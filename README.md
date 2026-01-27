@@ -30,3 +30,8 @@ BoatRaceLogic/
 - コンソールを閉じると API サーバも終了する  
 - 最小化しておけば常時稼働できる  
 - 将来はサービス化も可能
+
+
+$dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
+$user = "miyase428";
+$pass = "herunia0113";
