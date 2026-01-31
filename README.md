@@ -35,3 +35,11 @@ BoatRaceLogic/
 $dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
 $user = "miyase428";
 $pass = "herunia0113";
+
+cd C:\Apache24\bin
+ ./httpd.exe
+httpd.exe -k start
+
+httpd.exe -k stop
+
+httpd.exe -k restart

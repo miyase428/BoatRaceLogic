@@ -182,6 +182,7 @@ foreach ($rows as $row) {
     $mawari_score   = calcMawariScore((float)$row["around_time"], $avg_mawari);
     $straight_score = calcStraightScore((float)$row["straight_time"], $avg_straight);
     $attack_potential = $st_score + $straight_score;
+    $stable_score = $lap_score + $mawari_score;
 
     // 展示足トータル（O列）
     $ex_total = $ex_score + $lap_score + $mawari_score + $straight_score;
@@ -201,7 +202,8 @@ foreach ($rows as $row) {
         "straight"        => (float)$row["straight_time"],
         "straight_score"  => $straight_score,
         "ex_total"        => $ex_total,
-        "attack_potential" => $attack_potential
+        "attack_potential" => $attack_potential,
+        "stable_score"    => $stable_score
     ];
 }
 
