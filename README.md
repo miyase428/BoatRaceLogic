@@ -32,6 +32,13 @@ BoatRaceLogic/
 - 将来はサービス化も可能
 
 
+##　スクレイピングについて
+1/31
+対応表作成まで。
+実際にスクレイピングのプログラムはこれから。
+
+
+## 以下メモ
 $dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
 $user = "miyase428";
 $pass = "herunia0113";
