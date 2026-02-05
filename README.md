@@ -47,8 +47,3 @@ $pass = "herunia0113";
 
 cd C:\Apache24\bin
  ./httpd.exe
-httpd.exe -k start
-
-httpd.exe -k stop
-
-httpd.exe -k restart
