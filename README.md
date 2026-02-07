@@ -46,4 +46,4 @@ $user = "miyase428";
 $pass = "herunia0113";
 
 cd C:\Apache24\bin
- ./httpd.exe
+./httpd.exe

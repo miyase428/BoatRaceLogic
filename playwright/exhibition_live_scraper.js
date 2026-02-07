@@ -5,15 +5,38 @@ const { chromium } = require('playwright');
   const page = await browser.newPage();
 
   const url = process.argv[2]; // ← PHP から渡すURL
-  await page.goto(url);
-  await page.waitForTimeout(1500);
+  if (!url) {
+    console.error("URL が指定されていません");
+    process.exit(1);
+  }
+
+  // ------------------------------------------------------------
+  // ★ timeout 60秒 ＋ retry 1回 の安全版 goto
+  // ------------------------------------------------------------
+  async function safeGoto(targetUrl) {
+    try {
+      await page.goto(targetUrl, {
+        timeout: 60000,       // ← 60秒に延長
+        waitUntil: "load"
+      });
+    } catch (e) {
+      console.log("retry");
+      await page.goto(targetUrl, {
+        timeout: 60000,
+        waitUntil: "load"
+      });
+    }
+  }
+
+  await safeGoto(url);
+  await page.waitForTimeout(2000);
 
   // 出走表テーブル（選手ID）
   const playerTable = "(//table[contains(@class,'table_fixed')])[1]";
 
   // 展示情報タブ
   await page.click('.tab__button.tab_button_color5');
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2000);
 
   const baseTenji = "//td[normalize-space(text())='展示情報']/parent::tr";
 
