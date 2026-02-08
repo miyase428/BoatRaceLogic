@@ -74,7 +74,7 @@ $period = new DatePeriod(
 // ------------------------------------------------------------
 // 朝5時の制限時刻
 // ------------------------------------------------------------
-$limit_time = strtotime('today 05:00');
+$limit_time = strtotime('tomorrow 06:00');
 //$limit_time = strtotime('today 15:30');
 
 // ------------------------------------------------------------
@@ -173,6 +173,11 @@ foreach ($period as $dateObj) {
 
             if ($return_var !== 0) {
                 log_message("Playwright error: {$return_var}（{$place_code} {$race_no}R）");
+
+                // エラーURLを保存
+                $error_file = __DIR__ . '/../logs/error_urls.txt';
+                file_put_contents($error_file, $url . PHP_EOL, FILE_APPEND);
+
                 continue;
             }
 
@@ -300,14 +305,14 @@ foreach ($period as $dateObj) {
             log_message("{$race_code} 登録完了");
 
             // ------------------------------------------------------------
-            // 待ち時間（15〜20秒）
+            // 待ち時間（10〜13秒）
             // ------------------------------------------------------------
-            $wait = rand(1500, 2000) / 100;
+            $wait = rand(1000, 1300) / 100;
             usleep((int)($wait * 1000000));
         }
 
-        // 一場終了後の待ち時間（20〜30秒）
-        $wait_place = rand(2000, 3000) / 100;
+        // 一場終了後の待ち時間（10〜50秒）
+        $wait_place = rand(1000, 1500) / 100;
         log_message("一場終了待ち: {$wait_place} 秒");
         usleep((int)($wait_place * 1000000));
     }
@@ -317,10 +322,12 @@ foreach ($period as $dateObj) {
     // ------------------------------------------------------------
     // この日付は完走したので last_date を更新
     // ------------------------------------------------------------
+    $next_date = (new DateTime($race_date))->modify('+1 day')->format('Ymd');
     file_put_contents(
         __DIR__ . '/../config/last_date.php',
-        "<?php\nreturn ['last_date' => '{$race_date}'];"
+        "<?php\nreturn ['last_date' => '{$next_date}'];"
     );
+
 }
 
 log_message("=== 全日付の処理完了 ===");
