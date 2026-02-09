@@ -106,14 +106,16 @@ foreach ($period as $dateObj) {
     // ------------------------------------------------------------
     if (time() >= $limit_time) {
 
-        $last_done = $dateObj->modify('-1 day')->format('Ymd');
-
+        //次回取得するの日付を保存
+        $last_done = $dateObj->format('Ymd');
         file_put_contents(
             __DIR__ . '/../config/last_date.php',
             "<?php\nreturn ['last_date' => '{$last_done}'];"
         );
 
-        log_message("時間切れのため {$last_done} までで終了");
+        //実行した日付をログに出力して終了
+        $yesterday = (clone $dateObj)->modify('-1 day')->format('Ymd');
+        log_message("時間切れのため {$yesterday} までで終了");
         exit;
     }
 
