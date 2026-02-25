@@ -1,2 +1,2 @@
 <?php
-return ['last_date' => '20240102'];
+return ['last_date' => '20240324'];
