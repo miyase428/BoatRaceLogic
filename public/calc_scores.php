@@ -17,7 +17,8 @@ if (!$race_code) {
 // ------------------------------------------------------------
 // 2. Raspberry Pi の API から事実データを取得
 // ------------------------------------------------------------
-$pi_url = "http://192.168.0.205/api/get_input_data.php?race_code=" . urlencode($race_code);
+#$pi_url = "http://192.168.0.205/api/get_input_data.php?race_code=" . urlencode($race_code);
+$pi_url = "http://192.168.0.208/api/get_input_data.php?race_code=" . urlencode($race_code);
 
 $pi_response = @file_get_contents($pi_url);
 

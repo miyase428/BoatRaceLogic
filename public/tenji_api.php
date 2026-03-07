@@ -66,7 +66,8 @@ function calcStraightScore($straight, $avg_straight) {
 //--------------------------------------
 // DB接続
 //--------------------------------------
-$dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
+#$dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
+$dsn = "pgsql:host=192.168.0.208;port=5432;dbname=devdb;";
 $user = "miyase428";
 $pass = "herunia0113";
 
