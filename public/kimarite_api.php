@@ -4,8 +4,16 @@ header("Content-Type: application/json; charset=utf-8");
 // ------------------------------------------------------------
 // 1. race_code と in_course を受け取る
 // ------------------------------------------------------------
-$race_code = $_POST['race_code'] ?? null;
-$in        = $_POST['in_course'] ?? null;
+#$race_code = $_POST['race_code'] ?? null;
+#$in        = $_POST['in_course'] ?? null;
+$race_code = $_GET['race_code']
+          ?? $_POST['race_code']
+          ?? null;
+
+$in = $_GET['in_course']
+   ?? $_POST['in_course']
+   ?? null;
+
 
 if (!$race_code || !$in || strlen($in) !== 6) {
     echo json_encode([
@@ -31,7 +39,8 @@ $in_course = [
 // 3. PostgreSQL 接続
 // ------------------------------------------------------------
 $pdo = new PDO(
-    "pgsql:host=192.168.0.205;dbname=devdb",
+    #"pgsql:host=192.168.0.205;dbname=devdb",
+    "pgsql:host=192.168.0.208;dbname=devdb",
     "miyase428",
     "herunia0113",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
