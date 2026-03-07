@@ -4,8 +4,10 @@ header("Content-Type: application/json; charset=utf-8");
 // ------------------------------------------------------------
 // 1. race_code を受け取る
 // ------------------------------------------------------------
-$race_code = $_GET['race_code'] ?? null;
-
+#$race_code = $_GET['race_code'] ?? null;
+$race_code = $_GET["race_code"] 
+          ?? $_POST["race_code"] 
+          ?? "";
 if (!$race_code) {
     echo json_encode([
         "status" => "error",

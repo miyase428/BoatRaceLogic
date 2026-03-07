@@ -4,7 +4,10 @@ require_once __DIR__ . '/../logic/scrape_exhibition.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-$race_code = $_GET['race_code'] ?? null;
+#$race_code = $_GET['race_code'] ?? null;
+$race_code = $_GET["race_code"] 
+          ?? $_POST["race_code"] 
+          ?? "";
 
 if (!$race_code) {
     echo json_encode(['error' => 'race_code が必要です']);
