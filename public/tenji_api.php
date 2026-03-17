@@ -66,7 +66,8 @@ function calcStraightScore($straight, $avg_straight) {
 //--------------------------------------
 // DB接続
 //--------------------------------------
-$dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
+#$dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
+$dsn = "pgsql:host=192.168.0.208;port=5432;dbname=devdb;";
 $user = "miyase428";
 $pass = "herunia0113";
 
@@ -80,7 +81,10 @@ try {
 //--------------------------------------
 // race_code 取得
 //--------------------------------------
-$race_code = $_POST["race_code"] ?? "";
+#$race_code = $_POST["race_code"] ?? "";
+$race_code = $_GET["race_code"] 
+          ?? $_POST["race_code"] 
+          ?? "";
 
 if ($race_code === "") {
     echo json_encode(["error" => "race_code がありません"]);

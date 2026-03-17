@@ -75,7 +75,7 @@ $period = new DatePeriod(
 // 朝5時の制限時刻
 // ------------------------------------------------------------
 $limit_time = strtotime('tomorrow 06:00');
-//$limit_time = strtotime('today 15:30');
+//$limit_time = strtotime('today 09:30');
 
 // ------------------------------------------------------------
 // placeMap 読み込み
@@ -86,7 +86,8 @@ $placeMap = require __DIR__ . '/../config/place_map.php';
 // PostgreSQL 接続
 // ------------------------------------------------------------
 $pdo = new PDO(
-    "pgsql:host=192.168.0.205;dbname=devdb",
+    #"pgsql:host=192.168.0.205;dbname=devdb",
+    "pgsql:host=192.168.0.208;dbname=devdb",
     "miyase428",
     "herunia0113",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
@@ -106,14 +107,16 @@ foreach ($period as $dateObj) {
     // ------------------------------------------------------------
     if (time() >= $limit_time) {
 
-        $last_done = $dateObj->modify('-1 day')->format('Ymd');
-
+        //次回取得するの日付を保存
+        $last_done = $dateObj->format('Ymd');
         file_put_contents(
             __DIR__ . '/../config/last_date.php',
             "<?php\nreturn ['last_date' => '{$last_done}'];"
         );
 
-        log_message("時間切れのため {$last_done} までで終了");
+        //実行した日付をログに出力して終了
+        $yesterday = (clone $dateObj)->modify('-1 day')->format('Ymd');
+        log_message("時間切れのため {$yesterday} までで終了");
         exit;
     }
 
@@ -167,7 +170,9 @@ foreach ($period as $dateObj) {
             log_message("URL: {$url}");
 
             // Playwright 実行
-            $cmd = "node D:\\BoatRaceLogic\\playwright\\exhibition_live_scraper.js " . escapeshellarg($url);
+            #$cmd = "node D:\\BoatRaceLogic\\playwright\\exhibition_live_scraper.js " . escapeshellarg($url);
+            $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
+
             $output = [];
             exec($cmd, $output, $return_var);
 
@@ -319,7 +324,7 @@ foreach ($period as $dateObj) {
 
     log_message("=== 日付 {$race_date} の処理完了 ===");
 
-    // ------------------------------------------------------------
+   // ------------------------------------------------------------
     // この日付は完走したので last_date を更新
     // ------------------------------------------------------------
     $next_date = (new DateTime($race_date))->modify('+1 day')->format('Ymd');
