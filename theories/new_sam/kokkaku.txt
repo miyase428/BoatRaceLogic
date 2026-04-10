@@ -1,0 +1,113 @@
+</think>
+指定した場（スタジアム）について、DB から過去の展示データ（lap_time, around_time, straight_time, exhibition_time）とレース結果データ（着順）を取得し、
+新サム理論に基づく sum 値を計算し、
+sum 値の区間ごとに着順率を集計し、
+コース基準値との差分（バフデバフ）を算出して、
+場ごとのバフデバフ統計テーブル（stats.json）を生成する。
+
+【前提】
+・展示データは PostgreSQL に保存されている
+・接続情報：pgsql:host=192.168.0.208;port=5432;dbname=devdb;
+・ユーザ：miyase428
+・パスワード：herunia0113
+・スキーマ名：boat_race
+・展示情報のテーブル名：exhibition_live
+・使用するカラム：
+    race_code                                 -- レースを一意に識別するコード（例：20260124OMR01）
+    entry_course                              -- 展示進入コース（1〜6）。主キーの一部
+    player_id                                 -- 選手の登録番号（例：5208）
+    exhibition_time                           -- 展示タイム（例：6.76）
+    lap_time                                  -- 周回タイム（例：37.19）
+    around_time                               -- 周り足タイム（ターン性能）
+    straight_time                             -- 直線タイム（伸び性能）
+・レース結果のテーブル名：race_result_detail
+・使用するカラム：
+    race_code                                 -- レースを一意に識別するコード（例：20260124OMR01）
+    rank                                      -- 着順
+    entry_course  -- 進入コース（1〜6）。前づけを含めた実際のコース取り。統計上の「号艇番号」として扱う。
+・Python スクリプトは jyo（場コード）を引数として受け取り、
+  指定した場の全レースの展示データと結果データを取得して処理を行う
+・場（スタジアム）コードはrace_code の9～11文字目とする。
+・最終的に場ごとのバフデバフ統計テーブル（stats.json）を生成する
+
+【仕様】
+1. jyo（場コード）を引数として受け取る
+   ・例：OMR, TDA, KRY など
+   ・race_code の 9〜11 文字目が jyo と一致するレースを対象とする
+2. DB（PostgreSQL）から該当場の全レースの展示データを取得する
+   ・テーブル：boat_race.exhibition_live
+   ・使用カラム：
+       race_code
+       entry_course
+       exhibition_time
+       lap_time
+       around_time
+       straight_time
+3. DB から該当場の全レースの結果データを取得する
+   ・テーブル：boat_race.race_result_detail
+   ・使用カラム：
+       race_code
+       entry_course
+       rank
+4. features.json を読み込み、合算値（SUM）に使用する展示項目を決定する
+   ・全場3項目固定（展示タイム＋2項目）
+   ・例：OMR → ["exhibition_time", "lap_time", "straight_time"]
+5. 各レースごとに、合算値（sum_raw）を計算する
+   ・sum_raw = features[jyo] に含まれる項目の生データの合計
+   ・例：sum_raw = exhibition_time + lap_time + straight_time
+6. 各レースごとに、合算値（sum_raw）の平均値を計算する
+   ・avg_sum = そのレースの6艇の sum_raw の平均
+7. 各 entry_course（1〜6）について、平均との差（相対値）を計算する
+   ・sum = sum_raw - avg_sum
+   ・この sum（差分）が区間分類に使われる値となる
+8. sum を以下の区間に分類する（マイナス側も含む）
+       -0.6 未満
+       -0.6〜-0.4
+       -0.4〜-0.2
+       -0.2〜0.0
+        0.0〜0.2
+        0.2〜0.4
+        0.4〜0.6
+        0.6 以上
+9. コース（entry_course）ごとの基準着順率を集計する
+   ・1着率
+   ・2着率
+   ・3着率
+   ・3連率（1〜3着の合計）
+10. sum 区間ごとの着順率を集計する
+    ・entry_course × sum区間 のマトリクスで集計
+11. バフデバフ（差分）を計算する
+    ・バフデバフ = 区間の着順率 − コース基準着順率
+    ・1着率・2着率・3着率・3連率すべて計算
+12. 結果を stats.json として保存する
+    ・構造：
+      {
+        "<jyo>": {
+          "1": { "-0.6未満": {...}, "-0.6--0.4": {...}, ... },
+          "2": { ... },
+          ...
+          "6": { ... }
+        }
+      }
+13. PHP API から呼び出される前提で、
+    結果（stats.json の内容）を標準出力に JSON で print する
+
+
+【統計テーブル（stats.json）の構造】
+{
+  "1": {
+    "-0.6未満": {...},
+    "-0.6--0.4": {...},
+    "-0.4--0.2": {...},
+    "-0.2-0.0": {...},
+    "0.0-0.2": {...},
+    "0.2-0.4": {...},
+    "0.4-0.6": {...},
+    "0.6以上": {...}
+  },
+  ...
+  "6": {...}
+}
+
+これらを満たす new_sam.py を生成してください。
+

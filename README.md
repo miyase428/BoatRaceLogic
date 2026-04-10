@@ -6,11 +6,29 @@ Windows API server for boat race logic.
 php -S 0.0.0.0:8080 -t public
 
 ## 2. フォルダ構成の説明
-BoatRaceLogic/
-  public/      ← API エンドポイント
-  logic/       ← ロジック計算（PHP/Python）
-  models/      ← ML モデル
-  config/      ← 設定ファイル
+D:\BoatRaceLogic
+├─common               # 共通関数・ユーティリティ
+├─config               # 設定ファイル（DB接続・APIキーなど）
+├─log                  # ログ出力
+├─logic                # 既存のPHPロジック・API処理
+├─playwright           # スクレイピング関連（Node.js / Playwright）
+│   └─node_modules
+├─public               # 公開API（Excelや外部から叩くPHP）
+├─sample               # サンプルデータ・テスト用
+└─theories             # 予測理論・分析ロジック（Python中心）
+    ├─new_sam          # 新サム理論
+    │   ├─new_sam.py
+    │   ├─weights.json
+    │   ├─README.md
+    │   └─tests
+    ├─course_correction # コース別補正ロジック
+    │   ├─course_correction.py
+    │   └─tests
+    └─relative_lap      # 1周タイム相対評価ロジック ※まだない
+        ├─relative_lap.py
+        └─tests
+
+
 
 ## 3. 必要な環境（PHP 8.5 など）
 
