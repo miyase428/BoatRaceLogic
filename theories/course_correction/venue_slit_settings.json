@@ -1,0 +1,6 @@
+{
+  "default": {
+    "lead_threshold": 0.02,
+    "big_delay_threshold": 0.04
+  }
+}
