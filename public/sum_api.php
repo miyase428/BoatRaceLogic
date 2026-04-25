@@ -1,12 +1,4 @@
 <?php
-/**
- * サム理論 API（Excel 用）
- * -----------------------------------------
- * Excel から「場コード（例：OMR）」を受け取り、
- * stats_場コード.json が無ければ new_sam.py を実行して生成し、
- * その内容を返す。
- */
-
 header("Content-Type: application/json; charset=UTF-8");
 
 $jyo = $_POST["jyo"] ?? "";
@@ -16,28 +8,41 @@ if ($jyo === "") {
     exit;
 }
 
+// 安全チェック（重要）
+if (!preg_match('/^[A-Z0-9]+$/', $jyo)) {
+    echo json_encode(["error" => "不正な場コード"]);
+    exit;
+}
+
 $base = __DIR__ . "/../theories/new_sam/";
 $json_path = $base . "stats_" . $jyo . ".json";
 
-// ★ 1. stats_◯◯.json が無ければ new_sam.py を実行して生成
+// ★ statsが無い場合のみ生成
 if (!file_exists($json_path)) {
 
-    //$python = escapeshellcmd("python3");
+    // フルパス指定（重要）
     $python = "/usr/bin/python3";
     $script = escapeshellarg($base . "new_sam.py");
 
     $cmd = "$python $script " . escapeshellarg($jyo);
-    shell_exec($cmd);
-    // ログを保存
+
+    // ★ 実行結果（標準エラー含む）取得
+    $log = shell_exec($cmd . " 2>&1");
+
+    // ログ保存
     file_put_contents("/tmp/sam_api.log", "CMD: $cmd\nLOG:\n$log\n\n", FILE_APPEND);
 
-    // 生成されたか再チェック
+    // ★ デバッグ用（最初はこれONにする）
     if (!file_exists($json_path)) {
-        echo json_encode(["error" => "stats ファイルが生成されませんでした"]);
+        echo json_encode([
+            "error" => "stats ファイルが生成されませんでした",
+            "cmd" => $cmd,
+            "log" => $log
+        ]);
         exit;
     }
 }
 
-// ★ 2. ここまで来たら stats_◯◯.json は必ず存在する
+// ★ JSON返却
 echo file_get_contents($json_path);
 exit;
