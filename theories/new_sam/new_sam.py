@@ -3,6 +3,9 @@ import json
 import psycopg2
 from collections import defaultdict
 from argparse import ArgumentParser
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # PostgreSQL 接続情報
 DB_CONFIG = {
@@ -28,7 +31,8 @@ SUM_INTERVALS = [
 
 def load_features(path: str = "features.json") -> dict:
     """features.json を読み込む"""
-    with open(path, "r", encoding="utf-8") as f:
+    full_path = os.path.join(BASE_DIR, path)
+    with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
