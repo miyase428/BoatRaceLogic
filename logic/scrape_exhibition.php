@@ -170,7 +170,8 @@ foreach ($period as $dateObj) {
             log_message("URL: {$url}");
 
             // Playwright 実行
-            $cmd = "node D:\\BoatRaceLogic\\playwright\\exhibition_live_scraper.js " . escapeshellarg($url);
+            #$cmd = "node D:\\BoatRaceLogic\\playwright\\exhibition_live_scraper.js " . escapeshellarg($url);
+            $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
             $output = [];
             exec($cmd, $output, $return_var);
 
