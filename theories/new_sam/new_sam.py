@@ -259,7 +259,8 @@ def compute_stats_for_jyo(jyo: str, features: dict):
 
 
 def save_stats_to_json(stats: dict, jyo: str):
-    filename = f"stats_{jyo}.json"
+    filename = os.path.join(BASE_DIR, f"stats_{jyo}.json")
+
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
 
