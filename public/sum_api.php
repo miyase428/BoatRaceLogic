@@ -27,6 +27,8 @@ if (!file_exists($json_path)) {
 
     $cmd = "$python $script " . escapeshellarg($jyo);
     shell_exec($cmd);
+    // ログを保存
+    file_put_contents("/tmp/sam_api.log", "CMD: $cmd\nLOG:\n$log\n\n", FILE_APPEND);
 
     // 生成されたか再チェック
     if (!file_exists($json_path)) {
