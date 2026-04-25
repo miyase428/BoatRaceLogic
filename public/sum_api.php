@@ -3,10 +3,8 @@
  * サム理論 API（Excel 用）
  * -----------------------------------------
  * Excel から「場コード（例：OMR）」を受け取り、
- * theories/new_sam/stats_OMR.json を読み込んで
- * その内容をそのまま JSON として返す。
- *
- * new_sam.py は別途実行して stats_OMR.json を生成しておく。
+ * stats_場コード.json が無ければ new_sam.py を実行して生成し、
+ * その内容を返す。
  */
 
 header("Content-Type: application/json; charset=UTF-8");
@@ -18,12 +16,25 @@ if ($jyo === "") {
     exit;
 }
 
-$json_path = __DIR__ . "/../theories/new_sam/stats_" . $jyo . ".json";
+$base = __DIR__ . "/../theories/new_sam/";
+$json_path = $base . "stats_" . $jyo . ".json";
 
+// ★ 1. stats_◯◯.json が無ければ new_sam.py を実行して生成
 if (!file_exists($json_path)) {
-    echo json_encode(["error" => "stats ファイルがありません: " . $json_path]);
-    exit;
+
+    $python = escapeshellcmd("python3");
+    $script = escapeshellarg($base . "new_sam.py");
+
+    $cmd = "$python $script " . escapeshellarg($jyo);
+    shell_exec($cmd);
+
+    // 生成されたか再チェック
+    if (!file_exists($json_path)) {
+        echo json_encode(["error" => "stats ファイルが生成されませんでした"]);
+        exit;
+    }
 }
 
+// ★ 2. ここまで来たら stats_◯◯.json は必ず存在する
 echo file_get_contents($json_path);
 exit;
