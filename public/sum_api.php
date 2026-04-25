@@ -22,7 +22,8 @@ $json_path = $base . "stats_" . $jyo . ".json";
 // ★ 1. stats_◯◯.json が無ければ new_sam.py を実行して生成
 if (!file_exists($json_path)) {
 
-    $python = escapeshellcmd("python3");
+    //$python = escapeshellcmd("python3");
+    $python = "/usr/bin/python3";
     $script = escapeshellarg($base . "new_sam.py");
 
     $cmd = "$python $script " . escapeshellarg($jyo);
