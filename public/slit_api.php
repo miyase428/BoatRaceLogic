@@ -1,7 +1,6 @@
 <?php
 header("Content-Type: application/json; charset=UTF-8");
 
-// race_code を受け取る
 $race_code = $_POST["race_code"] ?? "";
 
 if ($race_code === "") {
@@ -9,26 +8,48 @@ if ($race_code === "") {
     exit;
 }
 
-// race_code の安全チェック（英数字のみ）
 if (!preg_match('/^[0-9A-Z]+$/', $race_code)) {
     echo json_encode(["error" => "不正な race_code"]);
     exit;
 }
 
-// Python スクリプトのパス
 $base = __DIR__ . "/../theories/course_correction/";
 $python = "/usr/bin/python3";
 $script = escapeshellarg($base . "predict_pattern.py");
 
-// コマンド生成
 $cmd = "$python $script " . escapeshellarg($race_code);
 
-// 実行（標準エラーも取得）
+// Python 実行
 $log = shell_exec($cmd . " 2>&1");
 
-// ログ保存（必要なら）
-file_put_contents("/tmp/slit_api.log", "CMD: $cmd\nLOG:\n$log\n\n", FILE_APPEND);
+// JSON パース
+$predict = json_decode($log, true);
 
-// Python が JSON を返すのでそのまま返却
-echo $log;
+if ($predict === null) {
+    echo json_encode([
+        "error" => "predict_pattern.py の JSON パースに失敗",
+        "raw" => $log
+    ]);
+    exit;
+}
+
+// pattern_id を取得
+$pattern_id = $predict["pattern_id"];
+
+// buff_debuff_slit.json を読み込む
+$buff_path = $base . "buff_debuff_slit.json";
+$buff_json = json_decode(file_get_contents($buff_path), true);
+
+// pattern_id の部分だけ抽出
+$buff = $buff_json[strval($pattern_id)] ?? null;
+
+// 最終的に返す JSON
+$response = [
+    "race_code" => $race_code,
+    "pattern_id" => $pattern_id,
+    "buff_debuff" => $buff,
+    "predict_detail" => $predict
+];
+
+echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 exit;
