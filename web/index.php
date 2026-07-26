@@ -211,8 +211,10 @@ for ($i = 1; $i <= 6; $i++) {
 
     // ★連対率は VBAの通り 展示API(tenji_list) 側のレスポンスから取得
     $t_data = $tenji_list[$i - 1] ?? [];
-    $rate6_raw = $t_data['three_in_rate_6m'] ?? $t_data['rate6'] ?? 0;
-    $rate3_raw = $t_data['three_in_rate_3m'] ?? $t_data['rate3'] ?? 0;
+    // $i は 1〜6 なので、配列が 0ベースなら $i - 1 を参照する
+    $item = $tenji_list[$i] ?? $tenji_list[$i - 1] ?? [];
+    $rate6_raw = $item['three_in_rate_6m'] ?? 0;
+    $rate3_raw = $item['three_in_rate_3m'] ?? 0;
 
     $rate6_dec = $to_dec($rate6_raw);
     $rate3_dec = $to_dec($rate3_raw);
