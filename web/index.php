@@ -427,7 +427,7 @@ $lane_colors = [
                             <th>平均ST</th>
                             <th>地力</th>
                             <th>一次総合</th>
-                            <th>足スコア</th> <!-- ★追加 -->
+                            <th>足スコア</th> <!-- ★正しい足スコア -->
                             <th>評価</th>
                         </tr>
                     </thead>
@@ -438,8 +438,8 @@ $lane_colors = [
                                 $c = $lane_colors[$lane] ?? $lane_colors[1];
                                 $r = $results[$index] ?? [];
 
-                                // ★ 足スコア（ExcelのQ9〜Q14に相当）
-                                $ashi_score = $r['total_score'] ?? 0;
+                                // ★ 正しい足スコア（Excel の Q列）
+                                $ashi_score = $r['ashi_score'] ?? 0;
                             ?>
                             <tr>
                                 <td>
@@ -456,7 +456,7 @@ $lane_colors = [
                                 <td><?= htmlspecialchars($e['average_start'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($r['jiryoku_score'] ?? '-') ?></td>
                                 <td class="score-highlight"><?= htmlspecialchars($r['total_score'] ?? '-') ?></td>
-                                <td><?= htmlspecialchars($ashi_score) ?></td> <!-- ★追加 -->
+                                <td><?= htmlspecialchars($ashi_score) ?></td> <!-- ★正しい足スコア -->
                                 <td><?= htmlspecialchars($r['ichiji_eval'] ?? '-') ?></td>
                             </tr>
                         <?php endforeach; ?>
