@@ -202,26 +202,9 @@ $apiUrl = "http://192.168.0.208:80/tenji_test.php?" . http_build_query([
     'tenji5'    => $tenji_list[4]['tenji_course'] ?? 0,
     'tenji6'    => $tenji_list[5]['tenji_course'] ?? 0,
 ]);
-echo "<script>
-alert('送信値: "
-    . "race_code={$apiUrl} "
-    . "race_code={$race_code} "
-    . "tenji1={$tenji_list[0]['tenji_course']} "
-    . "tenji2={$tenji_list[1]['tenji_course']} "
-    . "tenji3={$tenji_list[2]['tenji_course']} "
-    . "tenji4={$tenji_list[3]['tenji_course']} "
-    . "tenji5={$tenji_list[4]['tenji_course']} "
-    . "tenji6={$tenji_list[5]['tenji_course']}'
-);
-</script>";
-
 
 $jsonString = @file_get_contents($apiUrl);
 $tenji_test_data = json_decode($jsonString, true) ?? [];
-echo "<script>
-alert('tenji_test_data: " . json_encode($tenji_test_data) . "');
-</script>";
-
 
 // 数値・パーセンテージ文字列を小数（0.802など）に変換する汎用関数
 $parse_rate = function($val) {
