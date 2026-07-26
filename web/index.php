@@ -98,8 +98,7 @@ if (!empty($race_code)) {
     if ($t_json !== false) {
         $raw_tenji = json_decode($t_json, true) ?? [];
         
-        // 1. APIデータを配列で取得（VBA同様、JSONの配列順または艇番順）
-        // APIから返ってくる順番をそのまま保持、または1〜6艇番順で揃える
+        // 艇番(teiban)をキーにして配列を作成
         $items_by_boat = [];
         foreach ($raw_tenji as $item) {
             $boat = (int)($item['teiban'] ?? 0);
@@ -108,15 +107,16 @@ if (!empty($race_code)) {
             }
         }
 
-        // 出走表のQ9〜Q14に該当するスコア（1〜6艇番順）を取得
+        // 上部出走表の一次総合スコア（Q9〜Q14）を艇番順に抽出
         $q_table_values = [];
-        foreach ($results as $idx => $res) {
-            $lane = (int)($entries[$idx]['lane_number'] ?? ($idx + 1));
-            // 一次総合スコア（Q9〜Q14の値）
-            $q_table_values[$lane] = (float)($res['total_score'] ?? $res['q_score'] ?? 0);
+        foreach ($entries as $idx => $e) {
+            $lane = (int)($e['lane_number'] ?? ($idx + 1));
+            $res  = $results[$idx] ?? [];
+            // 一次総合スコア（total_score）を艇番(1〜6)キーで登録
+            $q_table_values[$lane] = (float)($res['total_score'] ?? 0);
         }
 
-        // 艇番 1〜6 (38行〜43行) の順で計算を実行
+        // 1艇目〜6艇目の順で計算（Excel 38行〜43行）
         $calculated_list = [];
         for ($b = 1; $b <= 6; $b++) {
             $item = $items_by_boat[$b] ?? [];
@@ -140,8 +140,8 @@ if (!empty($race_code)) {
             $attack_pot    = (int)($item['attack_potential'] ?? 0);
             $stable_score  = (int)($item['stable_score'] ?? 0);
 
-            // ★ R列: 展示補正スコア (VBA: ws.Range("O" & i) - ws.Range("Q" & (i - 29)))
-            // O列(展示足トータル) - Q9〜Q14(一次総合スコア)
+            // ★ R列: 展示補正スコア (VBA: O38 - Q9)
+            // 展示足トータル(O列) - 一次総合スコア(Q列)
             $q_val = $q_table_values[$b] ?? 0;
             $ex_hosei = $ex_total - $q_val;
 
@@ -161,7 +161,7 @@ if (!empty($race_code)) {
                 $dtype = "バランス";
             }
 
-            // ★ T列: 展示タイプ補正 (VBA: course × dtype)
+            // ★ T列: 展示タイプ補正 (VBA: A列:course × U列:dtype)
             $type_hosei = 0;
             if ($course === 1 && $dtype === "超伸び型") {
                 $type_hosei = 3;
@@ -236,7 +236,7 @@ if (!empty($race_code)) {
         $maxAttackBoat = 0;
 
         foreach ($calculated_list as $t) {
-            if ($t['type_hosei'] === 1) { // VBA: T列 = 1
+            if ($t['type_hosei'] === 1) { // ws.Range("T" & i) = 1
                 $hasKey = true;
                 $keyBoat = $t['teiban'];
             }
