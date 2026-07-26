@@ -189,35 +189,61 @@ if (!empty($race_code)) {
 }
 
 // -------------------------------------------------------------
-// ■ 最終予想ロジック（VBA完全再現・データ参照修正版）
+// ■ 最終予想ロジック（VBA完全再現・tenji_test.php 連携版）
 // -------------------------------------------------------------
-$final_predictions = [];
 
-// 1コース（21行目相当）の決まり手データ
-$k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? [];
+// 1. tenji_test.php からデータ取得 (VBAと同等処理)
+$apiUrl = "http://192.168.0.208:80/tenji_test.php?" . http_build_query([
+    'race_code' => $raceCode,
+    'tenji1'    => $tenji[1] ?? 1,
+    'tenji2'    => $tenji[2] ?? 2,
+    'tenji3'    => $tenji[3] ?? 3,
+    'tenji4'    => $tenji[4] ?? 4,
+    'tenji5'    => $tenji[5] ?? 5,
+    'tenji6'    => $tenji[6] ?? 6,
+]);
+
+$jsonString = @file_get_contents($apiUrl);
+$tenji_test_data = json_decode($jsonString, true) ?? [];
+
+// 数値・パーセンテージ文字列を小数（0.802など）に変換する汎用関数
+$parse_rate = function($val) {
+    if (is_null($val) || $val === '') return 0.0;
+    $clean = (float)preg_replace('/[^0-9.]/', '', (string)$val);
+    return ($clean > 1.0) ? $clean / 100.0 : $clean;
+};
+
 $to_dec = function($val) {
     $f = (float)$val;
     return ($f > 1.0) ? $f / 100.0 : $f;
 };
+
+// 1コース（21行目相当）の決まり手データ
+$k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? [];
 
 $k1_nige_dec     = $to_dec($k1['nige'] ?? 0);
 $k1_sashi_dec    = $to_dec($k1['sashi'] ?? 0);
 $k1_makuri_dec   = $to_dec($k1['makuri'] ?? 0);
 $k1_makuri_z_dec = $to_dec($k1['makurizashi'] ?? 0);
 
+$final_predictions = [];
+
 for ($i = 1; $i <= 6; $i++) {
     $boat = $i;
     $waku = $boat;
 
-    // ★連対率は VBAの通り 展示API(tenji_list) 側のレスポンスから取得
-    $t_data = $tenji_list[$i - 1] ?? [];
-    // $i は 1〜6 なので、配列が 0ベースなら $i - 1 を参照する
-    $item = $tenji_list[$i] ?? $tenji_list[$i - 1] ?? [];
-    $rate6_raw = $item['three_in_rate_6m'] ?? 0;
-    $rate3_raw = $item['three_in_rate_3m'] ?? 0;
+    // ★連対率は tenji_test.php のレスポンスから直接取得
+    // (レスポンスが 1〜6 キー、または 0〜5 インデックスの双方に対応)
+    $api_item = $tenji_test_data[$i] 
+             ?? $tenji_test_data[(string)$i] 
+             ?? $tenji_test_data[$i - 1] 
+             ?? [];
 
-    $rate6_dec = $to_dec($rate6_raw);
-    $rate3_dec = $to_dec($rate3_raw);
+    $rate6_dec = $parse_rate($api_item['three_in_rate_6m'] ?? 0);
+    $rate3_dec = $parse_rate($api_item['three_in_rate_3m'] ?? 0);
+
+    // 展示データ（スコア等用）
+    $t_data = $tenji_list[$i - 1] ?? [];
 
     // 決まり手データ（1年/6ヶ月の6ヶ月優先）
     $k_data = $kimarite_data[(string)$boat]['6month'] ?? $kimarite_data[(string)$boat] ?? [];
@@ -277,12 +303,12 @@ for ($i = 1; $i <= 6; $i++) {
     }
 
     // --- 決まり手タイプ（K50:K55） ---
-    $nige_d     = $to_dec($k_data['nige'] ?? 0);
-    $sashi_d    = $to_dec($k_data['sashi'] ?? 0);
-    $makuri_d   = $to_dec($k_data['makuri'] ?? 0);
-    $makuriz_d  = $to_dec($k_data['makurizashi'] ?? 0);
-    $sasare_d   = $to_dec($k_data['sasare'] ?? 0);
-    $makurarez_d= $to_dec($k_data['makurarezashi'] ?? 0);
+    $nige_d      = $to_dec($k_data['nige'] ?? 0);
+    $sashi_d     = $to_dec($k_data['sashi'] ?? 0);
+    $makuri_d    = $to_dec($k_data['makuri'] ?? 0);
+    $makuriz_d   = $to_dec($k_data['makurizashi'] ?? 0);
+    $sasare_d    = $to_dec($k_data['sasare'] ?? 0);
+    $makurarez_d = $to_dec($k_data['makurarezashi'] ?? 0);
 
     if ($nige_d >= 0.2 && $waku === 1) {
         $type = "逃げ型";
@@ -316,19 +342,19 @@ for ($i = 1; $i <= 6; $i++) {
     $final3 = $final2 + $typeBonus;
 
     $final_predictions[$i] = [
-        'boat' => $boat,
-        'waku' => $waku,
-        'rate6_dec' => $rate6_dec,
-        'rate3_dec' => $rate3_dec,
-        'kitai_dec' => $kitai_dec,
-        'flg_sashi' => $flg_sashi,
-        'flg_makuri' => $flg_makuri,
+        'boat'            => $boat,
+        'waku'            => $waku,
+        'rate6_dec'       => $rate6_dec,
+        'rate3_dec'       => $rate3_dec,
+        'kitai_dec'       => $kitai_dec,
+        'flg_sashi'       => $flg_sashi,
+        'flg_makuri'      => $flg_makuri,
         'flg_makurizashi' => $flg_makurizashi,
-        'flg_nogashi' => $flg_nogashi,
-        'type' => $type,
-        'typeBonus' => $typeBonus,
-        'final3' => $final3,
-        'getBonus' => (float)($t_data['tenkai_morai'] ?? 0),
+        'flg_nogashi'     => $flg_nogashi,
+        'type'            => $type,
+        'typeBonus'       => $typeBonus,
+        'final3'          => $final3,
+        'getBonus'        => (float)($t_data['tenkai_morai'] ?? 0),
     ];
 }
 
