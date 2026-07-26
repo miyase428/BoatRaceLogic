@@ -194,7 +194,7 @@ if (!empty($race_code)) {
 
 // 1. tenji_test.php からデータ取得 (VBAと同等処理)
 $apiUrl = "http://192.168.0.208:80/tenji_test.php?" . http_build_query([
-    'race_code' => $raceCode,
+    'race_code' => $race_code,
     'tenji1'    => $tenji_list[0]['tenji_course'] ?? 0,
     'tenji2'    => $tenji_list[1]['tenji_course'] ?? 0,
     'tenji3'    => $tenji_list[2]['tenji_course'] ?? 0,
@@ -205,7 +205,7 @@ $apiUrl = "http://192.168.0.208:80/tenji_test.php?" . http_build_query([
 echo "<script>
 alert('送信値: "
     . "race_code={$apiUrl} "
-    . "race_code={$raceCode} "
+    . "race_code={$race_code} "
     . "tenji1={$tenji_list[0]['tenji_course']} "
     . "tenji2={$tenji_list[1]['tenji_course']} "
     . "tenji3={$tenji_list[2]['tenji_course']} "
