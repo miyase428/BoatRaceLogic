@@ -215,11 +215,27 @@ for ($i = 1; $i <= 6; $i++) {
     $boat = $i;
     $waku = $boat;
 
-    $k_data = $kimarite_data[(string)$boat]['6month'] ?? $kimarite_data[(string)$boat] ?? $kimarite_data[$i-1] ?? [];
+// 艇番(文字列/数値)または配列インデックスで決まり手・連対率データを特定
+    $k_data = $kimarite_data[(string)$boat] 
+           ?? $kimarite_data[$boat] 
+           ?? $kimarite_data[$i - 1] 
+           ?? [];
+
+    // 6ヶ月/3ヶ月のネスト構造（'6month'等）に入っている場合も考慮して多角的に取得
+    $k_6m = $k_data['6month'] ?? $k_data;
+    $k_3m = $k_data['3month'] ?? $k_data;
 
     // --- 3連率（D50:E55） ---
-    $rate6_raw = $k_data['three_in_rate_6m'] ?? $k_data['rate6'] ?? 0;
-    $rate3_raw = $k_data['three_in_rate_3m'] ?? $k_data['rate3'] ?? 0;
+    $rate6_raw = $k_data['three_in_rate_6m'] 
+              ?? $k_6m['three_in_rate_6m'] 
+              ?? $k_data['rate6'] 
+              ?? $k_data['three_in_rate'] 
+              ?? 0;
+
+    $rate3_raw = $k_data['three_in_rate_3m'] 
+              ?? $k_3m['three_in_rate_3m'] 
+              ?? $k_data['rate3'] 
+              ?? 0;
 
     $rate6_dec = $to_dec($rate6_raw);
     $rate3_dec = $to_dec($rate3_raw);
