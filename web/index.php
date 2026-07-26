@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../common/db_connect.php';
 
-// config/place_map.php から場コードマスタを取得 (ID => 英字3桁)
+// config/place_map.php から場コードマスタを取得
 $place_map = require __DIR__ . '/../config/place_map.php';
 
 // 画面表示用の日本語場名マップ
@@ -17,15 +17,17 @@ $place_names = [
 // フォーム入力値の取得
 $selected_date   = $_GET['date'] ?? date('Y-m-d');
 $selected_place  = $_GET['place'] ?? 'OMR';
-$selected_race   = $_GET['race'] ?? '07';
-$in_course       = $_GET['in_course'] ?? '123456'; // デフォルト：枠なり進入
+$selected_race   = $_GET['race'] ?? '12';
+$in_course       = $_GET['in_course'] ?? '123456';
 
 // YYYYMMDD 形式
 $formatted_date  = date('Ymd', strtotime($selected_date));
 // レースコード生成
 $race_code       = $formatted_date . $selected_place . sprintf('%02d', $selected_race);
 
-// 1. 出走表データの取得（calc_scores.php から取得）
+// -------------------------------------------------------------
+// 1. 出走表データの取得 (calc_scores.php)
+// -------------------------------------------------------------
 $entries = [];
 $results = [];
 $api_error = '';
@@ -39,13 +41,15 @@ if ($json_data !== false) {
         $entries = $response['entries'] ?? [];
         $results = $response['results'] ?? [];
     } else {
-        $api_error = '出走表データが見つかりませんでした (status != ok)';
+        $api_error = '出走表データが見つかりませんでした。';
     }
 } else {
     $api_error = '出走表APIの呼び出しに失敗しました。';
 }
 
-// 2. 決まり手データの取得（kimarite_api.php から POST 取得）
+// -------------------------------------------------------------
+// 2. 決まり手データの取得 (kimarite_api.php)
+// -------------------------------------------------------------
 $kimarite_data = [];
 $kimarite_error = '';
 
@@ -69,6 +73,164 @@ if (!empty($race_code) && strlen($in_course) === 6) {
         $kimarite_data = json_decode($k_json, true) ?? [];
     } else {
         $kimarite_error = '決まり手APIの取得に失敗しました。';
+    }
+}
+
+// -------------------------------------------------------------
+// 3. 展示データの取得と新サム理論ロジック計算 (tenji_api.php)
+// -------------------------------------------------------------
+$tenji_list = [];
+$tenji_error = '';
+
+if (!empty($race_code)) {
+    $post_data = http_build_query(['race_code' => $race_code]);
+    $opts = [
+        'http' => [
+            'method'  => 'POST',
+            'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => $post_data,
+            'timeout' => 3
+        ]
+    ];
+    $context = stream_context_create($opts);
+    $t_json = @file_get_contents("http://localhost/tenji_api.php", false, $context);
+
+    if ($t_json !== false) {
+        $raw_tenji = json_decode($t_json, true) ?? [];
+        
+        // 配列整形 & VBA互換計算の準備
+        $i = 0;
+        foreach ($raw_tenji as $item) {
+            $course = (int)($item['tenji_course'] ?? ($i + 1));
+            $teiban = (int)($item['teiban'] ?? ($i + 1));
+            
+            $ex_total      = (int)($item['ex_total'] ?? 0);
+            $attack_pot    = (int)($item['attack_potential'] ?? 0);
+            $stable_score  = (int)($item['stable_score'] ?? 0);
+            $lap_score     = (int)($item['lap_score'] ?? 0);
+            $straight_score= (int)($item['straight_score'] ?? 0);
+            $st_score      = (int)($item['st_score'] ?? 0);
+            $mawari_score  = (int)($item['mawari_score'] ?? 0);
+
+            // ★ 展示補正スコア (O - Q(9~14) 相当: ※例としてO-Qで計算)
+            $ex_hosei = $ex_total - $stable_score;
+            // ★ 展示総合スコア (O + P + Q)
+            $ex_sougou = $ex_total + $attack_pot + $stable_score;
+
+            // ★ 展示タイプ名判定 (U列)
+            if ($lap_score === 5) {
+                $dtype = "超伸び型";
+            } elseif ($straight_score >= $ex_total + 2 && $st_score >= 4) {
+                $dtype = "攻め型";
+            } elseif ($ex_total >= $straight_score + 2 && $mawari_score >= 4) {
+                $dtype = "差し型";
+            } elseif ($straight_score === 5) {
+                $dtype = "伸び型";
+            } else {
+                $dtype = "バランス";
+            }
+
+            // ★ 展示タイプ補正 (T列)
+            $type_hosei = 0;
+            if ($course === 1 && $dtype === "超伸び型") {
+                $type_hosei = 3;
+            } elseif ($course === 1 && $dtype === "バランス") {
+                $type_hosei = 1;
+            } elseif ($course === 4 && $dtype === "超伸び型") {
+                $type_hosei = 4;
+            } elseif ($course >= 2 && $dtype === "超伸び型") {
+                $type_hosei = 3;
+            } elseif ($dtype === "差し型" || $dtype === "攻め型") {
+                $type_hosei = 2;
+            }
+
+            $tenji_list[] = [
+                'tenji_course'    => $course,
+                'teiban'          => $teiban,
+                'exhibition'      => $item['exhibition'] ?? '-',
+                'lap'             => $item['lap'] ?? '-',
+                'mawari'          => $item['mawari'] ?? '-',
+                'straight'        => $item['straight'] ?? '-',
+                'st'              => $item['st'] ?? '-',
+                'ex_diff'         => $item['ex_diff'] ?? '-',
+                'ex_score'        => $item['ex_score'] ?? 0,
+                'st_score'        => $st_score,
+                'lap_score'       => $lap_score,
+                'mawari_score'    => $mawari_score,
+                'straight_score'  => $straight_score,
+                'ex_total'        => $ex_total,
+                'attack_potential'=> $attack_pot,
+                'stable_score'    => $stable_score,
+                'ex_hosei'        => $ex_hosei,
+                'ex_sougou'       => $ex_sougou,
+                'dtype'           => $dtype,
+                'type_hosei'      => $type_hosei,
+                'tenkai_key'      => 0, // 後で判定
+                'tenkai_morai'    => 0, // 後で判定
+                'final_2nd_score' => 0, // 後で判定
+            ];
+            $i++;
+        }
+
+        // ★ V列：展開キー判定 (直線評価の最大値で判定)
+        $maxStraightSuper  = -999;
+        $maxStraightAttack = -999;
+
+        foreach ($tenji_list as $t) {
+            if ($t['dtype'] === '超伸び型') {
+                if ($t['straight_score'] > $maxStraightSuper) {
+                    $maxStraightSuper = $t['straight_score'];
+                }
+            } elseif ($t['dtype'] === '攻め型') {
+                if ($t['straight_score'] > $maxStraightAttack) {
+                    $maxStraightAttack = $t['straight_score'];
+                }
+            }
+        }
+
+        foreach ($tenji_list as &$t) {
+            if ($t['dtype'] === '超伸び型') {
+                $t['tenkai_key'] = ($t['straight_score'] === $maxStraightSuper) ? 1 : 0;
+            } elseif ($t['dtype'] === '攻め型') {
+                $t['tenkai_key'] = ($t['straight_score'] === $maxStraightAttack) ? 1 : 0;
+            } else {
+                $t['tenkai_key'] = 0;
+            }
+        }
+        unset($t);
+
+        // ★ W列：展開もらい補正 判定
+        $hasKey = false;
+        $keyBoat = 0;
+        $maxAttack = -999;
+        $maxAttackBoat = 0;
+
+        foreach ($tenji_list as $t) {
+            if ($t['type_hosei'] === 1) { // VBAのT列(=type_hosei)=1 判定
+                $hasKey = true;
+                $keyBoat = $t['teiban'];
+            }
+            if ($t['attack_potential'] > $maxAttack) {
+                $maxAttack = $t['attack_potential'];
+                $maxAttackBoat = $t['teiban'];
+            }
+        }
+
+        foreach ($tenji_list as &$t) {
+            $boat = $t['teiban'];
+            if ($hasKey) {
+                $t['tenkai_morai'] = ($boat === $keyBoat - 1 || $boat === $keyBoat + 1) ? 1 : 0;
+            } else {
+                $t['tenkai_morai'] = ($boat === $maxAttackBoat - 1 || $boat === $maxAttackBoat + 1) ? 1 : 0;
+            }
+
+            // ★ X列：最終二次予想スコア（S列 + T列 + W列）
+            $t['final_2nd_score'] = $t['ex_sougou'] + $t['type_hosei'] + $t['tenkai_morai'];
+        }
+        unset($t);
+
+    } else {
+        $tenji_error = '展示APIの取得に失敗しました。';
     }
 }
 
@@ -99,7 +261,7 @@ $lane_colors = [
             justify-content: center;
         }
         .container {
-            max-width: 950px;
+            max-width: 1100px;
             width: 100%;
             background-color: #1e293b;
             padding: 30px;
@@ -119,9 +281,6 @@ $lane_colors = [
             font-size: 18px;
             margin-top: 35px;
             margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
         .form-section {
             background-color: #0f172a;
@@ -184,31 +343,31 @@ $lane_colors = [
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            font-size: 12px;
             text-align: center;
         }
         th {
             background-color: #0f172a;
             color: #94a3b8;
-            padding: 10px;
+            padding: 8px 6px;
             font-weight: 600;
             border-bottom: 2px solid #334155;
             white-space: nowrap;
         }
         td {
-            padding: 8px;
+            padding: 8px 6px;
             border-bottom: 1px solid #334155;
             white-space: nowrap;
         }
         .lane-badge {
-            width: 24px;
-            height: 24px;
-            line-height: 24px;
+            width: 22px;
+            height: 22px;
+            line-height: 22px;
             border-radius: 50%;
             font-weight: bold;
             display: inline-block;
         }
-        .player-name { font-weight: bold; font-size: 14px; }
+        .player-name { font-weight: bold; font-size: 13px; }
         .no-data {
             padding: 20px;
             text-align: center;
@@ -217,9 +376,22 @@ $lane_colors = [
             border-radius: 8px;
         }
 
-        /* 決まり手テーブル固有スタイル */
+        /* テーブル固有スタイル */
         .kimarite-table td { font-family: monospace; }
         .border-top-course { border-top: 2px solid #475569; }
+        .score-highlight { font-weight: bold; color: #38bdf8; }
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background-color: #334155;
+            color: #f8fafc;
+            font-weight: bold;
+            font-size: 11px;
+        }
+        .type-super { background-color: #dc2626; color: #fff; }
+        .type-attack { background-color: #d97706; color: #fff; }
+        .type-sashi { background-color: #2563eb; color: #fff; }
     </style>
 </head>
 <body>
@@ -274,7 +446,6 @@ $lane_colors = [
 
         <!-- ■ 出走表情報 -->
         <h2>📋 出走表情報</h2>
-
         <?php if (!empty($entries)): ?>
             <div class="table-container">
                 <table>
@@ -314,7 +485,7 @@ $lane_colors = [
                                 <td><?= htmlspecialchars($e['boat_exacta_rate'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($e['average_start'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($r['jiryoku_score'] ?? '-') ?></td>
-                                <td style="font-weight: bold; color: #38bdf8;"><?= htmlspecialchars($r['total_score'] ?? '-') ?></td>
+                                <td class="score-highlight"><?= htmlspecialchars($r['total_score'] ?? '-') ?></td>
                                 <td><?= htmlspecialchars($r['ichiji_eval'] ?? '-') ?></td>
                             </tr>
                         <?php endforeach; ?>
@@ -322,14 +493,11 @@ $lane_colors = [
                 </table>
             </div>
         <?php else: ?>
-            <div class="no-data">
-                <?= htmlspecialchars($api_error ?: '該当レースのデータが存在しません。') ?>
-            </div>
+            <div class="no-data"><?= htmlspecialchars($api_error ?: 'データが存在しません。') ?></div>
         <?php endif; ?>
 
         <!-- ■ 決まり手情報 -->
         <h2>🎯 決まり手情報</h2>
-
         <?php if (!empty($kimarite_data)): ?>
             <div class="table-container">
                 <table class="kimarite-table">
@@ -355,7 +523,6 @@ $lane_colors = [
                                 $data_6m = $kimarite_data[$c_str]['6month'] ?? [];
                                 $c = $lane_colors[$course] ?? $lane_colors[1];
                             ?>
-                            <!-- 1年データ -->
                             <tr class="border-top-course">
                                 <td rowspan="2" style="vertical-align: middle;">
                                     <span class="lane-badge" style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>;">
@@ -372,7 +539,6 @@ $lane_colors = [
                                 <td><?= number_format(($data_1y['makurare'] ?? 0), 1) ?>%</td>
                                 <td><?= number_format(($data_1y['makurarezashi'] ?? 0), 1) ?>%</td>
                             </tr>
-                            <!-- 6ヶ月データ -->
                             <tr>
                                 <td style="color: #94a3b8;">6ヶ月</td>
                                 <td><?= number_format(($data_6m['nige'] ?? 0), 1) ?>%</td>
@@ -389,9 +555,87 @@ $lane_colors = [
                 </table>
             </div>
         <?php else: ?>
-            <div class="no-data">
-                <?= htmlspecialchars($kimarite_error ?: '決まり手データが存在しません。') ?>
+            <div class="no-data"><?= htmlspecialchars($kimarite_error ?: '決まり手データが存在しません。') ?></div>
+        <?php endif; ?>
+
+        <!-- ■ 展示情報 -->
+        <h2>⏱️ 展示情報</h2>
+        <?php if (!empty($tenji_list)): ?>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>艇</th>
+                            <th>展示進入</th>
+                            <th>展示タイム</th>
+                            <th>周回</th>
+                            <th>周り足</th>
+                            <th>直線</th>
+                            <th>ST</th>
+                            <th>展示タイム場平均差</th>
+                            <th>展示タイム評価</th>
+                            <th>ST評価</th>
+                            <th>周回評価</th>
+                            <th>周り足評価</th>
+                            <th>直線評価</th>
+                            <th>展示足トータル</th>
+                            <th>展示攻めポテンシャル</th>
+                            <th>展示安定感</th>
+                            <th>展示補正スコア</th>
+                            <th>展示総合スコア</th>
+                            <th>展示タイプ補正</th>
+                            <th>展示タイプ名</th>
+                            <th>展開キー</th>
+                            <th>展開もらい補正</th>
+                            <th>最終二次予想スコア</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($tenji_list as $t): ?>
+                            <?php
+                                $boat = (int)$t['teiban'];
+                                $c = $lane_colors[$boat] ?? $lane_colors[1];
+                                
+                                $badge_class = 'type-badge';
+                                if ($t['dtype'] === '超伸び型') $badge_class .= ' type-super';
+                                elseif ($t['dtype'] === '攻め型') $badge_class .= ' type-attack';
+                                elseif ($t['dtype'] === '差し型') $badge_class .= ' type-sashi';
+                            ?>
+                            <tr>
+                                <td>
+                                    <span class="lane-badge" style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>;">
+                                        <?= $boat ?>
+                                    </span>
+                                </td>
+                                <td><?= htmlspecialchars($t['tenji_course']) ?></td>
+                                <td><?= htmlspecialchars($t['exhibition']) ?></td>
+                                <td><?= htmlspecialchars($t['lap']) ?></td>
+                                <td><?= htmlspecialchars($t['mawari']) ?></td>
+                                <td><?= htmlspecialchars($t['straight']) ?></td>
+                                <td><?= htmlspecialchars($t['st']) ?></td>
+                                <td><?= htmlspecialchars($t['ex_diff']) ?></td>
+                                <td><?= htmlspecialchars($t['ex_score']) ?></td>
+                                <td><?= htmlspecialchars($t['st_score']) ?></td>
+                                <td><?= htmlspecialchars($t['lap_score']) ?></td>
+                                <td><?= htmlspecialchars($t['mawari_score']) ?></td>
+                                <td><?= htmlspecialchars($t['straight_score']) ?></td>
+                                <td><?= htmlspecialchars($t['ex_total']) ?></td>
+                                <td><?= htmlspecialchars($t['attack_potential']) ?></td>
+                                <td><?= htmlspecialchars($t['stable_score']) ?></td>
+                                <td><?= htmlspecialchars($t['ex_hosei']) ?></td>
+                                <td><?= htmlspecialchars($t['ex_sougou']) ?></td>
+                                <td><?= htmlspecialchars($t['type_hosei']) ?></td>
+                                <td><span class="<?= $badge_class ?>"><?= htmlspecialchars($t['dtype']) ?></span></td>
+                                <td><?= htmlspecialchars($t['tenkai_key']) ?></td>
+                                <td><?= htmlspecialchars($t['tenkai_morai']) ?></td>
+                                <td class="score-highlight" style="font-size: 14px;"><?= htmlspecialchars($t['final_2nd_score']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
+        <?php else: ?>
+            <div class="no-data"><?= htmlspecialchars($tenji_error ?: '展示データが存在しません。') ?></div>
         <?php endif; ?>
 
     </div>
