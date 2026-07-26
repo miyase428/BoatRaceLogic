@@ -77,7 +77,7 @@ if (!empty($race_code) && strlen($in_course) === 6) {
 }
 
 // -------------------------------------------------------------
-// 3. 展示データの取得とExcel完全一致計算
+// 3. 展示データの取得とExcel VBA完全一致計算
 // -------------------------------------------------------------
 $tenji_list = [];
 $tenji_error = '';
@@ -107,7 +107,15 @@ if (!empty($race_code)) {
             }
         }
 
-        // 艇番 1〜6 の順番で確実に作成（Excelの38行〜43行）
+        // 上部出走表のQ列相当の値（一次総合または該当スコア）を艇番順に抽出
+        $q_table_values = [];
+        foreach ($results as $idx => $res) {
+            $lane = (int)($entries[$idx]['lane_number'] ?? ($idx + 1));
+            // 一次総合スコア等のQ列に該当するキー（total_scoreなど）
+            $q_table_values[$lane] = (float)($res['q_score'] ?? $res['ichiji_score'] ?? $res['total_score'] ?? 0);
+        }
+
+        // 艇番 1〜6 の順番で確実に計算（Excelの38行〜43行）
         $calculated_list = [];
         for ($b = 1; $b <= 6; $b++) {
             $item = $items_by_boat[$b] ?? [];
@@ -131,25 +139,41 @@ if (!empty($race_code)) {
             $attack_pot    = (int)($item['attack_potential'] ?? 0);
             $stable_score  = (int)($item['stable_score'] ?? 0);
 
-            // R列: 展示補正スコア（APIから受け取った値または計算値）
-            $ex_hosei      = $item['ex_hosei'] ?? $item['ex_diff_score'] ?? $item['ex_diff'] ?? 0;
+            // ★ R列: 展示補正スコア（VBA: O列 - Q列(i-29)）
+            // O列(展示足トータル) - 出走表Q列の値
+            $q_val = $q_table_values[$b] ?? 0;
+            $ex_hosei = $ex_total - $q_val;
 
-            // S列: 展示総合スコア (O + P + Q)
-            $ex_sougou     = $ex_total + $attack_pot + $stable_score;
+            // ★ S列: 展示総合スコア (O列 + P列 + Q列)
+            $ex_sougou = $ex_total + $attack_pot + $stable_score;
 
-            // U列: 展示タイプ名 (Excelで艇番2が「超伸び型」、他が「バランス」になっているロジック)
-            if ($lap_score === 5 || $straight_score >= 4 && $ex_total >= 16) {
+            // ★ U列: 展示タイプ名 (VBA Select Case)
+            if ($lap_score === 5) {
                 $dtype = "超伸び型";
             } elseif ($straight_score >= $ex_total + 2 && $st_score >= 4) {
                 $dtype = "攻め型";
             } elseif ($ex_total >= $straight_score + 2 && $mawari_score >= 4) {
                 $dtype = "差し型";
+            } elseif ($straight_score === 5) {
+                $dtype = "伸び型";
             } else {
                 $dtype = "バランス";
             }
 
-            // T列: 展示タイプ補正（Excel画像では全艇 0）
+            // ★ T列: 展示タイプ補正 (VBA Select Case: course x dtype)
+            // A列(展示進入コース)とU列(dtype)から算出
             $type_hosei = 0;
+            if ($course === 1 && $dtype === "超伸び型") {
+                $type_hosei = 3;
+            } elseif ($course === 1 && $dtype === "バランス") {
+                $type_hosei = 1;
+            } elseif ($course === 4 && $dtype === "超伸び型") {
+                $type_hosei = 4;
+            } elseif ($course >= 2 && $dtype === "超伸び型") {
+                $type_hosei = 3;
+            } elseif ($dtype === "差し型" || $dtype === "攻め型") {
+                $type_hosei = 2;
+            }
 
             $calculated_list[$b] = [
                 'tenji_course'    => $course,
@@ -172,24 +196,65 @@ if (!empty($race_code)) {
                 'ex_sougou'       => $ex_sougou,
                 'dtype'           => $dtype,
                 'type_hosei'      => $type_hosei,
-                'tenkai_key'      => ($dtype === "超伸び型") ? 1 : 0, // V列: 超伸び型なら1
+                'tenkai_key'      => 0,
                 'tenkai_morai'    => 0,
                 'final_2nd_score' => 0,
             ];
         }
 
-        // ★ W列：展開もらい補正 ＆ X列：最終二次予想スコア
-        // Excelの表示結果（2艇目=1, 4艇目=1, 他=0）に正確に合致させるロジック
-        // 展開キー(2艇目)の直後(3艇目)や攻め艇の影響を受ける艇に付与
-        foreach ($calculated_list as $b => &$t) {
-            // 2艇目(キー艇自身または特定条件)と4艇目(角展開等)が1
-            if ($b === 2 || $b === 4) {
-                $t['tenkai_morai'] = 1;
+        // ★ V列: 展開キー（直線評価の最大値で判定）
+        $maxStraightSuper  = -999;
+        $maxStraightAttack = -999;
+
+        foreach ($calculated_list as $t) {
+            if ($t['dtype'] === '超伸び型') {
+                if ($t['straight_score'] > $maxStraightSuper) {
+                    $maxStraightSuper = $t['straight_score'];
+                }
+            } elseif ($t['dtype'] === '攻め型') {
+                if ($t['straight_score'] > $maxStraightAttack) {
+                    $maxStraightAttack = $t['straight_score'];
+                }
+            }
+        }
+
+        foreach ($calculated_list as &$t) {
+            if ($t['dtype'] === '超伸び型') {
+                $t['tenkai_key'] = ($t['straight_score'] === $maxStraightSuper) ? 1 : 0;
+            } elseif ($t['dtype'] === '攻め型') {
+                $t['tenkai_key'] = ($t['straight_score'] === $maxStraightAttack) ? 1 : 0;
             } else {
-                $t['tenkai_morai'] = 0;
+                $t['tenkai_key'] = 0;
+            }
+        }
+        unset($t);
+
+        // ★ W列: 展開もらい補正
+        $hasKey = false;
+        $keyBoat = 0;
+        $maxAttack = -999;
+        $maxAttackBoat = 0;
+
+        foreach ($calculated_list as $t) {
+            if ($t['type_hosei'] === 1) { // ws.Range("T"&i) = 1
+                $hasKey = true;
+                $keyBoat = $t['teiban'];
+            }
+            if ($t['attack_potential'] > $maxAttack) {
+                $maxAttack = $t['attack_potential'];
+                $maxAttackBoat = $t['teiban'];
+            }
+        }
+
+        foreach ($calculated_list as &$t) {
+            $boat = $t['teiban'];
+            if ($hasKey) {
+                $t['tenkai_morai'] = ($boat === $keyBoat - 1 || $boat === $keyBoat + 1) ? 1 : 0;
+            } else {
+                $t['tenkai_morai'] = ($boat === $maxAttackBoat - 1 || $boat === $maxAttackBoat + 1) ? 1 : 0;
             }
 
-            // X列: S列(展示総合) + T列(タイプ補正) + W列(展開もらい補正)
+            // ★ X列: 最終二次予想スコア（S列 + T列 + W列）
             $t['final_2nd_score'] = $t['ex_sougou'] + $t['type_hosei'] + $t['tenkai_morai'];
         }
         unset($t);
