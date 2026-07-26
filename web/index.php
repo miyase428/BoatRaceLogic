@@ -132,7 +132,7 @@ if (!empty($race_code)) {
             $stable_score  = (int)($item['stable_score'] ?? 0);
 
             // R列: 展示補正スコア（APIから受け取った値または計算値）
-            $ex_hosei = $ex_total - $stable_score;
+            $ex_hosei = $ex_total - $ashi_score;
 
             // S列: 展示総合スコア (O + P + Q)
             $ex_sougou     = $ex_total + $attack_pot + $stable_score;
