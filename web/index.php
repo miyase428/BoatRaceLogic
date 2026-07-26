@@ -16,15 +16,16 @@ $place_names = [
 
 // フォーム入力値の取得
 $selected_date   = $_GET['date'] ?? date('Y-m-d');
-$selected_place  = $_GET['place'] ?? 'OMR'; // デフォルト：大村
-$selected_race   = $_GET['race'] ?? '07';   // デフォルト：07R
+$selected_place  = $_GET['place'] ?? 'OMR';
+$selected_race   = $_GET['race'] ?? '07';
+$in_course       = $_GET['in_course'] ?? '123456'; // デフォルト：枠なり進入
 
 // YYYYMMDD 形式
 $formatted_date  = date('Ymd', strtotime($selected_date));
-// レースコード生成 (例: 20260724 + OMR + 07)
+// レースコード生成
 $race_code       = $formatted_date . $selected_place . sprintf('%02d', $selected_race);
 
-// 出走表データの取得（calc_scores.php から取得）
+// 1. 出走表データの取得（calc_scores.php から取得）
 $entries = [];
 $results = [];
 $api_error = '';
@@ -38,10 +39,37 @@ if ($json_data !== false) {
         $entries = $response['entries'] ?? [];
         $results = $response['results'] ?? [];
     } else {
-        $api_error = 'データが見つかりませんでした (status != ok)';
+        $api_error = '出走表データが見つかりませんでした (status != ok)';
     }
 } else {
     $api_error = '出走表APIの呼び出しに失敗しました。';
+}
+
+// 2. 決まり手データの取得（kimarite_api.php から POST 取得）
+$kimarite_data = [];
+$kimarite_error = '';
+
+if (!empty($race_code) && strlen($in_course) === 6) {
+    $post_data = http_build_query([
+        'race_code' => $race_code,
+        'in_course' => $in_course
+    ]);
+    $opts = [
+        'http' => [
+            'method'  => 'POST',
+            'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+            'content' => $post_data,
+            'timeout' => 3
+        ]
+    ];
+    $context = stream_context_create($opts);
+    $k_json = @file_get_contents("http://localhost/kimarite_api.php", false, $context);
+
+    if ($k_json !== false) {
+        $kimarite_data = json_decode($k_json, true) ?? [];
+    } else {
+        $kimarite_error = '決まり手APIの取得に失敗しました。';
+    }
 }
 
 // 枠番カラー設定
@@ -71,7 +99,7 @@ $lane_colors = [
             justify-content: center;
         }
         .container {
-            max-width: 900px;
+            max-width: 950px;
             width: 100%;
             background-color: #1e293b;
             padding: 30px;
@@ -89,8 +117,11 @@ $lane_colors = [
         h2 {
             color: #f8fafc;
             font-size: 18px;
-            margin-top: 30px;
+            margin-top: 35px;
             margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         .form-section {
             background-color: #0f172a;
@@ -101,7 +132,7 @@ $lane_colors = [
         }
         .form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
             gap: 15px;
             margin-bottom: 15px;
         }
@@ -148,7 +179,7 @@ $lane_colors = [
 
         .table-container {
             overflow-x: auto;
-            margin-top: 15px;
+            margin-top: 10px;
         }
         table {
             width: 100%;
@@ -165,26 +196,30 @@ $lane_colors = [
             white-space: nowrap;
         }
         td {
-            padding: 10px 8px;
+            padding: 8px;
             border-bottom: 1px solid #334155;
             white-space: nowrap;
         }
         .lane-badge {
-            width: 26px;
-            height: 26px;
-            line-height: 26px;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
             border-radius: 50%;
             font-weight: bold;
             display: inline-block;
         }
         .player-name { font-weight: bold; font-size: 14px; }
         .no-data {
-            padding: 30px;
+            padding: 20px;
             text-align: center;
             color: #94a3b8;
             background-color: #0f172a;
             border-radius: 8px;
         }
+
+        /* 決まり手テーブル固有スタイル */
+        .kimarite-table td { font-family: monospace; }
+        .border-top-course { border-top: 2px solid #475569; }
     </style>
 </head>
 <body>
@@ -220,6 +255,11 @@ $lane_colors = [
                                 <option value="<?= $r ?>" <?= $selected_race === $r ? 'selected' : '' ?>><?= $i ?>R</option>
                             <?php endfor; ?>
                         </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>進入コース (6桁)</label>
+                        <input type="text" name="in_course" maxlength="6" value="<?= htmlspecialchars($in_course) ?>">
                     </div>
                 </div>
 
@@ -286,6 +326,74 @@ $lane_colors = [
                 <?= htmlspecialchars($api_error ?: '該当レースのデータが存在しません。') ?>
             </div>
         <?php endif; ?>
+
+        <!-- ■ 決まり手情報 -->
+        <h2>🎯 決まり手情報</h2>
+
+        <?php if (!empty($kimarite_data)): ?>
+            <div class="table-container">
+                <table class="kimarite-table">
+                    <thead>
+                        <tr>
+                            <th>枠</th>
+                            <th>期間</th>
+                            <th>逃げ</th>
+                            <th>差し</th>
+                            <th>まくり</th>
+                            <th>まくり差し</th>
+                            <th>逃がし</th>
+                            <th>差され</th>
+                            <th>まくられ</th>
+                            <th>まくられ差</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $c_str = (string)$course;
+                                $data_1y = $kimarite_data[$c_str]['1year'] ?? [];
+                                $data_6m = $kimarite_data[$c_str]['6month'] ?? [];
+                                $c = $lane_colors[$course] ?? $lane_colors[1];
+                            ?>
+                            <!-- 1年データ -->
+                            <tr class="border-top-course">
+                                <td rowspan="2" style="vertical-align: middle;">
+                                    <span class="lane-badge" style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>;">
+                                        <?= $course ?>
+                                    </span>
+                                </td>
+                                <td>1年</td>
+                                <td><?= number_format(($data_1y['nige'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['sashi'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['makuri'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['makurizashi'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['nogashi'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['sasare'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['makurare'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_1y['makurarezashi'] ?? 0), 1) ?>%</td>
+                            </tr>
+                            <!-- 6ヶ月データ -->
+                            <tr>
+                                <td style="color: #94a3b8;">6ヶ月</td>
+                                <td><?= number_format(($data_6m['nige'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['sashi'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['makuri'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['makurizashi'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['nogashi'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['sasare'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['makurare'] ?? 0), 1) ?>%</td>
+                                <td><?= number_format(($data_6m['makurarezashi'] ?? 0), 1) ?>%</td>
+                            </tr>
+                        <?php endfor; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="no-data">
+                <?= htmlspecialchars($kimarite_error ?: '決まり手データが存在しません。') ?>
+            </div>
+        <?php endif; ?>
+
     </div>
 </body>
 </html>
