@@ -235,9 +235,9 @@ for ($i = 1; $i <= 6; $i++) {
     // ★連対率は tenji_test.php のレスポンスから直接取得
     // (レスポンスが 1〜6 キー、または 0〜5 インデックスの双方に対応)
     $api_item = $tenji_test_data[$i] 
-             ?? $tenji_test_data[(string)$i] 
-             ?? $tenji_test_data[$i - 1] 
-             ?? [];
+            ?? $tenji_test_data[(string)$i] 
+            ?? ($tenji_test_data[0] ?? null)
+            ?? [];
 
     $rate6_dec = $parse_rate($api_item['three_in_rate_6m'] ?? 0);
     $rate3_dec = $parse_rate($api_item['three_in_rate_3m'] ?? 0);
