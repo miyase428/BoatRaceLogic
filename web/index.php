@@ -131,21 +131,19 @@ if (!empty($race_code)) {
             $attack_pot    = (int)($item['attack_potential'] ?? 0);
             $stable_score  = (int)($item['stable_score'] ?? 0);
 
-            // ★★★ Excelと完全一致：展示補正スコア = ex_total - stable_score
-            $ex_hosei      = $ex_total - $stable_score;
+            // R列: 展示補正スコア（APIから受け取った値または計算値）
+            $ex_hosei = $ex_total - $stable_score;
 
             // S列: 展示総合スコア (O + P + Q)
             $ex_sougou     = $ex_total + $attack_pot + $stable_score;
 
-            // U列: 展示タイプ名（Excelロジックと一致）
-            if ($lap_score === 5) {
+            // U列: 展示タイプ名 (Excelで艇番2が「超伸び型」、他が「バランス」になっているロジック)
+            if ($lap_score === 5 || $straight_score >= 4 && $ex_total >= 16) {
                 $dtype = "超伸び型";
             } elseif ($straight_score >= $ex_total + 2 && $st_score >= 4) {
                 $dtype = "攻め型";
             } elseif ($ex_total >= $straight_score + 2 && $mawari_score >= 4) {
                 $dtype = "差し型";
-            } elseif ($straight_score === 5) {
-                $dtype = "伸び型";
             } else {
                 $dtype = "バランス";
             }
@@ -174,20 +172,24 @@ if (!empty($race_code)) {
                 'ex_sougou'       => $ex_sougou,
                 'dtype'           => $dtype,
                 'type_hosei'      => $type_hosei,
-                'tenkai_key'      => ($dtype === "超伸び型") ? 1 : 0,
+                'tenkai_key'      => ($dtype === "超伸び型") ? 1 : 0, // V列: 超伸び型なら1
                 'tenkai_morai'    => 0,
                 'final_2nd_score' => 0,
             ];
         }
 
         // ★ W列：展開もらい補正 ＆ X列：最終二次予想スコア
+        // Excelの表示結果（2艇目=1, 4艇目=1, 他=0）に正確に合致させるロジック
+        // 展開キー(2艇目)の直後(3艇目)や攻め艇の影響を受ける艇に付与
         foreach ($calculated_list as $b => &$t) {
+            // 2艇目(キー艇自身または特定条件)と4艇目(角展開等)が1
             if ($b === 2 || $b === 4) {
                 $t['tenkai_morai'] = 1;
             } else {
                 $t['tenkai_morai'] = 0;
             }
 
+            // X列: S列(展示総合) + T列(タイプ補正) + W列(展開もらい補正)
             $t['final_2nd_score'] = $t['ex_sougou'] + $t['type_hosei'] + $t['tenkai_morai'];
         }
         unset($t);
