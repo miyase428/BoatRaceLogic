@@ -110,7 +110,11 @@ if (!empty($race_code)) {
         // 艇番 1〜6 の順番で確実に作成（Excelの38行〜43行）
         $calculated_list = [];
         for ($b = 1; $b <= 6; $b++) {
+
             $item = $items_by_boat[$b] ?? [];
+
+            // ★ 出走表の足スコア（ExcelのQ9〜Q14）
+            $ashi_score = $results[$b-1]['ashi_score'] ?? 0;
 
             $course        = (int)($item['tenji_course'] ?? $b);
             $teiban        = $b;
@@ -131,12 +135,12 @@ if (!empty($race_code)) {
             $attack_pot    = (int)($item['attack_potential'] ?? 0);
             $stable_score  = (int)($item['stable_score'] ?? 0);
 
-            // R列: 展示補正スコア（APIから受け取った値または計算値）
-            $ex_hosei = $ex_total - $ashi_score;
+            // ★★★ Excelと完全一致：展示補正スコア = 展示足トータル - 足スコア
+            $ex_hosei      = $ex_total - $ashi_score;
 
             // S列: 展示総合スコア (O + P + Q)
             $ex_sougou     = $ex_total + $attack_pot + $stable_score;
-
+            
             // U列: 展示タイプ名 (Excelで艇番2が「超伸び型」、他が「バランス」になっているロジック)
             if ($lap_score === 5 || $straight_score >= 4 && $ex_total >= 16) {
                 $dtype = "超伸び型";
