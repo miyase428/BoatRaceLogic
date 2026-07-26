@@ -189,69 +189,46 @@ if (!empty($race_code)) {
 }
 
 // -------------------------------------------------------------
-// ■ VBAプログラム完全忠実移植（最終予想ロジック）
+// ■ 最終予想ロジック（VBA完全再現・データ参照修正版）
 // -------------------------------------------------------------
 $final_predictions = [];
 
-// 1コース（21行目相当）の決まり手・受けてデータ
-$k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? $kimarite_data[0] ?? [];
-$k1_nige     = (float)($k1['nige'] ?? 0);
-$k1_sashi    = (float)($k1['sashi'] ?? 0);
-$k1_makuri   = (float)($k1['makuri'] ?? 0);
-$k1_makuri_z = (float)($k1['makurizashi'] ?? 0);
-
-// 小数点（0.802）形式へ標準化関数
+// 1コース（21行目相当）の決まり手データ
+$k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? [];
 $to_dec = function($val) {
     $f = (float)$val;
     return ($f > 1.0) ? $f / 100.0 : $f;
 };
 
-$k1_nige_dec     = $to_dec($k1_nige);
-$k1_sashi_dec    = $to_dec($k1_sashi);
-$k1_makuri_dec   = $to_dec($k1_makuri);
-$k1_makuri_z_dec = $to_dec($k1_makuri_z);
+$k1_nige_dec     = $to_dec($k1['nige'] ?? 0);
+$k1_sashi_dec    = $to_dec($k1['sashi'] ?? 0);
+$k1_makuri_dec   = $to_dec($k1['makuri'] ?? 0);
+$k1_makuri_z_dec = $to_dec($k1['makurizashi'] ?? 0);
 
 for ($i = 1; $i <= 6; $i++) {
     $boat = $i;
     $waku = $boat;
 
-// 艇番(文字列/数値)または配列インデックスで決まり手・連対率データを特定
-    $k_data = $kimarite_data[(string)$boat] 
-           ?? $kimarite_data[$boat] 
-           ?? $kimarite_data[$i - 1] 
-           ?? [];
-
-    // 6ヶ月/3ヶ月のネスト構造（'6month'等）に入っている場合も考慮して多角的に取得
-    $k_6m = $k_data['6month'] ?? $k_data;
-    $k_3m = $k_data['3month'] ?? $k_data;
-
-    // --- 3連率（D50:E55） ---
-    $rate6_raw = $k_data['three_in_rate_6m'] 
-              ?? $k_6m['three_in_rate_6m'] 
-              ?? $k_data['rate6'] 
-              ?? $k_data['three_in_rate'] 
-              ?? 0;
-
-    $rate3_raw = $k_data['three_in_rate_3m'] 
-              ?? $k_3m['three_in_rate_3m'] 
-              ?? $k_data['rate3'] 
-              ?? 0;
+    // ★連対率は VBAの通り 展示API(tenji_list) 側のレスポンスから取得
+    $t_data = $tenji_list[$i - 1] ?? [];
+    $rate6_raw = $t_data['three_in_rate_6m'] ?? $t_data['rate6'] ?? 0;
+    $rate3_raw = $t_data['three_in_rate_3m'] ?? $t_data['rate3'] ?? 0;
 
     $rate6_dec = $to_dec($rate6_raw);
     $rate3_dec = $to_dec($rate3_raw);
 
+    // 決まり手データ（1年/6ヶ月の6ヶ月優先）
+    $k_data = $kimarite_data[(string)$boat]['6month'] ?? $kimarite_data[(string)$boat] ?? [];
+
     // --- 期待値計算（F50:F55） ---
-    // scoreRow = 37 + i (S列：展示総合スコア相当)
-    $score_s = (float)($tenji_list[$i-1]['ex_sougou'] ?? 0);
+    $score_s = (float)($t_data['ex_sougou'] ?? 0);
 
     if ($i === 1) {
-        // D21(1コース逃げ率) * (1 + S38 / 100)
         $kitai_dec = $k1_nige_dec * (1.0 + ($score_s / 100.0));
     } else {
-        // (E_base + F_base + G_base) * (1 + S_score / 100)
-        $sashi_dec  = $to_dec($k_data['sashi'] ?? 0);
-        $makuri_dec = $to_dec($k_data['makuri'] ?? 0);
-        $makuriz_dec= $to_dec($k_data['makurizashi'] ?? 0);
+        $sashi_dec   = $to_dec($k_data['sashi'] ?? 0);
+        $makuri_dec  = $to_dec($k_data['makuri'] ?? 0);
+        $makuriz_dec = $to_dec($k_data['makurizashi'] ?? 0);
 
         $kitai_dec = ($sashi_dec + $makuri_dec + $makuriz_dec) * (1.0 + ($score_s / 100.0));
     }
@@ -267,28 +244,24 @@ for ($i = 1; $i <= 6; $i++) {
         $curr_makuri  = $to_dec($k_data['makuri'] ?? 0);
         $curr_makuriz = $to_dec($k_data['makurizashi'] ?? 0);
 
-        // If ws.Range("I21").Value > 0.12 And ws.Range("E" & baseRow).Value > 0.12
         if ($k1_sashi_dec > 0.12 && $curr_sashi > 0.12) {
             $flg_sashi = "★" . $i . "差し";
         }
-        // If ws.Range("J21").Value > 0.12 And ws.Range("F" & baseRow).Value > 0.12
         if ($k1_makuri_dec > 0.12 && $curr_makuri > 0.12) {
             $flg_makuri = "★" . $i . "まくり";
         }
-        // If ws.Range("K21").Value > 0.12 And ws.Range("G" & baseRow).Value > 0.12
         if ($k1_makuri_z_dec > 0.12 && $curr_makuriz > 0.12) {
             $flg_makurizashi = "★" . $i . "まくり差し";
         }
     }
 
-    // 展開フラグ_逃し（J50:J55）
+    // 展開フラグ_逃し
     if ($i === 2) {
         $nogashi_dec = $to_dec($k_data['nogashi'] ?? 0);
         if ($nogashi_dec > 0.4) {
             $flg_nogashi = "★壁役(逃がし)";
         }
     } elseif ($i === 3) {
-        // stFactor = 1 + (ws.Range("K40").Value - 3) * 0.1
         $st_score_3 = (float)($tenji_list[2]['st_score'] ?? 0);
         $stFactor = 1.0 + ($st_score_3 - 3.0) * 0.1;
 
@@ -337,8 +310,7 @@ for ($i = 1; $i <= 6; $i++) {
     }
 
     // --- 三次予想スコア（M50:M55） ---
-    // final2 = ws.Range("X" & 37 + i).Value (展示最終二次予想スコア)
-    $final2 = (float)($tenji_list[$i-1]['final_2nd_score'] ?? 0);
+    $final2 = (float)($t_data['final_2nd_score'] ?? 0);
     $final3 = $final2 + $typeBonus;
 
     $final_predictions[$i] = [
@@ -354,11 +326,11 @@ for ($i = 1; $i <= 6; $i++) {
         'type' => $type,
         'typeBonus' => $typeBonus,
         'final3' => $final3,
-        'getBonus' => (float)($tenji_list[$i-1]['tenkai_morai'] ?? 0),
+        'getBonus' => (float)($t_data['tenkai_morai'] ?? 0),
     ];
 }
 
-// --- 切る艇判定（N50:N55 - VBA Median処理） ---
+// --- 切る艇判定（N50:N55） ---
 $m_scores = array_column($final_predictions, 'final3');
 sort($m_scores);
 $count = count($m_scores);
@@ -370,8 +342,6 @@ if ($count % 2 === 0) {
 
 for ($i = 1; $i <= 6; $i++) {
     $fp = &$final_predictions[$i];
-    
-    // If getBonus = 0 And final3 < med And (rate6 < 0.5 Or rate3 < 0.5) Then
     if ($fp['getBonus'] == 0 && $fp['final3'] < $med && ($fp['rate6_dec'] < 0.5 || $fp['rate3_dec'] < 0.5)) {
         $fp['kiru'] = 1;
     } else {
