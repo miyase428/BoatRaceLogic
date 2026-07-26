@@ -407,6 +407,40 @@ $kiru_kako        = implode('', $kiru_boats);
 $honmei_kai = $honmei_head . '-' . $honmei_aite_kako . '-' . $honmei_aite_kako . $kiru_kako;
 $taikou_kai = $taikou_head . '-' . $taikou_aite_kako . '-' . $taikou_aite_kako . $kiru_kako;
 
+// -------------------------------------------------------------
+// ■ サム理論マスタデータの取得 (sum_api.php 連携)
+// -------------------------------------------------------------
+$sam_master_data = [];
+$sam_error = '';
+
+// 場所コード ($selected_place) から数値2桁の場コード（例: OMR -> 24 など）を取得/変換
+// ※ $place_map に「'OMR' => '24'」等のマッピングがある前提
+$jyo_num = $place_map[$selected_place] ?? $selected_place; 
+
+$post_data = http_build_query(['jyo' => $jyo_num]);
+$opts = [
+    'http' => [
+        'method'  => 'POST',
+        'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => $post_data,
+        'timeout' => 3
+    ]
+];
+$context = stream_context_create($opts);
+$sam_json = @file_get_contents("http://192.168.0.208:80/sum_api.php", false, $context);
+
+if ($sam_json !== false) {
+    $parsed_sam = json_decode($sam_json, true) ?? [];
+    // APIレスポンスが $parsed_sam[$jyo_num] の階層構造になっている場合に対応
+    $sam_master_data = $parsed_sam[$jyo_num] ?? $parsed_sam;
+} else {
+    $sam_error = 'サム理論マスタAPIの取得に失敗しました。';
+}
+
+// サム理論の区間・メトリクスの表示順定義
+$sam_intervals = ["-0.6未満", "-0.6--0.4", "-0.4--0.2", "-0.2-0.0", "0.0-0.2", "0.2-0.4", "0.4-0.6", "0.6以上"];
+$sam_metrics   = ["win", "place2", "place3", "trio"];
+
 // 枠番カラー設定
 $lane_colors = [
     1 => ['bg' => '#f8fafc', 'text' => '#0f172a', 'border' => '#e2e8f0'],
@@ -571,6 +605,15 @@ $lane_colors = [
             padding: 15px;
             overflow-x: auto;
         }
+
+        /* サム理論表示用 */
+        .sam-table td, .sam-table th { font-family: monospace; }
+        .sam-course-bg-1 { background-color: rgba(248, 250, 252, 0.05); }
+        .sam-course-bg-2 { background-color: rgba(30, 41, 59, 0.5); }
+        .sam-course-bg-3 { background-color: rgba(239, 68, 68, 0.1); }
+        .sam-course-bg-4 { background-color: rgba(59, 130, 246, 0.1); }
+        .sam-course-bg-5 { background-color: rgba(234, 179, 8, 0.1); }
+        .sam-course-bg-6 { background-color: rgba(34, 197, 94, 0.1); }
     </style>
 </head>
 <body>
@@ -917,6 +960,62 @@ $lane_colors = [
             </div>
         <?php else: ?>
             <div class="no-data">最終予想データが存在しません。</div>
+        <?php endif; ?>
+
+<!-- ■ サム理論マスタデータ -->
+        <h2>📐 サム理論（コース・区間別マスタ）</h2>
+        <?php if (!empty($sam_master_data)): ?>
+            <div class="table-container">
+                <table class="sam-table">
+                    <thead>
+                        <tr>
+                            <th>コース</th>
+                            <th>区間</th>
+                            <th>win</th>
+                            <th>place2</th>
+                            <th>place3</th>
+                            <th>trio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php 
+                                $c_str = (string)$course;
+                                $course_data = $sam_master_data[$c_str] ?? [];
+                                $c = $lane_colors[$course] ?? $lane_colors[1];
+                                $bg_class = "sam-course-bg-" . $course;
+                            ?>
+                            <?php foreach ($sam_intervals as $idx => $interval): ?>
+                                <?php $row_metrics = $course_data[$interval] ?? []; ?>
+                                <tr class="<?= $bg_class ?> <?= ($idx === 0) ? 'border-top-course' : '' ?>">
+                                    <?php if ($idx === 0): ?>
+                                        <td rowspan="8" style="vertical-align: middle;">
+                                            <span class="lane-badge" style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>;">
+                                                <?= $course ?>
+                                            </span>
+                                        </td>
+                                    <?php endif; ?>
+                                    <td style="text-align: center; color: #a5b4fc;"><?= htmlspecialchars($interval) ?></td>
+                                    <?php foreach ($sam_metrics as $m): ?>
+                                        <?php 
+                                            $val = (float)($row_metrics[$m] ?? 0);
+                                            // 0を跨ぐ正負の色分け（プラスなら水色、マイナスなら赤系など）
+                                            $color_style = "";
+                                            if ($val > 0) $color_style = "color: #38bdf8;";
+                                            elseif ($val < 0) $color_style = "color: #f87171;";
+                                        ?>
+                                        <td style="<?= $color_style ?>">
+                                            <?= number_format($val * 100, 0) ?>%
+                                        </td>
+                                    <?php endforeach; ?>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endfor; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="no-data"><?= htmlspecialchars($sam_error ?: 'サム理論マスタデータが存在しません。') ?></div>
         <?php endif; ?>
 
     </div>
