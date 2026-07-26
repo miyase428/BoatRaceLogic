@@ -1,3 +1,25 @@
+<?php
+// common/db_connect.php を読み込み
+require_once __DIR__ . '/../common/db_connect.php';
+
+$db_status_msg   = '';
+$db_status_color = '#22c55e'; // 成功時：緑
+$is_success      = false;
+
+try {
+    // db_connect.php で定義されている関数でPDOインスタンスを取得
+    $pdo = getPDO();
+    
+    $db_status_msg = "PostgreSQL: 接続成功！";
+    $is_success = true;
+} catch (PDOException $e) {
+    $db_status_msg = "PostgreSQL: 接続失敗 (" . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ")";
+    $db_status_color = '#ef4444'; // 失敗時：赤
+} catch (Throwable $e) {
+    $db_status_msg = "エラー: " . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8');
+    $db_status_color = '#ef4444';
+}
+?>
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -35,7 +57,10 @@
             border-left: 4px solid #22c55e;
             padding: 15px;
             border-radius: 4px;
-            margin-top: 20px;
+            margin-top: 15px;
+        }
+        .status-card.db {
+            border-left-color: <?= $db_status_color ?>;
         }
         .status-title {
             font-size: 12px;
@@ -45,10 +70,12 @@
         }
         .status-value {
             font-size: 18px;
-            color: #22c55e;
+            color: #f8fafc;
             font-weight: bold;
             margin-top: 5px;
         }
+        .text-green { color: #22c55e; }
+        .text-red { color: #ef4444; }
     </style>
 </head>
 <body>
@@ -58,7 +85,14 @@
 
         <div class="status-card">
             <div class="status-title">System Status</div>
-            <div class="status-value">Web Server: ONLINE</div>
+            <div class="status-value text-green">Web Server: ONLINE</div>
+        </div>
+
+        <div class="status-card db">
+            <div class="status-title">Database Status</div>
+            <div class="status-value <?= $is_success ? 'text-green' : 'text-red' ?>">
+                <?= $db_status_msg ?>
+            </div>
         </div>
     </div>
 </body>
