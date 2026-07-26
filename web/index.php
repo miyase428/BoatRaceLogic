@@ -77,7 +77,7 @@ if (!empty($race_code) && strlen($in_course) === 6) {
 }
 
 // -------------------------------------------------------------
-// 3. 展示データの取得とExcel完全一致計算
+// 3. 展示データの取得
 // -------------------------------------------------------------
 $tenji_list = [];
 $tenji_error = '';
@@ -108,7 +108,6 @@ if (!empty($race_code)) {
 
         $calculated_list = [];
         for ($b = 1; $b <= 6; $b++) {
-
             $item = $items_by_boat[$b] ?? [];
             $ashi_score = $results[$b-1]['ashi_score'] ?? 0;
 
@@ -184,144 +183,220 @@ if (!empty($race_code)) {
         unset($t);
 
         $tenji_list = array_values($calculated_list);
-
     } else {
         $tenji_error = '展示APIの取得に失敗しました。';
     }
 }
 
 // -------------------------------------------------------------
-// ■ 最終予想ロジック（Excel完全一致）
+// ■ VBAプログラム完全忠実移植（最終予想ロジック）
 // -------------------------------------------------------------
 $final_predictions = [];
 
-for ($i = 0; $i < 6; $i++) {
-    $boat = $i + 1;
+// 1コース（21行目相当）の決まり手・受けてデータ
+$k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? $kimarite_data[0] ?? [];
+$k1_nige     = (float)($k1['nige'] ?? 0);
+$k1_sashi    = (float)($k1['sashi'] ?? 0);
+$k1_makuri   = (float)($k1['makuri'] ?? 0);
+$k1_makuri_z = (float)($k1['makurizashi'] ?? 0);
+
+// 小数点（0.802）形式へ標準化関数
+$to_dec = function($val) {
+    $f = (float)$val;
+    return ($f > 1.0) ? $f / 100.0 : $f;
+};
+
+$k1_nige_dec     = $to_dec($k1_nige);
+$k1_sashi_dec    = $to_dec($k1_sashi);
+$k1_makuri_dec   = $to_dec($k1_makuri);
+$k1_makuri_z_dec = $to_dec($k1_makuri_z);
+
+for ($i = 1; $i <= 6; $i++) {
+    $boat = $i;
     $waku = $boat;
 
-    $boat_kimarite = $kimarite_data[(string)$boat] ?? $kimarite_data[$i] ?? [];
-    $kimarite_6m   = $boat_kimarite['6month'] ?? $boat_kimarite ?? [];
+    $k_data = $kimarite_data[(string)$boat]['6month'] ?? $kimarite_data[(string)$boat] ?? $kimarite_data[$i-1] ?? [];
 
-    // 3連対率柔軟取得
-    $raw_rate6 = $boat_kimarite['three_in_rate_6m'] ?? $kimarite_6m['three_in_rate_6m'] ?? $boat_kimarite['rate6'] ?? 0;
-    $raw_rate3 = $boat_kimarite['three_in_rate_3m'] ?? $kimarite_6m['three_in_rate_3m'] ?? $boat_kimarite['rate3'] ?? 0;
+    // --- 3連率（D50:E55） ---
+    $rate6_raw = $k_data['three_in_rate_6m'] ?? $k_data['rate6'] ?? 0;
+    $rate3_raw = $k_data['three_in_rate_3m'] ?? $k_data['rate3'] ?? 0;
 
-    $rate6 = ($raw_rate6 <= 1.0 && $raw_rate6 > 0) ? $raw_rate6 * 100 : (float)$raw_rate6;
-    $rate3 = ($raw_rate3 <= 1.0 && $raw_rate3 > 0) ? $raw_rate3 * 100 : (float)$raw_rate3;
+    $rate6_dec = $to_dec($rate6_raw);
+    $rate3_dec = $to_dec($rate3_raw);
 
-    $nige   = $kimarite_6m['nige'] ?? $kimarite_6m['逃げ'] ?? 0;
-    $sashi  = $kimarite_6m['sashi'] ?? $kimarite_6m['差し'] ?? 0;
-    $makuri = $kimarite_6m['makuri'] ?? $kimarite_6m['まくり'] ?? 0;
-    $makurizashi = $kimarite_6m['makurizashi'] ?? $kimarite_6m['まくり差し'] ?? 0;
-    $sasare = $kimarite_6m['sasare'] ?? $kimarite_6m['差され'] ?? 0;
-    $makurarezashi = $kimarite_6m['makurarezashi'] ?? $kimarite_6m['まくられ差し'] ?? 0;
-    $nogashi = $kimarite_6m['nogashi'] ?? $kimarite_6m['逃がし'] ?? 0;
+    // --- 期待値計算（F50:F55） ---
+    // scoreRow = 37 + i (S列：展示総合スコア相当)
+    $score_s = (float)($tenji_list[$i-1]['ex_sougou'] ?? 0);
 
-    // 展開フラグ判定
+    if ($i === 1) {
+        // D21(1コース逃げ率) * (1 + S38 / 100)
+        $kitai_dec = $k1_nige_dec * (1.0 + ($score_s / 100.0));
+    } else {
+        // (E_base + F_base + G_base) * (1 + S_score / 100)
+        $sashi_dec  = $to_dec($k_data['sashi'] ?? 0);
+        $makuri_dec = $to_dec($k_data['makuri'] ?? 0);
+        $makuriz_dec= $to_dec($k_data['makurizashi'] ?? 0);
+
+        $kitai_dec = ($sashi_dec + $makuri_dec + $makuriz_dec) * (1.0 + ($score_s / 100.0));
+    }
+
+    // --- 展開フラグ判定 (G50:J55) ---
     $flg_sashi = "-";
     $flg_makuri = "-";
     $flg_makurizashi = "-";
     $flg_nogashi = "-";
 
-    if ($boat >= 2) {
-        if ($sashi > 0.12 || $sashi > 12) $flg_sashi = "★" . $boat . "差し";
-        if ($makuri > 0.12 || $makuri > 12) $flg_makuri = "★" . $boat . "まくり";
-        if ($makurizashi > 0.12 || $makurizashi > 12) $flg_makurizashi = "★" . $boat . "まくり差し";
+    if ($i >= 2) {
+        $curr_sashi   = $to_dec($k_data['sashi'] ?? 0);
+        $curr_makuri  = $to_dec($k_data['makuri'] ?? 0);
+        $curr_makuriz = $to_dec($k_data['makurizashi'] ?? 0);
+
+        // If ws.Range("I21").Value > 0.12 And ws.Range("E" & baseRow).Value > 0.12
+        if ($k1_sashi_dec > 0.12 && $curr_sashi > 0.12) {
+            $flg_sashi = "★" . $i . "差し";
+        }
+        // If ws.Range("J21").Value > 0.12 And ws.Range("F" & baseRow).Value > 0.12
+        if ($k1_makuri_dec > 0.12 && $curr_makuri > 0.12) {
+            $flg_makuri = "★" . $i . "まくり";
+        }
+        // If ws.Range("K21").Value > 0.12 And ws.Range("G" & baseRow).Value > 0.12
+        if ($k1_makuri_z_dec > 0.12 && $curr_makuriz > 0.12) {
+            $flg_makurizashi = "★" . $i . "まくり差し";
+        }
     }
 
-    if ($boat == 2 && ($nogashi > 0.4 || $nogashi > 40)) {
-        $flg_nogashi = "★壁役(逃がし)";
-    } elseif ($boat == 3) {
-        $flg_nogashi = "-";
+    // 展開フラグ_逃し（J50:J55）
+    if ($i === 2) {
+        $nogashi_dec = $to_dec($k_data['nogashi'] ?? 0);
+        if ($nogashi_dec > 0.4) {
+            $flg_nogashi = "★壁役(逃がし)";
+        }
+    } elseif ($i === 3) {
+        // stFactor = 1 + (ws.Range("K40").Value - 3) * 0.1
+        $st_score_3 = (float)($tenji_list[2]['st_score'] ?? 0);
+        $stFactor = 1.0 + ($st_score_3 - 3.0) * 0.1;
+
+        $k3_makuri  = $to_dec($k_data['makuri'] ?? 0);
+        $k3_makuriz = $to_dec($k_data['makurizashi'] ?? 0);
+        $blockIndex = ($k3_makuri + $k3_makuriz) * $stFactor;
+
+        if ($blockIndex > 0.12) {
+            $flg_nogashi = "★外ブロック";
+        }
     }
 
-    // 期待値
-    $score_s = $tenji_list[$i]['ex_sougou'] ?? 0;
-    if ($boat == 1) {
-        $kitai = $rate6 * (1 + $score_s / 100);
-    } else {
-        $kitai = ($sashi + $makuri + $makurizashi) * (1 + $score_s / 100);
-    }
+    // --- 決まり手タイプ（K50:K55） ---
+    $nige_d     = $to_dec($k_data['nige'] ?? 0);
+    $sashi_d    = $to_dec($k_data['sashi'] ?? 0);
+    $makuri_d   = $to_dec($k_data['makuri'] ?? 0);
+    $makuriz_d  = $to_dec($k_data['makurizashi'] ?? 0);
+    $sasare_d   = $to_dec($k_data['sasare'] ?? 0);
+    $makurarez_d= $to_dec($k_data['makurarezashi'] ?? 0);
 
-    // タイプ判定
-    if ($boat == 1 && ($nige >= 20 || $nige >= 0.2)) {
+    if ($nige_d >= 0.2 && $waku === 1) {
         $type = "逃げ型";
-    } elseif ($sashi >= 5 || $sashi >= 0.05) {
+    } elseif ($sashi_d >= 0.05) {
         $type = "差し型";
-    } elseif ($makuri >= 5 || $makuri >= 0.05 || $makurizashi >= 5 || $makurizashi >= 0.05) {
+    } elseif ($makuri_d >= 0.05 || $makuriz_d >= 0.05) {
         $type = "攻め型";
-    } elseif ($sasare >= 20 || $sasare >= 0.2 || $makurarezashi >= 20 || $makurarezashi >= 0.2) {
+    } elseif ($sasare_d >= 0.2 || $makurarez_d >= 0.2) {
         $type = "脆い型";
     } else {
         $type = "無色";
     }
 
-    $type_bonus = 0;
-    if (in_array($type, ["逃げ型", "差し型", "攻め型"])) {
-        $type_bonus = 1;
-    } elseif ($type === "脆い型") {
-        $type_bonus = -1;
+    // --- 決まり手補正（L50:L55） ---
+    switch ($type) {
+        case "攻め型":
+        case "差し型":
+        case "逃げ型":
+            $typeBonus = 1;
+            break;
+        case "脆い型":
+            $typeBonus = -1;
+            break;
+        default:
+            $typeBonus = 0;
+            break;
     }
 
-    $final2 = $tenji_list[$i]['final_2nd_score'] ?? 0;
-    $final3 = $final2 + $type_bonus;
+    // --- 三次予想スコア（M50:M55） ---
+    // final2 = ws.Range("X" & 37 + i).Value (展示最終二次予想スコア)
+    $final2 = (float)($tenji_list[$i-1]['final_2nd_score'] ?? 0);
+    $final3 = $final2 + $typeBonus;
 
-    $final_predictions[] = [
+    $final_predictions[$i] = [
         'boat' => $boat,
         'waku' => $waku,
-        'rate6' => $rate6,
-        'rate3' => $rate3,
-        'kitai' => $kitai,
+        'rate6_dec' => $rate6_dec,
+        'rate3_dec' => $rate3_dec,
+        'kitai_dec' => $kitai_dec,
         'flg_sashi' => $flg_sashi,
         'flg_makuri' => $flg_makuri,
         'flg_makurizashi' => $flg_makurizashi,
         'flg_nogashi' => $flg_nogashi,
         'type' => $type,
-        'type_bonus' => $type_bonus,
+        'typeBonus' => $typeBonus,
         'final3' => $final3,
-        'final2' => $final2,
-        'tenkai_bonus' => $tenji_list[$i]['tenkai_morai'] ?? 0,
+        'getBonus' => (float)($tenji_list[$i-1]['tenkai_morai'] ?? 0),
     ];
 }
 
-// 切る艇判定
-$med_scores = array_column($final_predictions, 'final3');
-sort($med_scores);
-$count = count($med_scores);
-if ($count % 2 == 0) {
-    $median = ($med_scores[$count/2 - 1] + $med_scores[$count/2]) / 2;
+// --- 切る艇判定（N50:N55 - VBA Median処理） ---
+$m_scores = array_column($final_predictions, 'final3');
+sort($m_scores);
+$count = count($m_scores);
+if ($count % 2 === 0) {
+    $med = ($m_scores[$count/2 - 1] + $m_scores[$count/2]) / 2.0;
 } else {
-    $median = $med_scores[floor($count/2)];
+    $med = $m_scores[floor($count/2)];
 }
 
-foreach ($final_predictions as &$fp) {
-    $fp['kiru'] = (
-        $fp['tenkai_bonus'] == 0 &&
-        $fp['final3'] < $median &&
-        ($fp['rate6'] < 50 || $fp['rate3'] < 50)
-    ) ? 1 : 0;
+for ($i = 1; $i <= 6; $i++) {
+    $fp = &$final_predictions[$i];
+    
+    // If getBonus = 0 And final3 < med And (rate6 < 0.5 Or rate3 < 0.5) Then
+    if ($fp['getBonus'] == 0 && $fp['final3'] < $med && ($fp['rate6_dec'] < 0.5 || $fp['rate3_dec'] < 0.5)) {
+        $fp['kiru'] = 1;
+    } else {
+        $fp['kiru'] = 0;
+    }
 }
 unset($fp);
 
-// 下部集計データ
+// --- 下部集計エリア文字列の作成 ---
 $kiru_boats = [];
 $aite_boats = [];
-foreach ($final_predictions as $fp) {
-    if ($fp['kiru'] == 1) {
-        $kiru_boats[] = $fp['boat'];
+for ($i = 1; $i <= 6; $i++) {
+    if ($final_predictions[$i]['kiru'] == 1) {
+        $kiru_boats[] = $i;
     } else {
-        $aite_boats[] = $fp['boat'];
+        $aite_boats[] = $i;
     }
 }
 
-$sorted_p = $final_predictions;
-usort($sorted_p, function($a, $b) { return $b['final3'] <=> $a['final3']; });
+// 三次予想スコア順で本命(1位)・対抗(2位)を判定
+$sorted_preds = $final_predictions;
+usort($sorted_preds, function($a, $b) { return $b['final3'] <=> $a['final3']; });
 
-$honmei_head = $sorted_p[0]['boat'] ?? 1;
-$taikou_head = $sorted_p[1]['boat'] ?? 2;
+$honmei_head = $sorted_preds[0]['boat'] ?? 1;
+$taikou_head = $sorted_preds[1]['boat'] ?? 2;
 
-$aite_str = implode('・', array_diff($aite_boats, [$honmei_head]));
-$kiru_str = implode('・', $kiru_boats);
+// 相手候補（頭を除く）
+$honmei_aite = array_diff($aite_boats, [$honmei_head]);
+$taikou_aite = array_diff($aite_boats, [$taikou_head]);
+
+$honmei_aite_str = implode('・', $honmei_aite);
+$taikou_aite_str = implode('・', $taikou_aite);
+$kiru_str        = implode('・', $kiru_boats);
+
+$honmei_aite_kako = implode('', $honmei_aite);
+$taikou_aite_kako = implode('', $taikou_aite);
+$kiru_kako        = implode('', $kiru_boats);
+
+// 買い目候補 3連単 (例: 2-341-3415)
+$honmei_kai = $honmei_head . '-' . $honmei_aite_kako . '-' . $honmei_aite_kako . $kiru_kako;
+$taikou_kai = $taikou_head . '-' . $taikou_aite_kako . '-' . $taikou_aite_kako . $kiru_kako;
 
 // 枠番カラー設定
 $lane_colors = [
@@ -425,10 +500,7 @@ $lane_colors = [
             font-family: monospace;
         }
 
-        .table-container {
-            overflow-x: auto;
-            margin-top: 10px;
-        }
+        .table-container { overflow-x: auto; margin-top: 10px; }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -739,7 +811,7 @@ $lane_colors = [
             <div class="no-data"><?= htmlspecialchars($tenji_error ?: '展示データが存在しません。') ?></div>
         <?php endif; ?>
 
-        <!-- ■ 最終予想（Excel完全一致構造） -->
+        <!-- ■ 最終予想（Excel/VBA完全一致） -->
         <h2>📊 最終予想（Excel完全一致）</h2>
 
         <?php if (!empty($final_predictions)): ?>
@@ -763,37 +835,37 @@ $lane_colors = [
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($final_predictions as $fp): ?>
+                        <?php for ($i = 1; $i <= 6; $i++): ?>
                             <?php
-                                $boat = $fp['boat'];
-                                $c = $lane_colors[$boat] ?? $lane_colors[1];
+                                $fp = $final_predictions[$i];
+                                $c  = $lane_colors[$i] ?? $lane_colors[1];
                             ?>
                             <tr>
-                                <td><?= $boat ?></td>
+                                <td><?= $fp['boat'] ?></td>
                                 <td>
                                     <span class="lane-badge" style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>;">
                                         <?= $fp['waku'] ?>
                                     </span>
                                 </td>
-                                <td><?= number_format($fp['rate6'], 1) ?>%</td>
-                                <td><?= number_format($fp['rate3'], 1) ?>%</td>
-                                <td><?= number_format($fp['kitai'], 1) ?>%</td>
+                                <td><?= number_format($fp['rate6_dec'] * 100, 1) ?>%</td>
+                                <td><?= number_format($fp['rate3_dec'] * 100, 1) ?>%</td>
+                                <td><?= number_format($fp['kitai_dec'] * 100, 1) ?>%</td>
                                 <td><?= htmlspecialchars($fp['flg_sashi']) ?></td>
                                 <td><?= htmlspecialchars($fp['flg_makuri']) ?></td>
                                 <td><?= htmlspecialchars($fp['flg_makurizashi']) ?></td>
                                 <td><?= htmlspecialchars($fp['flg_nogashi']) ?></td>
                                 <td><?= htmlspecialchars($fp['type']) ?></td>
-                                <td><?= $fp['type_bonus'] ?></td>
+                                <td><?= $fp['typeBonus'] ?></td>
                                 <td class="score-highlight" style="font-size: 14px;"><?= $fp['final3'] ?></td>
                                 <td>
                                     <?php if ($fp['kiru'] == 1): ?>
-                                        <span style="color:#ef4444; font-weight:bold;">切り</span>
+                                        <span style="color:#ef4444; font-weight:bold;">1</span>
                                     <?php else: ?>
-                                        -
+                                        0
                                     <?php endif; ?>
                                 </td>
                             </tr>
-                        <?php endforeach; ?>
+                        <?php endfor; ?>
                     </tbody>
                 </table>
             </div>
@@ -816,20 +888,20 @@ $lane_colors = [
                         <tr>
                             <td style="font-weight:bold; color:#38bdf8;">本命</td>
                             <td><?= $honmei_head ?></td>
-                            <td><?= htmlspecialchars($aite_str) ?></td>
+                            <td><?= htmlspecialchars($honmei_aite_str) ?></td>
                             <td><?= htmlspecialchars($kiru_str) ?></td>
-                            <td><?= str_replace('・', '', $aite_str) ?></td>
-                            <td><?= str_replace('・', '', $kiru_str) ?></td>
-                            <td class="score-highlight"><?= $honmei_head ?>-<?= str_replace('・', '', $aite_str) ?>-<?= str_replace('・', '', $aite_str) ?><?= str_replace('・', '', $kiru_str) ?></td>
+                            <td><?= htmlspecialchars($honmei_aite_kako) ?></td>
+                            <td><?= htmlspecialchars($kiru_kako) ?></td>
+                            <td class="score-highlight"><?= htmlspecialchars($honmei_kai) ?></td>
                         </tr>
                         <tr>
                             <td style="font-weight:bold; color:#f59e0b;">対抗</td>
                             <td><?= $taikou_head ?></td>
-                            <td><?= htmlspecialchars($aite_str) ?></td>
+                            <td><?= htmlspecialchars($taikou_aite_str) ?></td>
                             <td><?= htmlspecialchars($kiru_str) ?></td>
-                            <td><?= str_replace('・', '', $aite_str) ?></td>
-                            <td><?= str_replace('・', '', $kiru_str) ?></td>
-                            <td class="score-highlight"><?= $taikou_head ?>-<?= str_replace('・', '', $aite_str) ?>-<?= str_replace('・', '', $aite_str) ?><?= str_replace('・', '', $kiru_str) ?></td>
+                            <td><?= htmlspecialchars($taikou_aite_kako) ?></td>
+                            <td><?= htmlspecialchars($kiru_kako) ?></td>
+                            <td class="score-highlight"><?= htmlspecialchars($taikou_kai) ?></td>
                         </tr>
                     </tbody>
                 </table>
