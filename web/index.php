@@ -217,8 +217,9 @@ for ($i = 0; $i < 6; $i++) {
     $final2 = $tenji_list[$i]['final_2nd_score'];      // 二次予想
     $tenkai_bonus = $tenji_list[$i]['tenkai_morai'];   // 展開もらい補正
 
-    // --- 決まり手タイプ判定（Excelロジック） ---
-    $kimarite = $kimarite_data[(string)$boat]['6month'] ?? [];
+    // 艇番ごとのルートデータを取得
+    $boat_kimarite = $kimarite_data[(string)$boat] ?? [];
+    $kimarite = $boat_kimarite['6month'] ?? [];
 
     $nige   = $kimarite['nige'] ?? 0;
     $sashi  = $kimarite['sashi'] ?? 0;
@@ -227,7 +228,7 @@ for ($i = 0; $i < 6; $i++) {
     $sasare = $kimarite['sasare'] ?? 0;
     $makurarezashi = $kimarite['makurarezashi'] ?? 0;
 
-    // タイプ判定
+    // タイプ判定（Excelロジック）
     if ($boat == 1 && $nige >= 20) {
         $type = "逃げ型";
     } elseif ($sashi >= 5) {
@@ -251,9 +252,13 @@ for ($i = 0; $i < 6; $i++) {
     // 三次予想スコア
     $final3 = $final2 + $type_bonus;
 
-    // 3連対率（6ヶ月/3ヶ月）
-    $rate6 = $kimarite['three_in_rate_6m'] ?? 0;
-    $rate3 = $kimarite['three_in_rate_3m'] ?? 0;
+    // ★修正1: 3連対率は boat 直下、あるいは 6month 内のどちらからでも取れるようにフォールバック
+    $raw_rate6 = $boat_kimarite['three_in_rate_6m'] ?? $kimarite['three_in_rate_6m'] ?? 0;
+    $raw_rate3 = $boat_kimarite['three_in_rate_3m'] ?? $kimarite['three_in_rate_3m'] ?? 0;
+
+    // ★修正2: 小数(0.802)で届いた場合は100倍(80.2)に統一
+    $rate6 = ($raw_rate6 <= 1.0 && $raw_rate6 > 0) ? $raw_rate6 * 100 : (float)$raw_rate6;
+    $rate3 = ($raw_rate3 <= 1.0 && $raw_rate3 > 0) ? $raw_rate3 * 100 : (float)$raw_rate3;
 
     $final_predictions[] = [
         'boat' => $boat,
@@ -269,9 +274,10 @@ for ($i = 0; $i < 6; $i++) {
 
 // --- 切る艇判定（Excelロジック） ---
 $med = array_column($final_predictions, 'final3');
-$median = array_sum($med) / count($med); // ExcelのMedianに近似
+$median = array_sum($med) / count($med);
 
 foreach ($final_predictions as &$fp) {
+    // 3連対率が50%未満（0.5未満）の判定
     $fp['kiru'] = (
         $fp['tenkai_bonus'] == 0 &&
         $fp['final3'] < $median &&
@@ -279,7 +285,6 @@ foreach ($final_predictions as &$fp) {
     ) ? 1 : 0;
 }
 unset($fp);
-
 // 枠番カラー設定
 $lane_colors = [
     1 => ['bg' => '#f8fafc', 'text' => '#0f172a', 'border' => '#e2e8f0'],
