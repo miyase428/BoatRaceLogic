@@ -140,7 +140,7 @@ if (!empty($race_code)) {
 
             // S列: 展示総合スコア (O + P + Q)
             $ex_sougou     = $ex_total + $attack_pot + $stable_score;
-            
+
             // U列: 展示タイプ名 (Excelで艇番2が「超伸び型」、他が「バランス」になっているロジック)
             if ($lap_score === 5 || $straight_score >= 4 && $ex_total >= 16) {
                 $dtype = "超伸び型";
@@ -204,6 +204,81 @@ if (!empty($race_code)) {
         $tenji_error = '展示APIの取得に失敗しました。';
     }
 }
+
+// -------------------------------------------------------------
+// ■ 最終予想ロジック（Excel完全一致）
+// -------------------------------------------------------------
+
+$final_predictions = [];
+
+for ($i = 0; $i < 6; $i++) {
+
+    $boat = $tenji_list[$i]['teiban'];
+    $final2 = $tenji_list[$i]['final_2nd_score'];      // 二次予想
+    $tenkai_bonus = $tenji_list[$i]['tenkai_morai'];   // 展開もらい補正
+
+    // --- 決まり手タイプ判定（Excelロジック） ---
+    $kimarite = $kimarite_data[(string)$boat]['6month'] ?? [];
+
+    $nige   = $kimarite['nige'] ?? 0;
+    $sashi  = $kimarite['sashi'] ?? 0;
+    $makuri = $kimarite['makuri'] ?? 0;
+    $makurizashi = $kimarite['makurizashi'] ?? 0;
+    $sasare = $kimarite['sasare'] ?? 0;
+    $makurarezashi = $kimarite['makurarezashi'] ?? 0;
+
+    // タイプ判定
+    if ($boat == 1 && $nige >= 20) {
+        $type = "逃げ型";
+    } elseif ($sashi >= 5) {
+        $type = "差し型";
+    } elseif ($makuri >= 5 || $makurizashi >= 5) {
+        $type = "攻め型";
+    } elseif ($sasare >= 20 || $makurarezashi >= 20) {
+        $type = "脆い型";
+    } else {
+        $type = "無色";
+    }
+
+    // 決まり手補正
+    $type_bonus = 0;
+    if (in_array($type, ["逃げ型", "差し型", "攻め型"])) {
+        $type_bonus = 1;
+    } elseif ($type === "脆い型") {
+        $type_bonus = -1;
+    }
+
+    // 三次予想スコア
+    $final3 = $final2 + $type_bonus;
+
+    // 3連対率（6ヶ月/3ヶ月）
+    $rate6 = $kimarite['three_in_rate_6m'] ?? 0;
+    $rate3 = $kimarite['three_in_rate_3m'] ?? 0;
+
+    $final_predictions[] = [
+        'boat' => $boat,
+        'final2' => $final2,
+        'type' => $type,
+        'type_bonus' => $type_bonus,
+        'final3' => $final3,
+        'tenkai_bonus' => $tenkai_bonus,
+        'rate6' => $rate6,
+        'rate3' => $rate3,
+    ];
+}
+
+// --- 切る艇判定（Excelロジック） ---
+$med = array_column($final_predictions, 'final3');
+$median = array_sum($med) / count($med); // ExcelのMedianに近似
+
+foreach ($final_predictions as &$fp) {
+    $fp['kiru'] = (
+        $fp['tenkai_bonus'] == 0 &&
+        $fp['final3'] < $median &&
+        ($fp['rate6'] < 50 || $fp['rate3'] < 50)
+    ) ? 1 : 0;
+}
+unset($fp);
 
 // 枠番カラー設定
 $lane_colors = [
@@ -611,6 +686,65 @@ $lane_colors = [
             </div>
         <?php else: ?>
             <div class="no-data"><?= htmlspecialchars($tenji_error ?: '展示データが存在しません。') ?></div>
+        <?php endif; ?>
+
+        <!-- ■ 最終予想 -->
+        <h2>📊 最終予想（Excel完全一致）</h2>
+
+        <?php if (!empty($final_predictions)): ?>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>艇番</th>
+                            <th>二次予想スコア</th>
+                            <th>決まり手タイプ</th>
+                            <th>決まり手補正</th>
+                            <th>三次予想スコア</th>
+                            <th>展開もらい補正</th>
+                            <th>直近6ヶ月3連対率</th>
+                            <th>直近3ヶ月3連対率</th>
+                            <th>切る艇</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($final_predictions as $fp): ?>
+                            <?php
+                                $boat = $fp['boat'];
+                                $c = $lane_colors[$boat] ?? $lane_colors[1];
+                            ?>
+                            <tr>
+                                <td>
+                                    <span class="lane-badge"
+                                        style="background-color: <?= $c['bg'] ?>;
+                                            color: <?= $c['text'] ?>;
+                                            border: 1px solid <?= $c['border'] ?>;">
+                                        <?= $boat ?>
+                                    </span>
+                                </td>
+
+                                <td><?= htmlspecialchars($fp['final2']) ?></td>
+                                <td><?= htmlspecialchars($fp['type']) ?></td>
+                                <td><?= htmlspecialchars($fp['type_bonus']) ?></td>
+                                <td class="score-highlight"><?= htmlspecialchars($fp['final3']) ?></td>
+                                <td><?= htmlspecialchars($fp['tenkai_bonus']) ?></td>
+                                <td><?= htmlspecialchars($fp['rate6']) ?>%</td>
+                                <td><?= htmlspecialchars($fp['rate3']) ?>%</td>
+
+                                <td>
+                                    <?php if ($fp['kiru'] == 1): ?>
+                                        <span style="color:#ef4444; font-weight:bold;">切り</span>
+                                    <?php else: ?>
+                                        -
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="no-data">最終予想データが存在しません。</div>
         <?php endif; ?>
 
     </div>
