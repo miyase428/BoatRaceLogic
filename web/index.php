@@ -195,12 +195,12 @@ if (!empty($race_code)) {
 // 1. tenji_test.php からデータ取得 (VBAと同等処理)
 $apiUrl = "http://192.168.0.208:80/tenji_test.php?" . http_build_query([
     'race_code' => $raceCode,
-    'tenji1'    => $tenji[1] ?? 1,
-    'tenji2'    => $tenji[2] ?? 2,
-    'tenji3'    => $tenji[3] ?? 3,
-    'tenji4'    => $tenji[4] ?? 4,
-    'tenji5'    => $tenji[5] ?? 5,
-    'tenji6'    => $tenji[6] ?? 6,
+    'tenji1'    => $tenji_list[0]['tenji_course'] ?? 0,
+    'tenji2'    => $tenji_list[1]['tenji_course'] ?? 0,
+    'tenji3'    => $tenji_list[2]['tenji_course'] ?? 0,
+    'tenji4'    => $tenji_list[3]['tenji_course'] ?? 0,
+    'tenji5'    => $tenji_list[4]['tenji_course'] ?? 0,
+    'tenji6'    => $tenji_list[5]['tenji_course'] ?? 0,
 ]);
 
 $jsonString = @file_get_contents($apiUrl);
@@ -233,14 +233,9 @@ for ($i = 1; $i <= 6; $i++) {
     $waku = $boat;
 
     // ★連対率は tenji_test.php のレスポンスから直接取得
-    // (レスポンスが 1〜6 キー、または 0〜5 インデックスの双方に対応)
-    $api_item = $tenji_test_data[$i] 
-            ?? $tenji_test_data[(string)$i] 
-            ?? ($tenji_test_data[0] ?? null)
-            ?? [];
-
-    $rate6_dec = $parse_rate($api_item['three_in_rate_6m'] ?? 0);
-    $rate3_dec = $parse_rate($api_item['three_in_rate_3m'] ?? 0);
+    $api_item = $tenji_test_data[$i - 1] ?? [];
+    $rate6_dec = (float)$api_item['three_in_rate_6m'] ?? 0;
+    $rate3_dec = (float)$api_item['three_in_rate_3m'] ?? 0;
 
     // 展示データ（スコア等用）
     $t_data = $tenji_list[$i - 1] ?? [];
