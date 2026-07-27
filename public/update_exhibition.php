@@ -1,37 +1,32 @@
 <?php
 date_default_timezone_set('Asia/Tokyo');
 
-// 一時的なエラー表示設定（デバッグ用）
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-// 余計な出力（Warning等）がJSONを破壊しないようバッファリング開始
+// 余計な出力がJSONを破壊しないようバッファリング開始
 ob_start();
 
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../logic/scrape_exhibition.php';
 
-file_put_contents('/tmp/update_exhibition_input.log', json_encode($_POST) . "\n", FILE_APPEND);
-
 // ------------------------------------------------------------
-// ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
+// ログ出力関数（重複定義を防止）
 // ------------------------------------------------------------
-function log_message($message) {
-    $date = date("Y-m-d H:i:s");
-    $logLine = "[{$date}] {$message}\n";
+if (!function_exists('log_message')) {
+    function log_message($message) {
+        $date = date("Y-m-d H:i:s");
+        $logLine = "[{$date}] {$message}\n";
 
-    $logDir = __DIR__ . "/../log";
+        $logDir = __DIR__ . "/../log";
 
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0777, true);
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0777, true);
+        }
+
+        @file_put_contents(
+            $logDir . "/" . date("Ymd") . ".log",
+            $logLine,
+            FILE_APPEND
+        );
     }
-
-    @file_put_contents(
-        $logDir . "/" . date("Ymd") . ".log",
-        $logLine,
-        FILE_APPEND
-    );
 }
 
 // ------------------------------------------------------------
@@ -45,7 +40,6 @@ function convertStartTiming($value)
         return null;
     }
 
-    // PHP7以前でも安全に動く処理に変更
     if (substr($value, 0, 1) === "F") {
         return -1 * floatval(substr($value, 1));
     }
@@ -104,7 +98,7 @@ try {
     // 開催場 × 12R ループ
     // ------------------------------------------------------------
     if (!function_exists('raceCodeToKyoteiBiyoriUrl')) {
-        throw new Exception("関数 raceCodeToKyoteiBiyoriUrl が存在しません（race_url.phpの読み込みエラー）");
+        throw new Exception("関数 raceCodeToKyoteiBiyoriUrl が存在しません");
     }
     $url = raceCodeToKyoteiBiyoriUrl($race_code);
 
@@ -112,7 +106,7 @@ try {
 
     // Playwright 実行
     if (!function_exists('scrapeExhibitionData')) {
-        throw new Exception("関数 scrapeExhibitionData が存在しません（scrape_exhibition.phpの読み込みエラー）");
+        throw new Exception("関数 scrapeExhibitionData が存在しません");
     }
     $data = scrapeExhibitionData($url);
 
@@ -230,7 +224,6 @@ try {
     }
     log_message("{$race_code} 更新完了");
 
-    // バッファを破棄して純粋なJSONのみ返す
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8");
     echo json_encode([
@@ -240,15 +233,15 @@ try {
         "message" => "展示情報を更新しました"
     ], JSON_UNESCAPED_UNICODE);
 
-} catch (Throwable $e) { // ExceptionだけでなくFatal ErrorもキャッチするThrowableに変更
+} catch (Throwable $e) {
 
-    file_put_contents('/tmp/update_exhibition_error.log', $e->getMessage() . "\n", FILE_APPEND);
+    log_message("エラー発生: " . $e->getMessage());
 
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8", true, 500);
     echo json_encode([
         "success" => false,
-        "message" => "エラー発生: " . $e->getMessage()
+        "message" => "エラーが発生しました: " . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 
 }
