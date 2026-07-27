@@ -1268,23 +1268,34 @@ $lane_colors = [
                     </tr>
                 </thead>
                 <tbody>
-                    <?php for ($c = 1; $c <= 6; $c++): ?>
-                        <?php 
-                            $metrics = $slit_data[$c] ?? $slit_data[(string)$c] ?? [];
-                            $color = $lane_colors[$c] ?? $lane_colors[1];
-                        ?>
-                        <tr>
-                            <td>
-                                <span class="lane-badge" style="background-color: <?= $color['bg'] ?>; color: <?= $color['text'] ?>; border: 1px solid <?= $color['border'] ?>;">
-                                    <?= $c ?>
-                                </span>
-                            </td>
-                            <td><?= sprintf('%.2e', $metrics['win'] ?? 0) ?></td>
-                            <td><?= sprintf('%.2e', $metrics['place2'] ?? 0) ?></td>
-                            <td><?= sprintf('%.2e', $metrics['place3'] ?? 0) ?></td>
-                            <td style="font-weight: bold;"><?= sprintf('%.2e', $metrics['trio'] ?? 0) ?></td>
-                        </tr>
-                    <?php endfor; ?>
+<!-- スリット体系の <tbody> 内 -->
+<?php for ($c = 1; $c <= 6; $c++): ?>
+    <?php 
+        $metrics = $slit_data[$c] ?? $slit_data[(string)$c] ?? [];
+        $color = $lane_colors[$c] ?? $lane_colors[1];
+
+        // 数値変換（100倍してパーセント表示用へ）
+        $win    = (float)($metrics['win'] ?? 0) * 100;
+        $place2 = (float)($metrics['place2'] ?? 0) * 100;
+        $place3 = (float)($metrics['place3'] ?? 0) * 100;
+        $trio   = (float)($metrics['trio'] ?? 0) * 100;
+    ?>
+    <tr>
+        <td>
+            <span class="lane-badge" style="background-color: <?= $color['bg'] ?>; color: <?= $color['text'] ?>; border: 1px solid <?= $color['border'] ?>;">
+                <?= $c ?>
+            </span>
+        </td>
+        <!-- 小数点第2位までのパーセント表示（例: 0.02% や 0%） -->
+        <!-- もしExcel通り整数%で良ければ '%.0f%%' に変更してください -->
+        <td><?= sprintf('%.2f%%', $win) ?></td>
+        <td><?= sprintf('%.2f%%', $place2) ?></td>
+        <td><?= sprintf('%.2f%%', $place3) ?></td>
+        <td style="font-weight: bold; color: <?= $trio > 0 ? '#38bdf8' : ($trio < 0 ? '#f87171' : '#fff') ?>;">
+            <?= sprintf('%.2f%%', $trio) ?>
+        </td>
+    </tr>
+<?php endfor; ?>
                 </tbody>
             </table>
         </div>
