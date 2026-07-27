@@ -76,6 +76,30 @@ if (!empty($race_code) && strlen($in_course) === 6) {
     }
 }
 
+if (isset($_POST["update_exhibition"])) {
+
+    $ch = curl_init("http://192.168.0.208:80/update_exhibition.php");
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS,
+        http_build_query([
+            "race_code"=>$race_code
+        ])
+    );
+
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+    $update_response = curl_exec($ch);
+
+    curl_close($ch);
+
+    $update_json = json_decode($update_response,true);
+
+    $update_message =
+        $update_json["message"] ?? "更新しました";
+}
+
 // -------------------------------------------------------------
 // 3. 展示データの取得
 // -------------------------------------------------------------
@@ -963,7 +987,33 @@ $lane_colors = [
         <?php else: ?>
             <div class="no-data"><?= htmlspecialchars($kimarite_error ?: '決まり手データが存在しません。') ?></div>
         <?php endif; ?>
+        <div style="margin-bottom:10px;">
+            <form method="post" style="display:inline;">
+                <input type="hidden" name="race_code" value="<?= htmlspecialchars($race_code) ?>">
+                <input type="hidden" name="update_exhibition" value="1">
 
+                <button type="submit"
+                        style="padding:8px 16px;
+                            background:#2563eb;
+                            color:white;
+                            border:none;
+                            border-radius:5px;
+                            cursor:pointer;">
+                    展示情報を更新
+                </button>
+            </form>
+        </div>
+        <?php if (!empty($update_message)): ?>
+
+        <div style="
+            margin-bottom:10px;
+            color:#22c55e;
+            font-weight:bold;
+        ">
+        <?= htmlspecialchars($update_message) ?>
+        </div>
+
+        <?php endif; ?>
         <!-- ■ 展示情報 -->
         <h2>⏱️ 展示情報</h2>
         <?php if (!empty($tenji_list)): ?>
