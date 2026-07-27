@@ -1279,6 +1279,13 @@ $lane_colors = [
         $place2 = (float)($metrics['place2'] ?? 0) * 100;
         $place3 = (float)($metrics['place3'] ?? 0) * 100;
         $trio   = (float)($metrics['trio'] ?? 0) * 100;
+
+        // 値に応じた文字色を取得するインラインCSS生成関数
+        $getColorStyle = function($val) {
+            if ($val > 0.0001) return 'color: #38bdf8;'; // プラス（青）
+            if ($val < -0.0001) return 'color: #f87171;'; // マイナス（赤）
+            return 'color: #ffffff;'; // 0（白）
+        };
     ?>
     <tr>
         <td>
@@ -1286,14 +1293,10 @@ $lane_colors = [
                 <?= $c ?>
             </span>
         </td>
-        <!-- 小数点第2位までのパーセント表示（例: 0.02% や 0%） -->
-        <!-- もしExcel通り整数%で良ければ '%.0f%%' に変更してください -->
-        <td><?= sprintf('%.2f%%', $win) ?></td>
-        <td><?= sprintf('%.2f%%', $place2) ?></td>
-        <td><?= sprintf('%.2f%%', $place3) ?></td>
-        <td style="font-weight: bold; color: <?= $trio > 0 ? '#38bdf8' : ($trio < 0 ? '#f87171' : '#fff') ?>;">
-            <?= sprintf('%.2f%%', $trio) ?>
-        </td>
+        <td style="<?= $getColorStyle($win) ?>"><?= sprintf('%.2f%%', $win) ?></td>
+        <td style="<?= $getColorStyle($place2) ?>"><?= sprintf('%.2f%%', $place2) ?></td>
+        <td style="<?= $getColorStyle($place3) ?>"><?= sprintf('%.2f%%', $place3) ?></td>
+        <td style="font-weight: bold; <?= $getColorStyle($trio) ?>"><?= sprintf('%.2f%%', $trio) ?></td>
     </tr>
 <?php endfor; ?>
                 </tbody>
