@@ -78,36 +78,47 @@ if (!empty($race_code) && strlen($in_course) === 6) {
 
 if (isset($_POST["update_exhibition"])) {
 
-    $ch = curl_init("http://192.168.0.208:80/update_exhibition.php");
+    // 呼び出し先URL（localhostに変更してみるのも手です）
+    $target_url = "http://localhost/update_exhibition.php";
+    
+    // POSTで渡された race_code を優先、無ければGETから生成されたものを使用
+    $target_race_code = $_POST["race_code"] ?? $race_code;
+
+    $ch = curl_init($target_url);
 
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS,
-        http_build_query([
-            "race_code"=>$race_code
-        ])
-    );
-
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+        "race_code" => $target_race_code
+    ]));
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
 
     $update_response = curl_exec($ch);
-
+    $curl_errno = curl_errno($ch);
+    $curl_error = curl_error($ch);
+    $http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    $update_json = json_decode($update_response,true);
+    // cURL自体の通信エラーチェック
+    if ($curl_errno !== 0) {
+        $debug_msg = "【cURL通信エラー】\nCode: {$curl_errno}\nError: {$curl_error}";
+    } else {
+        $update_json = json_decode($update_response, true);
 
-    $update_message =
-        $update_json["message"] ?? "更新しました";
+        // JSONデバッグ情報の整理
+        $debug_msg = 
+            "HTTP STATUS: " . $http_code . "\n" .
+            "RACE_CODE: " . $target_race_code . "\n\n" .
+            "--- RAW RESPONSE ---\n" . $update_response . "\n\n" .
+            "--- JSON PARSED ---\n" . var_export($update_json, true);
 
-    $debug_msg =
-        "CMD_RESPONSE:\n" . var_export($update_response, true) . "\n" .
-        "JSON:\n" . var_export($update_json, true) . "\n" .
-        "RACE_CODE:\n" . $race_code . "\n";
+        $update_message = $update_json["message"] ?? "更新処理が完了しました";
+    }
+
     echo "<script>
         const debugText = " . json_encode($debug_msg) . ";
         alert(debugText);
     </script>";
-
 }
 
 // -------------------------------------------------------------
