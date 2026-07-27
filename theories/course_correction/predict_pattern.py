@@ -142,7 +142,7 @@ def predict_pattern(race_code):
     predicted_st = make_predicted_st(ex_st, player_ids, correction)
 
     # スリットパターンID
-    pattern_id = classify_slit_pattern(predicted_st, settings)
+    pattern_id, features = classify_slit_pattern(predicted_st, settings)
 
     return {
         "race_code": race_code,
@@ -150,7 +150,8 @@ def predict_pattern(race_code):
         "exhibition_st": ex_st,
         "correction": correction,
         "predicted_st": predicted_st,
-        "pattern_id": pattern_id
+        "pattern_id": pattern_id,
+        "features": features
     }
 
 
