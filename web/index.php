@@ -556,6 +556,55 @@ foreach ($sam_applied_list as $b => &$s) {
 }
 unset($s);
 
+// -------------------------------------------------------------
+// ■ スリット体系データの取得とマスタ参照
+// -------------------------------------------------------------
+// パターン辞書マスタ（添付画像より）
+$slit_pattern_master = [
+    1  => ['name' => '内側先行',   'desc' => '1〜3が速い。最も広い条件。最後に判定。'],
+    2  => ['name' => '横一線',     'desc' => '最も広い条件。後ろで判定。'],
+    3  => ['name' => '1・2先行',   'desc' => '1と2が速い。1（内側先行）より条件が狭い。'],
+    4  => ['name' => 'スロー先行', 'desc' => '1〜3が先行。3（1・2先行）と重複するため後。'],
+    5  => ['name' => 'カベなし',   'desc' => '2が遅れる。個別艇の遅れとして6・7より後。'],
+    6  => ['name' => '2・3遅れ',   'desc' => 'センター凹みの別パターン。7より優先度低い。'],
+    7  => ['name' => '中凹み',     'desc' => '3・4が遅れる。センター凹みとして特徴が強い。'],
+    8  => ['name' => '3の先攻め',  'desc' => '3が突出。個別艇の特徴として9より優先。'],
+    9  => ['name' => '中ぶくれ',   'desc' => '3・4が先行。8と重複するため後に判定。'],
+    10 => ['name' => '1が遅れる',  'desc' => 'イン遅れは展開に大きく影響。優先度高い。'],
+    11 => ['name' => '外側先行',   'desc' => '456が上位。12と重複しやすいので次に判定。'],
+    12 => ['name' => 'ダッシュ先行', 'desc' => '456が圧倒的に速い。外側先行の上位互換。最優先。'],
+];
+
+$slit_data = [];
+$slit_pattern = ['id' => '-', 'name' => '不明', 'desc' => ''];
+
+if (!empty($race_code)) {
+    // API呼び出し（ローカル環境の slit_api.php へリクエスト）
+    $ch = curl_init("http://192.168.0.208:80/slit_api.php"); // ※環境のポート番号に合わせてください
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['race_code' => $race_code]));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+    
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if ($response) {
+        $json = json_decode($response, true);
+        if (isset($json['buff_debuff'])) {
+            $slit_data = $json['buff_debuff'];
+        }
+        if (isset($json['pattern_id'])) {
+            $pid = (int)$json['pattern_id'];
+            $slit_pattern['id'] = $pid;
+            if (isset($slit_pattern_master[$pid])) {
+                $slit_pattern['name'] = $slit_pattern_master[$pid]['name'];
+                $slit_pattern['desc'] = $slit_pattern_master[$pid]['desc'];
+            }
+        }
+    }
+}
+
 // 枠番カラー設定
 $lane_colors = [
     1 => ['bg' => '#f8fafc', 'text' => '#0f172a', 'border' => '#e2e8f0'],
@@ -1202,6 +1251,58 @@ $lane_colors = [
     </div>
 <?php endif; ?>
 
+<!-- ■ スリット体系 -->
+<div style="margin-top: 30px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 20px;">
+    <h2 style="font-size: 18px; font-weight: bold; color: #f8fafc; margin-bottom: 15px;">📊 スリット体系</h2>
+
+    <?php if (!empty($slit_data)): ?>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>コース</th>
+                        <th>1着率</th>
+                        <th>2着率</th>
+                        <th>3着率</th>
+                        <th>3連対率</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php for ($c = 1; $c <= 6; $c++): ?>
+                        <?php 
+                            $metrics = $slit_data[$c] ?? $slit_data[(string)$c] ?? [];
+                            $color = $lane_colors[$c] ?? $lane_colors[1];
+                        ?>
+                        <tr>
+                            <td>
+                                <span class="lane-badge" style="background-color: <?= $color['bg'] ?>; color: <?= $color['text'] ?>; border: 1px solid <?= $color['border'] ?>;">
+                                    <?= $c ?>
+                                </span>
+                            </td>
+                            <td><?= sprintf('%.2e', $metrics['win'] ?? 0) ?></td>
+                            <td><?= sprintf('%.2e', $metrics['place2'] ?? 0) ?></td>
+                            <td><?= sprintf('%.2e', $metrics['place3'] ?? 0) ?></td>
+                            <td style="font-weight: bold;"><?= sprintf('%.2e', $metrics['trio'] ?? 0) ?></td>
+                        </tr>
+                    <?php endfor; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- パターン情報表示エリア -->
+        <div style="margin-top: 15px; padding: 12px; background-color: #1e293b; border-radius: 6px; border-left: 4px solid #38bdf8;">
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 6px;">
+                <div><span style="color: #94a3b8; font-size: 12px;">パターンID:</span> <strong style="color: #f8fafc; font-size: 16px;"><?= htmlspecialchars($slit_pattern['id']) ?></strong></div>
+                <div><span style="color: #94a3b8; font-size: 12px;">パターン名:</span> <span class="badge" style="background-color: #0284c7; color: #fff; padding: 3px 8px; border-radius: 4px; font-weight: bold;"><?= htmlspecialchars($slit_pattern['name']) ?></span></div>
+            </div>
+            <div style="font-size: 13px; color: #cbd5e1;">
+                <span style="color: #94a3b8;">説明:</span> <?= htmlspecialchars($slit_pattern['desc']) ?>
+            </div>
+        </div>
+    <?php else: ?>
+        <p style="color: #94a3b8;">※スリット体系データが取得できませんでした。</p>
+    <?php endif; ?>
+</div>
     </div>
 </body>
 </html>
