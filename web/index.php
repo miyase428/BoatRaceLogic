@@ -485,6 +485,77 @@ if ($sam_json !== false) {
 $sam_intervals = ["-0.6未満", "-0.6--0.4", "-0.4--0.2", "-0.2-0.0", "0.0-0.2", "0.2-0.4", "0.4-0.6", "0.6以上"];
 $sam_metrics   = ["win", "place2", "place3", "trio"];
 
+// -------------------------------------------------------------
+// ■ 展示サム理論のリアルタイム適用計算
+// -------------------------------------------------------------
+$sam_applied_list = [];
+$total_sum_all = 0;
+$valid_boat_count = 0;
+
+// 1. 各艇の合計値（J + K + L または 展示+周回+直線）を計算
+foreach ($tenji_list as $t) {
+    $b = (int)$t['teiban'];
+    
+    // J/K/Lの数値変換（ハイフン等の場合は0）
+    $val_j = is_numeric($t['tenji_J']) ? (float)$t['tenji_J'] : 0;
+    $val_k = is_numeric($t['tenji_K']) ? (float)$t['tenji_K'] : 0;
+    $val_l = is_numeric($t['tenji_L']) ? (float)$t['tenji_L'] : 0;
+    
+    $sum = $val_j + $val_k + $val_l;
+    
+    if ($sum > 0) {
+        $total_sum_all += $sum;
+        $valid_boat_count++;
+    }
+
+    $sam_applied_list[$b] = [
+        'teiban'   => $b,
+        'course'   => (int)($t['tenji_course'] ?? $b),
+        'val_j'    => $val_j,
+        'val_k'    => $val_k,
+        'val_l'    => $val_l,
+        'sum'      => $sum,
+        'avg_diff' => 0, // 後で計算
+    ];
+}
+
+// 2. 全体平均の算出
+$overall_avg = ($valid_boat_count > 0) ? ($total_sum_all / $valid_boat_count) : 0;
+
+// 3. 平均差とマスタ参照（1着率〜3連対率の取得）
+foreach ($sam_applied_list as $b => &$s) {
+    if ($s['sum'] > 0 && $overall_avg > 0) {
+        $diff = $s['sum'] - $overall_avg;
+        $s['avg_diff'] = round($diff, 3);
+
+        // 区間の判定
+        $d = $s['avg_diff'];
+        if ($d < -0.6)         $interval = "-0.6未満";
+        elseif ($d < -0.4)    $interval = "-0.6--0.4";
+        elseif ($d < -0.2)    $interval = "-0.4--0.2";
+        elseif ($d < 0.0)     $interval = "-0.2-0.0";
+        elseif ($d < 0.2)     $interval = "0.0-0.2";
+        elseif ($d < 0.4)     $interval = "0.2-0.4";
+        elseif ($d < 0.6)     $interval = "0.4-0.6";
+        else                  $interval = "0.6以上";
+
+        // サムマスタから該当コース・該当区間の確率を取得
+        $c_str = (string)$s['course'];
+        $m_data = $sam_master_data[$c_str][$interval] ?? [];
+
+        $s['interval'] = $interval;
+        $s['win']      = (float)($m_data['win'] ?? 0);
+        $s['place2']   = (float)($m_data['place2'] ?? 0);
+        $s['place3']   = (float)($m_data['place3'] ?? 0);
+        $s['trio']     = (float)($m_data['trio'] ?? 0);
+    } else {
+        $s['avg_diff'] = 0;
+        $s['interval'] = '-';
+        $s['win'] = $s['place2'] = $s['place3'] = $s['trio'] = 0;
+    }
+}
+unset($s);
+
 // 枠番カラー設定
 $lane_colors = [
     1 => ['bg' => '#f8fafc', 'text' => '#0f172a', 'border' => '#e2e8f0'],
@@ -1069,6 +1140,67 @@ $lane_colors = [
         <?php else: ?>
             <div class="no-data"><?= htmlspecialchars($sam_error ?: 'サム理論マスタデータが存在しません。') ?></div>
         <?php endif; ?>
+
+        <!-- ■ 展示サム理論 (Excel完全再現) -->
+<h2>📐 展示サム理論（レース適用値）</h2>
+<?php if (!empty($sam_applied_list)): ?>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>コース</th>
+                    <th>J列</th>
+                    <th>K列</th>
+                    <th>L列</th>
+                    <th>合計</th>
+                    <th>平均差</th>
+                    <th>1着率</th>
+                    <th>2着率</th>
+                    <th>3着率</th>
+                    <th>3連対率</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($sam_applied_list as $s): ?>
+                    <?php $c = $lane_colors[$s['course']] ?? $lane_colors[1]; ?>
+                    <tr>
+                        <td>
+                            <span class="lane-badge" style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>;">
+                                <?= $s['course'] ?>
+                            </span>
+                        </td>
+                        <td><?= number_format($s['val_j'], 2) ?></td>
+                        <td><?= number_format($s['val_k'], 2) ?></td>
+                        <td><?= number_format($s['val_l'], 2) ?></td>
+                        <td style="font-weight: bold;"><?= number_format($s['sum'], 2) ?></td>
+                        <td style="color: <?= $s['avg_diff'] < 0 ? '#38bdf8' : '#f87171' ?>; font-weight: bold;">
+                            <?= sprintf('%+.3f', $s['avg_diff']) ?>
+                        </td>
+                        <td style="color: <?= $s['win'] > 0 ? '#38bdf8' : ($s['win'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <?= number_format($s['win'] * 100, 0) ?>%
+                        </td>
+                        <td style="color: <?= $s['place2'] > 0 ? '#38bdf8' : ($s['place2'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <?= number_format($s['place2'] * 100, 0) ?>%
+                        </td>
+                        <td style="color: <?= $s['place3'] > 0 ? '#38bdf8' : ($s['place3'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <?= number_format($s['place3'] * 100, 0) ?>%
+                        </td>
+                        <td style="color: <?= $s['trio'] > 0 ? '#38bdf8' : ($s['trio'] < 0 ? '#f87171' : '#fff') ?>; font-weight: bold;">
+                            <?= number_format($s['trio'] * 100, 0) ?>%
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+            <tfoot>
+                <tr style="background-color: #0f172a; font-weight: bold;">
+                    <td colspan="4" style="text-align: right; color: #94a3b8;">全体平均:</td>
+                    <td style="color: #38bdf8;"><?= number_format($overall_avg, 3) ?></td>
+                    <td colspan="5"></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+<?php endif; ?>
 
     </div>
 </body>
