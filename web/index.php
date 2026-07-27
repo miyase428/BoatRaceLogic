@@ -1280,11 +1280,12 @@ $lane_colors = [
         $place3 = (float)($metrics['place3'] ?? 0) * 100;
         $trio   = (float)($metrics['trio'] ?? 0) * 100;
 
-        // 値に応じた文字色を取得するインラインCSS生成関数
+        // 表示用の精度（小数点第2位）で四捨五入してから判定する関数
         $getColorStyle = function($val) {
-            if ($val > 0.0001) return 'color: #38bdf8;'; // プラス（青）
-            if ($val < -0.0001) return 'color: #f87171;'; // マイナス（赤）
-            return 'color: #ffffff;'; // 0（白）
+            $rounded = round($val, 2);
+            if ($rounded > 0)  return 'color: #38bdf8;'; // 表示上プラスなら青
+            if ($rounded < 0)  return 'color: #f87171;'; // 表示上マイナスなら赤
+            return 'color: #ffffff;';                    // 表示上0（-0.00%含む）なら白
         };
     ?>
     <tr>
@@ -1293,10 +1294,10 @@ $lane_colors = [
                 <?= $c ?>
             </span>
         </td>
-        <td style="<?= $getColorStyle($win) ?>"><?= sprintf('%.2f%%', $win) ?></td>
-        <td style="<?= $getColorStyle($place2) ?>"><?= sprintf('%.2f%%', $place2) ?></td>
-        <td style="<?= $getColorStyle($place3) ?>"><?= sprintf('%.2f%%', $place3) ?></td>
-        <td style="font-weight: bold; <?= $getColorStyle($trio) ?>"><?= sprintf('%.2f%%', $trio) ?></td>
+        <td style="<?= $getColorStyle($win) ?>"><?= sprintf('%.2f%%', abs($win) < 0.005 ? 0 : $win) ?></td>
+        <td style="<?= $getColorStyle($place2) ?>"><?= sprintf('%.2f%%', abs($place2) < 0.005 ? 0 : $place2) ?></td>
+        <td style="<?= $getColorStyle($place3) ?>"><?= sprintf('%.2f%%', abs($place3) < 0.005 ? 0 : $place3) ?></td>
+        <td style="font-weight: bold; <?= $getColorStyle($trio) ?>"><?= sprintf('%.2f%%', abs($trio) < 0.005 ? 0 : $trio) ?></td>
     </tr>
 <?php endfor; ?>
                 </tbody>
