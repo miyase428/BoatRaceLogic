@@ -1,7 +1,13 @@
 <?php
 date_default_timezone_set('Asia/Tokyo');
 
-header("Content-Type: application/json; charset=UTF-8");
+// 一時的なエラー表示設定（デバッグ用）
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// 余計な出力（Warning等）がJSONを破壊しないようバッファリング開始
+ob_start();
 
 require_once __DIR__ . "/race_url.php";
 require_once __DIR__ . "/scrape_exhibition.php";
@@ -18,11 +24,11 @@ function log_message($message) {
     $logDir = __DIR__ . "/../log";
 
     if (!is_dir($logDir)) {
-        mkdir($logDir,0777,true);
+        @mkdir($logDir, 0777, true);
     }
 
-    file_put_contents(
-        $logDir."/".date("Ymd").".log",
+    @file_put_contents(
+        $logDir . "/" . date("Ymd") . ".log",
         $logLine,
         FILE_APPEND
     );
@@ -39,11 +45,12 @@ function convertStartTiming($value)
         return null;
     }
 
-    if (str_starts_with($value, "F")) {
+    // PHP7以前でも安全に動く処理に変更
+    if (substr($value, 0, 1) === "F") {
         return -1 * floatval(substr($value, 1));
     }
 
-    if (str_starts_with($value, "L")) {
+    if (substr($value, 0, 1) === "L") {
         return floatval(substr($value, 1));
     }
 
@@ -71,7 +78,6 @@ try {
     // PostgreSQL 接続
     // ------------------------------------------------------------
     $pdo = new PDO(
-        #"pgsql:host=192.168.0.205;dbname=devdb",
         "pgsql:host=192.168.0.208;dbname=devdb",
         "miyase428",
         "herunia0113",
@@ -90,22 +96,28 @@ try {
     }
 
     $place_code = substr($race_code, 8, 3);
-    $race_no    = intval(substr($race_code,11,2));
+    $race_no    = intval(substr($race_code, 11, 2));
 
     log_message("{$race_code} 更新開始");
 
     // ------------------------------------------------------------
     // 開催場 × 12R ループ
     // ------------------------------------------------------------
+    if (!function_exists('raceCodeToKyoteiBiyoriUrl')) {
+        throw new Exception("関数 raceCodeToKyoteiBiyoriUrl が存在しません（race_url.phpの読み込みエラー）");
+    }
     $url = raceCodeToKyoteiBiyoriUrl($race_code);
 
     log_message("URL: {$url}");
 
     // Playwright 実行
+    if (!function_exists('scrapeExhibitionData')) {
+        throw new Exception("関数 scrapeExhibitionData が存在しません（scrape_exhibition.phpの読み込みエラー）");
+    }
     $data = scrapeExhibitionData($url);
 
     if ($data === null || empty($data)) {
-        throw new Exception("展示データなし");
+        throw new Exception("展示データの取得に失敗したか、データが空でした (URL: {$url})");
     }
 
     // ------------------------------------------------------------
@@ -179,10 +191,10 @@ try {
     // ------------------------------------------------------------
     foreach ($data as $row) {
 
-        $exh      = toFloatOrZero($row['exhibition_time']);
-        $lap      = toFloatOrZero($row['lap_time']);
-        $around   = toFloatOrZero($row['around_time']);
-        $straight = toFloatOrZero($row['straight_time']);
+        $exh      = toFloatOrZero($row['exhibition_time'] ?? null);
+        $lap      = toFloatOrZero($row['lap_time'] ?? null);
+        $around   = toFloatOrZero($row['around_time'] ?? null);
+        $straight = toFloatOrZero($row['straight_time'] ?? null);
 
         $diff_straight = $avg_straight - $straight;
         $diff_around   = $avg_around   - $around;
@@ -205,33 +217,39 @@ try {
 
         $stmt_insert->execute([
             ':race_code'        => $race_code,
-            ':entry_course'     => $row['entry_course'],
-            ':player_id'        => $row['player_id'],
-            ':exhibition_time'  => toNullOrFloat($row['exhibition_time']),
-            ':start_timing'     => convertStartTiming($row['start_timing']),
-            ':lap_time'         => toNullOrFloat($row['lap_time']),
-            ':around_time'      => toNullOrFloat($row['around_time']),
-            ':straight_time'    => toNullOrFloat($row['straight_time']),
+            ':entry_course'     => $row['entry_course'] ?? null,
+            ':player_id'        => $row['player_id'] ?? null,
+            ':exhibition_time'  => toNullOrFloat($row['exhibition_time'] ?? null),
+            ':start_timing'     => convertStartTiming($row['start_timing'] ?? ''),
+            ':lap_time'         => toNullOrFloat($row['lap_time'] ?? null),
+            ':around_time'      => toNullOrFloat($row['around_time'] ?? null),
+            ':straight_time'    => toNullOrFloat($row['straight_time'] ?? null),
             ':exhibition_score' => $score,
             ':exhibition_type'  => $type
         ]);
     }
     log_message("{$race_code} 更新完了");
 
+    // バッファを破棄して純粋なJSONのみ返す
+    ob_end_clean();
+    header("Content-Type: application/json; charset=UTF-8");
     echo json_encode([
         "success" => true,
         "race_code" => $race_code,
         "count" => count($data),
         "message" => "展示情報を更新しました"
     ], JSON_UNESCAPED_UNICODE);
-} catch (Exception $e){
+
+} catch (Throwable $e) { // ExceptionだけでなくFatal ErrorもキャッチするThrowableに変更
 
     file_put_contents('/tmp/update_exhibition_error.log', $e->getMessage() . "\n", FILE_APPEND);
-    
+
+    ob_end_clean();
+    header("Content-Type: application/json; charset=UTF-8", true, 500);
     echo json_encode([
-        "success"=>false,
-        "message"=>$e->getMessage()
-    ]);
+        "success" => false,
+        "message" => "エラー発生: " . $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE);
 
 }
 
