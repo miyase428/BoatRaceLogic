@@ -6,6 +6,8 @@ header("Content-Type: application/json; charset=UTF-8");
 require_once __DIR__ . "/race_url.php";
 require_once __DIR__ . "/scrape_exhibition.php";
 
+file_put_contents('/tmp/update_exhibition_input.log', json_encode($_POST) . "\n", FILE_APPEND);
+
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
 // ------------------------------------------------------------
@@ -224,6 +226,8 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 } catch (Exception $e){
 
+    file_put_contents('/tmp/update_exhibition_error.log', $e->getMessage() . "\n", FILE_APPEND);
+    
     echo json_encode([
         "success"=>false,
         "message"=>$e->getMessage()
