@@ -106,6 +106,38 @@ if (!empty($race_code)) {
             }
         }
 
+        // ★ 1. 競艇場ごとの J/K/L 列マッピング定義（Excel SAM理論準拠）
+        // ※ J, K, L にどのタイムキー（exhibition, lap, mawari, straight）を割り当てるか定義
+        $JKL_rule = [
+            'KRY' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'TDA' => ['J' => 'exhibition', 'K' => 'mawari',   'L' => 'straight'],
+            'EDG' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'HWJ' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'TMG' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'HMN' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'GMG' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'TKN' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'TSU' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'MKN' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'BWK' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'SME' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'AMG' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'NRT' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'MRG' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'KJM' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'MYJ' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'TKY' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'SMS' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'WKM' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'ASY' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'FKO' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'KRT' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+            'OMR' => ['J' => 'exhibition', 'K' => 'lap',      'L' => 'straight'],
+        ];
+
+        // 選択された場のルールを取得（デフォルトは標準的な構成）
+        $rule = $JKL_rule[$selected_place] ?? ['J' => 'exhibition', 'K' => 'lap', 'L' => 'straight'];
+
         $calculated_list = [];
         for ($b = 1; $b <= 6; $b++) {
             $item = $items_by_boat[$b] ?? [];
@@ -118,6 +150,12 @@ if (!empty($race_code)) {
             $mawari        = $item['mawari'] ?? '-';
             $straight      = $item['straight'] ?? '-';
             $st            = $item['st'] ?? '-';
+
+            // ★ 2. 場別の定義に基づいた J/K/L データの新規切り出し
+            $tenji_J        = $item[$rule['J']] ?? '-';
+            $tenji_K        = $item[$rule['K']] ?? '-';
+            $tenji_L        = $item[$rule['L']] ?? '-';
+            $tenji_selected = $tenji_L; // ExcelのL列（メイン評価値）
 
             $ex_diff       = $item['ex_diff'] ?? '-';
             $ex_score      = (int)($item['ex_score'] ?? 0);
@@ -153,6 +191,11 @@ if (!empty($race_code)) {
                 'mawari'          => $mawari,
                 'straight'        => $straight,
                 'st'              => $st,
+                // ★ 新規追加: J/K/L と評価対象値
+                'tenji_J'         => $tenji_J,
+                'tenji_K'         => $tenji_K,
+                'tenji_L'         => $tenji_L,
+                'tenji_selected'  => $tenji_selected,
                 'ex_diff'         => $ex_diff,
                 'ex_score'        => $ex_score,
                 'st_score'        => $st_score,
@@ -354,7 +397,8 @@ for ($i = 1; $i <= 6; $i++) {
 }
 
 // --- 切る艇判定（N50:N55） ---
-$m_scores = array_column($final_predictions, 'final3');
+// --- 切る艇判定（N50:N55） ---
+$m_scores = array_values(array_column($final_predictions, 'final3')); // ★ array_values でインデックスを 0~5 にリセット
 sort($m_scores);
 $count = count($m_scores);
 if ($count % 2 === 0) {
@@ -796,6 +840,10 @@ $lane_colors = [
                             <th>周回</th>
                             <th>周り足</th>
                             <th>直線</th>
+                        <!-- ★ JKL評価用の列を追加 -->
+                            <th style="color:#a5b4fc;">J列</th>
+                            <th style="color:#a5b4fc;">K列</th>
+                            <th style="color:#38bdf8;">L列(メイン評価)</th>
                             <th>ST</th>
                             <th>展示タイム場平均差</th>
                             <th>展示タイム評価</th>
@@ -837,6 +885,10 @@ $lane_colors = [
                                 <td><?= htmlspecialchars($t['lap']) ?></td>
                                 <td><?= htmlspecialchars($t['mawari']) ?></td>
                                 <td><?= htmlspecialchars($t['straight']) ?></td>
+                        <!-- ★ 追加: J / K / L の値を表示（L列は目立つように強調） -->
+                                <td style="color:#c7d2fe;"><?= htmlspecialchars($t['tenji_J']) ?></td>
+                                <td style="color:#c7d2fe;"><?= htmlspecialchars($t['tenji_K']) ?></td>
+                                <td class="score-highlight"><?= htmlspecialchars($t['tenji_L']) ?></td>
                                 <td><?= htmlspecialchars($t['st']) ?></td>
                                 <td><?= htmlspecialchars($t['ex_diff']) ?></td>
                                 <td><?= htmlspecialchars($t['ex_score']) ?></td>
