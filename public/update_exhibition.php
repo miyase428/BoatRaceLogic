@@ -1,16 +1,36 @@
 <?php
 date_default_timezone_set('Asia/Tokyo');
 
-// 一時的にエラー内容を画面に出す（原因特定のため）
+// 一時的なエラー表示設定（原因特定用）
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// 余計な出力がJSONを破壊しないようバッファリング開始
 ob_start();
 
 require_once __DIR__ . '/../logic/race_url.php';
-require_once __DIR__ . '/../logic/scrape_exhibition.php';
+
+// ------------------------------------------------------------
+// ログ出力関数
+// ------------------------------------------------------------
+if (!function_exists('log_message')) {
+    function log_message($message) {
+        $date = date("Y-m-d H:i:s");
+        $logLine = "[{$date}] {$message}\n";
+
+        $logDir = __DIR__ . "/../log";
+
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0777, true);
+        }
+
+        @file_put_contents(
+            $logDir . "/" . date("Ymd") . ".log",
+            $logLine,
+            FILE_APPEND
+        );
+    }
+}
 
 // ------------------------------------------------------------
 // start_timing の変換（F.04 → -0.04）
@@ -23,7 +43,6 @@ function convertStartTiming($value)
         return null;
     }
 
-    // PHP7以前でも安全に動く処理に変更
     if (substr($value, 0, 1) === "F") {
         return -1 * floatval(substr($value, 1));
     }
@@ -35,26 +54,18 @@ function convertStartTiming($value)
     return floatval($value);
 }
 
-// ------------------------------------------------------------
-// "-" や "" を 0 に変換（score 計算用）
-// ------------------------------------------------------------
 function toFloatOrZero($v)
 {
     return ($v === "-" || $v === "" || $v === null) ? 0.0 : floatval($v);
 }
 
-// ------------------------------------------------------------
-// "-" や "" を null に変換（DB INSERT 用）
-// ------------------------------------------------------------
 function toNullOrFloat($v)
 {
     return ($v === "-" || $v === "" || $v === null) ? null : floatval($v);
 }
 
 try {
-    // ------------------------------------------------------------
     // PostgreSQL 接続
-    // ------------------------------------------------------------
     $pdo = new PDO(
         "pgsql:host=192.168.0.208;dbname=devdb",
         "miyase428",
@@ -62,9 +73,6 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 
-    // ------------------------------------------------------------
-    // 日付ごとの処理開始
-    // ------------------------------------------------------------
     $race_code = $_POST["race_code"]
             ?? $_GET["race_code"]
             ?? "";
@@ -74,28 +82,33 @@ try {
     }
 
     $place_code = substr($race_code, 8, 3);
-    $race_no    = intval(substr($race_code, 11, 2));
 
     log_message("{$race_code} 更新開始");
 
-    // ------------------------------------------------------------
-    // 開催場 × 12R ループ
-    // ------------------------------------------------------------
     if (!function_exists('raceCodeToKyoteiBiyoriUrl')) {
-        throw new Exception("関数 raceCodeToKyoteiBiyoriUrl が存在しません（race_url.phpの読み込みエラー）");
+        throw new Exception("関数 raceCodeToKyoteiBiyoriUrl が存在しません");
     }
     $url = raceCodeToKyoteiBiyoriUrl($race_code);
 
     log_message("URL: {$url}");
 
-    // Playwright 実行
-    if (!function_exists('scrapeExhibitionData')) {
-        throw new Exception("関数 scrapeExhibitionData が存在しません（scrape_exhibition.phpの読み込みエラー）");
+    // ------------------------------------------------------------
+    // Playwright を直接実行 (scrape_exhibition.php と同じ方式)
+    // ------------------------------------------------------------
+    $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
+
+    $output = [];
+    exec($cmd, $output, $return_var);
+
+    if ($return_var !== 0) {
+        throw new Exception("Playwright 実行エラー (コード: {$return_var})");
     }
-    $data = scrapeExhibitionData($url);
+
+    $json = implode("\n", $output);
+    $data = json_decode($json, true);
 
     if ($data === null || empty($data)) {
-        throw new Exception("展示データの取得に失敗したか、データが空でした (URL: {$url})");
+        throw new Exception("展示データの取得に失敗したか、データが空でした");
     }
 
     // ------------------------------------------------------------
@@ -208,7 +221,6 @@ try {
     }
     log_message("{$race_code} 更新完了");
 
-    // バッファを破棄して純粋なJSONのみ返す
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8");
     echo json_encode([
@@ -218,13 +230,15 @@ try {
         "message" => "展示情報を更新しました"
     ], JSON_UNESCAPED_UNICODE);
 
-} catch (Throwable $e) { // ExceptionだけでなくFatal ErrorもキャッチするThrowableに変更
+} catch (Throwable $e) {
+
+    log_message("エラー発生: " . $e->getMessage());
 
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8", true, 500);
     echo json_encode([
         "success" => false,
-        "message" => "エラー発生: " . $e->getMessage()
+        "message" => "エラーが発生しました: " . $e->getMessage()
     ], JSON_UNESCAPED_UNICODE);
 
 }
