@@ -9,8 +9,8 @@ error_reporting(E_ALL);
 // 余計な出力（Warning等）がJSONを破壊しないようバッファリング開始
 ob_start();
 
-require_once __DIR__ . "/race_url.php";
-require_once __DIR__ . "/scrape_exhibition.php";
+require_once __DIR__ . '/../logic/race_url.php';
+require_once __DIR__ . '/../logic/scrape_exhibition.php';
 
 file_put_contents('/tmp/update_exhibition_input.log', json_encode($_POST) . "\n", FILE_APPEND);
 
