@@ -12,27 +12,6 @@ ob_start();
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../logic/scrape_exhibition.php';
 
-
-// ------------------------------------------------------------
-// ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
-// ------------------------------------------------------------
-function log_message($message) {
-    $date = date("Y-m-d H:i:s");
-    $logLine = "[{$date}] {$message}\n";
-
-    $logDir = __DIR__ . "/../log";
-
-    if (!is_dir($logDir)) {
-        @mkdir($logDir, 0777, true);
-    }
-
-    @file_put_contents(
-        $logDir . "/" . date("Ymd") . ".log",
-        $logLine,
-        FILE_APPEND
-    );
-}
-
 // ------------------------------------------------------------
 // start_timing の変換（F.04 → -0.04）
 // ------------------------------------------------------------
