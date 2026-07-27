@@ -145,6 +145,7 @@ def predict_pattern(race_code):
     pattern_id, features = classify_slit_pattern(predicted_st, settings)
 
     return {
+
         "race_code": race_code,
         "player_ids": player_ids,
         "exhibition_st": ex_st,

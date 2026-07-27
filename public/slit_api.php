@@ -36,6 +36,8 @@ if ($predict === null) {
 // pattern_id を取得
 $pattern_id = $predict["pattern_id"];
 
+$features = $predict["features"] ?? [];
+
 // buff_debuff_slit.json を読み込む
 $buff_path = $base . "buff_debuff_slit.json";
 $buff_json = json_decode(file_get_contents($buff_path), true);
@@ -45,8 +47,9 @@ $buff = $buff_json[strval($pattern_id)] ?? null;
 
 // 最終的に返す JSON
 $response = [
-    "race_code" => $race_code,
-    "pattern_id" => $pattern_id,
+    "race_code"   => $race_code,
+    "pattern_id"  => $pattern_id,
+    "features"    => $features,
     "buff_debuff" => $buff,
     "predict_detail" => $predict
 ];

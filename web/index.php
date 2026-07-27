@@ -594,6 +594,9 @@ if (!empty($race_code)) {
         if (isset($json['buff_debuff'])) {
             $slit_data = $json['buff_debuff'];
         }
+        if (isset($json['features'])) {
+            $slit_pattern['features'] = $json['features'];
+        }
         if (isset($json['pattern_id'])) {
             $pid = (int)$json['pattern_id'];
             $slit_pattern['id'] = $pid;
@@ -1313,6 +1316,29 @@ $lane_colors = [
             <div style="font-size: 13px; color: #cbd5e1;">
                 <span style="color: #94a3b8;">説明:</span> <?= htmlspecialchars($slit_pattern['desc']) ?>
             </div>
+            <?php if (!empty($slit_pattern['features'])): ?>
+
+<div class="card mt-2">
+    <div class="card-header">
+        スリット特徴
+    </div>
+
+    <div class="card-body">
+
+<?php
+foreach ($slit_pattern['features'] as $key => $value) {
+
+    if ($value === true) {
+        echo "✅ {$key}<br>";
+    }
+
+}
+?>
+
+    </div>
+</div>
+
+<?php endif; ?>
         </div>
     <?php else: ?>
         <p style="color: #94a3b8;">※スリット体系データが取得できませんでした。</p>
