@@ -98,16 +98,6 @@ if (isset($_POST["update_exhibition"])) {
 
     $update_message =
         $update_json["message"] ?? "更新しました";
-
-    $debug_msg =
-        "CMD_RESPONSE:\n" . var_export($update_response, true) . "\n" .
-        "JSON:\n" . var_export($update_json, true) . "\n" .
-        "RACE_CODE:\n" . $race_code . "\n";
-    echo "<script>
-        const debugText = " . json_encode($debug_msg) . ";
-        alert(debugText);
-    </script>";
-
 }
 
 // -------------------------------------------------------------
