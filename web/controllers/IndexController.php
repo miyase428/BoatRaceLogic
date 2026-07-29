@@ -8,8 +8,6 @@ require_once __DIR__ . '/../logic/PredictionLogic.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/SlitLogic.php';
 
-include __DIR__ . '/../views/index_view.php';
-
 class IndexController
 {
     public function handle(): array
