@@ -83,6 +83,7 @@ class IndexController
             'race_code'       => $race_code,
             'place_map'       => $place_map,    // ★ここを追加！
             'place_names'     => $place_names,
+            'in_course'       => $in_course,      // ★これが返されているか確認！
             'entries'         => $entries,
             'results'         => $results,
             'api_error'       => $api_error,
