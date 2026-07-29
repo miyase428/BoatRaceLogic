@@ -96,8 +96,8 @@ try {
     // Playwright を直接実行 (scrape_exhibition.php と同じ方式)
     // ------------------------------------------------------------
     // HOME環境変数を明示して、cron等で動作実績のあるユーザーのパスを参照させる
-    $cmd = "HOME=/home/miyazaki /usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url) . " 2>&1";
-    $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
+    $cmd = "HOME=/home/miyazaki PLAYWRIGHT_BROWSERS_PATH=/home/miyazaki/.cache/ms-playwright /usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url) . " 2>&1";
+    // $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
 
     $output = [];
     exec($cmd, $output, $return_var);
