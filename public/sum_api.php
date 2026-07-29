@@ -18,27 +18,35 @@ $base = __DIR__ . "/../theories/new_sam/";
 $json_path = $base . "stats_" . $jyo . ".json";
 
 // ★ statsが無い場合のみ生成
+// ★ statsが無い場合のみ生成
 if (!file_exists($json_path)) {
 
-    // フルパス指定（重要）
     $python = "/usr/bin/python3";
     $script = escapeshellarg($base . "new_sam.py");
+    $arg_jyo = escapeshellarg($jyo);
 
-    $cmd = "$python $script " . escapeshellarg($jyo);
+    // ★ ターミナルと同じHOME環境変数や必要なパスを頭につけて実行する
+    $env_prefix = "HOME=/home/miyazaki PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+    
+    // ディレクトリを移動しつつ、環境変数を引き継いでPythonを実行
+    $cmd = "$env_prefix cd " . escapeshellarg($base) . " && $python $script $arg_jyo 2>&1";
 
-    // ★ 実行結果（標準エラー含む）取得
-    $log = shell_exec($cmd . " 2>&1");
+    // 実行とログ保存
+    $output = [];
+    $return_code = 0;
+    exec($cmd, $output, $return_code);
 
-    // ログ保存
-    file_put_contents("/tmp/sam_api.log", "CMD: $cmd\nLOG:\n$log\n\n", FILE_APPEND);
+    $log = implode("\n", $output);
+    file_put_contents("/tmp/sam_api.log", "CMD: $cmd\nRETURN: $return_code\nLOG:\n$log\n\n", FILE_APPEND);
 
-    // ★ デバッグ用（最初はこれONにする）
-    if (!file_exists($json_path)) {
+    if (!file_exists($json_path) || $return_code !== 0) {
+        http_response_code(500);
         echo json_encode([
             "error" => "stats ファイルが生成されませんでした",
+            "return_code" => $return_code,
             "cmd" => $cmd,
             "log" => $log
-        ]);
+        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit;
     }
 }
