@@ -160,14 +160,14 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 //--------------------------------------
 // ⑤ 6艇の平均値を先にまとめて計算
 //--------------------------------------
-$lap_times      = array_column($rows, 'lap_time');
-$avg_lap        = array_sum($lap_times) / count($lap_times);
+$lap_times = array_column($rows, 'lap_time');
+$avg_lap   = (count($lap_times) > 0) ? array_sum($lap_times) / count($lap_times) : 0;
 
-$mawari_times   = array_column($rows, 'around_time');
-$avg_mawari     = array_sum($mawari_times) / count($mawari_times);
+$mawari_times = array_column($rows, 'around_time');
+$avg_mawari   = (count($mawari_times) > 0) ? array_sum($mawari_times) / count($mawari_times) : 0;
 
 $straight_times = array_column($rows, 'straight_time');
-$avg_straight   = array_sum($straight_times) / count($straight_times);
+$avg_straight   = (count($straight_times) > 0) ? array_sum($straight_times) / count($straight_times) : 0;
 
 //--------------------------------------
 // ⑥ JSON 生成

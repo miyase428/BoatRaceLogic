@@ -203,7 +203,7 @@ class ApiClient
 
     public function fetchSamMaster(string $selected_place): array
     {
-        $place_map = require __DIR__ . '/../config/place_map.php';
+        $place_map = require __DIR__ . '/../../config/place_map.php';
         $sam_master_data = [];
         $jyo_num = $place_map[$selected_place] ?? $selected_place;
 
