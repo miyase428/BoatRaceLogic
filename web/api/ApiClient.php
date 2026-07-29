@@ -279,4 +279,47 @@ class ApiClient
 
         return [$slit_data, $slit_pattern];
     }
+
+    /**
+     * 展示情報を更新（競艇日和等のスクレイピング & DB保存）する
+     */
+    public function updateExhibition(string $race_code): array
+    {
+        $update_message = '';
+        $debug_msg = '';
+
+        if (!empty($race_code)) {
+            $target_url = "http://192.168.0.208:80/update_exhibition.php";
+
+            $ch = curl_init($target_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+                "race_code" => $race_code
+            ]));
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+            $update_response = curl_exec($ch);
+            $curl_errno = curl_errno($ch);
+            $curl_error = curl_error($ch);
+            $http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($curl_errno !== 0) {
+                $debug_msg = "【cURL通信エラー】\nCode: {$curl_errno}\nError: {$curl_error}";
+                $update_message = "展示情報の更新に失敗しました。";
+            } else {
+                $update_json = json_decode($update_response, true);
+                $debug_msg = 
+                    "HTTP STATUS: " . $http_code . "\n" .
+                    "RACE_CODE: " . $race_code . "\n\n" .
+                    "--- RAW RESPONSE ---\n" . $update_response . "\n\n" .
+                    "--- JSON PARSED ---\n" . var_export($update_json, true);
+
+                $update_message = $update_json["message"] ?? "更新処理が完了しました";
+            }
+        }
+
+        return [$update_message, $debug_msg];
+    }
 }

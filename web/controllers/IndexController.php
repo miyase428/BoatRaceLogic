@@ -12,7 +12,7 @@ class IndexController
 {
     public function handle(): array
     {
-        // require_once で読み込んだ place_map.php の配列を取得
+        //  require_once で読み込んだ place_map.php の配列を取得
         $place_map = require __DIR__ . '/../../config/place_map.php';
 
         // フォーム入力値
@@ -46,10 +46,27 @@ class IndexController
         // 2. 決まり手データ
         [$kimarite_data, $kimarite_error] = $apiClient->fetchKimarite($race_code, $in_course);
 
-        // 3. 展示データ
+        // -------------------------------------------------------------
+        // ★【②展示情報の更新処理】（「展示情報を更新」ボタン押下時）
+        // -------------------------------------------------------------
+        $update_message = '';
+        $debug_msg = '';
+
+        if (isset($_POST["update_exhibition"])) {
+            $target_race_code = $_POST["race_code"] ?? $race_code;
+            
+            // 展示API経由等でスクレイピング・DB登録を実行
+            [$update_message, $debug_msg] = $apiClient->updateExhibition($target_race_code);
+        }
+
+        // -------------------------------------------------------------
+        // 3. 展示データ（①初回は既存/ハイフン、②更新後は最新DBを取得）
+        // -------------------------------------------------------------
         [$tenji_list, $tenji_error] = $apiClient->fetchTenji($race_code, $results, $selected_place);
 
-        // 4. 最終予想ロジック（tenji_test連携）
+        // -------------------------------------------------------------
+        // 4. 最終予想ロジック（③最新のtenji_listを使って再計算）
+        // -------------------------------------------------------------
         $tenji_test_data = $apiClient->fetchTenjiTest($race_code, $tenji_list);
         $final_predictions = $predictionLogic->buildFinalPredictions(
             $tenji_list,
@@ -91,6 +108,8 @@ class IndexController
             'kimarite_error'  => $kimarite_error,
             'tenji_list'      => $tenji_list,
             'tenji_error'     => $tenji_error,
+            'update_message'  => $update_message, // ビューでメッセージを表示したい場合に渡す
+            'debug_msg'       => $debug_msg,       // デバッグメッセージが必要なら渡す
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
             'slit_data'       => $slit_data,
