@@ -116,6 +116,7 @@ class IndexController
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
             'overall_avg'       => $overall_avg,           // ★ ビューに渡す
+            'sam_master_data'   => $sam_master_data,     // ★ここを追加！
             'sam_error'         => $sam_error,             // サム理論APIのエラーメッセージ
             'sam_intervals'     => SamLogic::INTERVALS,    // 区間定義（表示用）
             'sam_metrics'       => SamLogic::METRICS,      // メトリクス定義（表示用）

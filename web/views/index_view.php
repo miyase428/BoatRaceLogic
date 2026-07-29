@@ -452,73 +452,45 @@
 
 <h2>📐 サム理論（コース・区間別マスタ）</h2>
 
+<!-- サム理論（コース・区間別マスタ）表示用テーブル例 -->
 <?php if (!empty($sam_master_data)): ?>
-    <div class="table-container">
-        <table class="sam-table">
-            <thead>
-                <tr>
-                    <th>コース</th>
-                    <th>区間</th>
-                    <th>win</th>
-                    <th>place2</th>
-                    <th>place3</th>
-                    <th>trio</th>
-                </tr>
-            </thead>
-
-            <tbody>
-                <?php for ($course = 1; $course <= 6; $course++): ?>
-                    <?php 
-                        $c_str = (string)$course;
-                        $course_data = $sam_master_data[$c_str] ?? [];
-                        $c = $lane_colors[$course] ?? $lane_colors[1];
-                        $bg_class = "sam-course-bg-" . $course;
-                    ?>
-
-                    <?php foreach ($sam_intervals as $idx => $interval): ?>
-                        <?php $row_metrics = $course_data[$interval] ?? []; ?>
-
-                        <tr class="<?= $bg_class ?> <?= ($idx === 0) ? 'border-top-course' : '' ?>">
-
-                            <?php if ($idx === 0): ?>
-                                <td rowspan="8" style="vertical-align: middle;">
-                                    <span class="lane-badge"
-                                          style="background-color: <?= $c['bg'] ?>;
-                                                 color: <?= $c['text'] ?>;
-                                                 border: 1px solid <?= $c['border'] ?>;">
-                                        <?= $course ?>
-                                    </span>
-                                </td>
-                            <?php endif; ?>
-
-                            <td style="text-align: center; color: #a5b4fc;">
-                                <?= htmlspecialchars($interval) ?>
-                            </td>
-
-                            <?php foreach ($sam_metrics as $m): ?>
-                                <?php 
-                                    $val = (float)($row_metrics[$m] ?? 0);
-                                    $color_style = "";
-                                    if ($val > 0) $color_style = "color: #38bdf8;";
-                                    elseif ($val < 0) $color_style = "color: #f87171;";
-                                ?>
-                                <td style="<?= $color_style ?>">
-                                    <?= number_format($val * 100, 0) ?>%
-                                </td>
-                            <?php endforeach; ?>
-
-                        </tr>
-                    <?php endforeach; ?>
-
-                <?php endfor; ?>
-            </tbody>
-        </table>
-    </div>
-
-<?php else: ?>
-    <div class="no-data"><?= htmlspecialchars($sam_error ?: 'サム理論マスタデータが存在しません。') ?></div>
+    <h2>サム理論（コース・区間別マスタデータ）</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>コース</th>
+                <th>指標</th>
+                <?php foreach ($sam_intervals as $interval): ?>
+                    <th><?= htmlspecialchars($interval) ?></th>
+                <?php endforeach; ?>
+            </tr>
+        </thead>
+        <tbody>
+            <?php for ($course = 1; $course <= 6; $course++): ?>
+                <?php
+                    $c_str = (string)$course;
+                    // キーが数値型か文字列型かに対応
+                    $course_data = $sam_master_data[$c_str] ?? $sam_master_data[$course] ?? [];
+                ?>
+                <?php foreach ($sam_metrics as $metric): ?>
+                    <tr>
+                        <?php if ($metric === $sam_metrics[0]): ?>
+                            <td rowspan="<?= count($sam_metrics) ?>"><?= $course ?>コース</td>
+                        <?php endif; ?>
+                        <td><?= htmlspecialchars($metric) ?></td>
+                        
+                        <?php foreach ($sam_intervals as $interval): ?>
+                            <?php 
+                                $val = $course_data[$interval][$metric] ?? '-';
+                            ?>
+                            <td><?= is_numeric($val) ? sprintf('%.3f', $val) : $val ?></td>
+                        <?php endforeach; ?>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endfor; ?>
+        </tbody>
+    </table>
 <?php endif; ?>
-
 
 <!-- ■ 展示サム理論 (Excel完全再現) -->
 
