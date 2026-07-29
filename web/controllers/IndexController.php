@@ -1,6 +1,7 @@
 <?php
-require_once __DIR__ . '/../common/db_connect.php';
-require_once __DIR__ . '/../config/place_map.php';
+require_once __DIR__ . '/../../common/db_connect.php';
+require_once __DIR__ . '/../../config/place_map.php';
+
 require_once __DIR__ . '/../api/ApiClient.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
 require_once __DIR__ . '/../logic/PredictionLogic.php';
