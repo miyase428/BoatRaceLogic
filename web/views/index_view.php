@@ -203,8 +203,24 @@
     <?php endif; ?>
 
     <!-- Part 4: 展示情報 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h2>⏱️ 展示情報</h2>
 
-    <h2>⏱️ 展示情報</h2>
+        <!-- ★ 展示情報を更新するフォーム（POST送信） -->
+        <form method="POST" action="" style="margin: 0;">
+            <input type="hidden" name="race_code" value="<?= htmlspecialchars($race_code) ?>">
+            <button type="submit" name="update_exhibition" value="1" style="background-color: #0284c7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                🔄 展示情報を更新
+            </button>
+        </form>
+    </div>
+
+    <!-- 更新完了メッセージ等の表示（任意） -->
+    <?php if (!empty($update_message)): ?>
+        <div style="background-color: #065f46; color: #a7f3d0; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+            <?= htmlspecialchars($update_message) ?>
+        </div>
+    <?php endif; ?>
 
     <?php if (!empty($tenji_list)): ?>
         <div class="table-container">
