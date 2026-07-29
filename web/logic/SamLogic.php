@@ -72,8 +72,9 @@ if (!class_exists('SamLogic')) {
             }
             unset($s);
 
-            return $sam_applied_list;
+            // ★ 適用リストと全体平均値をタプルで返す
+            return [$sam_applied_list, $overall_avg];
         }
-    }
+   }
 
 }

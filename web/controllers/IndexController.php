@@ -79,8 +79,10 @@ class IndexController
         // 5. サム理論マスタ & ロジック適用
         // -------------------------------------------------------------
         // ApiClientから [マスタデータ, エラーメッセージ] のペアで受け取る
+        // 5. サム理論マスタ & ロジック適用
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
-        $sam_applied_list = $samLogic->applySamTheory($tenji_list, $sam_master_data);
+        // ★ 受け取り方を [$sam_applied_list, $overall_avg] に変更
+        [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory($tenji_list, $sam_master_data);
 
         // 6. スリット体系
         [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
@@ -115,6 +117,7 @@ class IndexController
             'debug_msg'       => $debug_msg,
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
+            'overall_avg'       => $overall_avg,           // ★ ビューに渡す
             'sam_error'         => $sam_error,             // サム理論APIのエラーメッセージ
             'sam_intervals'     => SamLogic::INTERVALS,    // 区間定義（表示用）
             'sam_metrics'       => SamLogic::METRICS,      // メトリクス定義（表示用）
