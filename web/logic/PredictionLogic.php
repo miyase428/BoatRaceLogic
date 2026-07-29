@@ -160,18 +160,12 @@ class PredictionLogic
     /**
      * 最終予想結果から「本命・対抗・切る艇・買い目」などの集計変数を抽出するヘルパー
      */
-    public function buildSummary(array $final_predictions): array
+public function buildSummary(array $final_predictions): array
     {
         $kiru_boats = [];
-        $aite_boats = [];
-
         for ($i = 1; $i <= 6; $i++) {
-            if (isset($final_predictions[$i])) {
-                if (($final_predictions[$i]['kiru'] ?? 0) == 1) {
-                    $kiru_boats[] = $i;
-                } else {
-                    $aite_boats[] = $i;
-                }
+            if (isset($final_predictions[$i]) && ($final_predictions[$i]['kiru'] ?? 0) == 1) {
+                $kiru_boats[] = $i;
             }
         }
 
@@ -181,14 +175,28 @@ class PredictionLogic
             return ($b['final3'] ?? 0) <=> ($a['final3'] ?? 0);
         });
 
-        // 配列の数値インデックスを取り出す
-        $sorted_values = array_values($sorted_preds);
-        $honmei_head   = $sorted_values[0]['boat'] ?? 1;
-        $taikou_head   = $sorted_values[1]['boat'] ?? 2;
+        // スコア順の艇番リスト（例: [6, 4, 5, 2, 1, 3]）
+        $rank_boats = array_column(array_values($sorted_preds), 'boat');
 
-        // 相手候補（頭を除外）
-        $honmei_aite = array_values(array_diff($aite_boats, [$honmei_head]));
-        $taikou_aite = array_values(array_diff($aite_boats, [$taikou_head]));
+        $honmei_head = $rank_boats[0] ?? 1;
+        $taikou_head = $rank_boats[1] ?? 2;
+
+        // 【絞り込みロジック】
+        // 切る艇を除外し、かつ「頭」以外の艇をスコア順に上から最大3艇ピックアップ
+        $get_aite_boats = function($head) use ($rank_boats, $kiru_boats) {
+            $aite = [];
+            foreach ($rank_boats as $b) {
+                if ($b == $head) continue;             // 頭は除外
+                if (in_array($b, $kiru_boats)) continue; // 切る艇は除外
+                $aite[] = $b;
+                if (count($aite) >= 3) break;          // ★ここで最大3艇に制限！
+            }
+            sort($aite); // 昇順に並べ替え（見た目を綺麗にするため）
+            return $aite;
+        };
+
+        $honmei_aite = $get_aite_boats($honmei_head);
+        $taikou_aite = $get_aite_boats($taikou_head);
 
         $honmei_aite_str = implode('・', $honmei_aite);
         $taikou_aite_str = implode('・', $taikou_aite);
