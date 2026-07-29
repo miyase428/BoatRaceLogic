@@ -8,7 +8,7 @@
     <title>BoatRace Analytics</title>
 
     <!-- CSS 分離版 -->
-    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="/boatrace/web/assets/css/style.css">
 </head>
 
 <body>
