@@ -95,13 +95,16 @@ try {
     // ------------------------------------------------------------
     // Playwright を直接実行 (scrape_exhibition.php と同じ方式)
     // ------------------------------------------------------------
+    // HOME環境変数を明示して、cron等で動作実績のあるユーザーのパスを参照させる
+    $cmd = "HOME=/home/miyazaki /usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url) . " 2>&1";
     $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
 
     $output = [];
     exec($cmd, $output, $return_var);
 
     if ($return_var !== 0) {
-        throw new Exception("Playwright 実行エラー (コード: {$return_var})");
+        $node_error = implode("\n", $output);
+        throw new Exception("Playwright 実行エラー (コード: {$return_var})\n詳細: {$node_error}");
     }
 
     $json = implode("\n", $output);
