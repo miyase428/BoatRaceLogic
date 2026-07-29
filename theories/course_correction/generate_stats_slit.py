@@ -1,5 +1,6 @@
 # generate_stats_slit.py
 # スリットパターン × コース × 着順率 → stats_slit.json / baseline_slit.json / buff_debuff_slit.json を生成
+# （サンプル数に応じたベイズ平滑化 ＆ キャップ処理を搭載）
 
 import json
 import os
@@ -7,7 +8,7 @@ import psycopg2
 from classify_slit_pattern import classify_slit_pattern
 
 # ------------------------------------------------------------
-# PostgreSQL 接続情報（new_sam.py と統一）
+# PostgreSQL 接続情報
 # ------------------------------------------------------------
 DB_CONFIG = {
     "host": "192.168.0.208",
@@ -118,7 +119,7 @@ def calc_baseline_rates(races):
 
 
 # ------------------------------------------------------------
-# 3. スリットパターン別着順率（stats）
+# 3. スリットパターン別着順率（stats）＆生カウント保持
 # ------------------------------------------------------------
 def calc_pattern_rates(races):
     counts = {
@@ -164,23 +165,48 @@ def calc_pattern_rates(races):
                     "trio": counts[pid][lane]["trio"] / t
                 }
 
-    return stats
+    return stats, counts
 
 
 # ------------------------------------------------------------
-# 4. バフデバフ（stats - baseline）
+# 4. バフデバフ（ベイズ平滑化 ＆ 上下限キャップ付き）
 # ------------------------------------------------------------
-def calc_buff_debuff(stats, baseline):
+def calc_buff_debuff(stats, baseline, counts_total):
     buff = {}
+    
+    # ハイパーパラメータの設定
+    # Kが大きいほど、サンプル数が少ないときに差分が0（影響なし）に強く引き戻されます（例: 30〜50推奨）
+    K = 40 
+    
+    # 確率変動の物理的な上限・下限キャップ（例: 最大でも ±8% = 0.08 までに制限）
+    MAX_CAP = 0.08
 
     for pid in range(1, 13):
         buff[pid] = {}
         for lane in range(1, 7):
+            n = counts_total[pid][lane]["total"]
+            
+            # ベイズ平滑化の重み係数 (0.0 〜 1.0)
+            shrinkage_weight = n / (n + K)
+
+            # 各指標の生差分を計算し、シュリンク係数を掛ける
+            raw_win = stats[pid][lane]["win"] - baseline[lane]["win"]
+            raw_place2 = stats[pid][lane]["place2"] - baseline[lane]["place2"]
+            raw_place3 = stats[pid][lane]["place3"] - baseline[lane]["place3"]
+            raw_trio = stats[pid][lane]["trio"] - baseline[lane]["trio"]
+
+            # シュリンク適用後の値
+            shrunk_win = raw_win * shrinkage_weight
+            shrunk_place2 = raw_place2 * shrinkage_weight
+            shrunk_place3 = raw_place3 * shrinkage_weight
+            shrunk_trio = raw_trio * shrinkage_weight
+
+            # 上下限キャップ（クリップ）をかけて異常値を排除
             buff[pid][lane] = {
-                "win": stats[pid][lane]["win"] - baseline[lane]["win"],
-                "place2": stats[pid][lane]["place2"] - baseline[lane]["place2"],
-                "place3": stats[pid][lane]["place3"] - baseline[lane]["place3"],
-                "trio": stats[pid][lane]["trio"] - baseline[lane]["trio"]
+                "win": max(-MAX_CAP, min(MAX_CAP, shrunk_win)),
+                "place2": max(-MAX_CAP, min(MAX_CAP, shrunk_place2)),
+                "place3": max(-MAX_CAP, min(MAX_CAP, shrunk_place3)),
+                "trio": max(-MAX_CAP, min(MAX_CAP, shrunk_trio))
             }
 
     return buff
@@ -190,8 +216,6 @@ def calc_buff_debuff(stats, baseline):
 # 5. メイン処理（完全統合版）
 # ------------------------------------------------------------
 def main():
-
-    # venue_slit_settings.json を読み込む
     base_path = os.path.dirname(__file__)
     settings_path = os.path.join(base_path, "venue_slit_settings.json")
 
@@ -201,20 +225,22 @@ def main():
     settings = venue_settings["default"]
 
     # レースデータ読み込み
+    print("レースデータを読み込んでいます...")
     races = load_race_data()
 
     # パターンID付与
+    print("スリットパターンを分類しています...")
     for race in races:
-        race["pattern_id"] = classify_slit_pattern(race["st"], settings)
+        race["pattern_id"], _ = classify_slit_pattern(race["st"], settings)
 
     # 基準着順率
     baseline = calc_baseline_rates(races)
 
-    # パターン別着順率
-    stats = calc_pattern_rates(races)
+    # パターン別着順率（生カウントも同時に受け取る）
+    stats, counts_total = calc_pattern_rates(races)
 
-    # バフデバフ
-    buff = calc_buff_debuff(stats, baseline)
+    # バフデバフ（シュリンク ＆ キャップ適用）
+    buff = calc_buff_debuff(stats, baseline, counts_total)
 
     # JSON 出力
     out_stats = os.path.join(base_path, "stats_slit.json")
@@ -230,7 +256,7 @@ def main():
     with open(out_buff, "w", encoding="utf-8") as f:
         json.dump(buff, f, indent=2, ensure_ascii=False)
 
-    print("stats_slit.json / baseline_slit.json / buff_debuff_slit.json を生成しました。")
+    print("修正完了: stats_slit.json / baseline_slit.json / buff_debuff_slit.json を生成しました。")
 
 
 if __name__ == "__main__":
