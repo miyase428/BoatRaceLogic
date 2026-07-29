@@ -181,34 +181,50 @@ public function buildSummary(array $final_predictions): array
         $honmei_head = $rank_boats[0] ?? 1;
         $taikou_head = $rank_boats[1] ?? 2;
 
-        // 【絞り込みロジック】
-        // 切る艇を除外し、かつ「頭」以外の艇をスコア順に上から最大3艇ピックアップ
-        $get_aite_boats = function($head) use ($rank_boats, $kiru_boats) {
-            $aite = [];
+        // 【集計用クロージャ】
+        $calc_for_head = function($head) use ($rank_boats, $kiru_boats) {
+            $aite = []; // 2着候補（上位最大3艇）
+            $third = []; // 3着候補（切る艇以外すべて）
+
             foreach ($rank_boats as $b) {
-                if ($b == $head) continue;             // 頭は除外
+                if ($b == $head) continue;               // 頭は除外
                 if (in_array($b, $kiru_boats)) continue; // 切る艇は除外
-                $aite[] = $b;
-                if (count($aite) >= 3) break;          // ★ここで最大3艇に制限！
+
+                // 3着候補には切る艇以外すべて追加
+                $third[] = $b;
+
+                // 2着（相手）候補は上位最大3艇まで
+                if (count($aite) < 3) {
+                    $aite[] = $b;
+                }
             }
-            sort($aite); // 昇順に並べ替え（見た目を綺麗にするため）
-            return $aite;
+
+            sort($aite);  // 見映え用に昇順ソート
+            sort($third); // 見映え用に昇順ソート
+
+            return [$aite, $third];
         };
 
-        $honmei_aite = $get_aite_boats($honmei_head);
-        $taikou_aite = $get_aite_boats($taikou_head);
+        [$honmei_aite, $honmei_third] = $calc_for_head($honmei_head);
+        [$taikou_aite, $taikou_third] = $calc_for_head($taikou_head);
 
+        // 表示用文字列（ドット区切り）
         $honmei_aite_str = implode('・', $honmei_aite);
         $taikou_aite_str = implode('・', $taikou_aite);
         $kiru_str        = implode('・', $kiru_boats);
 
-        $honmei_aite_kako = implode('', $honmei_aite);
-        $taikou_aite_kako = implode('', $taikou_aite);
-        $kiru_kako        = implode('', $kiru_boats);
+        // 買い目用文字列（結合）
+        $honmei_aite_kako  = implode('', $honmei_aite);
+        $honmei_third_kako = implode('', $honmei_third);
 
-        // 買い目 3連単
-        $honmei_kai = $honmei_head . '-' . $honmei_aite_kako . '-' . $honmei_aite_kako . $kiru_kako;
-        $taikou_kai = $taikou_head . '-' . $taikou_aite_kako . '-' . $taikou_aite_kako . $kiru_kako;
+        $taikou_aite_kako  = implode('', $taikou_aite);
+        $taikou_third_kako = implode('', $taikou_third);
+
+        $kiru_kako         = implode('', $kiru_boats);
+
+        // 買い目 3連単 (例: 6 - 245 - 12345)
+        $honmei_kai = $honmei_head . '-' . $honmei_aite_kako . '-' . $honmei_third_kako;
+        $taikou_kai = $taikou_head . '-' . $taikou_aite_kako . '-' . $taikou_third_kako;
 
         return [
             'honmei_head'      => $honmei_head,
