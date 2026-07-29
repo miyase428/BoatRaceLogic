@@ -13,7 +13,6 @@ class IndexController
     public function handle(): array
     {
         // require_once で読み込んだ place_map.php の配列を取得
-        // (place_map.php が return している場合)
         $place_map = require __DIR__ . '/../../config/place_map.php';
 
         // フォーム入力値
@@ -57,6 +56,7 @@ class IndexController
             $kimarite_data,
             $tenji_test_data
         );
+        $summary = $predictionLogic->buildSummary($final_predictions);
 
         // 5. サム理論マスタ
         $sam_master_data = $apiClient->fetchSamMaster($selected_place);
@@ -76,14 +76,14 @@ class IndexController
             6 => ['bg' => '#22c55e', 'text' => '#ffffff', 'border' => '#16a34a'],
         ];
 
-        return [
+        $viewData = [
             'selected_date'   => $selected_date,
             'selected_place'  => $selected_place,
             'selected_race'   => $selected_race,
             'race_code'       => $race_code,
-            'place_map'       => $place_map,    // ★ここを追加！
+            'place_map'       => $place_map,
             'place_names'     => $place_names,
-            'in_course'       => $in_course,      // ★これが返されているか確認！
+            'in_course'       => $in_course,
             'entries'         => $entries,
             'results'         => $results,
             'api_error'       => $api_error,
@@ -98,5 +98,7 @@ class IndexController
             'feature_name'    => $feature_name,
             'lane_colors'     => $lane_colors,
         ];
+
+        return array_merge($viewData, $summary);
     }
 }

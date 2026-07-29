@@ -156,4 +156,63 @@ class PredictionLogic
 
         return $final_predictions;
     }
+
+    /**
+     * 最終予想結果から「本命・対抗・切る艇・買い目」などの集計変数を抽出するヘルパー
+     */
+    public function buildSummary(array $final_predictions): array
+    {
+        $kiru_boats = [];
+        $aite_boats = [];
+
+        for ($i = 1; $i <= 6; $i++) {
+            if (isset($final_predictions[$i])) {
+                if (($final_predictions[$i]['kiru'] ?? 0) == 1) {
+                    $kiru_boats[] = $i;
+                } else {
+                    $aite_boats[] = $i;
+                }
+            }
+        }
+
+        // final3 の降順にソート（キーを保持）
+        $sorted_preds = $final_predictions;
+        uasort($sorted_preds, function($a, $b) {
+            return ($b['final3'] ?? 0) <=> ($a['final3'] ?? 0);
+        });
+
+        // 配列の数値インデックスを取り出す
+        $sorted_values = array_values($sorted_preds);
+        $honmei_head   = $sorted_values[0]['boat'] ?? 1;
+        $taikou_head   = $sorted_values[1]['boat'] ?? 2;
+
+        // 相手候補（頭を除外）
+        $honmei_aite = array_values(array_diff($aite_boats, [$honmei_head]));
+        $taikou_aite = array_values(array_diff($aite_boats, [$taikou_head]));
+
+        $honmei_aite_str = implode('・', $honmei_aite);
+        $taikou_aite_str = implode('・', $taikou_aite);
+        $kiru_str        = implode('・', $kiru_boats);
+
+        $honmei_aite_kako = implode('', $honmei_aite);
+        $taikou_aite_kako = implode('', $taikou_aite);
+        $kiru_kako        = implode('', $kiru_boats);
+
+        // 買い目 3連単
+        $honmei_kai = $honmei_head . '-' . $honmei_aite_kako . '-' . $honmei_aite_kako . $kiru_kako;
+        $taikou_kai = $taikou_head . '-' . $taikou_aite_kako . '-' . $taikou_aite_kako . $kiru_kako;
+
+        return [
+            'honmei_head'      => $honmei_head,
+            'taikou_head'      => $taikou_head,
+            'honmei_aite_str'  => $honmei_aite_str,
+            'taikou_aite_str'  => $taikou_aite_str,
+            'kiru_str'         => $kiru_str,
+            'honmei_aite_kako' => $honmei_aite_kako,
+            'taikou_aite_kako' => $taikou_aite_kako,
+            'kiru_kako'        => $kiru_kako,
+            'honmei_kai'       => $honmei_kai,
+            'taikou_kai'       => $taikou_kai,
+        ];
+    }
 }
