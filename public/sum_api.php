@@ -21,11 +21,11 @@ $json_path = $base . "stats_" . $jyo . ".json";
 if (!file_exists($json_path)) {
 
     // 条件なしで強制実行 ＆ escapeshellarg を使わないテスト
-    $python = "/usr/bin/python3";
+    $python = "/home/miyazaki/.venv/bin/python3";
     $script = $base . "new_sam.py";
 
     // 環境変数 + シンプルな文字列結合
-    $cmd = "HOME=/home/miyazaki PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin cd " . $base . " && " . $python . " " . $script . " " . $jyo . " 2>&1";
+    $cmd = "export HOME=/home/miyazaki; export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin; cd {$base}; {$python} {$script} {$jyo} 2>&1";
 
     $output = [];
     $return_code = 0;
