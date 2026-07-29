@@ -12,6 +12,10 @@ class IndexController
 {
     public function handle(): array
     {
+        // require_once で読み込んだ place_map.php の配列を取得
+        // (place_map.php が return している場合)
+        $place_map = require __DIR__ . '/../../config/place_map.php';
+
         // フォーム入力値
         $selected_date   = $_GET['date']  ?? date('Y-m-d');
         $selected_place  = $_GET['place'] ?? 'OMR';
@@ -77,6 +81,7 @@ class IndexController
             'selected_place'  => $selected_place,
             'selected_race'   => $selected_race,
             'race_code'       => $race_code,
+            'place_map'       => $place_map,    // ★ここを追加！
             'place_names'     => $place_names,
             'entries'         => $entries,
             'results'         => $results,
