@@ -1,0 +1,159 @@
+<?php
+
+class PredictionLogic
+{
+    private function to_dec($val): float
+    {
+        $f = (float)$val;
+        return ($f > 1.0) ? $f / 100.0 : $f;
+    }
+
+    public function buildFinalPredictions(array $tenji_list, array $kimarite_data, array $tenji_test_data): array
+    {
+        // 1コース決まり手
+        $k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? [];
+        $k1_nige_dec     = $this->to_dec($k1['nige'] ?? 0);
+        $k1_sashi_dec    = $this->to_dec($k1['sashi'] ?? 0);
+        $k1_makuri_dec   = $this->to_dec($k1['makuri'] ?? 0);
+        $k1_makuri_z_dec = $this->to_dec($k1['makurizashi'] ?? 0);
+
+        $final_predictions = [];
+
+        for ($i = 1; $i <= 6; $i++) {
+            $boat = $i;
+            $waku = $boat;
+
+            $api_item = $tenji_test_data[$i - 1] ?? [];
+            $rate6_dec = (float)($api_item['three_in_rate_6m'] ?? 0);
+            $rate3_dec = (float)($api_item['three_in_rate_3m'] ?? 0);
+
+            $t_data = $tenji_list[$i - 1] ?? [];
+            $k_data = $kimarite_data[(string)$boat]['6month'] ?? $kimarite_data[(string)$boat] ?? [];
+
+            $score_s = (float)($t_data['ex_sougou'] ?? 0);
+
+            if ($i === 1) {
+                $kitai_dec = $k1_nige_dec * (1.0 + ($score_s / 100.0));
+            } else {
+                $sashi_dec   = $this->to_dec($k_data['sashi'] ?? 0);
+                $makuri_dec  = $this->to_dec($k_data['makuri'] ?? 0);
+                $makuriz_dec = $this->to_dec($k_data['makurizashi'] ?? 0);
+
+                $kitai_dec = ($sashi_dec + $makuri_dec + $makuriz_dec) * (1.0 + ($score_s / 100.0));
+            }
+
+            $flg_sashi = "-";
+            $flg_makuri = "-";
+            $flg_makurizashi = "-";
+            $flg_nogashi = "-";
+
+            if ($i >= 2) {
+                $curr_sashi   = $this->to_dec($k_data['sashi'] ?? 0);
+                $curr_makuri  = $this->to_dec($k_data['makuri'] ?? 0);
+                $curr_makuriz = $this->to_dec($k_data['makurizashi'] ?? 0);
+
+                if ($k1_sashi_dec > 0.12 && $curr_sashi > 0.12) {
+                    $flg_sashi = "★{$i}差し";
+                }
+                if ($k1_makuri_dec > 0.12 && $curr_makuri > 0.12) {
+                    $flg_makuri = "★{$i}まくり";
+                }
+                if ($k1_makuri_z_dec > 0.12 && $curr_makuriz > 0.12) {
+                    $flg_makurizashi = "★{$i}まくり差し";
+                }
+            }
+
+            if ($i === 2) {
+                $nogashi_dec = $this->to_dec($k_data['nogashi'] ?? 0);
+                if ($nogashi_dec > 0.4) {
+                    $flg_nogashi = "★壁役(逃がし)";
+                }
+            } elseif ($i === 3) {
+                $st_score_3 = (float)($tenji_list[2]['st_score'] ?? 0);
+                $stFactor = 1.0 + ($st_score_3 - 3.0) * 0.1;
+
+                $k3_makuri  = $this->to_dec($k_data['makuri'] ?? 0);
+                $k3_makuriz = $this->to_dec($k_data['makurizashi'] ?? 0);
+                $blockIndex = ($k3_makuri + $k3_makuriz) * $stFactor;
+
+                if ($blockIndex > 0.12) {
+                    $flg_nogashi = "★外ブロック";
+                }
+            }
+
+            $nige_d      = $this->to_dec($k_data['nige'] ?? 0);
+            $sashi_d     = $this->to_dec($k_data['sashi'] ?? 0);
+            $makuri_d    = $this->to_dec($k_data['makuri'] ?? 0);
+            $makuriz_d   = $this->to_dec($k_data['makurizashi'] ?? 0);
+            $sasare_d    = $this->to_dec($k_data['sasare'] ?? 0);
+            $makurarez_d = $this->to_dec($k_data['makurarezashi'] ?? 0);
+
+            if ($nige_d >= 0.2 && $waku === 1) {
+                $type = "逃げ型";
+            } elseif ($sashi_d >= 0.05) {
+                $type = "差し型";
+            } elseif ($makuri_d >= 0.05 || $makuriz_d >= 0.05) {
+                $type = "攻め型";
+            } elseif ($sasare_d >= 0.2 || $makurarez_d >= 0.2) {
+                $type = "脆い型";
+            } else {
+                $type = "無色";
+            }
+
+            switch ($type) {
+                case "攻め型":
+                case "差し型":
+                case "逃げ型":
+                    $typeBonus = 1;
+                    break;
+                case "脆い型":
+                    $typeBonus = -1;
+                    break;
+                default:
+                    $typeBonus = 0;
+                    break;
+            }
+
+            $final2 = (float)($t_data['final_2nd_score'] ?? 0);
+            $final3 = $final2 + $typeBonus;
+
+            $final_predictions[$i] = [
+                'boat'            => $boat,
+                'waku'            => $waku,
+                'rate6_dec'       => $rate6_dec,
+                'rate3_dec'       => $rate3_dec,
+                'kitai_dec'       => $kitai_dec,
+                'flg_sashi'       => $flg_sashi,
+                'flg_makuri'      => $flg_makuri,
+                'flg_makurizashi' => $flg_makurizashi,
+                'flg_nogashi'     => $flg_nogashi,
+                'type'            => $type,
+                'typeBonus'       => $typeBonus,
+                'final3'          => $final3,
+                'getBonus'        => (float)($t_data['tenkai_morai'] ?? 0),
+            ];
+        }
+
+        // 切る艇判定
+        $m_scores = array_values(array_column($final_predictions, 'final3'));
+        sort($m_scores);
+        $count = count($m_scores);
+        if ($count % 2 === 0) {
+            $med = ($m_scores[$count/2 - 1] + $m_scores[$count/2]) / 2.0;
+        } else {
+            $med = $m_scores[floor($count/2)];
+        }
+
+        for ($i = 1; $i <= 6; $i++) {
+            $fp = &$final_predictions[$i];
+            if ($fp['getBonus'] == 0 && $fp['final3'] < $med && ($fp['rate6_dec'] < 0.5 || $fp['rate3_dec'] < 0.5)) {
+                $fp['kiru'] = 1;
+            } else {
+                $fp['kiru'] = 0;
+            }
+        }
+        unset($fp);
+
+        return $final_predictions;
+    }
+}
