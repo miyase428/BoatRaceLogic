@@ -114,11 +114,6 @@ if (isset($_POST["update_exhibition"])) {
 
         $update_message = $update_json["message"] ?? "更新処理が完了しました";
     }
-
-    echo "<script>
-        const debugText = " . json_encode($debug_msg) . ";
-        alert(debugText);
-    </script>";
 }
 
 // -------------------------------------------------------------
