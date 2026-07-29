@@ -18,8 +18,6 @@ $base = __DIR__ . "/../theories/new_sam/";
 $json_path = $base . "stats_" . $jyo . ".json";
 
 // ★ statsが無い場合のみ生成
-// ★ statsが無い場合のみ生成
-// ★ statsが無い場合のみ生成
 if (!file_exists($json_path)) {
 
     $python = "/usr/bin/python3";
@@ -33,6 +31,7 @@ if (!file_exists($json_path)) {
     $output = [];
     $return_code = 0;
     exec($cmd, $output, $return_code);
+    file_put_contents($base . "exec_debug.log", "RETURN_CODE: $return_code\nOUTPUT:\n" . implode("\n", $output), FILE_APPEND);
 
     $log = implode("\n", $output);
     
