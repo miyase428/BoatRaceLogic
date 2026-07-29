@@ -81,9 +81,7 @@ class IndexController
         // ApiClientから [マスタデータ, エラーメッセージ] のペアで受け取る
         // 5. サム理論マスタ & ロジック適用
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
-        // ★ 受け取り方を [$sam_applied_list, $overall_avg] に変更
         [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory($tenji_list, $sam_master_data);
-
         // 6. スリット体系
         [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
         $feature_name = $slitLogic->getFeatureNames();

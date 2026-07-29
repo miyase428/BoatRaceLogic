@@ -208,12 +208,11 @@ class ApiClient
         $sam_master_data = [];
         $sam_error = '';
 
-        // place_map.php の読み込み（存在しない場合のフォールバック含む）
         $place_map_path = __DIR__ . '/../../config/place_map.php';
         $place_map = file_exists($place_map_path) ? require $place_map_path : [];
 
-        // 英字コード（例: OMR）から数値場コード（例: 24）へ変換
         $jyo_num = $place_map[$selected_place] ?? $selected_place;
+        $jyo_int = (int)$jyo_num;
 
         $post_data = http_build_query(['jyo' => $jyo_num]);
         $opts = [
@@ -228,9 +227,16 @@ class ApiClient
         $sam_json = @file_get_contents("http://192.168.0.208:80/sum_api.php", false, $context);
 
         if ($sam_json !== false) {
-            $parsed_sam = json_decode($sam_json, true) ?? [];
-            // レスポンスが $parsed_sam[$jyo_num] の階層構造になっている場合に対応
-            $sam_master_data = $parsed_sam[$jyo_num] ?? $parsed_sam;
+            $parsed = json_decode($sam_json, true) ?? [];
+
+            // 文字列キー ('04') でも数値キー (4) でも取り出せるようにガード
+            if (isset($parsed[$jyo_num])) {
+                $sam_master_data = $parsed[$jyo_num];
+            } elseif (isset($parsed[$jyo_int])) {
+                $sam_master_data = $parsed[$jyo_int];
+            } else {
+                $sam_master_data = $parsed;
+            }
         } else {
             $sam_error = 'サム理論マスタAPIの取得に失敗しました。';
         }

@@ -72,7 +72,7 @@ if (!class_exists('SamLogic')) {
             }
             unset($s);
 
-            // ★ 適用リストと全体平均値をタプルで返す
+            // 修正後: ★ タプル形式で全体平均（$overall_avg）も一緒に返す
             return [$sam_applied_list, $overall_avg];
         }
    }
