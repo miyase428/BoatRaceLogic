@@ -226,23 +226,23 @@ try {
 
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8");
-    echo json_encode([
-        "success" => true,
-        "race_code" => $race_code,
-        "count" => count($data),
-        "message" => "展示情報を更新しました"
-    ], JSON_UNESCAPED_UNICODE);
+//    echo json_encode([
+//        "success" => true,
+//        "race_code" => $race_code,
+//        "count" => count($data),
+//        "message" => "展示情報を更新しました"
+//    ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
 
     log_message("エラー発生: " . $e->getMessage());
 
     ob_end_clean();
-    header("Content-Type: application/json; charset=UTF-8", true, 500);
-    echo json_encode([
-        "success" => false,
-        "message" => "エラーが発生しました: " . $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
+//    header("Content-Type: application/json; charset=UTF-8", true, 500);
+//    echo json_encode([
+//        "success" => false,
+//        "message" => "エラーが発生しました: " . $e->getMessage()
+//    ], JSON_UNESCAPED_UNICODE);
 
 }
 
