@@ -453,9 +453,10 @@
 <h2>📐 サム理論（コース・区間別マスタ）</h2>
 
 <!-- サム理論（コース・区間別マスタ）表示用テーブル例 -->
+<!-- サム理論（コース・区間別マスタ）表示用テーブル -->
 <?php if (!empty($sam_master_data)): ?>
-    <h2>サム理論（コース・区間別マスタデータ）</h2>
-    <table class="table table-bordered">
+    <h2 class="text-xl font-bold mb-3">サム理論（コース・区間別マスタデータ）</h2>
+    <table class="table table-bordered text-center align-middle">
         <thead>
             <tr>
                 <th>コース</th>
@@ -469,21 +470,41 @@
             <?php for ($course = 1; $course <= 6; $course++): ?>
                 <?php
                     $c_str = (string)$course;
-                    // キーが数値型か文字列型かに対応
                     $course_data = $sam_master_data[$c_str] ?? $sam_master_data[$course] ?? [];
                 ?>
-                <?php foreach ($sam_metrics as $metric): ?>
+                <?php foreach ($sam_metrics as $m_idx => $metric): ?>
                     <tr>
-                        <?php if ($metric === $sam_metrics[0]): ?>
-                            <td rowspan="<?= count($sam_metrics) ?>"><?= $course ?>コース</td>
+                        <?php if ($m_idx === 0): ?>
+                            <td rowspan="<?= count($sam_metrics) ?>" class="align-middle font-bold"><?= $course ?>コース</td>
                         <?php endif; ?>
-                        <td><?= htmlspecialchars($metric) ?></td>
+                        <td class="font-bold"><?= htmlspecialchars($metric) ?></td>
                         
                         <?php foreach ($sam_intervals as $interval): ?>
                             <?php 
-                                $val = $course_data[$interval][$metric] ?? '-';
+                                $raw_val = $course_data[$interval][$metric] ?? '-';
+                                $val = is_numeric($raw_val) ? (float)$raw_val : null;
+
+                                // 色分けロジックの定義
+                                $style = '';
+                                if ($val !== null) {
+                                    if ($val > 0.05) {
+                                        // 強いプラス（赤系または明るい緑）
+                                        $style = 'background-color: rgba(239, 68, 68, 0.2); color: #fca5a5; font-weight: bold;';
+                                    } elseif ($val > 0.0) {
+                                        // 薄いプラス
+                                        $style = 'background-color: rgba(239, 68, 68, 0.1); color: #f87171;';
+                                    } elseif ($val < -0.05) {
+                                        // 強いマイナス（青系）
+                                        $style = 'background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; font-weight: bold;';
+                                    } elseif ($val < 0.0) {
+                                        // 薄いマイナス
+                                        $style = 'background-color: rgba(59, 130, 246, 0.1); color: #60a5fa;';
+                                    }
+                                }
                             ?>
-                            <td><?= is_numeric($val) ? sprintf('%.3f', $val) : $val ?></td>
+                            <td style="<?= $style ?>">
+                                <?= $val !== null ? sprintf('%.3f', $val) : '-' ?>
+                            </td>
                         <?php endforeach; ?>
                     </tr>
                 <?php endforeach; ?>
@@ -491,7 +512,6 @@
         </tbody>
     </table>
 <?php endif; ?>
-
 <!-- ■ 展示サム理論 (Excel完全再現) -->
 
 <h2>📐 展示サム理論（レース適用値）</h2>
