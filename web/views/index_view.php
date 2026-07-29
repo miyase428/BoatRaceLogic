@@ -29,10 +29,10 @@
                 <div class="form-group">
                     <label>開催場所</label>
                     <select name="place">
-                        <?php foreach ($place_map as $id => $code): ?>
+                        <?php foreach ($place_map as $code => $num): ?>
                             <?php $name = $place_names[$code] ?? $code; ?>
-                            <option value="<?= $code ?>" <?= $selected_place === $code ? 'selected' : '' ?>>
-                                <?= $name ?> (<?= $code ?>)
+                            <option value="<?= htmlspecialchars($code) ?>" <?= $selected_place === $code ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($name) ?> (<?= htmlspecialchars($code) ?>)
                             </option>
                         <?php endforeach; ?>
                     </select>
