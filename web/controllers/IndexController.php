@@ -12,7 +12,7 @@ class IndexController
 {
     public function handle(): array
     {
-        //  require_once で読み込んだ place_map.php の配列を取得
+        // require_once で読み込んだ place_map.php の配列を取得
         $place_map = require __DIR__ . '/../../config/place_map.php';
 
         // フォーム入力値
@@ -75,8 +75,11 @@ class IndexController
         );
         $summary = $predictionLogic->buildSummary($final_predictions);
 
-        // 5. サム理論マスタ
-        $sam_master_data = $apiClient->fetchSamMaster($selected_place);
+        // -------------------------------------------------------------
+        // 5. サム理論マスタ & ロジック適用
+        // -------------------------------------------------------------
+        // ApiClientから [マスタデータ, エラーメッセージ] のペアで受け取る
+        [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
         $sam_applied_list = $samLogic->applySamTheory($tenji_list, $sam_master_data);
 
         // 6. スリット体系
@@ -108,10 +111,13 @@ class IndexController
             'kimarite_error'  => $kimarite_error,
             'tenji_list'      => $tenji_list,
             'tenji_error'     => $tenji_error,
-            'update_message'  => $update_message, // ビューでメッセージを表示したい場合に渡す
-            'debug_msg'       => $debug_msg,       // デバッグメッセージが必要なら渡す
+            'update_message'  => $update_message,
+            'debug_msg'       => $debug_msg,
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
+            'sam_error'         => $sam_error,             // サム理論APIのエラーメッセージ
+            'sam_intervals'     => SamLogic::INTERVALS,    // 区間定義（表示用）
+            'sam_metrics'       => SamLogic::METRICS,      // メトリクス定義（表示用）
             'slit_data'       => $slit_data,
             'slit_pattern'    => $slit_pattern,
             'feature_name'    => $feature_name,
