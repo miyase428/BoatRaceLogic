@@ -246,30 +246,68 @@
                         </tr>
                     <?php endforeach; ?>
 
-                    <!-- 3. 決まり手(総合) セクション（上:直近1年 / 下:直近6ヶ月形式） -->
-                    <tr style="background-color: #1e293b;">
-                        <td colspan="7" style="text-align: left; padding: 8px 12px; font-weight: bold; color: #38bdf8; border-top: 2px solid #334155; border-bottom: 1px solid #334155;">
-                            🎯 決まり手(総合)（上:直近1年 / 下:直近6ヶ月）
+                    <!-- 決まり手（直近1年） -->
+                    <tr style="background-color:#1e293b;">
+                        <td colspan="7" style="padding:8px 12px; font-weight:bold; color:#38bdf8;">
+                            🎯 決まり手（直近1年）
                         </td>
                     </tr>
+
                     <?php foreach ($kimarite_columns as $col): ?>
-                        <tr>
-                            <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; padding-left: 20px;">
-                                <?= $col['label'] ?>
+                    <tr>
+                        <td style="position:sticky; left:0; background:#0f172a; font-weight:bold; border-right:2px solid #334155; padding-left:20px;">
+                            <?= $col['label'] ?>
+                        </td>
+
+                        <?php for ($i = 1; $i <= 6; $i++): ?>
+                            <?php
+                                $val = $kimarite_data[$i]['1year'][$col['key']] ?? 0;
+                                $pct = number_format($val, 1) . '%';
+
+                                // 色分けロジック（競艇日和風）
+                                if ($val >= 30)      $bg = '#f87171';   // 赤
+                                elseif ($val >= 15) $bg = '#fb923c';   // オレンジ
+                                elseif ($val > 0)   $bg = '#facc15';   // 黄色
+                                else                $bg = '#475569';   // グレー
+                            ?>
+                            <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
+                                <?= $pct ?>
                             </td>
-                            <?php for ($i = 1; $i <= 6; $i++): ?>
-                                <?php 
-                                    $val_1y = $get_kimarite_val($i, '1year', $col['key']);
-                                    $val_6m = $get_kimarite_val($i, '6month', $col['key']);
-                                ?>
-                                <td style="text-align: center; vertical-align: middle; padding: 4px;">
-                                    <div style="font-weight: bold; color: #38bdf8;"><?= $val_1y ?></div>
-                                    <div style="font-size: 11px; color: #94a3b8; border-top: 1px solid #334155; margin-top: 2px; padding-top: 2px;"><?= $val_6m ?></div>
-                                </td>
-                            <?php endfor; ?>
-                        </tr>
+                        <?php endfor; ?>
+                    </tr>
                     <?php endforeach; ?>
 
+
+                    <!-- 決まり手（直近6ヶ月） -->
+                    <tr style="background-color:#1e293b;">
+                        <td colspan="7" style="padding:8px 12px; font-weight:bold; color:#38bdf8;">
+                            🎯 決まり手（直近6ヶ月）
+                        </td>
+                    </tr>
+
+                    <?php foreach ($kimarite_columns as $col): ?>
+                    <tr>
+                        <td style="position:sticky; left:0; background:#0f172a; font-weight:bold; border-right:2px solid #334155; padding-left:20px;">
+                            <?= $col['label'] ?>
+                        </td>
+
+                        <?php for ($i = 1; $i <= 6; $i++): ?>
+                            <?php
+                                $val = $kimarite_data[$i]['6month'][$col['key']] ?? 0;
+                                $pct = number_format($val, 1) . '%';
+
+                                // 色分けロジック（競艇日和風）
+                                if ($val >= 30)      $bg = '#f87171';
+                                elseif ($val >= 15) $bg = '#fb923c';
+                                elseif ($val > 0)   $bg = '#facc15';
+                                else                $bg = '#475569';
+                            ?>
+                            <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
+                                <?= $pct ?>
+                            </td>
+                        <?php endfor; ?>
+                    </tr>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
