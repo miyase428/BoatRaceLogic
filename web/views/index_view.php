@@ -65,9 +65,9 @@
         <div class="code-value"><?= htmlspecialchars($race_code) ?></div>
     </div>
 
-<!-- Part 2～4 統合：出走表～展示情報マトリクス -->
+<!-- Part 2～4 統合：完全版 縦横反転マトリクス（縦：指標、横：1〜6号艇） -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h2>📋 総合出走・展示マトリクス（1〜6号艇）</h2>
+        <h2>📋 総合出走・展示マトリクス（選手横並び・全項目）</h2>
 
         <!-- 展示情報を更新するフォーム -->
         <form method="POST" action="" style="margin: 0;">
@@ -87,129 +87,138 @@
 
     <?php if (!empty($entries)): ?>
         <div class="table-container" style="overflow-x: auto;">
-            <table style="white-space: nowrap;">
+            <table style="white-space: nowrap; width: 100%;">
                 <thead>
                     <tr style="background-color: #1e293b; text-align: center;">
-                        <!-- 基本・出走表 -->
-                        <th>枠</th>
-                        <th>選手名</th>
-                        <th>級/支部</th>
-                        <th>全国勝率</th>
-                        <th>当地勝率</th>
-                        <th>モータ</th>
-                        <th>平均ST</th>
-                        <th>地力</th>
-                        <th>一次総合</th>
-                        
-                        <!-- 展示情報 -->
-                        <th style="background-color: #0f172a;">展示C</th>
-                        <th style="background-color: #0f172a;">展示T</th>
-                        <th style="background-color: #0f172a;">周り足</th>
-                        <th style="background-color: #0f172a;">直線</th>
-                        <th style="background-color: #0f172a; color:#a5b4fc;">J</th>
-                        <th style="background-color: #0f172a; color:#a5b4fc;">K</th>
-                        <th style="background-color: #0f172a; color:#38bdf8;">L(メイン)</th>
-                        <th style="background-color: #0f172a;">展示ST</th>
-                        <th style="background-color: #0f172a;">展示総合</th>
-                        <th style="background-color: #0f172a;">展示タイプ</th>
-                        
-                        <!-- 最終・足スコア -->
-                        <th>足スコア</th>
-                        <th style="color:#38bdf8;">二次予想スコア</th>
+                        <th style="position: sticky; left: 0; background-color: #1e293b; z-index: 2; min-width: 120px;">項目 / 艇番</th>
+                        <?php for ($i = 1; $i <= 6; $i++): ?>
+                            <?php $c = $lane_colors[$i] ?? $lane_colors[1]; ?>
+                            <th style="min-width: 130px;">
+                                <span class="lane-badge"
+                                    style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>; padding: 2px 8px; border-radius: 4px;">
+                                    <?= $i ?>号艇
+                                </span>
+                            </th>
+                        <?php endfor; ?>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php for ($i = 1; $i <= 6; $i++): ?>
-                        <?php
-                            // 1〜6号艇のデータをそれぞれの配列から安全に取得
-                            // ※ $entries, $results, $tenji_list の構造に合わせてインデックスやキーを調整してください
-                            $e = null;
-                            foreach ($entries as $entry) {
-                                if ((int)$entry['lane_number'] === $i) { $e = $entry; break; }
-                            }
-                            if (!$e) continue;
+                    <?php
+                        // 1〜6号艇のデータをインデックス配列として整理
+                        $map_entries = [];
+                        foreach ($entries as $e) { $map_entries[(int)$e['lane_number']] = $e; }
 
-                            $lane = $i;
-                            $c = $lane_colors[$lane] ?? $lane_colors[1];
-                            
-                            // 対応する結果データや展示データを特定
-                            $r = [];
-                            foreach ($results as $res_idx => $res_val) {
-                                // 添字や艇番の持ち方によって調整が必要な場合があります
-                                if (($res_idx + 1) === $i || (isset($res_val['boat']) && $res_val['boat'] == $i)) {
-                                    $r = $res_val;
-                                    break;
-                                }
-                            }
-                            // 見つからない場合はフォールバック
-                            if (empty($r)) $r = $results[$i - 1] ?? [];
+                        $map_results = [];
+                        foreach ($results as $idx => $r) {
+                            $b = $r['boat'] ?? ($idx + 1);
+                            $map_results[(int)$b] = $r;
+                        }
 
-                            $t = [];
-                            foreach ($tenji_list as $tenji) {
-                                if ((int)$tenji['teiban'] === $i) { $t = $tenji; break; }
-                            }
+                        $map_tenji = [];
+                        foreach ($tenji_list as $t) { $map_tenji[(int)$t['teiban']] = $t; }
 
-                            $ashi_score = $r['ashi_score'] ?? ($t['ex_total'] ?? '-');
-                        ?>
+                        // 行定義データのヘルパー関数
+                        // 引数: $category, $label, $key, $source_type ('entry', 'result', 'tenji', 'custom'), $format_callback
+                        $rows_def = [
+                            // --- 出走表情報 ---
+                            ['category' => '出走表', 'label' => '選手名', 'key' => 'player_name', 'src' => 'entry'],
+                            ['category' => '出走表', 'label' => '級別 / 支部', 'src' => 'custom', 'fn' => function($i) use ($map_entries) {
+                                $e = $map_entries[$i] ?? [];
+                                return htmlspecialchars(($e['class'] ?? '') . ' / ' . ($e['branch'] ?? ''));
+                            }],
+                            ['category' => '出走表', 'label' => '全国勝率', 'key' => 'national_win_rate', 'src' => 'entry'],
+                            ['category' => '出走表', 'label' => '当地勝率', 'key' => 'local_win_rate', 'src' => 'entry'],
+                            ['category' => '出走表', 'label' => 'モータ2連対率', 'key' => 'motor_exacta_rate', 'src' => 'entry'],
+                            ['category' => '出走表', 'label' => 'ボート2連対率', 'key' => 'boat_exacta_rate', 'src' => 'entry'],
+                            ['category' => '出走表', 'label' => '平均ST', 'key' => 'average_start', 'src' => 'entry'],
+                            ['category' => '出走表', 'label' => '地力スコア', 'key' => 'jiryoku_score', 'src' => 'result'],
+                            ['category' => '出走表', 'label' => '一次総合スコア', 'key' => 'total_score', 'src' => 'result', 'highlight' => true],
+                            ['category' => '出走表', 'label' => '足スコア', 'key' => 'ashi_score', 'src' => 'result'],
+                            ['category' => '出走表', 'label' => '一次評価', 'key' => 'ichiji_eval', 'src' => 'result'],
+
+                            // --- 展示情報 ---
+                            ['category' => '展示', 'label' => '展示進入コース', 'key' => 'tenji_course', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示タイム', 'key' => 'exhibition', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '周回', 'key' => 'lap', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '周り足', 'key' => 'mawari', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '直線', 'key' => 'straight', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => 'J列', 'key' => 'tenji_J', 'src' => 'tenji', 'color' => '#c7d2fe'],
+                            ['category' => '展示', 'label' => 'K列', 'key' => 'tenji_K', 'src' => 'tenji', 'color' => '#c7d2fe'],
+                            ['category' => '展示', 'label' => 'L列(メイン評価)', 'key' => 'tenji_L', 'src' => 'tenji', 'highlight' => true, 'color' => '#38bdf8'],
+                            ['category' => '展示', 'label' => '展示ST', 'key' => 'st', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示タイム場平均差', 'key' => 'ex_diff', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示タイム評価', 'key' => 'ex_score', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => 'ST評価', 'key' => 'st_score', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '周回評価', 'key' => 'lap_score', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '周り足評価', 'key' => 'mawari_score', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '直線評価', 'key' => 'straight_score', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示足トータル', 'key' => 'ex_total', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示攻めポテンシャル', 'key' => 'attack_potential', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示安定感', 'key' => 'stable_score', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示補正スコア', 'key' => 'ex_hosei', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示総合スコア', 'key' => 'ex_sougou', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示タイプ補正', 'key' => 'type_hosei', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展示タイプ名', 'src' => 'custom', 'fn' => function($i) use ($map_tenji) {
+                                $t = $map_tenji[$i] ?? [];
+                                $dtype = $t['dtype'] ?? '';
+                                if (!$dtype) return '-';
+                                $badge_class = 'type-badge';
+                                if ($dtype === '超伸び型') $badge_class .= ' type-super';
+                                elseif ($dtype === '攻め型') $badge_class .= ' type-attack';
+                                elseif ($dtype === '差し型') $badge_class .= ' type-sashi';
+                                return '<span class="' . $badge_class . '">' . htmlspecialchars($dtype) . '</span>';
+                            }],
+                            ['category' => '展示', 'label' => '展開キー', 'key' => 'tenkai_key', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '展開もらい補正', 'key' => 'tenkai_morai', 'src' => 'tenji'],
+                            ['category' => '展示', 'label' => '最終二次予想スコア', 'key' => 'final_2nd_score', 'src' => 'tenji', 'highlight' => true, 'style' => 'font-size: 14px;'],
+                        ];
+                    ?>
+
+                    <?php foreach ($rows_def as $row): ?>
                         <tr>
-                            <!-- 枠番 -->
-                            <td style="text-align: center;">
-                                <span class="lane-badge"
-                                    style="background-color: <?= $c['bg'] ?>;
-                                            color: <?= $c['text'] ?>;
-                                            border: 1px solid <?= $c['border'] ?>;">
-                                    <?= $lane ?>
-                                </span>
+                            <!-- 左側の項目名セル（スクロール時に固定されるように設定） -->
+                            <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; color: <?= $row['color'] ?? '#f8fafc' ?>;">
+                                <span style="font-size: 10px; color: #94a3b8; display: block;"><?= $row['category'] ?></span>
+                                <?= $row['label'] ?>
                             </td>
 
-                            <!-- 選手名・級支部 -->
-                            <td class="player-name" style="font-weight: bold;"><?= htmlspecialchars($e['player_name'] ?? '-') ?></td>
-                            <td><?= htmlspecialchars($e['class'] ?? '') ?>/<?= htmlspecialchars($e['branch'] ?? '') ?></td>
-                            <td style="text-align: right;"><?= htmlspecialchars($e['national_win_rate'] ?? '-') ?></td>
-                            <td style="text-align: right;"><?= htmlspecialchars($e['local_win_rate'] ?? '-') ?></td>
-                            <td style="text-align: right;"><?= htmlspecialchars($e['motor_exacta_rate'] ?? '-') ?></td>
-                            <td style="text-align: right;"><?= htmlspecialchars($e['average_start'] ?? '-') ?></td>
-                            <td style="text-align: right;"><?= htmlspecialchars($r['jiryoku_score'] ?? '-') ?></td>
-                            <td class="score-highlight" style="text-align: right;"><?= htmlspecialchars($r['total_score'] ?? '-') ?></td>
+                            <!-- 1〜6号艇のデータセル -->
+                            <?php for ($i = 1; $i <= 6; $i++): ?>
+                                <?php
+                                    $val = '-';
+                                    if ($row['src'] === 'entry') {
+                                        $val = $map_entries[$i][$row['key']] ?? '-';
+                                    } elseif ($row['src'] === 'result') {
+                                        $val = $map_results[$i][$row['key']] ?? '-';
+                                    } elseif ($row['src'] === 'tenji') {
+                                        $val = $map_tenji[$i][$row['key']] ?? '-';
+                                    } elseif ($row['src'] === 'custom') {
+                                        $val = $row['fn']($i);
+                                    }
 
-                            <!-- 展示情報カラム -->
-                            <td style="text-align: center; background-color: rgba(15, 23, 42, 0.3);"><?= htmlspecialchars($t['tenji_course'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3);"><?= htmlspecialchars($t['exhibition'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3);"><?= htmlspecialchars($t['mawari'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3);"><?= htmlspecialchars($t['straight'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3); color:#c7d2fe;"><?= htmlspecialchars($t['tenji_J'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3); color:#c7d2fe;"><?= htmlspecialchars($t['tenji_K'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3);" class="score-highlight"><?= htmlspecialchars($t['tenji_L'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3);"><?= htmlspecialchars($t['st'] ?? '-') ?></td>
-                            <td style="text-align: right; background-color: rgba(15, 23, 42, 0.3);"><?= htmlspecialchars($t['ex_sougou'] ?? '-') ?></td>
-                            <td style="text-align: center; background-color: rgba(15, 23, 42, 0.3);">
-                                <?php if (!empty($t['dtype'])): ?>
-                                    <?php
-                                        $badge_class = 'type-badge';
-                                        if ($t['dtype'] === '超伸び型') $badge_class .= ' type-super';
-                                        elseif ($t['dtype'] === '攻め型') $badge_class .= ' type-attack';
-                                        elseif ($t['dtype'] === '差し型') $badge_class .= ' type-sashi';
-                                    ?>
-                                    <span class="<?= $badge_class ?>"><?= htmlspecialchars($t['dtype']) ?></span>
-                                <?php else: ?>
-                                    -
-                                <?php endif; ?>
-                            </td>
-
-                            <!-- 最終評価系 -->
-                            <td style="text-align: right;"><?= htmlspecialchars($ashi_score) ?></td>
-                            <td class="score-highlight" style="text-align: right; font-size: 14px;">
-                                <?= htmlspecialchars($t['final_2nd_score'] ?? '-') ?>
-                            </td>
+                                    $td_style = $row['style'] ?? '';
+                                    if (!empty($row['color']) && $row['src'] !== 'custom') {
+                                        $td_style .= " color: {$row['color']};";
+                                    }
+                                    $td_class = !empty($row['highlight']) ? 'score-highlight' : '';
+                                ?>
+                                <td class="<?= $td_class ?>" style="text-align: center; <?= $td_style ?>">
+                                    <?php if ($row['src'] === 'custom' && strpos($val, '<span') === 0): ?>
+                                        <?= $val ?>
+                                    <?php else: ?>
+                                        <?= htmlspecialchars($val !== '' && $val !== null ? $val : '-') ?>
+                                    <?php endif; ?>
+                                </td>
+                            <?php endfor; ?>
                         </tr>
-                    <?php endfor; ?>
+                    <?php endforeach; ?>
                 </tbody>
             </table>
         </div>
     <?php else: ?>
         <div class="no-data"><?= htmlspecialchars($api_error ?: 'データが存在しません。') ?></div>
     <?php endif; ?>
-
+    
     <!-- Part 5: 最終予想（Excel完全一致） -->
 
     <h2>📊 最終予想（Excel完全一致）</h2>
