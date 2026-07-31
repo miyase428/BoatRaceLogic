@@ -117,14 +117,13 @@
                         $map_tenji = [];
                         foreach ($tenji_list as $t) { $map_tenji[(int)$t['teiban']] = $t; }
 
-                        // 決まり手データのマップ作成（$kimarite_data はコース毎の1年・6ヶ月データ）
+// 決まり手データのマップ作成（$kimarite_data はコース毎の1年・6ヶ月データ）
                         $get_kimarite_val = function($course, $period, $key) use ($kimarite_data) {
                             if (empty($kimarite_data[$course][$period][$key])) return '-';
                             return number_format($kimarite_data[$course][$period][$key], 1) . '%';
                         };
 
                         // 行定義データのヘルパー関数
-                        // categoryをキーにしてセクションヘッダーを自動挿入できるように定義
                         $rows_def = [
                             // --- 出走表情報 ---
                             ['category' => '出走表', 'label' => '選手名', 'key' => 'player_name', 'src' => 'entry'],
@@ -236,7 +235,7 @@
                             </tr>
                         <?php endif; ?>
 
-<tr>
+                        <tr>
                             <!-- 左側の項目名セル（スクロール時に固定） -->
                             <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; color: <?= $row['color'] ?? '#f8fafc' ?>; padding-left: 20px;">
                                 <?= $row['label'] ?>
@@ -262,8 +261,10 @@
                                     }
                                     $td_class = !empty($row['highlight']) ? 'score-highlight' : '';
                                 ?>
-                                <td class="<?= $td_class ?>" style="text-align: center; <?= $td_style ?>">
-                                    <?php if ($row['src'] === 'custom' && strpos($val, '<span') === 0): ?>
+                                <td class="<?= $td_class ?>" style="text-align: center; vertical-align: middle; <?= $td_style ?>">
+                                    <?php if ($row['src'] === 'custom' && strpos($val, '<div') !== false): ?>
+                                        <?= $val ?>
+                                    <?php elseif ($row['src'] === 'custom' && strpos($val, '<span') === 0): ?>
                                         <?= $val ?>
                                     <?php else: ?>
                                         <?= htmlspecialchars($val !== '' && $val !== null ? $val : '-') ?>
