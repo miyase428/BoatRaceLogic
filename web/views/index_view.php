@@ -177,31 +177,38 @@
                             ['category' => '展示', 'label' => '展開もらい補正', 'key' => 'tenkai_morai', 'src' => 'tenji'],
                             ['category' => '展示', 'label' => '最終二次予想スコア', 'key' => 'final_2nd_score', 'src' => 'tenji', 'highlight' => true, 'style' => 'font-size: 14px;'],
 
-                            // --- 決まり手(総合) 情報（競艇日和完全一致レイアウト） ---
-                            ['category' => '決まり手(総合)', 'label' => '逃げ / 逃し', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
-                                // 1号艇は「逃げ」、2号艇は「逃がし」など、コースごとの見え方に対応
-                                $val1 = ($i === 1) ? $get_kimarite_val($i, '1year', 'nige') : $get_kimarite_val($i, '1year', 'nogashi');
-                                $val2 = ($i === 1) ? $get_kimarite_val($i, '6month', 'nige') : $get_kimarite_val($i, '6month', 'nogashi');
-                                return '<div style="font-weight:bold; color:#f97316;">' . $val1 . '</div>' .
-                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $val2 . '</div>';
+                            // --- 決まり手(総合) 情報（上:1年 / 下:6ヶ月形式） ---
+                            ['category' => '決まり手(総合)', 'label' => '逃げ (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'nige') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'nige') . '</div>';
                             }],
-                            ['category' => '決まり手(総合)', 'label' => '差され / 差し', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
-                                $val1 = $get_kimarite_val($i, '1year', 'sasare');
-                                $val2 = $get_kimarite_val($i, '6month', 'sasare');
-                                return '<div style="font-weight:bold; color:#f97316;">' . $val1 . '</div>' .
-                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $val2 . '</div>';
+                            ['category' => '決まり手(総合)', 'label' => '差し (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'sashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'sashi') . '</div>';
                             }],
-                            ['category' => '決まり手(総合)', 'label' => '捲られ / 捲り', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
-                                $val1 = $get_kimarite_val($i, '1year', 'makurare');
-                                $val2 = $get_kimarite_val($i, '6month', 'makurare');
-                                return '<div style="font-weight:bold; color:#f97316;">' . $val1 . '</div>' .
-                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $val2 . '</div>';
+                            ['category' => '決まり手(総合)', 'label' => 'まくり (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makuri') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makuri') . '</div>';
                             }],
-                            ['category' => '決まり手(総合)', 'label' => '捲られ差 / 捲り差し', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
-                                $val1 = $get_kimarite_val($i, '1year', 'makurarezashi');
-                                $val2 = $get_kimarite_val($i, '6month', 'makurarezashi');
-                                return '<div style="font-weight:bold; color:#f97316;">' . $val1 . '</div>' .
-                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $val2 . '</div>';
+                            ['category' => '決まり手(総合)', 'label' => 'まくり差し (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makurizashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makurizashi') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => '逃がし (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'nogashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'nogashi') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => '差され (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'sasare') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'sasare') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => 'まくられ (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makurare') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makurare') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => 'まくられ差 (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makurarezashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makurarezashi') . '</div>';
                             }],
                         ];
 
