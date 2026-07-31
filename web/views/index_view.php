@@ -118,7 +118,7 @@
                         foreach ($tenji_list as $t) { $map_tenji[(int)$t['teiban']] = $t; }
 
                         // 行定義データのヘルパー関数
-                        // 引数: $category, $label, $key, $source_type ('entry', 'result', 'tenji', 'custom'), $format_callback
+                        // categoryをキーにしてセクションヘッダーを自動挿入できるように定義
                         $rows_def = [
                             // --- 出走表情報 ---
                             ['category' => '出走表', 'label' => '選手名', 'key' => 'player_name', 'src' => 'entry'],
@@ -172,13 +172,27 @@
                             ['category' => '展示', 'label' => '展開もらい補正', 'key' => 'tenkai_morai', 'src' => 'tenji'],
                             ['category' => '展示', 'label' => '最終二次予想スコア', 'key' => 'final_2nd_score', 'src' => 'tenji', 'highlight' => true, 'style' => 'font-size: 14px;'],
                         ];
+
+                        $current_category = '';
                     ?>
 
                     <?php foreach ($rows_def as $row): ?>
+                        <?php 
+                            // カテゴリーが変わったタイミングでセクションヘッダー行を挿入
+                            if ($current_category !== $row['category']):
+                                $current_category = $row['category'];
+                                $section_title = ($current_category === '出走表') ? '📋 出走表・基本情報' : '⏱️ 展示・評価情報';
+                        ?>
+                            <tr style="background-color: #1e293b;">
+                                <td colspan="7" style="text-align: left; padding: 8px 12px; font-weight: bold; color: #38bdf8; border-top: 2px solid #334155; border-bottom: 1px solid #334155;">
+                                    <?= $section_title ?>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+
                         <tr>
-                            <!-- 左側の項目名セル（スクロール時に固定されるように設定） -->
-                            <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; color: <?= $row['color'] ?? '#f8fafc' ?>;">
-                                <span style="font-size: 10px; color: #94a3b8; display: block;"><?= $row['category'] ?></span>
+                            <!-- 左側の項目名セル（スクロール時に固定） -->
+                            <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; color: <?= $row['color'] ?? '#f8fafc' ?>; padding-left: 20px;">
                                 <?= $row['label'] ?>
                             </td>
 
