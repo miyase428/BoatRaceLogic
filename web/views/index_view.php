@@ -187,7 +187,14 @@
                             ['category' => '決まり手', 'label' => 'まくり (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makuri'); }],
                             ['category' => '決まり手', 'label' => 'まくり差し (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurizashi'); }],
                             ['category' => '決まり手', 'label' => 'まくり差し (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurizashi'); }],
-                        ];
+                            ['category' => '決まり手', 'label' => '逃がし (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'nogashi'); }],
+                            ['category' => '決まり手', 'label' => '逃がし (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'nogashi'); }],
+                            ['category' => '決まり手', 'label' => '差され (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'sasare'); }],
+                            ['category' => '決まり手', 'label' => '差され (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'sasare'); }],
+                            ['category' => '決まり手', 'label' => 'まくられ (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurare'); }],
+                            ['category' => '決まり手', 'label' => 'まくられ (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurare'); }],
+                            ['category' => '決まり手', 'label' => 'まくられ差 (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurarezashi'); }],
+                            ['category' => '決まり手', 'label' => 'まくられ差 (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurarezashi'); }],                        ];
 
                         $current_category = '';
                     ?>
