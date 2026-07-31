@@ -253,29 +253,75 @@
                         </td>
                     </tr>
 
-                    <?php foreach ($kimarite_columns as $col): ?>
-                    <tr>
-                        <td style="position:sticky; left:0; background:#0f172a; font-weight:bold; border-right:2px solid #334155; padding-left:20px;">
-                            <?= $col['label'] ?>
+                    <?php
+                    function get_kimarite_keys_by_course($course) {
+                        if ($course == 1) {
+                            return [
+                                ['key' => 'nige', 'label' => '逃げ'],
+                                ['key' => 'sasare', 'label' => '差され'],
+                                ['key' => 'makurare', 'label' => '捲られ'],
+                                ['key' => 'makurarezashi', 'label' => '捲られ差'],
+                            ];
+                        }
+
+                        if ($course == 2) {
+                            return [
+                                ['key' => 'nige', 'label' => '逃げ'], // 逃がし
+                                ['key' => 'sashi', 'label' => '差し'],
+                                ['key' => 'makuri', 'label' => '捲り'],
+                                ['key' => 'makurizashi', 'label' => '捲り差し'],
+                            ];
+                        }
+
+                        return [
+                            ['key' => 'sashi', 'label' => '差し'],
+                            ['key' => 'makuri', 'label' => '捲り'],
+                            ['key' => 'makurizashi', 'label' => '捲り差し'],
+                        ];
+                    }
+
+                    function biyori_color($v) {
+                        if ($v >= 40) return '#f87171';   // 赤
+                        if ($v >= 25) return '#fb923c';   // オレンジ
+                        if ($v >= 10) return '#facc15';   // 黄色
+                        if ($v > 0)  return '#60a5fa';    // 青
+                        return '#475569';                 // グレー
+                    }
+                    ?>
+
+                    <!-- 決まり手（直近1年） -->
+                    <tr style="background-color:#1e293b;">
+                        <td colspan="7" style="padding:8px 12px; font-weight:bold; color:#38bdf8;">
+                            🎯 決まり手（直近1年）
                         </td>
-
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php
-                                $val = $kimarite_data[$i]['1year'][$col['key']] ?? 0;
-                                $pct = number_format($val, 1) . '%';
-
-                                // 色分けロジック（競艇日和風）
-                                if ($val >= 30)      $bg = '#f87171';   // 赤
-                                elseif ($val >= 15) $bg = '#fb923c';   // オレンジ
-                                elseif ($val > 0)   $bg = '#facc15';   // 黄色
-                                else                $bg = '#475569';   // グレー
-                            ?>
-                            <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
-                                <?= $pct ?>
-                            </td>
-                        <?php endfor; ?>
                     </tr>
-                    <?php endforeach; ?>
+
+                    <?php for ($i = 1; $i <= 6; $i++): ?>
+                        <?php $cols = get_kimarite_keys_by_course($i); ?>
+
+                        <tr style="background-color:#0f172a;">
+                            <td colspan="7" style="padding:6px 12px; font-weight:bold; color:#38bdf8;">
+                                <?= $i ?>コース
+                            </td>
+                        </tr>
+
+                        <?php foreach ($cols as $col): ?>
+                            <tr>
+                                <td style="position:sticky; left:0; background:#0f172a; font-weight:bold; border-right:2px solid #334155; padding-left:20px;">
+                                    <?= $col['label'] ?>
+                                </td>
+
+                                <?php
+                                    $v = $kimarite_data[$i]['1year'][$col['key']] ?? 0;
+                                    $pct = number_format($v, 1) . '%';
+                                    $bg = biyori_color($v);
+                                ?>
+                                <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
+                                    <?= $pct ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endfor; ?>
 
 
                     <!-- 決まり手（直近6ヶ月） -->
@@ -285,29 +331,33 @@
                         </td>
                     </tr>
 
-                    <?php foreach ($kimarite_columns as $col): ?>
-                    <tr>
-                        <td style="position:sticky; left:0; background:#0f172a; font-weight:bold; border-right:2px solid #334155; padding-left:20px;">
-                            <?= $col['label'] ?>
-                        </td>
+                    <?php for ($i = 1; $i <= 6; $i++): ?>
+                        <?php $cols = get_kimarite_keys_by_course($i); ?>
 
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php
-                                $val = $kimarite_data[$i]['6month'][$col['key']] ?? 0;
-                                $pct = number_format($val, 1) . '%';
-
-                                // 色分けロジック（競艇日和風）
-                                if ($val >= 30)      $bg = '#f87171';
-                                elseif ($val >= 15) $bg = '#fb923c';
-                                elseif ($val > 0)   $bg = '#facc15';
-                                else                $bg = '#475569';
-                            ?>
-                            <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
-                                <?= $pct ?>
+                        <tr style="background-color:#0f172a;">
+                            <td colspan="7" style="padding:6px 12px; font-weight:bold; color:#38bdf8;">
+                                <?= $i ?>コース
                             </td>
-                        <?php endfor; ?>
-                    </tr>
-                    <?php endforeach; ?>
+                        </tr>
+
+                        <?php foreach ($cols as $col): ?>
+                            <tr>
+                                <td style="position:sticky; left:0; background:#0f172a; font-weight:bold; border-right:2px solid #334155; padding-left:20px;">
+                                    <?= $col['label'] ?>
+                                </td>
+
+                                <?php
+                                    $v = $kimarite_data[$i]['6month'][$col['key']] ?? 0;
+                                    $pct = number_format($v, 1) . '%';
+                                    $bg = biyori_color($v);
+                                ?>
+                                <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
+                                    <?= $pct ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endfor; ?>
+
                 </tbody>
             </table>
         </div>
