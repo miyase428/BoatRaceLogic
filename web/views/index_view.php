@@ -117,6 +117,12 @@
                         $map_tenji = [];
                         foreach ($tenji_list as $t) { $map_tenji[(int)$t['teiban']] = $t; }
 
+                        // 決まり手データのマップ作成（$kimarite_data はコース毎の1年・6ヶ月データ）
+                        $get_kimarite_val = function($course, $period, $key) use ($kimarite_data) {
+                            if (empty($kimarite_data[$course][$period][$key])) return '-';
+                            return number_format($kimarite_data[$course][$period][$key], 1) . '%';
+                        };
+
                         // 行定義データのヘルパー関数
                         // categoryをキーにしてセクションヘッダーを自動挿入できるように定義
                         $rows_def = [
@@ -171,6 +177,16 @@
                             ['category' => '展示', 'label' => '展開キー', 'key' => 'tenkai_key', 'src' => 'tenji'],
                             ['category' => '展示', 'label' => '展開もらい補正', 'key' => 'tenkai_morai', 'src' => 'tenji'],
                             ['category' => '展示', 'label' => '最終二次予想スコア', 'key' => 'final_2nd_score', 'src' => 'tenji', 'highlight' => true, 'style' => 'font-size: 14px;'],
+
+                            // --- 決まり手情報（1年・6ヶ月） ---
+                            ['category' => '決まり手', 'label' => '逃げ (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'nige'); }],
+                            ['category' => '決まり手', 'label' => '逃げ (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'nige'); }],
+                            ['category' => '決まり手', 'label' => '差し (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'sashi'); }],
+                            ['category' => '決まり手', 'label' => '差し (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'sashi'); }],
+                            ['category' => '決まり手', 'label' => 'まくり (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makuri'); }],
+                            ['category' => '決まり手', 'label' => 'まくり (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makuri'); }],
+                            ['category' => '決まり手', 'label' => 'まくり差し (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurizashi'); }],
+                            ['category' => '決まり手', 'label' => 'まくり差し (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurizashi'); }],
                         ];
 
                         $current_category = '';
@@ -181,7 +197,13 @@
                             // カテゴリーが変わったタイミングでセクションヘッダー行を挿入
                             if ($current_category !== $row['category']):
                                 $current_category = $row['category'];
-                                $section_title = ($current_category === '出走表') ? '📋 出走表・基本情報' : '⏱️ 展示・評価情報';
+                                if ($current_category === '出走表') {
+                                    $section_title = '📋 出走表・基本情報';
+                                } elseif ($current_category === '展示') {
+                                    $section_title = '⏱️ 展示・評価情報';
+                                } else {
+                                    $section_title = '🎯 決まり手データ（1年・6ヶ月）';
+                                }
                         ?>
                             <tr style="background-color: #1e293b;">
                                 <td colspan="7" style="text-align: left; padding: 8px 12px; font-weight: bold; color: #38bdf8; border-top: 2px solid #334155; border-bottom: 1px solid #334155;">
@@ -190,7 +212,7 @@
                             </tr>
                         <?php endif; ?>
 
-                        <tr>
+<tr>
                             <!-- 左側の項目名セル（スクロール時に固定） -->
                             <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; color: <?= $row['color'] ?? '#f8fafc' ?>; padding-left: 20px;">
                                 <?= $row['label'] ?>
