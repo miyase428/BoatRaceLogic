@@ -178,23 +178,40 @@
                             ['category' => '展示', 'label' => '展開もらい補正', 'key' => 'tenkai_morai', 'src' => 'tenji'],
                             ['category' => '展示', 'label' => '最終二次予想スコア', 'key' => 'final_2nd_score', 'src' => 'tenji', 'highlight' => true, 'style' => 'font-size: 14px;'],
 
-                            // --- 決まり手情報（1年・6ヶ月） ---
-                            ['category' => '決まり手', 'label' => '逃げ (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'nige'); }],
-                            ['category' => '決まり手', 'label' => '逃げ (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'nige'); }],
-                            ['category' => '決まり手', 'label' => '差し (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'sashi'); }],
-                            ['category' => '決まり手', 'label' => '差し (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'sashi'); }],
-                            ['category' => '決まり手', 'label' => 'まくり (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makuri'); }],
-                            ['category' => '決まり手', 'label' => 'まくり (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makuri'); }],
-                            ['category' => '決まり手', 'label' => 'まくり差し (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurizashi'); }],
-                            ['category' => '決まり手', 'label' => 'まくり差し (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurizashi'); }],
-                            ['category' => '決まり手', 'label' => '逃がし (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'nogashi'); }],
-                            ['category' => '決まり手', 'label' => '逃がし (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'nogashi'); }],
-                            ['category' => '決まり手', 'label' => '差され (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'sasare'); }],
-                            ['category' => '決まり手', 'label' => '差され (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'sasare'); }],
-                            ['category' => '決まり手', 'label' => 'まくられ (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurare'); }],
-                            ['category' => '決まり手', 'label' => 'まくられ (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurare'); }],
-                            ['category' => '決まり手', 'label' => 'まくられ差 (1年)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '1year', 'makurarezashi'); }],
-                            ['category' => '決まり手', 'label' => 'まくられ差 (6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) { return $get_kimarite_val($i, '6month', 'makurarezashi'); }],                        ];
+                            // --- 決まり手(総合) 情報（本家同様：上段1年・下段6ヶ月形式） ---
+                            ['category' => '決まり手(総合)', 'label' => '逃げ (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'nige') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'nige') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => '差し (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'sashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'sashi') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => 'まくり (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makuri') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makuri') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => 'まくり差し (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makurizashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makurizashi') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => '逃がし (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'nogashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'nogashi') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => '差され (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'sasare') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'sasare') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => 'まくられ (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makurare') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makurare') . '</div>';
+                            }],
+                            ['category' => '決まり手(総合)', 'label' => 'まくられ差 (上:1年 / 下:6ヶ月)', 'src' => 'custom', 'fn' => function($i) use ($get_kimarite_val) {
+                                return '<div style="font-weight:bold; color:#38bdf8;">' . $get_kimarite_val($i, '1year', 'makurarezashi') . '</div>' .
+                                       '<div style="font-size:11px; color:#94a3b8; border-top:1px solid #334155; margin-top:2px; padding-top:2px;">' . $get_kimarite_val($i, '6month', 'makurarezashi') . '</div>';
+                            }],
+                        ];
 
                         $current_category = '';
                     ?>
@@ -209,7 +226,7 @@
                                 } elseif ($current_category === '展示') {
                                     $section_title = '⏱️ 展示・評価情報';
                                 } else {
-                                    $section_title = '🎯 決まり手データ（1年・6ヶ月）';
+                                    $section_title = '🎯 決まり手(総合)（上:直近1年 / 下:直近6ヶ月）';
                                 }
                         ?>
                             <tr style="background-color: #1e293b;">
