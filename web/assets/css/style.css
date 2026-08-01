@@ -315,31 +315,38 @@ td {
     -webkit-overflow-scrolling: touch;
 }
 
-/* テーブルが潰れないように最小幅を確保 */
+/* PC・スマホ共通：マトリクス表のパディングをさらに削り、最小幅の呪縛を解除 */
 .matrix-table {
-    min-width: 900px; /* 必要なら調整可能 */
+    min-width: auto !important; /* 900pxの強制最小幅を解除 */
+    width: 100%;
 }
 
-/* PC・スマホ共通：マトリクス表に縦の境界線を追加し、パディングを狭くする */
 .matrix-table th,
 .matrix-table td {
-    padding: 3px 4px; /* 上下左右の余白をさらに狭くして情報量をアップ */
+    padding: 2px 2px !important;
+    font-size: 10px !important;
     border-left: 1px solid #334155;
     border-right: 1px solid #334155;
+    white-space: nowrap;
 }
 
-/* スマホ表示時の最適化（さらに余白を削る） */
+/* スマホ時の極限圧縮 */
 @media (max-width: 600px) {
+    .container {
+        padding: 8px; /* コンテナ自体の余白も削る */
+    }
+
     .matrix-table td,
     .matrix-table th {
-        padding: 2px 3px;
-        font-size: 11px;
+        padding: 1px 1px !important;
+        font-size: 9px !important;
     }
 
     .matrix-table td:first-child,
     .matrix-table th:first-child {
-        padding-left: 6px;
-        padding-right: 6px;
-        border-left: none;
+        padding-left: 4px;
+        padding-right: 4px;
+        font-size: 9px !important;
+        min-width: 75px; /* 項目名の幅を最小限に抑える */
     }
 }
