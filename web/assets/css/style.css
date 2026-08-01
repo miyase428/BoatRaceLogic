@@ -330,28 +330,46 @@ td {
     border-right: 1px solid #334155;
 }
 
-/* スマホ表示時（画面幅600px以下）：パディングを極限まで削り、文字も小さくして1〜6号艇を収める */
+/* スマホ（画面幅600px以下）で競艇日和さんのように1〜6号艇を1画面に強制収容する */
 @media (max-width: 600px) {
+    /* ページ全体の余白を最小化 */
+    body {
+        padding: 4px 2px;
+    }
+    
     .container {
         padding: 4px;
+        width: 100%;
+        box-sizing: border-box;
     }
 
+    /* テーブルを画面幅に完全にフィットさせ、はみ出しを禁止 */
+    .matrix-table {
+        width: 100% !important;
+        min-width: 100% !important;
+        table-layout: fixed !important; /* 列幅を均等・固定化して崩れを防ぐ */
+    }
+
+    /* すべてのセル（th, td）のパディングとフォントを限界突破して縮小 */
     .matrix-table th,
     .matrix-table td {
-        padding: 1px 1px !important; /* 左右の余白を文字の半角スペース程度に圧縮 */
-        font-size: 8.5px !important;    /* 6艇分が収まるようにフォントも微調整 */
+        padding: 1px 0px !important;
+        font-size: 7.5px !important; /* スマホで6列＋項目名が入る最小サイズ */
+        line-height: 1.1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         border-left: 1px solid #334155;
         border-right: 1px solid #334155;
-        white-space: nowrap;
     }
 
-    /* 左端の項目名列 */
+    /* 左端の「項目名」の列幅を確保し、残りを1〜6号艇で均等割にする */
     .matrix-table td:first-child,
     .matrix-table th:first-child {
-        padding-left: 3px !important;
-        padding-right: 3px !important;
-        font-size: 8.5px !important;
-        min-width: 65px;
+        width: 58px !important; /* 項目名が入る最低限の固定幅 */
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+        font-size: 7.5px !important;
         border-left: none;
     }
 }
