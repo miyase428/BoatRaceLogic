@@ -320,21 +320,26 @@ td {
     min-width: 900px; /* 必要なら調整可能 */
 }
 
-/* スマホ時のテーブル余白を狭くし、縦線（境界線）を追加する */
+/* PC・スマホ共通：マトリクス表に縦の境界線を追加し、パディングを狭くする */
+.matrix-table th,
+.matrix-table td {
+    padding: 3px 4px; /* 上下左右の余白をさらに狭くして情報量をアップ */
+    border-left: 1px solid #334155;
+    border-right: 1px solid #334155;
+}
+
+/* スマホ表示時の最適化（さらに余白を削る） */
 @media (max-width: 600px) {
     .matrix-table td,
     .matrix-table th {
-        padding: 4px 4px; /* 上下左右のパディングを狭く調整 */
+        padding: 2px 3px;
         font-size: 11px;
-        border-left: 1px solid #334155; /* セルに縦線を追加 */
-        border-right: 1px solid #334155;
     }
 
-    /* 左端の項目列の固定部分のスタイル */
     .matrix-table td:first-child,
     .matrix-table th:first-child {
-        padding-left: 8px;
-        padding-right: 8px;
+        padding-left: 6px;
+        padding-right: 6px;
         border-left: none;
     }
 }
