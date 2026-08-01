@@ -85,9 +85,7 @@
 
     <?php if (!empty($entries)): ?>
         <div class="matrix-wrapper">
-        <table class="matrix-table">
-        <div class="table-container" style="overflow-x: auto;">
-            <table style="white-space: nowrap; width: 100%;">
+            <table class="matrix-table" style="white-space: nowrap; width: 100%;">
                 <thead>
                     <tr style="background-color: #1e293b; text-align: center;">
                         <th style="position: sticky; left: 0; background-color: #1e293b; z-index: 2; min-width: 120px;">項目 / 艇番</th>
@@ -254,8 +252,8 @@
                     [
                         'label' => '逃げ / 逃がし',
                         'keys'  => [
-                            1 => 'nige',      // 1コース：逃げ
-                            2 => 'nige',      // 2コース：逃がし（同じキーでOK）
+                            1 => 'nige',      
+                            2 => 'nige',      
                             3 => null,
                             4 => null,
                             5 => null,
@@ -265,8 +263,8 @@
                     [
                         'label' => '差され / 差し',
                         'keys'  => [
-                            1 => 'sasare',    // 1コース：差され
-                            2 => 'sashi',     // 2〜6コース：差し
+                            1 => 'sasare',    
+                            2 => 'sashi',     
                             3 => 'sashi',
                             4 => 'sashi',
                             5 => 'sashi',
@@ -276,8 +274,8 @@
                     [
                         'label' => '捲られ / 捲り',
                         'keys'  => [
-                            1 => 'makurare',  // 1コース：捲られ
-                            2 => 'makuri',    // 2〜6コース：捲り
+                            1 => 'makurare',  
+                            2 => 'makuri',    
                             3 => 'makuri',
                             4 => 'makuri',
                             5 => 'makuri',
@@ -287,8 +285,8 @@
                     [
                         'label' => '捲られ差 / 捲り差し',
                         'keys'  => [
-                            1 => 'makurarezashi', // 1コース：捲られ差
-                            2 => 'makurizashi',   // 2〜6コース：捲り差し
+                            1 => 'makurarezashi', 
+                            2 => 'makurizashi',   
                             3 => 'makurizashi',
                             4 => 'makurizashi',
                             5 => 'makurizashi',
@@ -299,11 +297,11 @@
 
                 // 色分けロジック（競艇日和風）
                 function biyori_color($v) {
-                    if ($v >= 40) return '#f87171';   // 赤
-                    if ($v >= 25) return '#fb923c';   // オレンジ
-                    if ($v >= 10) return '#facc15';   // 黄色
-                    if ($v > 0)  return '#60a5fa';    // 青
-                    return '#475569';                 // グレー
+                    if ($v >= 40) return '#f87171';   
+                    if ($v >= 25) return '#fb923c';   
+                    if ($v >= 10) return '#facc15';   
+                    if ($v > 0)  return '#60a5fa';    
+                    return '#475569';                 
                 }
                 ?>
 
@@ -395,8 +393,6 @@
                 <?php endforeach; ?>
                 </tbody>
             </table>
-        </div>
-        </table>
         </div>
     <?php else: ?>
         <div class="no-data"><?= htmlspecialchars($api_error ?: 'データが存在しません。') ?></div>
