@@ -285,3 +285,52 @@ td {
     border-radius: 4px;
     font-weight: bold;
 }
+/* 決まり手テーブルをスマホで横スクロール可能にする */
+.kimarite-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* テーブルの最小幅を確保（スマホで圧縮しすぎない） */
+.kimarite-table {
+    min-width: 600px;
+}
+
+/* スマホ時のセル圧縮 */
+@media (max-width: 600px) {
+    .kimarite-table td {
+        padding: 4px 6px;
+        font-size: 12px;
+    }
+
+    .kimarite-table td:first-child {
+        padding-left: 10px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+}
+/* 横スクロールを許可（スマホで必須） */
+.matrix-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* テーブルが潰れないように最小幅を確保 */
+.matrix-table {
+    min-width: 900px; /* 必要なら調整可能 */
+}
+
+/* スマホ時の圧縮レイアウト */
+@media (max-width: 600px) {
+    .matrix-table td,
+    .matrix-table th {
+        padding: 4px 6px;
+        font-size: 12px;
+        white-space: nowrap; /* セル内改行を防ぐ */
+    }
+
+    .matrix-table td:first-child {
+        padding-left: 10px;
+        font-size: 12px;
+    }
+}

@@ -84,6 +84,8 @@
     <?php endif; ?>
 
     <?php if (!empty($entries)): ?>
+        <div class="matrix-wrapper">
+        <table class="matrix-table">
         <div class="table-container" style="overflow-x: auto;">
             <table style="white-space: nowrap; width: 100%;">
                 <thead>
@@ -393,6 +395,8 @@
                 <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+        </table>
         </div>
     <?php else: ?>
         <div class="no-data"><?= htmlspecialchars($api_error ?: 'データが存在しません。') ?></div>
