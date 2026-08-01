@@ -320,42 +320,21 @@ td {
     min-width: 900px; /* 必要なら調整可能 */
 }
 
-/* スマホ時の圧縮レイアウト */
+/* スマホ時のテーブル余白を狭くし、縦線（境界線）を追加する */
 @media (max-width: 600px) {
     .matrix-table td,
     .matrix-table th {
-        padding: 4px 6px;
-        font-size: 12px;
-        white-space: nowrap; /* セル内改行を防ぐ */
+        padding: 4px 4px; /* 上下左右のパディングを狭く調整 */
+        font-size: 11px;
+        border-left: 1px solid #334155; /* セルに縦線を追加 */
+        border-right: 1px solid #334155;
     }
 
-    .matrix-table td:first-child {
-        padding-left: 10px;
-        font-size: 12px;
-    }
-}
-/* スマホ表示（画面幅600px以下）の最適化 */
-@media (max-width: 600px) {
-    body {
-        padding: 10px 5px;
-    }
-    
-    .container {
-        padding: 12px;
-    }
-
-    /* タイトルと更新ボタンを縦並びにして見切れを防ぐ */
-    .matrix-header-area {
-        flex-direction: column;
-        align-items: flex-start !important;
-        gap: 10px;
-    }
-    
-    .matrix-header-area form {
-        width: 100%;
-    }
-    
-    .matrix-header-area button {
-        width: 100%;
+    /* 左端の項目列の固定部分のスタイル */
+    .matrix-table td:first-child,
+    .matrix-table th:first-child {
+        padding-left: 8px;
+        padding-right: 8px;
+        border-left: none;
     }
 }
