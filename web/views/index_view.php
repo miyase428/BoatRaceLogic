@@ -253,7 +253,7 @@
                         'label' => '逃げ / 逃がし',
                         'keys'  => [
                             1 => 'nige',      
-                            2 => 'nige',      
+                            2 => 'nogashi',      
                             3 => null,
                             4 => null,
                             5 => null,
