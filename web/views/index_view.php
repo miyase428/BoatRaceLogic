@@ -64,8 +64,8 @@
     </div>
 
     <!-- ■ 総合出走・展示マトリクス -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <h2>📋 総合出走・展示マトリクス（選手横並び・全項目）</h2>
+    <div class="matrix-header-area" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h2 style="margin: 0; font-size: 16px;">📋 総合出走・展示マトリクス</h2>
 
         <!-- 展示情報を更新するフォーム -->
         <form method="POST" action="" style="margin: 0;">

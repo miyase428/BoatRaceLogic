@@ -334,3 +334,28 @@ td {
         font-size: 12px;
     }
 }
+/* スマホ表示（画面幅600px以下）の最適化 */
+@media (max-width: 600px) {
+    body {
+        padding: 10px 5px;
+    }
+    
+    .container {
+        padding: 12px;
+    }
+
+    /* タイトルと更新ボタンを縦並びにして見切れを防ぐ */
+    .matrix-header-area {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 10px;
+    }
+    
+    .matrix-header-area form {
+        width: 100%;
+    }
+    
+    .matrix-header-area button {
+        width: 100%;
+    }
+}
