@@ -9,12 +9,19 @@ declare(strict_types=1);
  *   過去レースについて、現行 public/calc_scores.php の
  *   一次評価ロジックを再現し、実着順と比較する。
  *
- * 重要:
- *   race_result_detail は公式データ仕様により1～4着のみ保持。
- *   5着・6着はレコードが存在しないため「着外」として扱う。
+ * 実着順について:
+ *   race_result_detail.rank に保存されている
+ *   1～6着をそのまま実着順として使用する。
  *
- *   着外の平均着順への反映:
- *     5着・6着の区別ができないため 5.5着相当として扱う。
+ *   1着 -> 1
+ *   2着 -> 2
+ *   3着 -> 3
+ *   4着 -> 4
+ *   5着 -> 5
+ *   6着 -> 6
+ *
+ *   rank が NULL または1～6以外の場合は、
+ *   データ異常としてそのレースをスキップする。
  *
  * 本番 calc_scores.php は変更しない。
  *
@@ -26,36 +33,57 @@ declare(strict_types=1);
  */
 
 
+/*
+ * デフォルト検証期間
+ */
 const DEFAULT_FROM = '2025-08-01';
 const DEFAULT_TO   = '2026-07-31';
 
 
+/*
+ * コマンドライン引数
+ */
 $from = $argv[1] ?? DEFAULT_FROM;
 $to   = $argv[2] ?? DEFAULT_TO;
 
 
+/*
+ * 日付チェック
+ */
 if (
     !preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) ||
     !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)
 ) {
-    fwrite(STDERR, "日付は YYYY-MM-DD 形式で指定してください。\n");
+    fwrite(
+        STDERR,
+        "日付は YYYY-MM-DD 形式で指定してください。\n"
+    );
     exit(1);
 }
 
 
 if ($from > $to) {
-    fwrite(STDERR, "開始日は終了日以前にしてください。\n");
+    fwrite(
+        STDERR,
+        "開始日は終了日以前にしてください。\n"
+    );
     exit(1);
 }
 
 
+/*
+ * DB接続
+ */
 require_once __DIR__ . '/../common/db_connect.php';
 
 
 try {
     $pdo = getPDO();
 } catch (Throwable $e) {
-    fwrite(STDERR, "DB接続エラー: {$e->getMessage()}\n");
+    fwrite(
+        STDERR,
+        "DB接続エラー: {$e->getMessage()}\n"
+    );
     exit(1);
 }
 
@@ -74,23 +102,34 @@ function getTermInfo(string $raceDate): string
     $year = (int)$dt->format('Y');
     $month = (int)$dt->format('n');
 
+
     if ($month <= 4) {
+
         $termYear = $year - 1;
         $termCode = 10;
+
     } elseif ($month <= 10) {
+
         $termYear = $year;
         $termCode = 4;
+
     } else {
+
         $termYear = $year;
         $termCode = 10;
     }
 
-    return sprintf('%02d%02d', $termYear % 100, $termCode);
+
+    return sprintf(
+        '%02d%02d',
+        $termYear % 100,
+        $termCode
+    );
 }
 
 
 /**
- * 現行 calc_scores.php の点数計算を再現。
+ * 現行 calc_scores.php の一次評価点数計算を再現。
  */
 function calcFirstEval(
     int $lane,
@@ -100,68 +139,185 @@ function calcFirstEval(
     float $boat,
     float $st
 ): array {
-    $shoritsuScore = min(10.0, max(1.0, $nation * 1.2));
-    $tochiScore    = min(5.0, max(1.0, ($local - 4.0) * 2.0));
-    $motorScore    = min(5.0, max(1.0, ($motor - 25.0) / 4.0));
-    $boatScore     = min(5.0, max(1.0, ($boat - 25.0) / 4.0));
-    $stScore       = min(5.0, max(1.0, 8.0 - ($st * 30.0)));
 
+    /*
+     * 勝率
+     */
+    $shoritsuScore = min(
+        10.0,
+        max(
+            1.0,
+            $nation * 1.2
+        )
+    );
+
+
+    /*
+     * 当地勝率
+     */
+    $tochiScore = min(
+        5.0,
+        max(
+            1.0,
+            ($local - 4.0) * 2.0
+        )
+    );
+
+
+    /*
+     * モーター2連率
+     */
+    $motorScore = min(
+        5.0,
+        max(
+            1.0,
+            ($motor - 25.0) / 4.0
+        )
+    );
+
+
+    /*
+     * ボート2連率
+     */
+    $boatScore = min(
+        5.0,
+        max(
+            1.0,
+            ($boat - 25.0) / 4.0
+        )
+    );
+
+
+    /*
+     * 平均ST
+     */
+    $stScore = min(
+        5.0,
+        max(
+            1.0,
+            8.0 - ($st * 30.0)
+        )
+    );
+
+
+    /*
+     * 基礎カテゴリ
+     */
     $jiryokuScore = $shoritsuScore + $tochiScore;
     $ashiScore    = $motorScore + $boatScore;
     $startScore   = $stScore;
-    $totalScore   = $jiryokuScore + $ashiScore + $startScore;
 
+
+    /*
+     * 総合スコア
+     */
+    $totalScore =
+        $jiryokuScore +
+        $ashiScore +
+        $startScore;
+
+
+    /*
+     * タイプ判定用
+     */
     $R = $totalScore;
     $J = $jiryokuScore;
     $P = $ashiScore;
     $N = $stScore;
 
+
     $type = null;
 
+
+    /*
+     * 1号艇
+     */
     if ($lane === 1) {
+
         if ($R >= 22) {
+
             $type = 4;
+
         } elseif ($R >= 18) {
+
             $type = 5;
+
         } else {
+
             $type = 6;
         }
+
+
+    /*
+     * 6号艇
+     */
     } elseif ($lane === 6) {
+
         if ($R >= 22) {
+
             $type = 11;
+
         } elseif ($R >= 18) {
+
             $type = 12;
+
         } else {
+
             $type = 13;
         }
+
+
+    /*
+     * その他の艇
+     */
     } elseif ($R >= 22) {
+
         $type = ($J >= 8) ? 1 : 2;
+
     } elseif ($R >= 20) {
+
         $type = 3;
+
     } elseif ($J <= 3 && $P >= 7) {
+
         $type = 14;
+
     } elseif ($J >= 7 && $P <= 5) {
+
         $type = 15;
+
     } elseif ($N == 5.0) {
+
         $type = 17;
+
     } elseif ($R >= 18) {
+
         $type = 8;
+
     } elseif ($R >= 15) {
+
         $type = 9;
+
     } else {
+
         $type = 10;
     }
 
+
+    /*
+     * 一次評価記号
+     */
     $ichijiMap = [
-        1 => '◎',
-        2 => '○',
-        3 => '○',
-        4 => '◎',
-        5 => '○',
-        6 => '×',
-        7 => '△',
-        8 => '○',
-        9 => '△',
+
+        1  => '◎',
+        2  => '○',
+        3  => '○',
+        4  => '◎',
+        5  => '○',
+        6  => '×',
+        7  => '△',
+        8  => '○',
+        9  => '△',
         10 => '×',
         11 => '△',
         12 => '△',
@@ -173,49 +329,104 @@ function calcFirstEval(
         18 => '△',
     ];
 
+
     return [
+
         'shoritsu_score' => $shoritsuScore,
-        'tochi_score'    => $tochiScore,
-        'motor_score'    => $motorScore,
-        'boat_score'     => $boatScore,
-        'st_score'       => $stScore,
-        'jiryoku_score'  => $jiryokuScore,
-        'ashi_score'     => $ashiScore,
-        'start_score'    => $startScore,
-        'total_score'    => $totalScore,
-        'type'           => $type,
-        'ichiji_eval'    => $ichijiMap[$type] ?? '×',
+
+        'tochi_score' =>
+            $tochiScore,
+
+        'motor_score' =>
+            $motorScore,
+
+        'boat_score' =>
+            $boatScore,
+
+        'st_score' =>
+            $stScore,
+
+        'jiryoku_score' =>
+            $jiryokuScore,
+
+        'ashi_score' =>
+            $ashiScore,
+
+        'start_score' =>
+            $startScore,
+
+        'total_score' =>
+            $totalScore,
+
+        'type' =>
+            $type,
+
+        'ichiji_eval' =>
+            $ichijiMap[$type] ?? '×',
     ];
 }
 
 
 /**
  * 標準的な競争順位。
- * 同点なら同順位。次順位は飛ぶ。
+ *
+ * 総合スコアが同点なら同順位。
+ * 次順位は飛ぶ。
  */
 function assignCompetitionRanks(array &$boats): void
 {
-    usort($boats, function (array $a, array $b): int {
-        if ($a['total_score'] == $b['total_score']) {
-            return $a['lane'] <=> $b['lane'];
-        }
+    usort(
+        $boats,
+        function (array $a, array $b): int {
 
-        return ($a['total_score'] > $b['total_score']) ? -1 : 1;
-    });
+            if (
+                $a['total_score'] ==
+                $b['total_score']
+            ) {
+
+                return $a['lane'] <=>
+                       $b['lane'];
+            }
+
+
+            return (
+                $a['total_score'] >
+                $b['total_score']
+            )
+                ? -1
+                : 1;
+        }
+    );
+
 
     $rank = 0;
     $previousScore = null;
 
-    foreach ($boats as $index => &$boat) {
+
+    foreach (
+        $boats as $index => &$boat
+    ) {
+
         $position = $index + 1;
 
-        if ($previousScore === null || $boat['total_score'] != $previousScore) {
+
+        if (
+            $previousScore === null ||
+            $boat['total_score'] !=
+            $previousScore
+        ) {
+
             $rank = $position;
-            $previousScore = $boat['total_score'];
+
+            $previousScore =
+                $boat['total_score'];
         }
 
-        $boat['score_rank'] = $rank;
+
+        $boat['score_rank'] =
+            $rank;
     }
+
 
     unset($boat);
 }
@@ -227,93 +438,162 @@ function assignCompetitionRanks(array &$boats): void
 function newBucket(): array
 {
     return [
+
         'count' => 0,
+
         'first' => 0,
+
         'second' => 0,
+
         'third' => 0,
+
         'top3' => 0,
-        'out' => 0,
+
         'sum_rank' => 0.0,
     ];
 }
 
 
 /**
- * 実着順を集計する。
+ * 実着順を集計。
  *
  * actualRank:
- *   1.0～4.0 = 実着順
- *   5.5       = 着外（5着・6着を区別できないため）
+ *   1～6をそのまま使用。
  */
 function addBucket(
     array &$bucket,
     float $actualRank,
     ?int $scoreRank = null
 ): void {
+
     $bucket['count']++;
 
+
+    /*
+     * 1着
+     */
     if ($actualRank === 1.0) {
+
         $bucket['first']++;
     }
 
+
+    /*
+     * 2着
+     */
     if ($actualRank === 2.0) {
+
         $bucket['second']++;
     }
 
+
+    /*
+     * 3着
+     */
     if ($actualRank === 3.0) {
+
         $bucket['third']++;
     }
 
-    if ($actualRank >= 1.0 && $actualRank <= 3.0) {
+
+    /*
+     * 3着以内
+     */
+    if (
+        $actualRank >= 1.0 &&
+        $actualRank <= 3.0
+    ) {
+
         $bucket['top3']++;
     }
 
-    if ($actualRank === 5.5) {
-        $bucket['out']++;
-    }
 
     /*
-     * 平均着順。
+     * 平均着順
      *
-     * 5着・6着は公式データ上区別できないため、
-     * 着外を5.5着相当として計算する。
+     * 1～6着をそのまま加算。
      */
-    $bucket['sum_rank'] += $actualRank;
+    $bucket['sum_rank'] +=
+        $actualRank;
 }
 
 
 /**
  * 集計結果を整形。
  */
-function finalizeBucket(array $bucket): array
-{
-    $count = $bucket['count'];
+function finalizeBucket(
+    array $bucket
+): array {
+
+    $count =
+        $bucket['count'];
+
 
     return [
-        'count' => $count,
 
-        'first' => $bucket['first'],
-        'first_rate' => $count > 0
-            ? round($bucket['first'] / $count * 100, 2)
-            : 0.0,
+        'count' =>
+            $count,
 
-        'second' => $bucket['second'],
 
-        'third' => $bucket['third'],
+        /*
+         * 1着
+         */
+        'first' =>
+            $bucket['first'],
 
-        'top3' => $bucket['top3'],
-        'top3_rate' => $count > 0
-            ? round($bucket['top3'] / $count * 100, 2)
-            : 0.0,
+        'first_rate' =>
+            $count > 0
+                ? round(
+                    $bucket['first']
+                    / $count
+                    * 100,
+                    2
+                )
+                : 0.0,
 
-        'out' => $bucket['out'],
-        'out_rate' => $count > 0
-            ? round($bucket['out'] / $count * 100, 2)
-            : 0.0,
 
-        'avg_actual_rank' => $count > 0
-            ? round($bucket['sum_rank'] / $count, 3)
-            : null,
+        /*
+         * 2着
+         */
+        'second' =>
+            $bucket['second'],
+
+
+        /*
+         * 3着
+         */
+        'third' =>
+            $bucket['third'],
+
+
+        /*
+         * 3連率
+         */
+        'top3' =>
+            $bucket['top3'],
+
+        'top3_rate' =>
+            $count > 0
+                ? round(
+                    $bucket['top3']
+                    / $count
+                    * 100,
+                    2
+                )
+                : 0.0,
+
+
+        /*
+         * 平均着順
+         */
+        'avg_actual_rank' =>
+            $count > 0
+                ? round(
+                    $bucket['sum_rank']
+                    / $count,
+                    3
+                )
+                : null,
     ];
 }
 
@@ -322,73 +602,132 @@ function finalizeBucket(array $bucket): array
  * 対象レースを取得。
  *
  * race_entryを基準にする。
- * race_result_detailには5・6着が存在しないため、
- * INNER JOINすると着外を含むレースが除外されてしまう。
+ *
+ * ここではrace_result_detailとのINNER JOINを行わない。
+ * そのため結果データ側の欠損によって
+ * 対象レース自体が消えることを防ぐ。
  */
 $sql = <<<SQL
 SELECT DISTINCT
     re.race_code,
     re.race_date
 FROM boat_race.race_entry re
-WHERE re.race_date BETWEEN :from_date AND :to_date
-ORDER BY re.race_date, re.race_code
+WHERE re.race_date
+    BETWEEN :from_date
+    AND :to_date
+ORDER BY
+    re.race_date,
+    re.race_code
 SQL;
 
 
-$stmt = $pdo->prepare($sql);
+$stmt =
+    $pdo->prepare($sql);
+
 
 $stmt->execute([
-    ':from_date' => $from,
-    ':to_date' => $to,
+
+    ':from_date' =>
+        $from,
+
+    ':to_date' =>
+        $to,
 ]);
 
-$races = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$totalRaces = count($races);
-
-
-echo "========================================\n";
-echo "一次評価 検証開始\n";
-echo "期間: {$from} ～ {$to}\n";
-echo "対象レース: {$totalRaces}\n";
-echo "========================================\n";
+$races =
+    $stmt->fetchAll(
+        PDO::FETCH_ASSOC
+    );
 
 
+$totalRaces =
+    count($races);
+
+
+echo
+    "========================================\n";
+
+echo
+    "一次評価 検証開始\n";
+
+echo
+    "期間: {$from} ～ {$to}\n";
+
+echo
+    "対象レース: {$totalRaces}\n";
+
+echo
+    "========================================\n";
+
+
+/*
+ * レース統計
+ */
 $raceStats = [
+
     'processed' => 0,
+
     'skipped' => 0,
+
     'boats' => 0,
 ];
 
 
+/*
+ * スキップ理由
+ */
+$skipReasons = [
+
+    'not_6_boats' => 0,
+
+    'missing_required_data' => 0,
+
+    'invalid_rank' => 0,
+];
+
+
+/*
+ * 集計配列
+ */
 $byScoreRank = [];
+
 $byEval = [];
+
 $byLaneEval = [];
+
 $byType = [];
+
 $byStadium = [];
 
 
-for ($i = 0; $i < $totalRaces; $i++) {
+/*
+ * レースループ
+ */
+for (
+    $i = 0;
+    $i < $totalRaces;
+    $i++
+) {
 
-    $race = $races[$i];
+    $race =
+        $races[$i];
 
-    $raceCode = (string)$race['race_code'];
-    $raceDate = (string)$race['race_date'];
 
-    $termInfo = getTermInfo($raceDate);
+    $raceCode =
+        (string)$race['race_code'];
+
+
+    $raceDate =
+        (string)$race['race_date'];
+
+
+    $termInfo =
+        getTermInfo($raceDate);
 
 
     /*
-     * 過去レース時点の入力データを取得。
-     *
-     * race_result_detail は LEFT JOIN。
-     *
-     * 1～4着:
-     *   rrd.rank が存在
-     *
-     * 5・6着:
-     *   rrd.rank がNULL
-     *   → 着外として扱う
+     * レース単位の入力データ取得。
      */
     $sqlRace = <<<SQL
 SELECT
@@ -429,156 +768,291 @@ LEFT JOIN boat_race.race_result_detail rrd
 
 WHERE re.race_code = :race_code
 
-ORDER BY re.lane_number
+ORDER BY
+    re.lane_number
 SQL;
 
 
-    $stmtRace = $pdo->prepare($sqlRace);
+    $stmtRace =
+        $pdo->prepare(
+            $sqlRace
+        );
+
 
     $stmtRace->execute([
-        ':term_info' => $termInfo,
-        ':race_code' => $raceCode,
+
+        ':term_info' =>
+            $termInfo,
+
+        ':race_code' =>
+            $raceCode,
     ]);
 
 
-    $rows = $stmtRace->fetchAll(PDO::FETCH_ASSOC);
+    $rows =
+        $stmtRace->fetchAll(
+            PDO::FETCH_ASSOC
+        );
 
 
     /*
-     * 出走表そのものが6艇揃っていることを確認。
+     * 6艇揃っているか確認。
      */
-    if (count($rows) !== 6) {
+    if (
+        count($rows) !== 6
+    ) {
+
         $raceStats['skipped']++;
+
+        $skipReasons[
+            'not_6_boats'
+        ]++;
+
         continue;
     }
 
 
     $boats = [];
+
     $invalid = false;
 
 
-    foreach ($rows as $row) {
+    /*
+     * 6艇処理
+     */
+    foreach (
+        $rows as $row
+    ) {
+
 
         /*
-         * actual_rank はNULLでも正常。
+         * 一次評価に必要なデータ。
          *
-         * NULL = 5着・6着 = 着外
-         *
-         * それ以外の必須項目だけチェックする。
+         * actual_rankは別途チェックする。
          */
         $required = [
+
             'national_win_rate',
+
             'local_win_rate',
+
             'motor_exacta_rate',
+
             'boat_exacta_rate',
+
             'average_start',
         ];
 
 
-        foreach ($required as $key) {
-            if ($row[$key] === null || $row[$key] === '') {
+        foreach (
+            $required as $key
+        ) {
+
+            if (
+                $row[$key] === null ||
+                $row[$key] === ''
+            ) {
+
                 $invalid = true;
+
                 break 2;
             }
         }
 
 
         /*
-         * 実着順を決定。
+         * 実着順チェック。
          *
-         * 1～4着:
-         *   DBに実着順あり
-         *
-         * NULL:
-         *   5着・6着 → 着外
+         * 1～6着をすべて正常値として扱う。
          */
-        $actualRankText = trim((string)$row['actual_rank']);
+        $actualRankText =
+            trim(
+                (string)$row['actual_rank']
+            );
 
-        if ($actualRankText === '') {
 
-            // 公式データに5着・6着の区別がないため着外=5.5着相当
-            $actualRank = 5.5;
+        if (
+            !preg_match(
+                '/^[1-6]$/',
+                $actualRankText
+            )
+        ) {
 
-        } elseif (preg_match('/^[1-4]$/', $actualRankText)) {
-
-            $actualRank = (float)$actualRankText;
-
-        } else {
-
-            /*
-             * 1～4以外の値が入っていた場合は
-             * 想定外のデータなので、そのレースをスキップ。
-             */
             $invalid = true;
+
             break;
         }
 
 
-        $lane = (int)$row['lane_number'];
+        $actualRank =
+            (float)$actualRankText;
 
 
-        $scores = calcFirstEval(
-            $lane,
-            (float)$row['national_win_rate'],
-            (float)$row['local_win_rate'],
-            (float)$row['motor_exacta_rate'],
-            (float)$row['boat_exacta_rate'],
-            (float)$row['average_start']
-        );
+        /*
+         * 艇番
+         */
+        $lane =
+            (int)$row['lane_number'];
 
 
+        /*
+         * 一次評価計算
+         */
+        $scores =
+            calcFirstEval(
+
+                $lane,
+
+                (float)
+                $row['national_win_rate'],
+
+                (float)
+                $row['local_win_rate'],
+
+                (float)
+                $row['motor_exacta_rate'],
+
+                (float)
+                $row['boat_exacta_rate'],
+
+                (float)
+                $row['average_start']
+            );
+
+
+        /*
+         * ボート情報
+         */
         $boats[] = [
-            'lane' => $lane,
-            'player_id' => (string)$row['player_id'],
-            'player_name' => (string)$row['player_name'],
 
-            'actual_rank' => $actualRank,
+            'lane' =>
+                $lane,
 
-            'total_score' => $scores['total_score'],
-            'type' => $scores['type'],
-            'ichiji_eval' => $scores['ichiji_eval'],
+            'player_id' =>
+                (string)
+                $row['player_id'],
 
-            'shoritsu_score' => $scores['shoritsu_score'],
-            'tochi_score' => $scores['tochi_score'],
-            'motor_score' => $scores['motor_score'],
-            'boat_score' => $scores['boat_score'],
-            'st_score' => $scores['st_score'],
+            'player_name' =>
+                (string)
+                $row['player_name'],
 
-            'jiryoku_score' => $scores['jiryoku_score'],
-            'ashi_score' => $scores['ashi_score'],
-            'start_score' => $scores['start_score'],
+            'actual_rank' =>
+                $actualRank,
+
+
+            /*
+             * 評価
+             */
+            'total_score' =>
+                $scores['total_score'],
+
+            'type' =>
+                $scores['type'],
+
+            'ichiji_eval' =>
+                $scores['ichiji_eval'],
+
+
+            /*
+             * 各スコア
+             */
+            'shoritsu_score' =>
+                $scores['shoritsu_score'],
+
+            'tochi_score' =>
+                $scores['tochi_score'],
+
+            'motor_score' =>
+                $scores['motor_score'],
+
+            'boat_score' =>
+                $scores['boat_score'],
+
+            'st_score' =>
+                $scores['st_score'],
+
+            'jiryoku_score' =>
+                $scores['jiryoku_score'],
+
+            'ashi_score' =>
+                $scores['ashi_score'],
+
+            'start_score' =>
+                $scores['start_score'],
         ];
     }
 
 
-    if ($invalid || count($boats) !== 6) {
+    /*
+     * データ異常の場合
+     */
+    if (
+        $invalid ||
+        count($boats) !== 6
+    ) {
+
         $raceStats['skipped']++;
+
+        $skipReasons[
+            'missing_required_data'
+        ]++;
+
         continue;
     }
 
 
-    assignCompetitionRanks($boats);
+    /*
+     * 総合スコア順位付与
+     */
+    assignCompetitionRanks(
+        $boats
+    );
 
 
+    /*
+     * 処理数
+     */
     $raceStats['processed']++;
+
     $raceStats['boats'] += 6;
 
 
-    foreach ($boats as $boat) {
+    /*
+     * 6艇の集計
+     */
+    foreach (
+        $boats as $boat
+    ) {
 
-        $actualRank = $boat['actual_rank'];
-        $scoreRank = $boat['score_rank'];
-        $eval = $boat['ichiji_eval'];
-        $lane = $boat['lane'];
-        $type = $boat['type'];
+        $actualRank =
+            $boat['actual_rank'];
+
+        $scoreRank =
+            $boat['score_rank'];
+
+        $eval =
+            $boat['ichiji_eval'];
+
+        $lane =
+            $boat['lane'];
+
+        $type =
+            $boat['type'];
 
 
         /*
          * 総合スコア順位別
          */
-        if (!isset($byScoreRank[$scoreRank])) {
-            $byScoreRank[$scoreRank] = newBucket();
+        if (
+            !isset(
+                $byScoreRank[$scoreRank]
+            )
+        ) {
+
+            $byScoreRank[$scoreRank] =
+                newBucket();
         }
+
 
         addBucket(
             $byScoreRank[$scoreRank],
@@ -590,9 +1064,16 @@ SQL;
         /*
          * 評価記号別
          */
-        if (!isset($byEval[$eval])) {
-            $byEval[$eval] = newBucket();
+        if (
+            !isset(
+                $byEval[$eval]
+            )
+        ) {
+
+            $byEval[$eval] =
+                newBucket();
         }
+
 
         addBucket(
             $byEval[$eval],
@@ -603,13 +1084,27 @@ SQL;
         /*
          * 艇番 × 評価記号
          */
-        if (!isset($byLaneEval[$lane])) {
-            $byLaneEval[$lane] = [];
+        if (
+            !isset(
+                $byLaneEval[$lane]
+            )
+        ) {
+
+            $byLaneEval[$lane] =
+                [];
         }
 
-        if (!isset($byLaneEval[$lane][$eval])) {
-            $byLaneEval[$lane][$eval] = newBucket();
+
+        if (
+            !isset(
+                $byLaneEval[$lane][$eval]
+            )
+        ) {
+
+            $byLaneEval[$lane][$eval] =
+                newBucket();
         }
+
 
         addBucket(
             $byLaneEval[$lane][$eval],
@@ -620,9 +1115,16 @@ SQL;
         /*
          * タイプ別
          */
-        if (!isset($byType[$type])) {
-            $byType[$type] = newBucket();
+        if (
+            !isset(
+                $byType[$type]
+            )
+        ) {
+
+            $byType[$type] =
+                newBucket();
         }
+
 
         addBucket(
             $byType[$type],
@@ -633,11 +1135,24 @@ SQL;
         /*
          * 場別
          */
-        $stadiumCode = substr($raceCode, 8, 3);
+        $stadiumCode =
+            substr(
+                $raceCode,
+                8,
+                3
+            );
 
-        if (!isset($byStadium[$stadiumCode])) {
-            $byStadium[$stadiumCode] = newBucket();
+
+        if (
+            !isset(
+                $byStadium[$stadiumCode]
+            )
+        ) {
+
+            $byStadium[$stadiumCode] =
+                newBucket();
         }
+
 
         addBucket(
             $byStadium[$stadiumCode],
@@ -646,13 +1161,23 @@ SQL;
     }
 
 
-    if (($raceStats['processed'] % 500) === 0) {
+    /*
+     * 500レースごとの進捗表示
+     */
+    if (
+        ($raceStats['processed'] % 500) === 0
+    ) {
 
         echo sprintf(
+
             "[%d/%d] processed=%d skipped=%d\n",
+
             $i + 1,
+
             $totalRaces,
+
             $raceStats['processed'],
+
             $raceStats['skipped']
         );
     }
@@ -660,120 +1185,285 @@ SQL;
 
 
 /*
- * 結果を整形。
+ * ============================================================
+ * 結果整形
+ * ============================================================
  */
 
+
+/*
+ * 総合スコア順位
+ */
 $scoreRankResult = [];
 
-ksort($byScoreRank);
+ksort(
+    $byScoreRank
+);
 
-foreach ($byScoreRank as $rank => $bucket) {
-    $scoreRankResult[(string)$rank] = finalizeBucket($bucket);
+
+foreach (
+    $byScoreRank as $rank => $bucket
+) {
+
+    $scoreRankResult[
+        (string)$rank
+    ] =
+        finalizeBucket(
+            $bucket
+        );
 }
 
 
+/*
+ * 評価記号
+ */
 $evalResult = [];
 
-foreach (['◎', '○', '△', '×'] as $eval) {
+foreach (
+    ['◎', '○', '△', '×'] as $eval
+) {
 
-    if (isset($byEval[$eval])) {
-        $evalResult[$eval] = finalizeBucket($byEval[$eval]);
+    if (
+        isset(
+            $byEval[$eval]
+        )
+    ) {
+
+        $evalResult[$eval] =
+            finalizeBucket(
+                $byEval[$eval]
+            );
     }
 }
 
 
+/*
+ * 艇番 × 評価記号
+ */
 $laneEvalResult = [];
 
-ksort($byLaneEval);
+ksort(
+    $byLaneEval
+);
 
-foreach ($byLaneEval as $lane => $evals) {
 
-    $laneEvalResult[(string)$lane] = [];
+foreach (
+    $byLaneEval as $lane => $evals
+) {
 
-    foreach (['◎', '○', '△', '×'] as $eval) {
+    $laneEvalResult[
+        (string)$lane
+    ] = [];
 
-        if (isset($evals[$eval])) {
-            $laneEvalResult[(string)$lane][$eval] =
-                finalizeBucket($evals[$eval]);
+
+    foreach (
+        ['◎', '○', '△', '×'] as $eval
+    ) {
+
+        if (
+            isset(
+                $evals[$eval]
+            )
+        ) {
+
+            $laneEvalResult[
+                (string)$lane
+            ][$eval] =
+                finalizeBucket(
+                    $evals[$eval]
+                );
         }
     }
 }
 
 
+/*
+ * タイプ別
+ */
 $typeResult = [];
 
-ksort($byType);
-
-foreach ($byType as $type => $bucket) {
-    $typeResult[(string)$type] = finalizeBucket($bucket);
-}
+ksort(
+    $byType
+);
 
 
-$stadiumResult = [];
+foreach (
+    $byType as $type => $bucket
+) {
 
-ksort($byStadium);
-
-foreach ($byStadium as $stadium => $bucket) {
-    $stadiumResult[$stadium] = finalizeBucket($bucket);
+    $typeResult[
+        (string)$type
+    ] =
+        finalizeBucket(
+            $bucket
+        );
 }
 
 
 /*
- * JSONレポート。
+ * 場別
  */
-$report = [
-    'period' => [
-        'from' => $from,
-        'to' => $to,
-    ],
+$stadiumResult = [];
 
-    'term_rule' => [
-        '01-04' => '前年下期 YY10',
-        '05-10' => '当年上期 YY04',
-        '11-12' => '当年下期 YY10',
-    ],
-
-    'result_rule' => [
-        'rank_1_to_4' => '実着順',
-        'rank_missing' => '着外',
-        'out_average_rank' => 5.5,
-    ],
-
-    'summary' => [
-        'target_races' => $totalRaces,
-        'processed_races' => $raceStats['processed'],
-        'skipped_races' => $raceStats['skipped'],
-        'processed_boats' => $raceStats['boats'],
-    ],
-
-    'by_score_rank' => $scoreRankResult,
-    'by_eval' => $evalResult,
-    'by_lane_eval' => $laneEvalResult,
-    'by_type' => $typeResult,
-    'by_stadium' => $stadiumResult,
-];
+ksort(
+    $byStadium
+);
 
 
-$outputDir = __DIR__ . '/output';
+foreach (
+    $byStadium as $stadium => $bucket
+) {
 
-if (!is_dir($outputDir)) {
-    mkdir($outputDir, 0775, true);
+    $stadiumResult[
+        $stadium
+    ] =
+        finalizeBucket(
+            $bucket
+        );
 }
 
 
+/*
+ * ============================================================
+ * JSONレポート
+ * ============================================================
+ */
+$report = [
+
+    'period' => [
+
+        'from' =>
+            $from,
+
+        'to' =>
+            $to,
+    ],
+
+
+    'term_rule' => [
+
+        '01-04' =>
+            '前年下期 YY10',
+
+        '05-10' =>
+            '当年上期 YY04',
+
+        '11-12' =>
+            '当年下期 YY10',
+    ],
+
+
+    /*
+     * 実着順ルール
+     */
+    'result_rule' => [
+
+        'rank_1_to_6' =>
+            'race_result_detail.rank をそのまま実着順として使用',
+
+        'rank_missing' =>
+            'データ異常としてスキップ',
+
+        'valid_rank_range' =>
+            '1-6',
+    ],
+
+
+    /*
+     * 集計サマリー
+     */
+    'summary' => [
+
+        'target_races' =>
+            $totalRaces,
+
+        'processed_races' =>
+            $raceStats['processed'],
+
+        'skipped_races' =>
+            $raceStats['skipped'],
+
+        'processed_boats' =>
+            $raceStats['boats'],
+    ],
+
+
+    /*
+     * スキップ理由
+     */
+    'skip_reasons' => $skipReasons,
+
+
+    /*
+     * 集計結果
+     */
+    'by_score_rank' =>
+        $scoreRankResult,
+
+    'by_eval' =>
+        $evalResult,
+
+    'by_lane_eval' =>
+        $laneEvalResult,
+
+    'by_type' =>
+        $typeResult,
+
+    'by_stadium' =>
+        $stadiumResult,
+];
+
+
+/*
+ * 出力ディレクトリ
+ */
+$outputDir =
+    __DIR__ . '/output';
+
+
+if (
+    !is_dir($outputDir)
+) {
+
+    mkdir(
+        $outputDir,
+        0775,
+        true
+    );
+}
+
+
+/*
+ * 出力ファイル
+ */
 $outputFile =
     $outputDir .
     '/first_eval_report_' .
-    str_replace('-', '', $from) .
+    str_replace(
+        '-',
+        '',
+        $from
+    ) .
     '_' .
-    str_replace('-', '', $to) .
+    str_replace(
+        '-',
+        '',
+        $to
+    ) .
     '.json';
 
 
+/*
+ * JSON保存
+ */
 file_put_contents(
+
     $outputFile,
+
     json_encode(
+
         $report,
+
         JSON_UNESCAPED_UNICODE |
         JSON_PRETTY_PRINT |
         JSON_INVALID_UTF8_SUBSTITUTE
@@ -781,46 +1471,110 @@ file_put_contents(
 );
 
 
-echo "\n========================================\n";
-echo "一次評価 検証完了\n";
-echo "========================================\n";
+/*
+ * ============================================================
+ * コンソール出力
+ * ============================================================
+ */
 
-echo "対象レース     : {$totalRaces}\n";
-echo "検証レース     : {$raceStats['processed']}\n";
-echo "スキップ       : {$raceStats['skipped']}\n";
-echo "対象艇数       : {$raceStats['boats']}\n";
-echo "結果ファイル   : {$outputFile}\n";
+echo
+    "\n========================================\n";
 
-echo "========================================\n\n";
+echo
+    "一次評価 検証完了\n";
+
+echo
+    "========================================\n";
 
 
-echo "【総合スコア順位】\n";
+echo
+    "対象レース     : {$totalRaces}\n";
 
-foreach ($scoreRankResult as $rank => $data) {
+echo
+    "検証レース     : {$raceStats['processed']}\n";
+
+echo
+    "スキップ       : {$raceStats['skipped']}\n";
+
+echo
+    "対象艇数       : {$raceStats['boats']}\n";
+
+echo
+    "結果ファイル   : {$outputFile}\n";
+
+
+echo
+    "========================================\n\n";
+
+
+/*
+ * 総合スコア順位
+ */
+echo
+    "【総合スコア順位】\n";
+
+
+foreach (
+    $scoreRankResult as $rank => $data
+) {
 
     printf(
-        "%s位: 件数=%d  1着率=%.2f%%  3連率=%.2f%%  着外率=%.2f%%  平均着順=%.3f\n",
+
+        "%s位: 件数=%d  1着率=%.2f%%  3連率=%.2f%%  平均着順=%.3f\n",
+
         $rank,
+
         $data['count'],
+
         $data['first_rate'],
+
         $data['top3_rate'],
-        $data['out_rate'],
+
         $data['avg_actual_rank']
     );
 }
 
 
-echo "\n【評価記号】\n";
+/*
+ * 評価記号
+ */
+echo
+    "\n【評価記号】\n";
 
-foreach ($evalResult as $eval => $data) {
+
+foreach (
+    $evalResult as $eval => $data
+) {
 
     printf(
-        "%s: 件数=%d  1着率=%.2f%%  3連率=%.2f%%  着外率=%.2f%%  平均着順=%.3f\n",
+
+        "%s: 件数=%d  1着率=%.2f%%  3連率=%.2f%%  平均着順=%.3f\n",
+
         $eval,
+
         $data['count'],
+
         $data['first_rate'],
+
         $data['top3_rate'],
-        $data['out_rate'],
+
         $data['avg_actual_rank']
     );
 }
+
+
+/*
+ * スキップ理由
+ */
+echo
+    "\n【スキップ理由】\n";
+
+
+echo
+    "6艇不足             : {$skipReasons['not_6_boats']}\n";
+
+echo
+    "必須データ欠損/異常  : {$skipReasons['missing_required_data']}\n";
+
+echo
+    "着順データ異常       : {$skipReasons['invalid_rank']}\n";
