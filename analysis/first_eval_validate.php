@@ -20,8 +20,8 @@ declare(strict_types=1);
  *   5着 -> 5
  *   6着 -> 6
  *
- *   rank が NULL または1～6以外の場合は、
- *   データ異常としてそのレースをスキップする。
+ *   rank が NULL の場合は 5.5 に置き換える。
+ *   1～6以外の場合は、データ異常としてそのレースをスキップする。
  *
  * 本番 calc_scores.php は変更しない。
  *
@@ -458,7 +458,7 @@ function newBucket(): array
  * 実着順を集計。
  *
  * actualRank:
- *   1～6をそのまま使用。
+ *   1～6または5.5（NULL代替）を使用。
  */
 function addBucket(
     array &$bucket,
@@ -511,7 +511,7 @@ function addBucket(
     /*
      * 平均着順
      *
-     * 1～6着をそのまま加算。
+     * 着順をそのまま加算。
      */
     $bucket['sum_rank'] +=
         $actualRank;
@@ -600,12 +600,6 @@ function finalizeBucket(
 
 /*
  * 対象レースを取得。
- *
- * race_entryを基準にする。
- *
- * ここではrace_result_detailとのINNER JOINを行わない。
- * そのため結果データ側の欠損によって
- * 対象レース自体が消えることを防ぐ。
  */
 $sql = <<<SQL
 SELECT DISTINCT
@@ -827,8 +821,6 @@ SQL;
 
         /*
          * 一次評価に必要なデータ。
-         *
-         * actual_rankは別途チェックする。
          */
         $required = [
 
@@ -861,31 +853,34 @@ SQL;
 
 
         /*
-         * 実着順チェック。
+         * 実着順チェック・置換。
          *
-         * 1～6着をすべて正常値として扱う。
+         * NULL の場合は 5.5 に置き換える。
+         * 1～6着はそのまま正常値として扱う。
+         * それ以外の不正値の場合はスキップ対象とする。
          */
-        $actualRankText =
-            trim(
-                (string)$row['actual_rank']
-            );
+        $rawRank = $row['actual_rank'];
 
+        if ($rawRank === null || $rawRank === '') {
+            $actualRank = 5.5;
+        } else {
+            $actualRankText = trim((string)$rawRank);
 
-        if (
-            !preg_match(
-                '/^[1-6]$/',
-                $actualRankText
-            )
-        ) {
+            if (
+                !preg_match(
+                    '/^[1-6]$/',
+                    $actualRankText
+                )
+            ) {
 
-            $invalid = true;
+                $invalid = true;
 
-            break;
+                break;
+            }
+
+            $actualRank =
+                (float)$actualRankText;
         }
-
-
-        $actualRank =
-            (float)$actualRankText;
 
 
         /*
@@ -1361,8 +1356,11 @@ $report = [
         'rank_1_to_6' =>
             'race_result_detail.rank をそのまま実着順として使用',
 
-        'rank_missing' =>
-            'データ異常としてスキップ',
+        'rank_null' =>
+            'NULL の場合は 5.5 に置き換え',
+
+        'rank_invalid' =>
+            '1～6以外の場合はデータ異常としてスキップ',
 
         'valid_rank_range' =>
             '1-6',
