@@ -226,17 +226,23 @@ function normalizeActualRank($value): array
 {
     $text = trim((string)$value);
 
-
+    /*
+     * NULL / 空欄
+     *
+     * 公式DBに着順が存在しない場合は、
+     * 着外として 5.5 を使用する。
+     */
     if ($text === '') {
-
         return [
             'rank' => 5.5,
             'category' => '着外',
         ];
     }
 
-
-    if (preg_match('/^[1-4]$/', $text)) {
+    /*
+     * 1～6着は正常な実着順として扱う。
+     */
+    if (preg_match('/^[1-6]$/', $text)) {
 
         $rank = (float)$text;
 
@@ -246,7 +252,9 @@ function normalizeActualRank($value): array
         ];
     }
 
-
+    /*
+     * それ以外は異常データ。
+     */
     return [
         'rank' => null,
         'category' => '異常',
