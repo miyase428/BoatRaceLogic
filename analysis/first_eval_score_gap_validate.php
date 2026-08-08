@@ -744,10 +744,13 @@ SQL;
     foreach ($rows as $row) {
 
         /*
-         * 必須評価データ。
-         *
-         * NULL の場合は検証不能。
-         */
+        * 必須評価データ。
+        *
+        * NULL / 空欄の場合は 5.5 として扱う。
+        *
+        * これは公式DB上で取得できないデータがある場合でも、
+        * レースそのものを検証対象から除外しないため。
+        */
         $required = [
             'national_win_rate',
             'local_win_rate',
@@ -756,17 +759,13 @@ SQL;
             'average_start',
         ];
 
-
         foreach ($required as $key) {
 
             if (
                 $row[$key] === null ||
                 $row[$key] === ''
             ) {
-
-                $invalid = true;
-
-                break 2;
+                $row[$key] = 5.5;
             }
         }
 
@@ -818,7 +817,10 @@ SQL;
     if ($invalid || count($boats) !== 6) {
 
         $skipped++;
-        $skipMissing++;
+
+        if ($invalid) {
+            $skipMissing++;
+        }
 
         continue;
     }
