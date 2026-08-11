@@ -329,8 +329,14 @@ $summary =
 // ============================================================
 // 14. 艇別CSVデータ作成
 //
-// player_id / player_name は
-// race_result_detail を正とする。
+// 選手名:
+//   entries を正とする
+//
+// player_id:
+//   race_result_detail に存在する場合のみ取得
+//
+// 実着順:
+//   race_result_detail を正とする
 // ============================================================
 
 $boatRows = [];
@@ -339,6 +345,9 @@ for ($lane = 1; $lane <= 6; $lane++) {
 
     $result =
         $results[$lane - 1] ?? [];
+
+    $entry =
+        $entries[$lane - 1] ?? [];
 
     $tenji =
         $tenjiList[$lane - 1] ?? [];
@@ -353,16 +362,33 @@ for ($lane = 1; $lane <= 6; $lane++) {
         $actualByLane[$lane] ?? [];
 
 
+    // --------------------------------------------------------
+    // 選手情報
+    // --------------------------------------------------------
+
+    $playerName =
+        $entry['player_name']
+        ?? '';
+
+    $playerId =
+        $actual['player_id']
+        ?? '';
+
+
+    // --------------------------------------------------------
+    // 艇別データ
+    // --------------------------------------------------------
+
     $boatRows[$lane] = [
 
         // 基本
         'lane_number' => $lane,
 
         'player_id' =>
-            $actual['player_id'] ?? '',
+            $playerId,
 
         'player_name' =>
-            $actual['player_name'] ?? '',
+            $playerName,
 
 
         // 一次評価
