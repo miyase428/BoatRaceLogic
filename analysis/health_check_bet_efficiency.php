@@ -6,12 +6,14 @@ declare(strict_types=1);
  * 現行最終予想 健康診断 STEP 2-2
  *
  * 調査内容
- *  - 本命買い目の点数
- *  - 対抗買い目の点数
- *  - 重複除外後の実質購入点数
- *  - 的中率
- *  - 的中時払戻
- *  - 回収率
+ *   - 本命買い目の平均点数
+ *   - 対抗買い目の平均点数
+ *   - 本命＋対抗の重複除外後平均点数
+ *   - 本命買い目の的中率
+ *   - 対抗買い目の的中率
+ *   - 本命＋対抗の的中率
+ *   - 的中時払戻
+ *   - 回収率
  *
  * Usage:
  *   php analysis/health_check_bet_efficiency.php \
@@ -20,7 +22,7 @@ declare(strict_types=1);
 
 if ($argc < 2) {
     echo "Usage:\n";
-    echo "  php health_check_bet_efficiency.php <races_csv>\n";
+    echo "  php analysis/health_check_bet_efficiency.php <races_csv>\n";
     exit(1);
 }
 
@@ -35,6 +37,8 @@ if (!file_exists($csvPath)) {
  * DB接続
  */
 require_once __DIR__ . '/../common/db_connect.php';
+
+$pdo = getPDO();
 
 /**
  * CSV読み込み
@@ -64,6 +68,9 @@ foreach ($header as $index => $name) {
     $headerMap[$name] = $index;
 }
 
+/**
+ * 必須列確認
+ */
 $requiredColumns = [
     'race_code',
     'honmei_kai',
@@ -91,13 +98,16 @@ $payoutStmt = $pdo->prepare(
  * 3連単買い目を展開
  *
  * 例:
+ *
  *   1-235-2345
  *
- * → 1-2-3
- *    1-2-4
- *    1-2-5
- *    1-3-2
- *    ...
+ * ↓
+ *
+ *   1-2-3
+ *   1-2-4
+ *   1-2-5
+ *   1-3-2
+ *   ...
  */
 function expandTrifecta(string $bet): array
 {
@@ -123,7 +133,7 @@ function expandTrifecta(string $bet): array
         foreach ($second as $b) {
             foreach ($third as $c) {
 
-                // 同一艇が同じ買い目内に入るものは無効
+                // 同一艇が重複する組み合わせは除外
                 if ($a === $b || $a === $c || $b === $c) {
                     continue;
                 }
@@ -143,7 +153,7 @@ $totalRaces = 0;
 
 $honmeiHit = 0;
 $taikouHit = 0;
-$eitherHit = 0;
+$combinedHit = 0;
 
 $honmeiBetCountTotal = 0;
 $taikouBetCountTotal = 0;
@@ -161,21 +171,19 @@ $honmeiHitPayouts = [];
 $taikouHitPayouts = [];
 $combinedHitPayouts = [];
 
-$rows = 0;
-
+/**
+ * CSV処理
+ */
 while (($row = fgetcsv($handle)) !== false) {
 
     if (count($row) < count($header)) {
         continue;
     }
 
-    $rows++;
-
     $raceCode = trim($row[$headerMap['race_code']]);
 
     $honmeiKai = trim($row[$headerMap['honmei_kai']]);
     $taikouKai = trim($row[$headerMap['taikou_kai']]);
-
     $actualTrifecta = trim($row[$headerMap['actual_trifecta']]);
 
     if ($raceCode === '' || $actualTrifecta === '') {
@@ -189,7 +197,9 @@ while (($row = fgetcsv($handle)) !== false) {
     $taikouBets = expandTrifecta($taikouKai);
 
     /**
-     * 重複を除いた全買い目
+     * 本命＋対抗
+     *
+     * 同じ買い目が重複している場合は1点として扱う
      */
     $combinedBets = array_values(
         array_unique(
@@ -214,6 +224,9 @@ while (($row = fgetcsv($handle)) !== false) {
 
     $totalRaces++;
 
+    /**
+     * 購入点数
+     */
     $honmeiCount = count($honmeiBets);
     $taikouCount = count($taikouBets);
     $combinedCount = count($combinedBets);
@@ -223,7 +236,7 @@ while (($row = fgetcsv($handle)) !== false) {
     $combinedBetCountTotal += $combinedCount;
 
     /**
-     * 1点100円として計算
+     * 1点100円
      */
     $honmeiInvestment += $honmeiCount * 100;
     $taikouInvestment += $taikouCount * 100;
@@ -236,20 +249,29 @@ while (($row = fgetcsv($handle)) !== false) {
     $taikouIsHit = in_array($actualTrifecta, $taikouBets, true);
     $combinedIsHit = in_array($actualTrifecta, $combinedBets, true);
 
+    /**
+     * 本命
+     */
     if ($honmeiIsHit) {
         $honmeiHit++;
         $honmeiPayout += $payout;
         $honmeiHitPayouts[] = $payout;
     }
 
+    /**
+     * 対抗
+     */
     if ($taikouIsHit) {
         $taikouHit++;
         $taikouPayout += $payout;
         $taikouHitPayouts[] = $payout;
     }
 
+    /**
+     * 本命＋対抗
+     */
     if ($combinedIsHit) {
-        $eitherHit++;
+        $combinedHit++;
         $combinedPayout += $payout;
         $combinedHitPayouts[] = $payout;
     }
@@ -258,7 +280,7 @@ while (($row = fgetcsv($handle)) !== false) {
 fclose($handle);
 
 /**
- * 平均値
+ * 平均購入点数
  */
 $avgHonmeiBets = $totalRaces > 0
     ? $honmeiBetCountTotal / $totalRaces
@@ -284,7 +306,7 @@ $taikouHitRate = $totalRaces > 0
     : 0;
 
 $combinedHitRate = $totalRaces > 0
-    ? ($eitherHit / $totalRaces) * 100
+    ? ($combinedHit / $totalRaces) * 100
     : 0;
 
 /**
@@ -360,7 +382,7 @@ echo "本命＋対抗（重複除外）" . PHP_EOL;
 echo "========================================" . PHP_EOL;
 
 echo "平均購入点数 : " . number_format($avgCombinedBets, 2) . " 点" . PHP_EOL;
-echo "的中         : {$eitherHit} / {$totalRaces} (" .
+echo "的中         : {$combinedHit} / {$totalRaces} (" .
     number_format($combinedHitRate, 2) . "%)" . PHP_EOL;
 echo "購入金額     : " . number_format($combinedInvestment) . " 円" . PHP_EOL;
 echo "払戻         : " . number_format($combinedPayout) . " 円" . PHP_EOL;
