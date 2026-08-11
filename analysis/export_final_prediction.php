@@ -1,524 +1,188 @@
 <?php
 declare(strict_types=1);
 
-/**
- * 現行最終予想 検証用CSV出力
- *
- * 実行:
- *   php analysis/export_final_prediction.php 20260810WKM12
- *
- * 出力:
- *   analysis/output/final_prediction_boats.csv
- *   analysis/output/final_prediction_races.csv
- *
- * 方針:
- *   ・現在のWebと同じ ApiClient / PredictionLogic を使用
- *   ・予想ロジック自体は変更しない
- *   ・過去レースの実結果を race_result_detail から取得
- *   ・健康診断に必要な情報だけCSVへ保存
- */
-
-require_once __DIR__ . '/../common/db_connect.php';
-require_once __DIR__ . '/../web/api/ApiClient.php';
-require_once __DIR__ . '/../web/logic/PredictionLogic.php';
+require_once __DIR__ . '/lib/FinalPredictionExporter.php';
 
 
 // ============================================================
-// 1. race_code
-// ============================================================
-
-$raceCode = $argv[1] ?? '';
-
-if ($raceCode === '') {
-    fwrite(
-        STDERR,
-        "race_codeを指定してください。\n" .
-        "例: php analysis/export_final_prediction.php 20260810WKM12\n"
-    );
-    exit(1);
-}
-
-
-// ============================================================
-// 2. DB接続
-// ============================================================
-
-try {
-    $pdo = getPDO();
-} catch (Throwable $e) {
-    fwrite(
-        STDERR,
-        "DB接続エラー: {$e->getMessage()}\n"
-    );
-    exit(1);
-}
-
-
-// ============================================================
-// 3. race_master
-// ============================================================
-
-$sql = <<<SQL
-SELECT
-    race_code,
-    race_day,
-    race_date,
-    stadium_name,
-    race_number
-FROM boat_race.race_master
-WHERE race_code = :race_code
-LIMIT 1
-SQL;
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute([
-    ':race_code' => $raceCode
-]);
-
-$raceMaster = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$raceMaster) {
-    fwrite(
-        STDERR,
-        "race_masterに該当レースがありません: {$raceCode}\n"
-    );
-    exit(1);
-}
-
-
-// ============================================================
-// 4. race_result_detail
+// 引数
 //
-// 実際の選手情報・着順はこちらを正とする。
+// 1個:
+//   race_code指定
+//
+//   php export_final_prediction.php 20260810WKM12
+//
+// 2個:
+//   期間指定
+//
+//   php export_final_prediction.php 2026-08-01 2026-08-08
 // ============================================================
 
-$sql = <<<SQL
-SELECT
-    rank,
-    lane_number,
-    player_id,
-    player_name,
-    motor_number,
-    boat_number,
-    exhibition_time,
-    entry_course,
-    start_timing,
-    goal_time,
-    technique
-FROM boat_race.race_result_detail
-WHERE race_code = :race_code
-ORDER BY lane_number
-SQL;
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute([
-    ':race_code' => $raceCode
-]);
-
-$resultDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-if (!$resultDetails) {
-    fwrite(
-        STDERR,
-        "race_result_detailに結果がありません: {$raceCode}\n"
-    );
-    exit(1);
-}
-
-
-// ============================================================
-// 5. 艇番別の実結果を整理
-// ============================================================
-
-$actualByLane = [];
-
-foreach ($resultDetails as $row) {
-
-    $lane = (int)$row['lane_number'];
-
-    if ($lane < 1 || $lane > 6) {
-        continue;
-    }
-
-    $actualByLane[$lane] = [
-        'rank'          => (
-            $row['rank'] !== null &&
-            $row['rank'] !== ''
-        )
-            ? (int)$row['rank']
-            : null,
-
-        'player_id'     => $row['player_id'] ?? '',
-        'player_name'   => $row['player_name'] ?? '',
-        'motor_number'  => $row['motor_number'] ?? '',
-        'boat_number'   => $row['boat_number'] ?? '',
-        'entry_course'  => $row['entry_course'] ?? '',
-        'exhibition_time' => $row['exhibition_time'] ?? '',
-        'start_timing'  => $row['start_timing'] ?? '',
-        'goal_time'     => $row['goal_time'] ?? '',
-        'technique'     => $row['technique'] ?? '',
-    ];
-}
-
-
-// ============================================================
-// 6. 実着順 → 艇番
-// ============================================================
-
-$actualByRank = [];
-
-foreach ($actualByLane as $lane => $data) {
-
-    $rank = $data['rank'];
-
-    if (
-        $rank !== null &&
-        $rank >= 1 &&
-        $rank <= 6
-    ) {
-        $actualByRank[$rank] = $lane;
-    }
-}
-
-$actual1st = $actualByRank[1] ?? '';
-$actual2nd = $actualByRank[2] ?? '';
-$actual3rd = $actualByRank[3] ?? '';
-
-$actualTrifecta = '';
-
-if (
-    $actual1st !== '' &&
-    $actual2nd !== '' &&
-    $actual3rd !== ''
-) {
-    $actualTrifecta =
-        "{$actual1st}-{$actual2nd}-{$actual3rd}";
-}
-
-
-// ============================================================
-// 7. 現行Webと同じAPI
-// ============================================================
-
-$apiClient = new ApiClient();
-
-
-// ============================================================
-// 8. 一次評価
-// ============================================================
-
-[$entries, $results, $calcError] =
-    $apiClient->fetchCalcScores($raceCode);
-
-if ($calcError !== '') {
-    fwrite(
-        STDERR,
-        "calc_scoresエラー: {$calcError}\n"
-    );
-    exit(1);
-}
-
-if (
-    !is_array($results) ||
-    count($results) < 6
-) {
-    fwrite(
-        STDERR,
-        "一次評価が6艇分取得できません。\n"
-    );
-    exit(1);
-}
-
-
-// ============================================================
-// 9. 場コード
-// ============================================================
-
-$placeCode = substr(
-    $raceCode,
-    8,
-    3
+$args = array_slice(
+    $argv,
+    1
 );
 
+if (count($args) === 1) {
 
-// ============================================================
-// 10. 決まり手
-// ============================================================
+    $mode = 'race';
 
-$inCourse = '123456';
+    $raceCode =
+        trim($args[0]);
 
-[$kimariteData, $kimariteError] =
-    $apiClient->fetchKimarite(
-        $raceCode,
-        $inCourse
-    );
+} elseif (count($args) === 2) {
 
-if ($kimariteError !== '') {
+    $mode = 'period';
+
+    $startDate =
+        trim($args[0]);
+
+    $endDate =
+        trim($args[1]);
+
+} else {
+
     fwrite(
         STDERR,
-        "警告: 決まり手API: {$kimariteError}\n"
-    );
-}
-
-
-// ============================================================
-// 11. 展示情報
-// ============================================================
-
-[$tenjiList, $tenjiError] =
-    $apiClient->fetchTenji(
-        $raceCode,
-        $results,
-        $placeCode
+        "\n使用方法:\n\n" .
+        "1レース:\n" .
+        "  php analysis/export_final_prediction.php 20260810WKM12\n\n" .
+        "期間指定:\n" .
+        "  php analysis/export_final_prediction.php 2026-08-01 2026-08-08\n\n"
     );
 
-if ($tenjiError !== '') {
-    fwrite(
-        STDERR,
-        "警告: 展示API: {$tenjiError}\n"
-    );
-}
-
-if (
-    !is_array($tenjiList) ||
-    count($tenjiList) < 6
-) {
-    fwrite(
-        STDERR,
-        "展示情報が6艇分取得できません。\n"
-    );
     exit(1);
 }
 
 
 // ============================================================
-// 12. 3か月・6か月3連対率
+// Exporter
 // ============================================================
 
-$tenjiTestData =
-    $apiClient->fetchTenjiTest(
-        $raceCode,
-        $tenjiList
-    );
-
-if (!is_array($tenjiTestData)) {
-    $tenjiTestData = [];
-}
+$exporter =
+    new FinalPredictionExporter();
 
 
 // ============================================================
-// 13. 現行PredictionLogic
+// 1レース
 // ============================================================
 
-$predictionLogic =
-    new PredictionLogic();
+if ($mode === 'race') {
 
-$finalPredictions =
-    $predictionLogic->buildFinalPredictions(
-        $tenjiList,
-        $kimariteData,
-        $tenjiTestData
-    );
+    try {
 
-$summary =
-    $predictionLogic->buildSummary(
-        $finalPredictions
-    );
+        $data =
+            $exporter->exportRace(
+                $raceCode
+            );
 
+        echo "\n";
+        echo "========================================\n";
+        echo "現行最終予想 検証データ取得\n";
+        echo "========================================\n";
 
-// ============================================================
-// 14. 艇別CSVデータ作成
-//
-// 選手名:
-//   entries を正とする
-//
-// player_id:
-//   race_result_detail に存在する場合のみ取得
-//
-// 実着順:
-//   race_result_detail を正とする
-// ============================================================
+        echo "race_code : {$raceCode}\n";
 
-$boatRows = [];
+        echo "本命       : "
+            . ($data['summary']['honmei_head'] ?? '')
+            . "\n";
 
-for ($lane = 1; $lane <= 6; $lane++) {
+        echo "対抗       : "
+            . ($data['summary']['taikou_head'] ?? '')
+            . "\n";
 
-    $result =
-        $results[$lane - 1] ?? [];
+        echo "切る艇     : "
+            . ($data['summary']['kiru_str'] ?? '')
+            . "\n";
 
-    $entry =
-        $entries[$lane - 1] ?? [];
+        echo "実際の3連単 : "
+            . ($data['actual']['trifecta'] ?? '')
+            . "\n\n";
 
-    $tenji =
-        $tenjiList[$lane - 1] ?? [];
+    } catch (Throwable $e) {
 
-    $test =
-        $tenjiTestData[$lane - 1] ?? [];
+        fwrite(
+            STDERR,
+            "エラー: {$e->getMessage()}\n"
+        );
 
-    $final =
-        $finalPredictions[$lane] ?? [];
-
-    $actual =
-        $actualByLane[$lane] ?? [];
-
-
-    // --------------------------------------------------------
-    // 選手情報
-    // --------------------------------------------------------
-
-    $playerName =
-        $entry['player_name']
-        ?? '';
-
-    $playerId =
-        $actual['player_id']
-        ?? '';
-
-
-    // --------------------------------------------------------
-    // 艇別データ
-    // --------------------------------------------------------
-
-    $boatRows[$lane] = [
-
-        // 基本
-        'lane_number' => $lane,
-
-        'player_id' =>
-            $playerId,
-
-        'player_name' =>
-            $playerName,
-
-
-        // 一次評価
-        'first_total_score' =>
-            $result['total_score'] ?? 0,
-
-        'first_type' =>
-            $result['type'] ?? '',
-
-        'first_eval' =>
-            $result['ichiji_eval'] ?? '',
-
-
-        // 3連対率
-        'three_in_rate_6m' =>
-            $final['rate6_dec']
-            ?? ($test['three_in_rate_6m'] ?? 0),
-
-        'three_in_rate_3m' =>
-            $final['rate3_dec']
-            ?? ($test['three_in_rate_3m'] ?? 0),
-
-
-        // 二次評価
-        'second_score' =>
-            $tenji['final_2nd_score'] ?? 0,
-
-
-        // 最終予想
-        'kitai' =>
-            $final['kitai_dec'] ?? 0,
-
-        'final_type' =>
-            $final['type'] ?? '',
-
-        'type_bonus' =>
-            $final['typeBonus'] ?? 0,
-
-        'final3' =>
-            $final['final3'] ?? 0,
-
-        'get_bonus' =>
-            $final['getBonus'] ?? 0,
-
-        'kiru' =>
-            $final['kiru'] ?? 0,
-
-
-        // 実結果
-        'actual_rank' =>
-            $actual['rank'] ?? '',
-    ];
-}
-
-
-// ============================================================
-// 15. 順位計算
-// ============================================================
-
-function makeRankMap(
-    array $rows,
-    string $scoreKey
-): array {
-
-    $scores = [];
-
-    foreach ($rows as $lane => $row) {
-
-        $scores[$lane] =
-            (float)($row[$scoreKey] ?? 0);
+        exit(1);
     }
 
-    /*
-     * スコア降順。
-     * 同点の場合は艇番の小さい方を先にする。
-     */
-    uksort(
-        $scores,
-        static function (
-            string $laneA,
-            string $laneB
-        ) use ($scores): int {
-
-            $scoreA = $scores[$laneA];
-            $scoreB = $scores[$laneB];
-
-            if ($scoreA == $scoreB) {
-                return (int)$laneA <=> (int)$laneB;
-            }
-
-            return $scoreA < $scoreB ? 1 : -1;
-        }
-    );
-
-    $rankMap = [];
-
-    $rank = 1;
-
-    foreach ($scores as $lane => $score) {
-
-        $rankMap[(int)$lane] = $rank;
-
-        $rank++;
-    }
-
-    return $rankMap;
+    exit(0);
 }
 
 
-$firstRank =
-    makeRankMap(
-        $boatRows,
-        'first_total_score'
+// ============================================================
+// 期間指定
+// ============================================================
+
+if ($startDate > $endDate) {
+
+    fwrite(
+        STDERR,
+        "開始日が終了日より後になっています。\n"
     );
 
-$secondRank =
-    makeRankMap(
-        $boatRows,
-        'second_score'
-    );
-
-$finalRank =
-    makeRankMap(
-        $boatRows,
-        'final3'
-    );
+    exit(1);
+}
 
 
 // ============================================================
-// 16. 出力ディレクトリ
+// DB
+// ============================================================
+
+require_once __DIR__ . '/../common/db_connect.php';
+
+$pdo =
+    getPDO();
+
+
+// ============================================================
+// 対象race_code取得
+// ============================================================
+
+$stmt = $pdo->prepare(
+    <<<SQL
+    SELECT
+        race_code,
+        race_date,
+        stadium_name,
+        race_number
+    FROM boat_race.race_master
+    WHERE race_date >= :start_date
+      AND race_date <= :end_date
+    ORDER BY
+        race_date,
+        race_code
+    SQL
+);
+
+$stmt->execute([
+    ':start_date' =>
+        $startDate,
+
+    ':end_date' =>
+        $endDate,
+]);
+
+$raceMasters =
+    $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+if (!$raceMasters) {
+
+    fwrite(
+        STDERR,
+        "指定期間にレースがありません。\n"
+    );
+
+    exit(1);
+}
+
+
+// ============================================================
+// 出力ファイル
 // ============================================================
 
 $outputDir =
@@ -526,52 +190,81 @@ $outputDir =
 
 if (!is_dir($outputDir)) {
 
-    if (!mkdir($outputDir, 0775, true)) {
-
-        fwrite(
-            STDERR,
-            "出力ディレクトリを作成できません。\n"
-        );
-
-        exit(1);
-    }
+    mkdir(
+        $outputDir,
+        0775,
+        true
+    );
 }
 
 
-// ============================================================
-// 17. 艇別CSV
-// ============================================================
+$startLabel =
+    str_replace(
+        '-',
+        '',
+        $startDate
+    );
+
+$endLabel =
+    str_replace(
+        '-',
+        '',
+        $endDate
+    );
+
 
 $boatsCsv =
-    $outputDir .
-    '/final_prediction_boats.csv';
+    "{$outputDir}/final_prediction_boats_{$startLabel}_{$endLabel}.csv";
 
-$fp =
+$racesCsv =
+    "{$outputDir}/final_prediction_races_{$startLabel}_{$endLabel}.csv";
+
+
+$boatsFp =
     fopen(
         $boatsCsv,
         'wb'
     );
 
-if ($fp === false) {
+$racesFp =
+    fopen(
+        $racesCsv,
+        'wb'
+    );
+
+
+if (
+    $boatsFp === false ||
+    $racesFp === false
+) {
 
     fwrite(
         STDERR,
-        "CSVを開けません: {$boatsCsv}\n"
+        "CSVファイルを作成できません。\n"
     );
 
     exit(1);
 }
 
 
-// Excel用UTF-8 BOM
+// BOM
 fwrite(
-    $fp,
+    $boatsFp,
+    "\xEF\xBB\xBF"
+);
+
+fwrite(
+    $racesFp,
     "\xEF\xBB\xBF"
 );
 
 
+// ============================================================
+// ヘッダー
+// ============================================================
+
 fputcsv(
-    $fp,
+    $boatsFp,
     [
         'race_code',
         'race_date',
@@ -606,80 +299,8 @@ fputcsv(
 );
 
 
-foreach ($boatRows as $lane => $row) {
-
-    fputcsv(
-        $fp,
-        [
-            $raceCode,
-            $raceMaster['race_date'],
-            $raceMaster['stadium_name'],
-            $raceMaster['race_number'],
-
-            $lane,
-            $row['player_id'],
-            $row['player_name'],
-
-            $row['first_total_score'],
-            $row['first_type'],
-            $row['first_eval'],
-            $firstRank[$lane] ?? '',
-
-            $row['three_in_rate_6m'],
-            $row['three_in_rate_3m'],
-
-            $row['second_score'],
-            $secondRank[$lane] ?? '',
-
-            $row['kitai'],
-            $row['final_type'],
-            $row['type_bonus'],
-            $row['final3'],
-            $row['get_bonus'],
-            $row['kiru'],
-            $finalRank[$lane] ?? '',
-
-            $row['actual_rank'],
-        ]
-    );
-}
-
-fclose($fp);
-
-
-// ============================================================
-// 18. レース別CSV
-// ============================================================
-
-$racesCsv =
-    $outputDir .
-    '/final_prediction_races.csv';
-
-$fp =
-    fopen(
-        $racesCsv,
-        'wb'
-    );
-
-if ($fp === false) {
-
-    fwrite(
-        STDERR,
-        "CSVを開けません: {$racesCsv}\n"
-    );
-
-    exit(1);
-}
-
-
-fwrite(
-    $fp,
-    "\xEF\xBB\xBF"
-);
-
-
 fputcsv(
-    $fp,
+    $racesFp,
     [
         'race_code',
         'race_date',
@@ -704,83 +325,202 @@ fputcsv(
 );
 
 
-fputcsv(
-    $fp,
-    [
-        $raceCode,
-        $raceMaster['race_date'],
-        $raceMaster['stadium_name'],
-        $raceMaster['race_number'],
+// ============================================================
+// 処理
+// ============================================================
 
-        $summary['honmei_head']
-            ?? '',
+$totalRaces = count($raceMasters);
+$successCount = 0;
+$errorCount = 0;
 
-        $summary['taikou_head']
-            ?? '',
-
-        $summary['honmei_aite_str']
-            ?? '',
-
-        $summary['taikou_aite_str']
-            ?? '',
-
-        $summary['kiru_str']
-            ?? '',
-
-        $summary['honmei_kai']
-            ?? '',
-
-        $summary['taikou_kai']
-            ?? '',
-
-        $actual1st,
-        $actual2nd,
-        $actual3rd,
-        $actualTrifecta,
-    ]
-);
+$errors = [];
 
 
-fclose($fp);
+echo "\n";
+echo "========================================\n";
+echo "現行最終予想 期間検証CSV出力\n";
+echo "========================================\n";
+echo "期間 : {$startDate} ～ {$endDate}\n";
+echo "対象 : {$totalRaces}レース\n";
+echo "========================================\n\n";
+
+
+foreach ($raceMasters as $index => $raceMaster) {
+
+    $raceCode =
+        $raceMaster['race_code'];
+
+    $number =
+        $index + 1;
+
+    echo sprintf(
+        "[%d/%d] %s ... ",
+        $number,
+        $totalRaces,
+        $raceCode
+    );
+
+
+    try {
+
+        $data =
+            $exporter->exportRace(
+                $raceCode
+            );
+
+
+        $master =
+            $data['race_master'];
+
+        $boats =
+            $data['boats'];
+
+        $ranks =
+            $data['ranks'];
+
+        $summary =
+            $data['summary'];
+
+        $actual =
+            $data['actual'];
+
+
+        // ----------------------------------------------------
+        // 艇別CSV
+        // ----------------------------------------------------
+
+        foreach ($boats as $lane => $boat) {
+
+            fputcsv(
+                $boatsFp,
+                [
+                    $raceCode,
+                    $master['race_date'],
+                    $master['stadium_name'],
+                    $master['race_number'],
+
+                    $lane,
+                    $boat['player_id'],
+                    $boat['player_name'],
+
+                    $boat['first_total_score'],
+                    $boat['first_type'],
+                    $boat['first_eval'],
+                    $ranks['first'][$lane] ?? '',
+
+                    $boat['three_in_rate_6m'],
+                    $boat['three_in_rate_3m'],
+
+                    $boat['second_score'],
+                    $ranks['second'][$lane] ?? '',
+
+                    $boat['kitai'],
+                    $boat['final_type'],
+                    $boat['type_bonus'],
+                    $boat['final3'],
+                    $boat['get_bonus'],
+                    $boat['kiru'],
+                    $ranks['final'][$lane] ?? '',
+
+                    $boat['actual_rank'],
+                ]
+            );
+        }
+
+
+        // ----------------------------------------------------
+        // レース別CSV
+        // ----------------------------------------------------
+
+        fputcsv(
+            $racesFp,
+            [
+                $raceCode,
+                $master['race_date'],
+                $master['stadium_name'],
+                $master['race_number'],
+
+                $summary['honmei_head'] ?? '',
+                $summary['taikou_head'] ?? '',
+
+                $summary['honmei_aite_str'] ?? '',
+                $summary['taikou_aite_str'] ?? '',
+                $summary['kiru_str'] ?? '',
+
+                $summary['honmei_kai'] ?? '',
+                $summary['taikou_kai'] ?? '',
+
+                $actual['first'] ?? '',
+                $actual['second'] ?? '',
+                $actual['third'] ?? '',
+                $actual['trifecta'] ?? '',
+            ]
+        );
+
+
+        $successCount++;
+
+        echo "OK\n";
+
+    } catch (Throwable $e) {
+
+        $errorCount++;
+
+        $errors[] = [
+            'race_code' =>
+                $raceCode,
+
+            'error' =>
+                $e->getMessage(),
+        ];
+
+        echo "ERROR\n";
+        echo "       {$e->getMessage()}\n";
+    }
+}
+
+
+fclose($boatsFp);
+fclose($racesFp);
 
 
 // ============================================================
-// 19. コンソール表示
+// 完了
 // ============================================================
 
 echo "\n";
 echo "========================================\n";
-echo "現行最終予想 検証CSV出力完了\n";
+echo "期間検証CSV出力完了\n";
 echo "========================================\n";
 
-echo "race_code    : {$raceCode}\n";
-echo "場           : {$raceMaster['stadium_name']}\n";
-echo "レース       : {$raceMaster['race_number']}\n";
-
-echo "\n";
-
-echo "本命         : "
-    . ($summary['honmei_head'] ?? '')
-    . "\n";
-
-echo "対抗         : "
-    . ($summary['taikou_head'] ?? '')
-    . "\n";
-
-echo "切る艇       : "
-    . ($summary['kiru_str'] ?? '')
-    . "\n";
-
-echo "実際の3連単  : {$actualTrifecta}\n";
+echo "期間       : {$startDate} ～ {$endDate}\n";
+echo "対象レース : {$totalRaces}\n";
+echo "成功       : {$successCount}\n";
+echo "エラー     : {$errorCount}\n";
 
 echo "\n";
 
 echo "艇別CSV:\n";
-echo $boatsCsv . "\n";
+echo "{$boatsCsv}\n";
 
 echo "\n";
 
 echo "レース別CSV:\n";
-echo $racesCsv . "\n";
+echo "{$racesCsv}\n";
+
+
+if ($errorCount > 0) {
+
+    echo "\n";
+    echo "========================================\n";
+    echo "エラー一覧\n";
+    echo "========================================\n";
+
+    foreach ($errors as $error) {
+
+        echo "{$error['race_code']} : "
+            . "{$error['error']}\n";
+    }
+}
 
 echo "\n";
