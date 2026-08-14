@@ -15,6 +15,7 @@
  * G : 本命＋対抗＋最終評価上位2艇の3艇BOX ×2
  * H : 本命1着固定
  * I : 対抗1着固定
+ * J : 本命＋対抗＋最終評価上位3艇の3艇BOX ×3
  *
  * Gの順位決定：
  * 本命・対抗を除いた艇の最終評価順位を見る。
@@ -352,6 +353,7 @@ $strategies = [
     'G' => '本命＋対抗＋上位2艇 3艇BOX×2',
     'H' => '本命1着固定',
     'I' => '対抗1着固定',
+    'J' => '本命＋対抗＋上位3艇 3艇BOX×3',
 ];
 
 $stats = [];
@@ -710,6 +712,59 @@ foreach ($rows as $row) {
         array_merge($betsG1, $betsG2)
     );
 
+    // --------------------------------------------------------
+    // J
+    //
+    // 本命・対抗・残り最終評価1位
+    // 本命・対抗・残り最終評価2位
+    // 本命・対抗・残り最終評価3位
+    //
+    // それぞれ3艇BOX
+    //
+    // 合計 3BOX × 6点 = 18点
+    // --------------------------------------------------------
+
+    $betsJ1 = [];
+    $betsJ2 = [];
+    $betsJ3 = [];
+
+    if (isset($gTop2[0])) {
+
+        $betsJ1 = makeTrifectaBox([
+            $honmei,
+            $taikou,
+            $gTop2[0],
+        ]);
+    }
+
+    if (isset($gTop2[1])) {
+
+        $betsJ2 = makeTrifectaBox([
+            $honmei,
+            $taikou,
+            $gTop2[1],
+        ]);
+    }
+
+    // 上位3艇目を取得
+    $gTop3 = array_slice($remaining, 0, 3);
+
+    if (isset($gTop3[2])) {
+
+        $betsJ3 = makeTrifectaBox([
+            $honmei,
+            $taikou,
+            $gTop3[2],
+        ]);
+    }
+
+    $betsJ = uniqueBets(
+        array_merge(
+            $betsJ1,
+            $betsJ2,
+            $betsJ3
+        )
+    );
 
     // --------------------------------------------------------
     // H 本命1着固定
@@ -732,6 +787,7 @@ foreach ($rows as $row) {
         'G' => $betsG,
         'H' => $betsH,
         'I' => $betsI,
+        'J' => $betsJ,
     ];
 
 
