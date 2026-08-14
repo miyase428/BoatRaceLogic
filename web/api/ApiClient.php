@@ -87,8 +87,8 @@ class ApiClient
                 }
 
                 $JKL_rule = [
-                    'KRY' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'around'],
-                    'TDA' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'around'],
+                    'KRY' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'mawari'],
+                    'TDA' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'mawari'],
                     'OMR' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'straight'],
                 ];
 
