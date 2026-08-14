@@ -967,6 +967,296 @@ for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
 
 /*
 |--------------------------------------------------------------------------
+| 9. 一次評価 × 二次評価 36パターン分析
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【9】一次評価 × 二次評価 36パターン\n";
+
+$combinationStats = [];
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        $combinationStats[$firstRank][$secondRank] = [
+            'count' => 0,
+            'first' => 0,
+            'top2'  => 0,
+            'top3'  => 0,
+        ];
+    }
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        $firstRank = $boat['first'] ?? null;
+        $secondRank = $boat['second'] ?? null;
+        $actual = $boat['actual'] ?? null;
+
+        if (
+            $firstRank === null ||
+            $secondRank === null ||
+            $firstRank < 1 ||
+            $firstRank > 6 ||
+            $secondRank < 1 ||
+            $secondRank > 6
+        ) {
+            continue;
+        }
+
+        $combinationStats[$firstRank][$secondRank]['count']++;
+
+        if ($actual === 1) {
+            $combinationStats[$firstRank][$secondRank]['first']++;
+        }
+
+        if (
+            $actual !== null &&
+            $actual <= 2
+        ) {
+            $combinationStats[$firstRank][$secondRank]['top2']++;
+        }
+
+        if (
+            $actual !== null &&
+            $actual <= 3
+        ) {
+            $combinationStats[$firstRank][$secondRank]['top3']++;
+        }
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 件数
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【9-1】件数\n";
+
+echo "一次\\二次";
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+    echo sprintf("%8d", $secondRank);
+}
+
+echo "\n";
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    echo sprintf(
+        "一次%d位 ",
+        $firstRank
+    );
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        echo sprintf(
+            "%8d",
+            $combinationStats[$firstRank][$secondRank]['count']
+        );
+    }
+
+    echo "\n";
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 1着率
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【9-2】1着率\n";
+
+echo "一次\\二次";
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+    echo sprintf("%8d", $secondRank);
+}
+
+echo "\n";
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    echo sprintf(
+        "一次%d位 ",
+        $firstRank
+    );
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        $stats =
+            $combinationStats[$firstRank][$secondRank];
+
+        echo sprintf(
+            "%8s",
+            pct(
+                $stats['first'],
+                $stats['count']
+            )
+        );
+    }
+
+    echo "\n";
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 2連対率
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【9-3】2連対率\n";
+
+echo "一次\\二次";
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+    echo sprintf("%8d", $secondRank);
+}
+
+echo "\n";
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    echo sprintf(
+        "一次%d位 ",
+        $firstRank
+    );
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        $stats =
+            $combinationStats[$firstRank][$secondRank];
+
+        echo sprintf(
+            "%8s",
+            pct(
+                $stats['top2'],
+                $stats['count']
+            )
+        );
+    }
+
+    echo "\n";
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 3連対率
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【9-4】3連対率\n";
+
+echo "一次\\二次";
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+    echo sprintf("%8d", $secondRank);
+}
+
+echo "\n";
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    echo sprintf(
+        "一次%d位 ",
+        $firstRank
+    );
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        $stats =
+            $combinationStats[$firstRank][$secondRank];
+
+        echo sprintf(
+            "%8s",
+            pct(
+                $stats['top3'],
+                $stats['count']
+            )
+        );
+    }
+
+    echo "\n";
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 10. 順位逆転パターン比較
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【10】順位逆転パターン比較\n";
+
+$comparisonPairs = [
+    [1, 2, 2, 1],
+    [1, 3, 3, 1],
+    [1, 4, 4, 1],
+    [1, 5, 5, 1],
+    [1, 6, 6, 1],
+    [2, 3, 3, 2],
+    [2, 4, 4, 2],
+    [2, 5, 5, 2],
+    [2, 6, 6, 2],
+    [3, 4, 4, 3],
+    [3, 5, 5, 3],
+    [3, 6, 6, 3],
+    [4, 5, 5, 4],
+    [4, 6, 6, 4],
+    [5, 6, 6, 5],
+];
+
+foreach ($comparisonPairs as $pair) {
+
+    [$f1, $s1, $f2, $s2] = $pair;
+
+    $a =
+        $combinationStats[$f1][$s1];
+
+    $b =
+        $combinationStats[$f2][$s2];
+
+    echo sprintf(
+        "一次%d→二次%d vs 一次%d→二次%d\n",
+        $f1,
+        $s1,
+        $f2,
+        $s2
+    );
+
+    echo sprintf(
+        "  A: 件数=%d, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $a['count'],
+        pct($a['first'], $a['count']),
+        pct($a['top2'], $a['count']),
+        pct($a['top3'], $a['count'])
+    );
+
+    echo sprintf(
+        "  B: 件数=%d, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $b['count'],
+        pct($b['first'], $b['count']),
+        pct($b['top2'], $b['count']),
+        pct($b['top3'], $b['count'])
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
 | 終了
 |--------------------------------------------------------------------------
 */
