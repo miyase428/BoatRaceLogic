@@ -86,13 +86,65 @@ class ApiClient
                     }
                 }
 
-                $JKL_rule = [
-                    'KRY' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'mawari'],
-                    'TDA' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'mawari'],
-                    'OMR' => ['J' => 'exhibition', 'K' => 'lap', 'L' => 'straight'],
+                /*
+                * SUM理論で使用する項目は features.json を唯一の定義元とする。
+                *
+                * features.json:
+                *   exhibition_time -> Webデータの exhibition
+                *   lap_time        -> Webデータの lap
+                *   around_time     -> Webデータの mawari
+                *   straight_time   -> Webデータの straight
+                */
+                $features_path = __DIR__ . '/../../theories/new_sam/features.json';
+
+                if (!file_exists($features_path)) {
+                    $tenji_error = 'SUM理論のfeatures.jsonが見つかりません。';
+                    return [$tenji_list, $tenji_error];
+                }
+
+                $features_json = @file_get_contents($features_path);
+
+                if ($features_json === false) {
+                    $tenji_error = 'SUM理論のfeatures.jsonの読み込みに失敗しました。';
+                    return [$tenji_list, $tenji_error];
+                }
+
+                $features = json_decode($features_json, true);
+
+                if (!is_array($features)) {
+                    $tenji_error = 'SUM理論のfeatures.jsonの形式が不正です。';
+                    return [$tenji_list, $tenji_error];
+                }
+
+                $feature_rule = $features[$selected_place] ?? null;
+
+                if (!is_array($feature_rule) || count($feature_rule) !== 3) {
+                    $tenji_error = "SUM理論の設定が見つかりません: {$selected_place}";
+                    return [$tenji_list, $tenji_error];
+                }
+
+                /*
+                * features.json の項目名と tenji_api.php の項目名を対応付ける。
+                */
+                $feature_map = [
+                    'exhibition_time' => 'exhibition',
+                    'lap_time'        => 'lap',
+                    'around_time'     => 'mawari',
+                    'straight_time'   => 'straight',
                 ];
 
-                $rule = $JKL_rule[$selected_place] ?? ['J' => 'exhibition', 'K' => 'lap', 'L' => 'straight'];
+                foreach ($feature_rule as $feature_name) {
+                    if (!isset($feature_map[$feature_name])) {
+                        $tenji_error = "SUM理論で未対応の項目が指定されています: {$feature_name}";
+                        return [$tenji_list, $tenji_error];
+                    }
+                }
+
+                $rule = [
+                    'J' => $feature_map[$feature_rule[0]],
+                    'K' => $feature_map[$feature_rule[1]],
+                    'L' => $feature_map[$feature_rule[2]],
+                ];
 
                 $calculated_list = [];
                 for ($b = 1; $b <= 6; $b++) {
@@ -183,7 +235,6 @@ class ApiClient
 
         return [$tenji_list, $tenji_error];
     }
-
     public function fetchTenjiTest(string $race_code, array $tenji_list): array
     {
         $apiUrl = "http://192.168.0.208:80/tenji_test.php?" . http_build_query([
