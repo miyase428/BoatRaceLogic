@@ -1277,6 +1277,534 @@ foreach ($comparisonPairs as $pair) {
 
 /*
 |--------------------------------------------------------------------------
+| 11. 一次・二次スコア分布
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【11】一次・二次スコア分布\n";
+
+$firstScoreValues = [];
+$secondScoreValues = [];
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        $firstScore = $boat['first_score'] ?? null;
+        $secondScore = $boat['second_score'] ?? null;
+
+        if ($firstScore !== null) {
+            $firstScoreValues[] = $firstScore;
+        }
+
+        if ($secondScore !== null) {
+            $secondScoreValues[] = $secondScore;
+        }
+    }
+}
+
+if (count($firstScoreValues) > 0) {
+
+    echo sprintf(
+        "一次評価スコア: 件数=%d, 最小=%.4f, 最大=%.4f, 平均=%.4f\n",
+        count($firstScoreValues),
+        min($firstScoreValues),
+        max($firstScoreValues),
+        array_sum($firstScoreValues) / count($firstScoreValues)
+    );
+}
+
+if (count($secondScoreValues) > 0) {
+
+    echo sprintf(
+        "二次評価スコア: 件数=%d, 最小=%.4f, 最大=%.4f, 平均=%.4f\n",
+        count($secondScoreValues),
+        min($secondScoreValues),
+        max($secondScoreValues),
+        array_sum($secondScoreValues) / count($secondScoreValues)
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 12. 一次順位 → 二次順位の変化量
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【12】一次順位 → 二次順位の変化量\n";
+
+/*
+ * 変化量
+ *
+ * 0  : 順位変化なし
+ * +1 : 1位 → 2位 のように順位を1つ下げた
+ * +2 : 2つ下げた
+ * -1 : 2位 → 1位 のように順位を1つ上げた
+ *
+ * 「二次順位 - 一次順位」で計算する。
+ */
+
+$rankChangeStats = [];
+
+for ($change = -5; $change <= 5; $change++) {
+
+    $rankChangeStats[$change] = [
+        'count' => 0,
+        'first' => 0,
+        'top2'  => 0,
+        'top3'  => 0,
+    ];
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        $firstRank = $boat['first'] ?? null;
+        $secondRank = $boat['second'] ?? null;
+        $actual = $boat['actual'] ?? null;
+
+        if (
+            $firstRank === null ||
+            $secondRank === null ||
+            $actual === null
+        ) {
+            continue;
+        }
+
+        $change = $secondRank - $firstRank;
+
+        if (!isset($rankChangeStats[$change])) {
+            continue;
+        }
+
+        $rankChangeStats[$change]['count']++;
+
+        if ($actual === 1) {
+            $rankChangeStats[$change]['first']++;
+        }
+
+        if ($actual <= 2) {
+            $rankChangeStats[$change]['top2']++;
+        }
+
+        if ($actual <= 3) {
+            $rankChangeStats[$change]['top3']++;
+        }
+    }
+}
+
+for ($change = -5; $change <= 5; $change++) {
+
+    $stats = $rankChangeStats[$change];
+
+    if ($change < 0) {
+        $label = sprintf(
+            "%d位上昇",
+            abs($change)
+        );
+    } elseif ($change > 0) {
+        $label = sprintf(
+            "%d位下降",
+            $change
+        );
+    } else {
+        $label = "順位変化なし";
+    }
+
+    echo sprintf(
+        "%s: 件数=%d, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $label,
+        $stats['count'],
+        pct($stats['first'], $stats['count']),
+        pct($stats['top2'], $stats['count']),
+        pct($stats['top3'], $stats['count'])
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 13. 一次1位 → 二次で下げられた艇のスコア分析
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【13】一次1位 → 二次で下げられた艇のスコア分析\n";
+
+/*
+ * 一次1位艇について、
+ *
+ * 1 → 1
+ * 1 → 2
+ * 1 → 3
+ * ...
+ *
+ * それぞれの
+ *
+ * ・一次スコア
+ * ・二次スコア
+ * ・スコア差
+ * ・実績
+ *
+ * を調べる。
+ */
+
+$first1ScoreStats = [];
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    $first1ScoreStats[$secondRank] = [
+        'count' => 0,
+
+        'first_score_sum' => 0.0,
+        'second_score_sum' => 0.0,
+        'score_diff_sum' => 0.0,
+
+        'first_score_min' => null,
+        'first_score_max' => null,
+
+        'second_score_min' => null,
+        'second_score_max' => null,
+
+        'first' => 0,
+        'top2'  => 0,
+        'top3'  => 0,
+    ];
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        if (($boat['first'] ?? null) !== 1) {
+            continue;
+        }
+
+        $secondRank = $boat['second'] ?? null;
+
+        if (
+            $secondRank === null ||
+            $secondRank < 1 ||
+            $secondRank > 6
+        ) {
+            continue;
+        }
+
+        $firstScore = $boat['first_score'] ?? null;
+        $secondScore = $boat['second_score'] ?? null;
+        $actual = $boat['actual'] ?? null;
+
+        if (
+            $firstScore === null ||
+            $secondScore === null
+        ) {
+            continue;
+        }
+
+        $stats =& $first1ScoreStats[$secondRank];
+
+        $stats['count']++;
+
+        $stats['first_score_sum'] += $firstScore;
+        $stats['second_score_sum'] += $secondScore;
+
+        $scoreDiff =
+            $secondScore - $firstScore;
+
+        $stats['score_diff_sum'] += $scoreDiff;
+
+        if (
+            $stats['first_score_min'] === null ||
+            $firstScore < $stats['first_score_min']
+        ) {
+            $stats['first_score_min'] = $firstScore;
+        }
+
+        if (
+            $stats['first_score_max'] === null ||
+            $firstScore > $stats['first_score_max']
+        ) {
+            $stats['first_score_max'] = $firstScore;
+        }
+
+        if (
+            $stats['second_score_min'] === null ||
+            $secondScore < $stats['second_score_min']
+        ) {
+            $stats['second_score_min'] = $secondScore;
+        }
+
+        if (
+            $stats['second_score_max'] === null ||
+            $secondScore > $stats['second_score_max']
+        ) {
+            $stats['second_score_max'] = $secondScore;
+        }
+
+        if ($actual !== null) {
+
+            if ($actual === 1) {
+                $stats['first']++;
+            }
+
+            if ($actual <= 2) {
+                $stats['top2']++;
+            }
+
+            if ($actual <= 3) {
+                $stats['top3']++;
+            }
+        }
+
+        unset($stats);
+
+        /*
+         * 一次1位はレース内で1艇だけなので終了
+         */
+        break;
+    }
+}
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    $stats = $first1ScoreStats[$secondRank];
+
+    $count = $stats['count'];
+
+    if ($count <= 0) {
+
+        echo sprintf(
+            "一次1位 → 二次%d位: データなし\n",
+            $secondRank
+        );
+
+        continue;
+    }
+
+    $firstAvg =
+        $stats['first_score_sum'] / $count;
+
+    $secondAvg =
+        $stats['second_score_sum'] / $count;
+
+    $diffAvg =
+        $stats['score_diff_sum'] / $count;
+
+    echo sprintf(
+        "一次1位 → 二次%d位: 件数=%d, 一次平均=%.4f, 二次平均=%.4f, 平均変化=%.4f, 一次範囲=%.4f～%.4f, 二次範囲=%.4f～%.4f, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $secondRank,
+        $count,
+        $firstAvg,
+        $secondAvg,
+        $diffAvg,
+        $stats['first_score_min'],
+        $stats['first_score_max'],
+        $stats['second_score_min'],
+        $stats['second_score_max'],
+        pct($stats['first'], $count),
+        pct($stats['top2'], $count),
+        pct($stats['top3'], $count)
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 14. 一次順位 × 二次順位 × スコア差
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【14】一次順位 × 二次順位別 スコア差\n";
+
+/*
+ * スコア差そのものを評価するのではなく、
+ * 「同じ順位パターンの中で二次評価がどれくらい動かしているか」
+ * を確認するための診断用。
+ */
+
+$scoreDiffPatterns = [];
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        $scoreDiffPatterns[$firstRank][$secondRank] = [
+            'count' => 0,
+            'sum'   => 0.0,
+            'min'   => null,
+            'max'   => null,
+        ];
+    }
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        $firstRank = $boat['first'] ?? null;
+        $secondRank = $boat['second'] ?? null;
+
+        $firstScore = $boat['first_score'] ?? null;
+        $secondScore = $boat['second_score'] ?? null;
+
+        if (
+            $firstRank === null ||
+            $secondRank === null ||
+            $firstScore === null ||
+            $secondScore === null
+        ) {
+            continue;
+        }
+
+        $diff =
+            $secondScore - $firstScore;
+
+        $stats =&
+            $scoreDiffPatterns[$firstRank][$secondRank];
+
+        $stats['count']++;
+        $stats['sum'] += $diff;
+
+        if (
+            $stats['min'] === null ||
+            $diff < $stats['min']
+        ) {
+            $stats['min'] = $diff;
+        }
+
+        if (
+            $stats['max'] === null ||
+            $diff > $stats['max']
+        ) {
+            $stats['max'] = $diff;
+        }
+
+        unset($stats);
+    }
+}
+
+echo "一次→二次   件数    平均変化      最小        最大\n";
+
+for ($firstRank = 1; $firstRank <= 6; $firstRank++) {
+
+    for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+        $stats =
+            $scoreDiffPatterns[$firstRank][$secondRank];
+
+        if ($stats['count'] <= 0) {
+            continue;
+        }
+
+        $avg =
+            $stats['sum'] / $stats['count'];
+
+        echo sprintf(
+            "%d→%d      %4d    %+9.4f    %+9.4f    %+9.4f\n",
+            $firstRank,
+            $secondRank,
+            $stats['count'],
+            $avg,
+            $stats['min'],
+            $stats['max']
+        );
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 15. 一次1位 → 二次下落幅別の実績
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【15】一次1位 → 二次下落幅別の実績\n";
+
+$dropStats = [];
+
+for ($drop = 0; $drop <= 5; $drop++) {
+
+    $dropStats[$drop] = [
+        'count' => 0,
+        'first' => 0,
+        'top2'  => 0,
+        'top3'  => 0,
+    ];
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        if (($boat['first'] ?? null) !== 1) {
+            continue;
+        }
+
+        $secondRank = $boat['second'] ?? null;
+        $actual = $boat['actual'] ?? null;
+
+        if (
+            $secondRank === null ||
+            $actual === null
+        ) {
+            continue;
+        }
+
+        $drop = $secondRank - 1;
+
+        if ($drop < 0 || $drop > 5) {
+            continue;
+        }
+
+        $dropStats[$drop]['count']++;
+
+        if ($actual === 1) {
+            $dropStats[$drop]['first']++;
+        }
+
+        if ($actual <= 2) {
+            $dropStats[$drop]['top2']++;
+        }
+
+        if ($actual <= 3) {
+            $dropStats[$drop]['top3']++;
+        }
+
+        break;
+    }
+}
+
+for ($drop = 0; $drop <= 5; $drop++) {
+
+    $stats = $dropStats[$drop];
+
+    if ($drop === 0) {
+        $label = "一次1位 → 二次1位";
+    } else {
+        $label = sprintf(
+            "一次1位 → %d位下落",
+            $drop
+        );
+    }
+
+    echo sprintf(
+        "%s: 件数=%d, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $label,
+        $stats['count'],
+        pct($stats['first'], $stats['count']),
+        pct($stats['top2'], $stats['count']),
+        pct($stats['top3'], $stats['count'])
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
 | 終了
 |--------------------------------------------------------------------------
 */
