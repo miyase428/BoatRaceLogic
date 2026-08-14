@@ -66,6 +66,8 @@ $index = array_flip($header);
 $requiredColumns = [
     'race_code',
     'lane_number',
+    'first_total_score',
+    'second_score',
     'first_rank',
     'second_rank',
     'final_rank',
@@ -133,7 +135,25 @@ while (($row = fgetcsv($fp)) !== false) {
         return (int)$value;
     };
 
+    $getFloat = static function (
+        string $name
+    ) use ($row, $index): ?float {
+
+        $value = trim(
+            (string)($row[$index[$name]] ?? '')
+        );
+
+        if ($value === '') {
+            return null;
+        }
+
+        return (float)$value;
+    };
+
     $races[$raceCode]['boats'][$lane] = [
+        'first_score'  => $getFloat('first_total_score'),
+        'second_score' => $getFloat('second_score'),
+
         'first'  => $getInt('first_rank'),
         'second' => $getInt('second_rank'),
         'final'  => $getInt('final_rank'),
