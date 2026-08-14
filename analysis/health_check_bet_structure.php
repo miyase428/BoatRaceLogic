@@ -812,6 +812,7 @@ foreach ($rows as $row) {
         'H' => $betsH,
         'I' => $betsI,
         'J' => $betsJ,
+        'K' => $betsK,
     ];
 
 
