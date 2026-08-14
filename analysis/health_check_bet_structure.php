@@ -281,88 +281,8 @@ function calcAmount(int $count, int $unit = 100): int
     return $count * $unit;
 }
 
-
 // ============================================================
 // 払戻取得
-// ============================================================
-//
-// race_payouts のカラム名が環境によって多少違っても対応できるように、
-// information_schemaから候補を探す。
-// ============================================================
-
-function findColumn(PDO $pdo, string $table, array $candidates): ?string
-{
-    $sql = "
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = :table
-        ORDER BY ordinal_position
-    ";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([':table' => $table]);
-
-    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-    foreach ($candidates as $candidate) {
-        foreach ($columns as $column) {
-            if (strtolower($column) === strtolower($candidate)) {
-                return $column;
-            }
-        }
-    }
-
-    return null;
-}
-
-$raceCodeColumn = findColumn(
-    $pdo,
-    'race_payouts',
-    [
-        'race_code',
-        'racecode'
-    ]
-);
-
-$betTypeColumn = findColumn(
-    $pdo,
-    'race_payouts',
-    [
-        'bet_type',
-        'bettype',
-        'ticket_type',
-        'type',
-        'shikibetsu'
-    ]
-);
-
-$combinationColumn = findColumn(
-    $pdo,
-    'race_payouts',
-    [
-        'combination',
-        'bet_combination',
-        'kumi',
-        'kumiban',
-        'combination_number'
-    ]
-);
-
-$payoutColumn = findColumn(
-    $pdo,
-    'race_payouts',
-    [
-        'payout',
-        'payoff',
-        'refund',
-        'amount',
-        'return_amount'
-    ]
-);
-
-
-// ============================================================
-// 払戻キャッシュ
 // ============================================================
 
 $payoutCache = [];
@@ -370,15 +290,16 @@ $payoutCache = [];
 
 /**
  * 3連単払戻を取得
+ *
+ * race_payouts:
+ *   race_code
+ *   trifecta_combination
+ *   trifecta_payout
  */
 function getTrifectaPayout(
     PDO $pdo,
     string $race_code,
     string $combination,
-    ?string $raceCodeColumn,
-    ?string $betTypeColumn,
-    ?string $combinationColumn,
-    ?string $payoutColumn,
     array &$cache
 ): int {
 
@@ -388,38 +309,18 @@ function getTrifectaPayout(
         return $cache[$cacheKey];
     }
 
-    if (
-        !$raceCodeColumn ||
-        !$combinationColumn ||
-        !$payoutColumn
-    ) {
-        $cache[$cacheKey] = 0;
-        return 0;
-    }
-
     $sql = "
-        SELECT \"{$payoutColumn}\"
+        SELECT trifecta_payout
         FROM race_payouts
-        WHERE \"{$raceCodeColumn}\" = :race_code
-          AND \"{$combinationColumn}\" = :combination
+        WHERE race_code = :race_code
+          AND trifecta_combination = :combination
+        LIMIT 1
     ";
-
-    if ($betTypeColumn) {
-        $sql .= "
-          AND (
-                \"{$betTypeColumn}\" = '3連単'
-                OR \"{$betTypeColumn}\" = 'trifecta'
-                OR \"{$betTypeColumn}\" = '3tan'
-              )
-        ";
-    }
-
-    $sql .= " LIMIT 1";
 
     $stmt = $pdo->prepare($sql);
 
     $stmt->execute([
-        ':race_code'  => $race_code,
+        ':race_code'   => $race_code,
         ':combination' => $combination
     ]);
 
@@ -430,16 +331,12 @@ function getTrifectaPayout(
         return 0;
     }
 
-    // 「12,340円」のような形式にも対応
-    $value = preg_replace('/[^\d]/', '', (string)$value);
-
     $payout = (int)$value;
 
     $cache[$cacheKey] = $payout;
 
     return $payout;
 }
-
 
 // ============================================================
 // レースごとに処理
@@ -597,10 +494,6 @@ foreach ($rows as $row) {
                 $pdo,
                 $raceCode,
                 $actual,
-                $raceCodeColumn,
-                $betTypeColumn,
-                $combinationColumn,
-                $payoutColumn,
                 $payoutCache
             );
         }
@@ -860,10 +753,6 @@ foreach ($rows as $row) {
                 $pdo,
                 $raceCode,
                 $actual,
-                $raceCodeColumn,
-                $betTypeColumn,
-                $combinationColumn,
-                $payoutColumn,
                 $payoutCache
             );
         }
