@@ -717,6 +717,253 @@ printStats(
     $cases['first2plus_final1']
 );
 
+/*
+|--------------------------------------------------------------------------
+| 6. 一次評価1位が二次評価でどう動いたか
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【6】一次評価1位 → 二次評価順位\n";
+
+$first1SecondStats = [];
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+    $first1SecondStats[$secondRank] = [
+        'count' => 0,
+        'first' => 0,
+        'top2'  => 0,
+        'top3'  => 0,
+    ];
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        if (($boat['first'] ?? null) !== 1) {
+            continue;
+        }
+
+        $secondRank = $boat['second'] ?? null;
+
+        if (
+            $secondRank === null ||
+            $secondRank < 1 ||
+            $secondRank > 6
+        ) {
+            continue;
+        }
+
+        $actual = $boat['actual'];
+
+        $first1SecondStats[$secondRank]['count']++;
+
+        if ($actual === 1) {
+            $first1SecondStats[$secondRank]['first']++;
+        }
+
+        if (
+            $actual !== null &&
+            $actual <= 2
+        ) {
+            $first1SecondStats[$secondRank]['top2']++;
+        }
+
+        if (
+            $actual !== null &&
+            $actual <= 3
+        ) {
+            $first1SecondStats[$secondRank]['top3']++;
+        }
+
+        break;
+    }
+}
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    $stats = $first1SecondStats[$secondRank];
+
+    echo sprintf(
+        "一次1位 → 二次%d位: 件数=%d, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $secondRank,
+        $stats['count'],
+        pct(
+            $stats['first'],
+            $stats['count']
+        ),
+        pct(
+            $stats['top2'],
+            $stats['count']
+        ),
+        pct(
+            $stats['top3'],
+            $stats['count']
+        )
+    );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 7. 一次1位 → 二次順位 → 最終順位
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【7】一次1位 → 二次順位 → 最終順位\n";
+
+$first1Path = [];
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    for ($finalRank = 1; $finalRank <= 6; $finalRank++) {
+
+        $first1Path[$secondRank][$finalRank] = 0;
+    }
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        if (($boat['first'] ?? null) !== 1) {
+            continue;
+        }
+
+        $secondRank = $boat['second'] ?? null;
+        $finalRank = $boat['final'] ?? null;
+
+        if (
+            $secondRank === null ||
+            $finalRank === null ||
+            $secondRank < 1 ||
+            $secondRank > 6 ||
+            $finalRank < 1 ||
+            $finalRank > 6
+        ) {
+            continue;
+        }
+
+        $first1Path[$secondRank][$finalRank]++;
+
+        break;
+    }
+}
+
+echo "二次\\最終    1      2      3      4      5      6\n";
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    echo sprintf(
+        "二次%d位 ",
+        $secondRank
+    );
+
+    for ($finalRank = 1; $finalRank <= 6; $finalRank++) {
+
+        echo sprintf(
+            "%7d",
+            $first1Path[$secondRank][$finalRank]
+        );
+    }
+
+    echo "\n";
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| 8. 一次1位 → 二次順位 → 最終1位になった場合の実績
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【8】一次1位 → 二次順位 → 最終1位 の実績\n";
+
+$first1SecondFinal1 = [];
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    $first1SecondFinal1[$secondRank] = [
+        'count' => 0,
+        'first' => 0,
+        'top2'  => 0,
+        'top3'  => 0,
+    ];
+}
+
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        if (($boat['first'] ?? null) !== 1) {
+            continue;
+        }
+
+        if (($boat['final'] ?? null) !== 1) {
+            continue;
+        }
+
+        $secondRank = $boat['second'] ?? null;
+
+        if (
+            $secondRank === null ||
+            $secondRank < 1 ||
+            $secondRank > 6
+        ) {
+            continue;
+        }
+
+        $actual = $boat['actual'];
+
+        $first1SecondFinal1[$secondRank]['count']++;
+
+        if ($actual === 1) {
+            $first1SecondFinal1[$secondRank]['first']++;
+        }
+
+        if (
+            $actual !== null &&
+            $actual <= 2
+        ) {
+            $first1SecondFinal1[$secondRank]['top2']++;
+        }
+
+        if (
+            $actual !== null &&
+            $actual <= 3
+        ) {
+            $first1SecondFinal1[$secondRank]['top3']++;
+        }
+
+        break;
+    }
+}
+
+for ($secondRank = 1; $secondRank <= 6; $secondRank++) {
+
+    $stats = $first1SecondFinal1[$secondRank];
+
+    echo sprintf(
+        "一次1位 → 二次%d位 → 最終1位: 件数=%d, 1着率=%s, 2連対率=%s, 3連対率=%s\n",
+        $secondRank,
+        $stats['count'],
+        pct(
+            $stats['first'],
+            $stats['count']
+        ),
+        pct(
+            $stats['top2'],
+            $stats['count']
+        ),
+        pct(
+            $stats['top3'],
+            $stats['count']
+        )
+    );
+}
 
 /*
 |--------------------------------------------------------------------------
