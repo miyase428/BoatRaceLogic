@@ -5,7 +5,7 @@
  *
  * 一次1位 vs 二次1位 直接比較
  *
- * 対象：
+ * 条件：
  * ① 一次 2～5 × 二次 0～2
  * ② 一次 5以上 × 二次 0～2
  */
@@ -51,6 +51,7 @@ foreach ($header as $i => $name) {
 
 $required = [
     'race_code',
+    'lane_number',
     'first_total_score',
     'first_rank',
     'second_score',
@@ -80,7 +81,10 @@ while (($row = fgetcsv($fp)) !== false) {
     }
 
     $races[$raceCode][] = [
-        'first_score' =>
+        'lane_number' =>
+            (int)$row[$map['lane_number']],
+
+        'first_total_score' =>
             (float)$row[$map['first_total_score']],
 
         'first_rank' =>
@@ -101,8 +105,11 @@ fclose($fp);
 
 
 /*
- * 条件
+ * ========================================
+ * 分析条件
+ * ========================================
  */
+
 $conditions = [
 
     '一次 2～5 × 二次 0～2' => [
@@ -130,22 +137,14 @@ foreach ($conditions as $conditionName => $condition) {
     $stats = [
         'count' => 0,
 
-        'primary' => [
-            'sum' => 0,
-            'rank1' => 0,
-            'rank2' => 0,
-            'rank3' => 0,
-        ],
+        'primary' => createStats(),
 
-        'secondary' => [
-            'sum' => 0,
-            'rank1' => 0,
-            'rank2' => 0,
-            'rank3' => 0,
-        ],
+        'secondary' => createStats(),
 
         'primary_better' => 0,
+
         'secondary_better' => 0,
+
         'same' => 0,
     ];
 
@@ -172,6 +171,7 @@ foreach ($conditions as $conditionName => $condition) {
             'second_rank'
         );
 
+
         if (
             $first1 === null ||
             $first2 === null ||
@@ -183,62 +183,24 @@ foreach ($conditions as $conditionName => $condition) {
 
 
         /*
-         * 一次1位・二次1位が一致する場合は除外
+         * 一次1位と二次1位が同じ艇なら除外
          */
         if (
-            $first1['first_rank']
+            $first1['lane_number']
             ===
-            $second1['second_rank']
+            $second1['lane_number']
         ) {
-            /*
-             * rank値同士では艇の一致判定にならないため、
-             * 実際には後述の判定を使う。
-             */
-        }
-
-
-        /*
-         * 一次1位と二次1位の艇が同じか確認
-         *
-         * CSVにはlane_numberが無い場合があるため、
-         * スコア上の順位だけでは判定できない。
-         *
-         * 今回は不一致分析用CSVなので、
-         * 一次1位・二次1位が別艇であることを
-         * race内の順位構造から確認する。
-         */
-
-        $primaryBoatIndex = findIndex(
-            $boats,
-            'first_rank',
-            1
-        );
-
-        $secondaryBoatIndex = findIndex(
-            $boats,
-            'second_rank',
-            1
-        );
-
-        if (
-            $primaryBoatIndex === null ||
-            $secondaryBoatIndex === null
-        ) {
-            continue;
-        }
-
-        if ($primaryBoatIndex === $secondaryBoatIndex) {
             continue;
         }
 
 
         /*
-         * スコア差
+         * 1位-2位スコア差
          */
         $firstGap =
-            $first1['first_score']
+            $first1['first_total_score']
             -
-            $first2['first_score'];
+            $first2['first_total_score'];
 
         $secondGap =
             $second1['second_score']
@@ -250,9 +212,12 @@ foreach ($conditions as $conditionName => $condition) {
          * 条件判定
          */
         if (
-            $firstGap < $condition['first_min'] ||
-            $firstGap >= $condition['first_max'] ||
-            $secondGap < $condition['second_min'] ||
+            $firstGap < $condition['first_min']
+            ||
+            $firstGap >= $condition['first_max']
+            ||
+            $secondGap < $condition['second_min']
+            ||
             $secondGap >= $condition['second_max']
         ) {
             continue;
@@ -274,19 +239,33 @@ foreach ($conditions as $conditionName => $condition) {
         }
 
 
+        /*
+         * 対象レース数
+         */
         $stats['count']++;
 
+
+        /*
+         * 一次1位
+         */
         addActual(
             $stats['primary'],
             $primaryActual
         );
 
+
+        /*
+         * 二次1位
+         */
         addActual(
             $stats['secondary'],
             $secondaryActual
         );
 
 
+        /*
+         * 直接比較
+         */
         if ($primaryActual < $secondaryActual) {
 
             $stats['primary_better']++;
@@ -310,10 +289,12 @@ foreach ($conditions as $conditionName => $condition) {
 
     echo "対象レース : {$stats['count']}\n\n";
 
+
     printResult(
         '一次1位',
         $stats['primary']
     );
+
 
     printResult(
         '二次1位',
@@ -357,6 +338,24 @@ echo "分析完了\n";
 echo "========================================\n";
 
 
+/*
+ * ========================================
+ * 関数
+ * ========================================
+ */
+
+function createStats(): array
+{
+    return [
+        'rank1' => 0,
+        'rank2' => 0,
+        'rank3' => 0,
+        'sum' => 0,
+        'count' => 0,
+    ];
+}
+
+
 function findRankOne(
     array $boats,
     string $column
@@ -389,27 +388,12 @@ function findRankTwo(
 }
 
 
-function findIndex(
-    array $boats,
-    string $column,
-    int $rank
-): ?int {
-
-    foreach ($boats as $index => $boat) {
-
-        if ($boat[$column] === $rank) {
-            return $index;
-        }
-    }
-
-    return null;
-}
-
-
 function addActual(
     array &$stats,
     int $actual
 ): void {
+
+    $stats['count']++;
 
     $stats['sum'] += $actual;
 
@@ -432,8 +416,8 @@ function rate(
     int $total
 ): float {
 
-    if ($total === 0) {
-        return 0;
+    if ($total <= 0) {
+        return 0.0;
     }
 
     return $value / $total * 100;
@@ -445,20 +429,74 @@ function printResult(
     array $stats
 ): void {
 
-    $count =
-        $stats['rank1']
-        + $stats['rank2']
-        + $stats['rank3'];
+    $count = $stats['count'];
 
-    /*
-     * 実際の件数は1～6着すべてなので、
-     * sumから直接平均を出すため別途countを
-     * 呼び出し側では持たない。
-     *
-     * ここでは1着～6着のデータを対象にするため、
-     * rank1+rank2+rank3だけでは不十分。
-     *
-     * 実際の表示では呼び出し側の対象件数を
-     * 使う必要があるため、今回は後述。
-     */
+    if ($count <= 0) {
+
+        echo "----------------------------------------\n";
+        echo "{$name}\n";
+        echo "----------------------------------------\n";
+        echo "件数 : 0\n";
+
+        return;
+    }
+
+    $firstRate =
+        rate(
+            $stats['rank1'],
+            $count
+        );
+
+    $secondRate =
+        rate(
+            $stats['rank1']
+            +
+            $stats['rank2'],
+            $count
+        );
+
+    $thirdRate =
+        rate(
+            $stats['rank1']
+            +
+            $stats['rank2']
+            +
+            $stats['rank3'],
+            $count
+        );
+
+    $average =
+        $stats['sum']
+        /
+        $count;
+
+
+    echo "----------------------------------------\n";
+    echo "{$name}\n";
+    echo "----------------------------------------\n";
+
+    printf(
+        "件数       : %d\n",
+        $count
+    );
+
+    printf(
+        "1着        : %.2f%%\n",
+        $firstRate
+    );
+
+    printf(
+        "2連対      : %.2f%%\n",
+        $secondRate
+    );
+
+    printf(
+        "3連対      : %.2f%%\n",
+        $thirdRate
+    );
+
+    printf(
+        "平均着順   : %.3f\n",
+        $average
+    );
 }
