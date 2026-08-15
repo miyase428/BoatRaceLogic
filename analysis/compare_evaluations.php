@@ -1805,6 +1805,277 @@ for ($drop = 0; $drop <= 5; $drop++) {
 
 /*
 |--------------------------------------------------------------------------
+| 16. 一次スコア × 二次スコア帯
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【16】一次スコア × 二次スコア帯\n";
+
+$scoreBuckets = [];
+
+/**
+ * 一次スコア：
+ *   4点刻み
+ *
+ * 二次スコア：
+ *   5点刻み
+ */
+foreach ($validRaces as $boats) {
+
+    foreach ($boats as $boat) {
+
+        $firstScore  = $boat['first_score'] ?? null;
+        $secondScore = $boat['second_score'] ?? null;
+        $actual      = $boat['actual'] ?? null;
+
+        if (
+            $firstScore === null ||
+            $secondScore === null ||
+            $actual === null
+        ) {
+            continue;
+        }
+
+        /*
+         * 一次スコア帯
+         *
+         * 例:
+         * 6.0～9.9
+         * 10.0～13.9
+         * 14.0～17.9
+         * ...
+         */
+        $firstBucketStart =
+            floor($firstScore / 4) * 4;
+
+        $firstBucketEnd =
+            $firstBucketStart + 3.999999;
+
+        /*
+         * 二次スコア帯
+         *
+         * 例:
+         * 0～4
+         * 5～9
+         * 10～14
+         * ...
+         */
+        $secondBucketStart =
+            floor($secondScore / 5) * 5;
+
+        $secondBucketEnd =
+            $secondBucketStart + 4.999999;
+
+        $key =
+            $firstBucketStart . '|' .
+            $secondBucketStart;
+
+        if (!isset($scoreBuckets[$key])) {
+
+            $scoreBuckets[$key] = [
+                'first_start'  => $firstBucketStart,
+                'first_end'    => $firstBucketEnd,
+                'second_start' => $secondBucketStart,
+                'second_end'   => $secondBucketEnd,
+
+                'count' => 0,
+                'first' => 0,
+                'top2'  => 0,
+                'top3'  => 0,
+            ];
+        }
+
+        $scoreBuckets[$key]['count']++;
+
+        if ($actual === 1) {
+            $scoreBuckets[$key]['first']++;
+        }
+
+        if ($actual <= 2) {
+            $scoreBuckets[$key]['top2']++;
+        }
+
+        if ($actual <= 3) {
+            $scoreBuckets[$key]['top3']++;
+        }
+    }
+}
+
+/**
+ * 一次スコア → 二次スコア順
+ */
+uasort(
+    $scoreBuckets,
+    static function (
+        array $a,
+        array $b
+    ): int {
+
+        if (
+            $a['first_start'] !==
+            $b['first_start']
+        ) {
+            return
+                $a['first_start'] <=>
+                $b['first_start'];
+        }
+
+        return
+            $a['second_start'] <=>
+            $b['second_start'];
+    }
+);
+
+echo "\n";
+echo "一次スコア帯 × 二次スコア帯\n";
+echo "--------------------------------------------------------------------------\n";
+
+echo sprintf(
+    "%-15s %-15s %8s %10s %10s %10s\n",
+    "一次スコア",
+    "二次スコア",
+    "件数",
+    "1着率",
+    "2連対率",
+    "3連対率"
+);
+
+echo "--------------------------------------------------------------------------\n";
+
+foreach ($scoreBuckets as $bucket) {
+
+    echo sprintf(
+        "%-15s %-15s %8d %10s %10s %10s\n",
+
+        sprintf(
+            "%.1f～%.1f",
+            $bucket['first_start'],
+            $bucket['first_end']
+        ),
+
+        sprintf(
+            "%.0f～%.0f",
+            $bucket['second_start'],
+            $bucket['second_end']
+        ),
+
+        $bucket['count'],
+
+        pct(
+            $bucket['first'],
+            $bucket['count']
+        ),
+
+        pct(
+            $bucket['top2'],
+            $bucket['count']
+        ),
+
+        pct(
+            $bucket['top3'],
+            $bucket['count']
+        )
+    );
+}
+
+echo "--------------------------------------------------------------------------\n";
+
+
+/*
+|--------------------------------------------------------------------------
+| 17. 一次スコア・二次スコアの代表的な組み合わせ
+|--------------------------------------------------------------------------
+*/
+
+echo "\n";
+echo "【17】一次スコア × 二次スコア 組み合わせ（件数20以上）\n";
+
+$filteredBuckets = array_filter(
+    $scoreBuckets,
+    static function (array $bucket): bool {
+        return $bucket['count'] >= 20;
+    }
+);
+
+/**
+ * 1着率の高い順
+ */
+uasort(
+    $filteredBuckets,
+    static function (
+        array $a,
+        array $b
+    ): int {
+
+        $rateA =
+            $a['count'] > 0
+                ? $a['first'] / $a['count']
+                : 0;
+
+        $rateB =
+            $b['count'] > 0
+                ? $b['first'] / $b['count']
+                : 0;
+
+        return $rateB <=> $rateA;
+    }
+);
+
+echo "--------------------------------------------------------------------------\n";
+
+echo sprintf(
+    "%-15s %-15s %8s %10s %10s %10s\n",
+    "一次スコア",
+    "二次スコア",
+    "件数",
+    "1着率",
+    "2連対率",
+    "3連対率"
+);
+
+echo "--------------------------------------------------------------------------\n";
+
+foreach ($filteredBuckets as $bucket) {
+
+    echo sprintf(
+        "%-15s %-15s %8d %10s %10s %10s\n",
+
+        sprintf(
+            "%.1f～%.1f",
+            $bucket['first_start'],
+            $bucket['first_end']
+        ),
+
+        sprintf(
+            "%.0f～%.0f",
+            $bucket['second_start'],
+            $bucket['second_end']
+        ),
+
+        $bucket['count'],
+
+        pct(
+            $bucket['first'],
+            $bucket['count']
+        ),
+
+        pct(
+            $bucket['top2'],
+            $bucket['count']
+        ),
+
+        pct(
+            $bucket['top3'],
+            $bucket['count']
+        )
+    );
+}
+
+echo "--------------------------------------------------------------------------\n";
+
+/*
+|--------------------------------------------------------------------------
 | 終了
 |--------------------------------------------------------------------------
 */
