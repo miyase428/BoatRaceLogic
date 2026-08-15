@@ -1,17 +1,9 @@
 <?php
 
 /**
- * 一次1位と二次1位が異なるレースを分析
+ * 一次1位・二次1位 不一致レース分析
  *
- * 確認する内容:
- *  1. 一次1位 = 二次1位
- *  2. 一次1位 ≠ 二次1位
- *     - 統合1位 = 一次1位
- *     - 統合1位 = 二次1位
- *     - 統合1位がどちらでもない
- *
- * 各ケースについて、
- *  一次1位・二次1位・統合1位の実着順を比較する。
+ * lane_number を使って「同じ艇か」を正確に判定する。
  *
  * 使用例:
  * php analysis/compare_disagreement.php analysis/output/final_prediction_boats_20260801_20260808.csv
@@ -63,6 +55,7 @@ foreach ($header as $index => $name) {
 // 必須列
 $requiredColumns = [
     'race_code',
+    'lane_number',
     'actual_rank',
     'first_rank',
     'second_rank',
@@ -72,14 +65,13 @@ $requiredColumns = [
 foreach ($requiredColumns as $column) {
     if (!isset($headerMap[$column])) {
         echo "必要な列がありません: {$column}\n";
-        echo "CSVの列名:\n";
-        print_r($header);
         exit(1);
     }
 }
 
+
 /**
- * レース単位で保持
+ * レース単位でデータ保持
  */
 $races = [];
 
@@ -95,78 +87,69 @@ while (($row = fgetcsv($fp)) !== false) {
         continue;
     }
 
-    $actualRank = (int)$row[$headerMap['actual_rank']];
-    $firstRank  = (int)$row[$headerMap['first_rank']];
-    $secondRank = (int)$row[$headerMap['second_rank']];
-    $finalRank  = (int)$row[$headerMap['final_rank']];
+    $boat = [
+        'lane_number' => (int)$row[$headerMap['lane_number']],
+        'actual_rank' => (int)$row[$headerMap['actual_rank']],
+        'first_rank'  => (int)$row[$headerMap['first_rank']],
+        'second_rank' => (int)$row[$headerMap['second_rank']],
+        'final_rank'  => (int)$row[$headerMap['final_rank']],
+    ];
 
     if (!isset($races[$raceCode])) {
         $races[$raceCode] = [];
     }
 
-    $races[$raceCode][] = [
-        'actual_rank' => $actualRank,
-        'first_rank'  => $firstRank,
-        'second_rank' => $secondRank,
-        'final_rank'  => $finalRank,
-    ];
+    $races[$raceCode][] = $boat;
 }
 
 fclose($fp);
 
 
 /**
- * 分析用データ
+ * 統計
  */
 $stats = [
     '一致' => createStats(),
-    '統合＝一次' => createStats(),
-    '統合＝二次' => createStats(),
-    '統合＝どちらでもない' => createStats(),
+    '不一致_統合一次' => createStats(),
+    '不一致_統合二次' => createStats(),
+    '不一致_統合その他' => createStats(),
 ];
 
 
-// 不一致レースの詳細
-$disagreementDetails = [];
+// 一次 vs 二次の勝敗
+$disagreementWinner = [
+    '一次の方が実着順上位' => 0,
+    '二次の方が実着順上位' => 0,
+    '同着' => 0,
+];
 
 
 /**
- * レースごとに分析
+ * レース分析
  */
 foreach ($races as $raceCode => $boats) {
 
-    $firstBoat = null;
-    $secondBoat = null;
-    $finalBoat = null;
+    $firstBoat = findRankOne($boats, 'first_rank');
+    $secondBoat = findRankOne($boats, 'second_rank');
+    $finalBoat = findRankOne($boats, 'final_rank');
 
-    foreach ($boats as $boat) {
-
-        if ($boat['first_rank'] === 1) {
-            $firstBoat = $boat;
-        }
-
-        if ($boat['second_rank'] === 1) {
-            $secondBoat = $boat;
-        }
-
-        if ($boat['final_rank'] === 1) {
-            $finalBoat = $boat;
-        }
-    }
-
-    // 3つの1位が取得できない場合はスキップ
+    // 3つとも存在しなければスキップ
     if ($firstBoat === null || $secondBoat === null || $finalBoat === null) {
         continue;
     }
 
-    $firstActual  = $firstBoat['actual_rank'];
+    $firstLane = $firstBoat['lane_number'];
+    $secondLane = $secondBoat['lane_number'];
+    $finalLane = $finalBoat['lane_number'];
+
+    $firstActual = $firstBoat['actual_rank'];
     $secondActual = $secondBoat['actual_rank'];
-    $finalActual  = $finalBoat['actual_rank'];
+    $finalActual = $finalBoat['actual_rank'];
 
     /**
      * 一次1位と二次1位が一致
      */
-    if ($firstActual === $secondActual) {
+    if ($firstLane === $secondLane) {
 
         addCaseResult(
             $stats['一致'],
@@ -178,193 +161,228 @@ foreach ($races as $raceCode => $boats) {
         continue;
     }
 
+
     /**
-     * 不一致
-     *
-     * 「艇そのもの」が同じかを判定する必要があるため、
-     * 今回は実着順ではなく配列上の対象艇を比較する。
-     *
-     * race_code内で同じ行を参照できるよう、
-     * actual_rankだけでは判定しない。
+     * ここから不一致
      */
 
-    // 一次1位と二次1位が別艇かどうか
-    // 実着順が違う場合は必ず別艇なので、
-    // このCSVでは actual_rank の違いを使って判定する。
-    //
-    // ただし同着データなど特殊ケースがある場合は、
-    // 後で boat_number 等を使った判定に変更可能。
+    // 一次と二次、どちらが実着順で上だったか
+    if ($firstActual < $secondActual) {
 
-    if ($firstActual !== $secondActual) {
+        $disagreementWinner['一次の方が実着順上位']++;
 
-        if ($finalActual === $firstActual) {
+    } elseif ($secondActual < $firstActual) {
 
-            addCaseResult(
-                $stats['統合＝一次'],
-                $firstActual,
-                $secondActual,
-                $finalActual
-            );
+        $disagreementWinner['二次の方が実着順上位']++;
 
-            $case = '統合＝一次';
+    } else {
 
-        } elseif ($finalActual === $secondActual) {
+        $disagreementWinner['同着']++;
+    }
 
-            addCaseResult(
-                $stats['統合＝二次'],
-                $firstActual,
-                $secondActual,
-                $finalActual
-            );
 
-            $case = '統合＝二次';
+    /**
+     * 統合がどちらを採用したか
+     */
+    if ($finalLane === $firstLane) {
 
-        } else {
+        addCaseResult(
+            $stats['不一致_統合一次'],
+            $firstActual,
+            $secondActual,
+            $finalActual
+        );
 
-            addCaseResult(
-                $stats['統合＝どちらでもない'],
-                $firstActual,
-                $secondActual,
-                $finalActual
-            );
+    } elseif ($finalLane === $secondLane) {
 
-            $case = '統合＝どちらでもない';
-        }
+        addCaseResult(
+            $stats['不一致_統合二次'],
+            $firstActual,
+            $secondActual,
+            $finalActual
+        );
 
-        $disagreementDetails[] = [
-            'race_code' => $raceCode,
-            'case' => $case,
-            'first_actual' => $firstActual,
-            'second_actual' => $secondActual,
-            'final_actual' => $finalActual,
-        ];
+    } else {
+
+        addCaseResult(
+            $stats['不一致_統合その他'],
+            $firstActual,
+            $secondActual,
+            $finalActual
+        );
     }
 }
 
 
 /**
+ * ========================================
  * 全体サマリー
+ * ========================================
  */
+
 echo "========================================\n";
 echo "全体サマリー\n";
 echo "========================================\n";
 
-foreach ($stats as $caseName => $stat) {
+printCaseSummary(
+    '一次1位・二次1位が一致',
+    $stats['一致']
+);
 
-    echo "\n----------------------------------------\n";
-    echo "{$caseName}\n";
-    echo "----------------------------------------\n";
+printCaseSummary(
+    '不一致・統合1位＝一次1位',
+    $stats['不一致_統合一次']
+);
 
-    if ($stat['count'] === 0) {
-        echo "件数 : 0\n";
-        continue;
-    }
+printCaseSummary(
+    '不一致・統合1位＝二次1位',
+    $stats['不一致_統合二次']
+);
 
-    echo sprintf(
-        "件数       : %d\n",
-        $stat['count']
-    );
-
-    echo "\n";
-
-    printResult(
-        '一次1位',
-        $stat['first']
-    );
-
-    printResult(
-        '二次1位',
-        $stat['second']
-    );
-
-    printResult(
-        '統合1位',
-        $stat['final']
-    );
-}
+printCaseSummary(
+    '不一致・統合1位＝どちらでもない',
+    $stats['不一致_統合その他']
+);
 
 
 /**
- * 不一致レースだけの比較
+ * ========================================
+ * 不一致レース全体
+ * ========================================
  */
-$totalDisagreement = count($disagreementDetails);
+
+$disagreementCount =
+    $stats['不一致_統合一次']['count']
+    + $stats['不一致_統合二次']['count']
+    + $stats['不一致_統合その他']['count'];
 
 echo "\n========================================\n";
 echo "一次1位・二次1位 不一致レース\n";
 echo "========================================\n";
 
-echo "件数 : {$totalDisagreement}\n\n";
+echo "件数 : {$disagreementCount}\n\n";
 
-if ($totalDisagreement > 0) {
+if ($disagreementCount > 0) {
 
-    $firstWins = 0;
-    $secondWins = 0;
-    $finalWins = 0;
+    echo "実着順で良かった方\n";
 
-    foreach ($disagreementDetails as $detail) {
+    foreach ($disagreementWinner as $name => $count) {
 
-        if ($detail['first_actual'] === 1) {
-            $firstWins++;
-        }
-
-        if ($detail['second_actual'] === 1) {
-            $secondWins++;
-        }
-
-        if ($detail['final_actual'] === 1) {
-            $finalWins++;
-        }
+        printf(
+            "  %-22s : %4d (%.2f%%)\n",
+            $name,
+            $count,
+            $count / $disagreementCount * 100
+        );
     }
-
-    echo "不一致レースにおける1着数\n";
-    echo sprintf(
-        "  一次1位   : %d (%.2f%%)\n",
-        $firstWins,
-        $firstWins / $totalDisagreement * 100
-    );
-
-    echo sprintf(
-        "  二次1位   : %d (%.2f%%)\n",
-        $secondWins,
-        $secondWins / $totalDisagreement * 100
-    );
-
-    echo sprintf(
-        "  統合1位   : %d (%.2f%%)\n",
-        $finalWins,
-        $finalWins / $totalDisagreement * 100
-    );
 }
 
 
 /**
- * 統合が一次を選んだケース
+ * ========================================
+ * 統合判断の正解率
+ * ========================================
  */
-printDetailedCase(
-    '統合＝一次',
-    $stats['統合＝一次']
+
+$integrationCorrect = 0;
+$integrationWrong = 0;
+$integrationOther = 0;
+
+foreach ($races as $raceCode => $boats) {
+
+    $firstBoat = findRankOne($boats, 'first_rank');
+    $secondBoat = findRankOne($boats, 'second_rank');
+    $finalBoat = findRankOne($boats, 'final_rank');
+
+    if (
+        $firstBoat === null ||
+        $secondBoat === null ||
+        $finalBoat === null
+    ) {
+        continue;
+    }
+
+    if (
+        $firstBoat['lane_number'] ===
+        $secondBoat['lane_number']
+    ) {
+        continue;
+    }
+
+    $firstLane = $firstBoat['lane_number'];
+    $secondLane = $secondBoat['lane_number'];
+    $finalLane = $finalBoat['lane_number'];
+
+    $firstActual = $firstBoat['actual_rank'];
+    $secondActual = $secondBoat['actual_rank'];
+    $finalActual = $finalBoat['actual_rank'];
+
+    /**
+     * 統合が一次を選択
+     */
+    if ($finalLane === $firstLane) {
+
+        if ($firstActual < $secondActual) {
+            $integrationCorrect++;
+        } else {
+            $integrationWrong++;
+        }
+
+    /**
+     * 統合が二次を選択
+     */
+    } elseif ($finalLane === $secondLane) {
+
+        if ($secondActual < $firstActual) {
+            $integrationCorrect++;
+        } else {
+            $integrationWrong++;
+        }
+
+    /**
+     * どちらでもない
+     */
+    } else {
+
+        $integrationOther++;
+    }
+}
+
+echo "\n========================================\n";
+echo "統合判断の方向性\n";
+echo "========================================\n";
+
+$judgedCount = $integrationCorrect + $integrationWrong;
+
+echo "一次・二次のどちらかを選択したケース : {$judgedCount}\n";
+
+if ($judgedCount > 0) {
+
+    printf(
+        "実着順で良い方を選択              : %d (%.2f%%)\n",
+        $integrationCorrect,
+        $integrationCorrect / $judgedCount * 100
+    );
+
+    printf(
+        "実着順で悪い方を選択              : %d (%.2f%%)\n",
+        $integrationWrong,
+        $integrationWrong / $judgedCount * 100
+    );
+}
+
+printf(
+    "どちらでもない                    : %d\n",
+    $integrationOther
 );
 
-/**
- * 統合が二次を選んだケース
- */
-printDetailedCase(
-    '統合＝二次',
-    $stats['統合＝二次']
-);
 
 /**
- * 統合がどちらでもないケース
+ * ========================================
+ * 関数
+ * ========================================
  */
-printDetailedCase(
-    '統合＝どちらでもない',
-    $stats['統合＝どちらでもない']
-);
 
-
-/**
- * 統計オブジェクト作成
- */
 function createStats(): array
 {
     return [
@@ -372,25 +390,25 @@ function createStats(): array
 
         'first' => [
             'count' => 0,
-            'first' => 0,
-            'second' => 0,
-            'third' => 0,
+            'rank1' => 0,
+            'rank2' => 0,
+            'rank3' => 0,
             'sum' => 0,
         ],
 
         'second' => [
             'count' => 0,
-            'first' => 0,
-            'second' => 0,
-            'third' => 0,
+            'rank1' => 0,
+            'rank2' => 0,
+            'rank3' => 0,
             'sum' => 0,
         ],
 
         'final' => [
             'count' => 0,
-            'first' => 0,
-            'second' => 0,
-            'third' => 0,
+            'rank1' => 0,
+            'rank2' => 0,
+            'rank3' => 0,
             'sum' => 0,
         ],
     ];
@@ -398,20 +416,36 @@ function createStats(): array
 
 
 /**
+ * 指定した順位列が1の艇を取得
+ */
+function findRankOne(array $boats, string $rankColumn): ?array
+{
+    foreach ($boats as $boat) {
+
+        if ($boat[$rankColumn] === 1) {
+            return $boat;
+        }
+    }
+
+    return null;
+}
+
+
+/**
  * ケースに結果を追加
  */
 function addCaseResult(
-    array &$stat,
+    array &$stats,
     int $firstActual,
     int $secondActual,
     int $finalActual
 ): void {
 
-    $stat['count']++;
+    $stats['count']++;
 
-    addActual($stat['first'], $firstActual);
-    addActual($stat['second'], $secondActual);
-    addActual($stat['final'], $finalActual);
+    addActual($stats['first'], $firstActual);
+    addActual($stats['second'], $secondActual);
+    addActual($stats['final'], $finalActual);
 }
 
 
@@ -428,24 +462,52 @@ function addActual(array &$data, int $actualRank): void
     $data['sum'] += $actualRank;
 
     if ($actualRank === 1) {
-        $data['first']++;
+        $data['rank1']++;
     }
 
     if ($actualRank === 2) {
-        $data['second']++;
+        $data['rank2']++;
     }
 
     if ($actualRank === 3) {
-        $data['third']++;
+        $data['rank3']++;
     }
+}
+
+
+/**
+ * ケース表示
+ */
+function printCaseSummary(
+    string $title,
+    array $stats
+): void {
+
+    echo "\n----------------------------------------\n";
+    echo "{$title}\n";
+    echo "----------------------------------------\n";
+
+    if ($stats['count'] === 0) {
+        echo "件数 : 0\n";
+        return;
+    }
+
+    echo "件数 : {$stats['count']}\n\n";
+
+    printResult('一次1位', $stats['first']);
+    printResult('二次1位', $stats['second']);
+    printResult('統合1位', $stats['final']);
 }
 
 
 /**
  * 結果表示
  */
-function printResult(string $name, array $data): void
-{
+function printResult(
+    string $name,
+    array $data
+): void {
+
     if ($data['count'] === 0) {
         echo "{$name} : データなし\n";
         return;
@@ -453,17 +515,25 @@ function printResult(string $name, array $data): void
 
     $count = $data['count'];
 
-    $firstRate = $data['first'] / $count * 100;
-    $secondRate = ($data['first'] + $data['second']) / $count * 100;
-    $thirdRate = (
-        $data['first']
-        + $data['second']
-        + $data['third']
-    ) / $count * 100;
+    $firstRate =
+        $data['rank1'] / $count * 100;
 
-    $avg = $data['sum'] / $count;
+    $secondRate =
+        ($data['rank1'] + $data['rank2'])
+        / $count * 100;
 
-    echo sprintf(
+    $thirdRate =
+        (
+            $data['rank1']
+            + $data['rank2']
+            + $data['rank3']
+        )
+        / $count * 100;
+
+    $avg =
+        $data['sum'] / $count;
+
+    printf(
         "%-8s 件数=%4d  1着=%6.2f%%  2連対=%6.2f%%  3連対=%6.2f%%  平均着順=%.3f\n",
         $name,
         $count,
@@ -472,28 +542,4 @@ function printResult(string $name, array $data): void
         $thirdRate,
         $avg
     );
-}
-
-
-/**
- * ケース詳細表示
- */
-function printDetailedCase(
-    string $caseName,
-    array $stat
-): void {
-
-    if ($stat['count'] === 0) {
-        return;
-    }
-
-    echo "\n----------------------------------------\n";
-    echo "{$caseName} 詳細\n";
-    echo "----------------------------------------\n";
-
-    echo "件数 : {$stat['count']}\n\n";
-
-    printResult('一次1位', $stat['first']);
-    printResult('二次1位', $stat['second']);
-    printResult('統合1位', $stat['final']);
 }
