@@ -370,11 +370,36 @@ class FinalPredictionExporter
                 'second_score'
             );
 
-        $finalRank =
-            $this->makeRankMap(
-                $boatRows,
-                'final3'
-            );
+        /*
+        * STEP 4適用後の最終順位
+        *
+        * buildSummary() の rank_boats は、
+        * 一次差5～10 × 二次差1～2 の昇格ルールを
+        * 適用した後の実際の最終順位。
+        */
+        $finalRank = [];
+
+        $effectiveRankBoats =
+            $summary['rank_boats'] ?? [];
+
+        foreach ($effectiveRankBoats as $index => $lane) {
+
+            $finalRank[(int)$lane] =
+                $index + 1;
+        }
+
+        /*
+        * 念のためrank_boatsが取得できなかった場合は
+        * 従来のfinal3順位へフォールバック
+        */
+        if (count($finalRank) < 6) {
+
+            $finalRank =
+                $this->makeRankMap(
+                    $boatRows,
+                    'final3'
+                );
+        }
 
 
         // ----------------------------------------------------
