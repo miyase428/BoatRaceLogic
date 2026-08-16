@@ -1,301 +1,95 @@
 <?php
 declare(strict_types=1);
 
-
 /**
  * BoatRaceLogic - 二次評価 検証プログラム
  *
- * 目的:
- *   過去レースについて、現行 tenji_api.php の
- *   二次評価ロジックを再現し、実着順と比較する。
+ * 現在の本番 tenji_api.php の二次評価ロジックを再現し、
+ * 過去レースの実着順と比較する。
  *
- * 現行二次評価:
- *
- *   ex_score
- *   st_score
- *   lap_score
- *   mawari_score
- *   straight_score
- *
- *   ↓
- *
- *   ex_total
- *   attack_potential
- *   stable_score
- *
- *   ↓
- *
- *   ex_sougou
- *   type_hosei
- *   tenkai_morai
- *
- *   ↓
- *
- *   final_2nd_score
- *
- *
- * 現在の tenji_api.php では:
- *
- *   ex_sougou
- *       = ex_total
- *       + attack_potential
- *       + stable_score
- *
- *   type_hosei
- *       = 0
- *
- *   tenkai_morai
- *       = 2号艇・4号艇なら +1
- *       = その他は 0
- *
- *
- * 本番 tenji_api.php は変更しない。
- *
+ * 展示STは検証済みの ST_BAND を使用する。
+ *   ST <= 0.00        => 3点
+ *   0.00 < ST <= 0.12 => 5点
+ *   0.12 < ST <= 0.20 => 3点
+ *   0.20 < ST <= 0.30 => 2点
+ *   ST > 0.30         => 1点
  *
  * 実行:
- *
- *   php analysis/second_eval_validate.php
- *
- *
- * 任意:
- *
- *   php analysis/second_eval_validate.php 2025-08-01 2026-07-31
+ *   php analysis/second_eval_validate.php 2026-06-15 2026-07-14
+ *   php analysis/second_eval_validate.php 2026-07-15 2026-08-14
  */
 
-
-//--------------------------------------------------
-// デフォルト検証期間
-//--------------------------------------------------
+require_once __DIR__ . '/../common/db_connect.php';
 
 const DEFAULT_FROM = '2025-08-01';
 const DEFAULT_TO   = '2026-07-31';
 
-
-//--------------------------------------------------
-// コマンドライン引数
-//--------------------------------------------------
-
 $from = $argv[1] ?? DEFAULT_FROM;
 $to   = $argv[2] ?? DEFAULT_TO;
 
-
-//--------------------------------------------------
-// 日付チェック
-//--------------------------------------------------
-
-if (
-    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) ||
-    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)
-) {
-    fwrite(
-        STDERR,
-        "日付は YYYY-MM-DD 形式で指定してください。\n"
-    );
-
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+    fwrite(STDERR, "日付は YYYY-MM-DD 形式で指定してください。\n");
     exit(1);
 }
-
-
 if ($from > $to) {
-
-    fwrite(
-        STDERR,
-        "開始日は終了日以前にしてください。\n"
-    );
-
+    fwrite(STDERR, "開始日は終了日以前にしてください。\n");
     exit(1);
 }
-
-
-//--------------------------------------------------
-// DB接続
-//--------------------------------------------------
-
-require_once __DIR__ . '/../common/db_connect.php';
-
 
 try {
-
     $pdo = getPDO();
-
 } catch (Throwable $e) {
-
-    fwrite(
-        STDERR,
-        "DB接続エラー: {$e->getMessage()}\n"
-    );
-
+    fwrite(STDERR, "DB接続エラー: {$e->getMessage()}\n");
     exit(1);
 }
-
-
-//--------------------------------------------------
-// 展示タイム評価
-//
-// tenji_api.php と同じ。
-//--------------------------------------------------
 
 function calcExhibitionScore(float $diff): float
 {
-    if ($diff <= -0.10) {
-        return 5.0;
-    }
-
-    if ($diff <= -0.05) {
-        return 4.0;
-    }
-
-    if ($diff <= 0.05) {
-        return 3.0;
-    }
-
-    if ($diff <= 0.10) {
-        return 2.0;
-    }
-
+    if ($diff <= -0.10) return 5.0;
+    if ($diff <= -0.05) return 4.0;
+    if ($diff <=  0.05) return 3.0;
+    if ($diff <=  0.10) return 2.0;
     return 1.0;
 }
-
-
-//--------------------------------------------------
-// ST評価
-//
-// tenji_api.php と同じ。
-//--------------------------------------------------
 
 function calcStScore(float $st): float
 {
-    if ($st <= -0.05) {
-        return 1.0;
-    }
-
-    if ($st < 0) {
-        return 2.0;
-    }
-
-    if ($st <= 0.05) {
-        return 5.0;
-    }
-
-    if ($st <= 0.12) {
-        return 4.0;
-    }
-
-    if ($st <= 0.20) {
-        return 2.0;
-    }
-
+    if ($st <= 0.00) return 3.0;
+    if ($st <= 0.12) return 5.0;
+    if ($st <= 0.20) return 3.0;
+    if ($st <= 0.30) return 2.0;
     return 1.0;
 }
 
-
-//--------------------------------------------------
-// 周回評価
-//
-// tenji_api.php と同じ。
-//--------------------------------------------------
-
-function calcLapScore(
-    float $lap,
-    float $avgLap
-): float {
-
+function calcLapScore(float $lap, float $avgLap): float
+{
     $diff = $lap - $avgLap;
-
-
-    if ($diff <= -0.30) {
-        return 5.0;
-    }
-
-    if ($diff <= -0.10) {
-        return 4.0;
-    }
-
-    if ($diff <= 0.10) {
-        return 3.0;
-    }
-
-    if ($diff <= 0.30) {
-        return 2.0;
-    }
-
+    if ($diff <= -0.30) return 5.0;
+    if ($diff <= -0.10) return 4.0;
+    if ($diff <=  0.10) return 3.0;
+    if ($diff <=  0.30) return 2.0;
     return 1.0;
 }
 
-
-//--------------------------------------------------
-// 周り足評価
-//
-// tenji_api.php と同じ。
-//--------------------------------------------------
-
-function calcMawariScore(
-    float $mawari,
-    float $avgMawari
-): float {
-
+function calcMawariScore(float $mawari, float $avgMawari): float
+{
     $diff = $mawari - $avgMawari;
-
-
-    if ($diff <= -0.20) {
-        return 5.0;
-    }
-
-    if ($diff <= -0.05) {
-        return 4.0;
-    }
-
-    if ($diff <= 0.05) {
-        return 3.0;
-    }
-
-    if ($diff <= 0.20) {
-        return 2.0;
-    }
-
+    if ($diff <= -0.20) return 5.0;
+    if ($diff <= -0.05) return 4.0;
+    if ($diff <=  0.05) return 3.0;
+    if ($diff <=  0.20) return 2.0;
     return 1.0;
 }
 
-
-//--------------------------------------------------
-// 直線評価
-//
-// tenji_api.php と同じ。
-//--------------------------------------------------
-
-function calcStraightScore(
-    float $straight,
-    float $avgStraight
-): float {
-
+function calcStraightScore(float $straight, float $avgStraight): float
+{
     $diff = $straight - $avgStraight;
-
-
-    if ($diff <= -0.04) {
-        return 5.0;
-    }
-
-    if ($diff <= -0.01) {
-        return 4.0;
-    }
-
-    if ($diff <= 0.01) {
-        return 3.0;
-    }
-
-    if ($diff <= 0.04) {
-        return 2.0;
-    }
-
+    if ($diff <= -0.04) return 5.0;
+    if ($diff <= -0.01) return 4.0;
+    if ($diff <=  0.01) return 3.0;
+    if ($diff <=  0.04) return 2.0;
     return 1.0;
 }
-
-
-//--------------------------------------------------
-// 二次評価計算
-//
-// tenji_api.php の現在ロジックを再現。
-//--------------------------------------------------
 
 function calcSecondEval(
     int $lane,
@@ -309,1230 +103,289 @@ function calcSecondEval(
     float $straight,
     float $avgStraight
 ): array {
+    $exScore = calcExhibitionScore($exhibition - $avgExhibition);
+    $stScore = calcStScore($st);
+    $lapScore = calcLapScore($lap, $avgLap);
+    $mawariScore = calcMawariScore($mawari, $avgMawari);
+    $straightScore = calcStraightScore($straight, $avgStraight);
 
-
-    //--------------------------------------------------
-    // 各基本スコア
-    //--------------------------------------------------
-
-    $exDiff =
-        $exhibition - $avgExhibition;
-
-
-    $exScore =
-        calcExhibitionScore(
-            $exDiff
-        );
-
-
-    $stScore =
-        calcStScore(
-            $st
-        );
-
-
-    $lapScore =
-        calcLapScore(
-            $lap,
-            $avgLap
-        );
-
-
-    $mawariScore =
-        calcMawariScore(
-            $mawari,
-            $avgMawari
-        );
-
-
-    $straightScore =
-        calcStraightScore(
-            $straight,
-            $avgStraight
-        );
-
-
-    //--------------------------------------------------
-    // 展示足トータル
-    //--------------------------------------------------
-
-    $exTotal =
-        $exScore
-        + $lapScore
-        + $mawariScore
-        + $straightScore;
-
-
-    //--------------------------------------------------
-    // 攻めポテンシャル
-    //--------------------------------------------------
-
-    $attackPotential =
-        $stScore
-        + $straightScore;
-
-
-    //--------------------------------------------------
-    // 安定性
-    //--------------------------------------------------
-
-    $stableScore =
-        $lapScore
-        + $mawariScore;
-
-
-    //--------------------------------------------------
-    // 展示総合
-    //
-    // 現行 tenji_api.php の fetchTenji() 側で
-    // 使用されている構造を再現。
-    //--------------------------------------------------
-
-    $exSougou =
-        $exTotal
-        + $attackPotential
-        + $stableScore;
-
-
-    //--------------------------------------------------
-    // タイプ補正
-    //
-    // 現在は未実装なので 0。
-    //--------------------------------------------------
-
+    $exTotal = $exScore + $lapScore + $mawariScore + $straightScore;
+    $attackPotential = $stScore + $straightScore;
+    $stableScore = $lapScore + $mawariScore;
+    $exSougou = $exTotal + $attackPotential + $stableScore;
     $typeHosei = 0.0;
-
-
-    //--------------------------------------------------
-    // 展開補正
-    //
-    // 現在は2号艇・4号艇のみ +1。
-    //--------------------------------------------------
-
-    $tenkaiMorai =
-        (
-            $lane === 2 ||
-            $lane === 4
-        )
-            ? 1.0
-            : 0.0;
-
-
-    //--------------------------------------------------
-    // 最終二次評価
-    //--------------------------------------------------
-
-    $finalSecondScore =
-        $exSougou
-        + $typeHosei
-        + $tenkaiMorai;
-
+    $tenkaiMorai = ($lane === 2 || $lane === 4) ? 1.0 : 0.0;
+    $finalSecondScore = $exSougou + $typeHosei + $tenkaiMorai;
 
     return [
-
-        'ex_diff' =>
-            $exDiff,
-
-        'ex_score' =>
-            $exScore,
-
-        'st_score' =>
-            $stScore,
-
-        'lap_score' =>
-            $lapScore,
-
-        'mawari_score' =>
-            $mawariScore,
-
-        'straight_score' =>
-            $straightScore,
-
-        'ex_total' =>
-            $exTotal,
-
-        'attack_potential' =>
-            $attackPotential,
-
-        'stable_score' =>
-            $stableScore,
-
-        'ex_sougou' =>
-            $exSougou,
-
-        'type_hosei' =>
-            $typeHosei,
-
-        'tenkai_morai' =>
-            $tenkaiMorai,
-
-        'final_2nd_score' =>
-            $finalSecondScore,
+        'ex_score' => $exScore,
+        'st_score' => $stScore,
+        'lap_score' => $lapScore,
+        'mawari_score' => $mawariScore,
+        'straight_score' => $straightScore,
+        'final_2nd_score' => $finalSecondScore,
     ];
 }
 
-
-//--------------------------------------------------
-// 競争順位
-//--------------------------------------------------
-
-function assignCompetitionRanks(
-    array &$boats
-): void {
-
-    usort(
-        $boats,
-        function (
-            array $a,
-            array $b
-        ): int {
-
-            if (
-                $a['final_2nd_score'] ==
-                $b['final_2nd_score']
-            ) {
-
-                return
-                    $a['lane']
-                    <=>
-                    $b['lane'];
-            }
-
-
-            return
-                (
-                    $a['final_2nd_score']
-                    >
-                    $b['final_2nd_score']
-                )
-                    ? -1
-                    : 1;
+function assignCompetitionRanks(array &$boats): void
+{
+    usort($boats, function (array $a, array $b): int {
+        if ((float)$a['final_2nd_score'] === (float)$b['final_2nd_score']) {
+            return (int)$a['lane'] <=> (int)$b['lane'];
         }
-    );
-
-
-    $rank = 0;
+        return (float)$a['final_2nd_score'] > (float)$b['final_2nd_score'] ? -1 : 1;
+    });
 
     $previousScore = null;
-
-
-    foreach (
-        $boats as $index => &$boat
-    ) {
-
-        $position =
-            $index + 1;
-
-
-        if (
-            $previousScore === null ||
-            $boat['final_2nd_score'] !=
-            $previousScore
-        ) {
-
-            $rank =
-                $position;
-
-            $previousScore =
-                $boat['final_2nd_score'];
+    $rank = 0;
+    foreach ($boats as $index => &$boat) {
+        $score = (float)$boat['final_2nd_score'];
+        $position = $index + 1;
+        if ($previousScore === null || $score !== $previousScore) {
+            $rank = $position;
+            $previousScore = $score;
         }
-
-
-        $boat['score_rank'] =
-            $rank;
+        $boat['score_rank'] = $rank;
     }
-
-
     unset($boat);
 }
-
-
-//--------------------------------------------------
-// 集計バケット
-//--------------------------------------------------
 
 function newBucket(): array
 {
     return [
-
         'count' => 0,
-
         'first' => 0,
-
         'second' => 0,
-
         'third' => 0,
-
+        'top2' => 0,
         'top3' => 0,
-
         'sum_rank' => 0.0,
     ];
 }
 
-
-//--------------------------------------------------
-// 実着順を追加
-//--------------------------------------------------
-
-function addBucket(
-    array &$bucket,
-    float $actualRank
-): void {
-
+function addBucket(array &$bucket, float $actualRank): void
+{
     $bucket['count']++;
-
-
-    if ($actualRank === 1.0) {
-
-        $bucket['first']++;
-    }
-
-
-    if ($actualRank === 2.0) {
-
-        $bucket['second']++;
-    }
-
-
-    if ($actualRank === 3.0) {
-
-        $bucket['third']++;
-    }
-
-
-    if (
-        $actualRank >= 1.0 &&
-        $actualRank <= 3.0
-    ) {
-
-        $bucket['top3']++;
-    }
-
-
-    $bucket['sum_rank'] +=
-        $actualRank;
+    if ($actualRank === 1.0) $bucket['first']++;
+    if ($actualRank === 2.0) $bucket['second']++;
+    if ($actualRank === 3.0) $bucket['third']++;
+    if ($actualRank >= 1.0 && $actualRank <= 2.0) $bucket['top2']++;
+    if ($actualRank >= 1.0 && $actualRank <= 3.0) $bucket['top3']++;
+    $bucket['sum_rank'] += $actualRank;
 }
 
-
-//--------------------------------------------------
-// バケットを結果へ変換
-//--------------------------------------------------
-
-function finalizeBucket(
-    array $bucket
-): array {
-
-    $count =
-        $bucket['count'];
-
-
-    return [
-
-        'count' =>
-            $count,
-
-
-        'first' =>
-            $bucket['first'],
-
-        'first_rate' =>
-            $count > 0
-                ? round(
-                    $bucket['first']
-                    / $count
-                    * 100,
-                    2
-                )
-                : 0.0,
-
-
-        'second' =>
-            $bucket['second'],
-
-        'second_rate' =>
-            $count > 0
-                ? round(
-                    $bucket['second']
-                    / $count
-                    * 100,
-                    2
-                )
-                : 0.0,
-
-
-        'third' =>
-            $bucket['third'],
-
-        'third_rate' =>
-            $count > 0
-                ? round(
-                    $bucket['third']
-                    / $count
-                    * 100,
-                    2
-                )
-                : 0.0,
-
-
-        'top3' =>
-            $bucket['top3'],
-
-        'top3_rate' =>
-            $count > 0
-                ? round(
-                    $bucket['top3']
-                    / $count
-                    * 100,
-                    2
-                )
-                : 0.0,
-
-
-        'avg_actual_rank' =>
-            $count > 0
-                ? round(
-                    $bucket['sum_rank']
-                    / $count,
-                    3
-                )
-                : null,
-    ];
+function pct(int $n, int $d): float
+{
+    return $d > 0 ? $n / $d * 100.0 : 0.0;
 }
 
-
-//--------------------------------------------------
-// 対象レース取得
-//--------------------------------------------------
-
-$sql = <<<SQL
-
-SELECT DISTINCT
-
-    re.race_code,
-
-    re.race_date
-
+$sqlRaces = <<<SQL
+SELECT DISTINCT re.race_code, re.race_date
 FROM boat_race.race_entry re
-
-WHERE re.race_date
-    BETWEEN :from_date
-    AND :to_date
-
-ORDER BY
-    re.race_date,
-    re.race_code
-
+WHERE re.race_date BETWEEN :from_date AND :to_date
+ORDER BY re.race_date, re.race_code
 SQL;
+$stmtRaces = $pdo->prepare($sqlRaces);
+$stmtRaces->execute([':from_date' => $from, ':to_date' => $to]);
+$races = $stmtRaces->fetchAll(PDO::FETCH_ASSOC);
 
+$sqlEntry = <<<SQL
+SELECT re.lane_number AS lane, re.player_id, rrd.rank
+FROM boat_race.race_entry re
+LEFT JOIN boat_race.race_result_detail rrd
+  ON rrd.race_code = re.race_code
+ AND rrd.player_id = re.player_id
+WHERE re.race_code = :race_code
+ORDER BY re.lane_number
+SQL;
+$stmtEntry = $pdo->prepare($sqlEntry);
 
-$stmt =
-    $pdo->prepare(
-        $sql
-    );
+$sqlEx = <<<SQL
+SELECT re.lane_number AS lane,
+       el.exhibition_time,
+       el.start_timing,
+       el.lap_time,
+       el.around_time,
+       el.straight_time
+FROM boat_race.exhibition_live el
+JOIN boat_race.race_entry re
+  ON el.race_code = re.race_code
+ AND el.player_id = re.player_id
+WHERE el.race_code = :race_code
+ORDER BY re.lane_number
+SQL;
+$stmtEx = $pdo->prepare($sqlEx);
 
+$sqlName = <<<SQL
+SELECT stadium_name
+FROM boat_race.stadium_master
+WHERE stadium_code = :jyo
+LIMIT 1
+SQL;
+$stmtName = $pdo->prepare($sqlName);
 
-$stmt->execute([
+$sqlAvg = <<<SQL
+SELECT avg_exhibition_time_6m
+FROM boat_race.exhibition_avg_6m
+WHERE stadium_name = :stadium_name
+LIMIT 1
+SQL;
+$stmtAvg = $pdo->prepare($sqlAvg);
 
-    ':from_date' =>
-        $from,
+$byRank = [];
+for ($rank = 1; $rank <= 6; $rank++) {
+    $byRank[$rank] = newBucket();
+}
 
-    ':to_date' =>
-        $to,
-]);
-
-
-$races =
-    $stmt->fetchAll(
-        PDO::FETCH_ASSOC
-    );
-
-
-$totalRaces =
-    count($races);
-
-
-echo
-    "========================================\n";
-
-echo
-    "二次評価 検証開始\n";
-
-echo
-    "期間: {$from} ～ {$to}\n";
-
-echo
-    "対象レース: {$totalRaces}\n";
-
-echo
-    "========================================\n";
-
-
-//--------------------------------------------------
-// レース統計
-//--------------------------------------------------
-
-$raceStats = [
-
-    'processed' => 0,
-
-    'skipped' => 0,
-
-    'boats' => 0,
-];
-
-
-//--------------------------------------------------
-// スキップ理由
-//--------------------------------------------------
-
+$total = count($races);
+$processed = 0;
+$skipped = 0;
 $skipReasons = [
-
     'not_6_boats' => 0,
-
     'missing_exhibition' => 0,
-
     'missing_average' => 0,
-
     'invalid_rank' => 0,
 ];
 
+foreach ($races as $race) {
+    $raceCode = (string)$race['race_code'];
 
-//--------------------------------------------------
-// 集計
-//--------------------------------------------------
-
-$byScoreRank = [];
-
-$byLane = [];
-
-
-//--------------------------------------------------
-// レースループ
-//--------------------------------------------------
-
-foreach (
-    $races as $race
-) {
-
-    $raceCode =
-        $race['race_code'];
-
-    $raceDate =
-        $race['race_date'];
-
-
-    //--------------------------------------------------
-    // 6艇の出走情報＋実着順
-    //--------------------------------------------------
-
-    $sqlEntry = <<<SQL
-
-SELECT
-
-    re.lane_number AS lane,
-
-    re.player_id,
-
-    rrd.rank
-
-FROM boat_race.race_entry re
-
-LEFT JOIN boat_race.race_result_detail rrd
-
-    ON rrd.race_code =
-       re.race_code
-
-   AND rrd.player_id =
-       re.player_id
-
-WHERE re.race_code =
-      :race_code
-
-ORDER BY
-    re.lane_number
-
-SQL;
-
-
-    $stmtEntry =
-        $pdo->prepare(
-            $sqlEntry
-        );
-
-
-    $stmtEntry->execute([
-
-        ':race_code' =>
-            $raceCode,
-    ]);
-
-
-    $entries =
-        $stmtEntry->fetchAll(
-            PDO::FETCH_ASSOC
-        );
-
-
-    //--------------------------------------------------
-    // 6艇以外ならスキップ
-    //--------------------------------------------------
-
-    if (
-        count($entries) !== 6
-    ) {
-
-        $raceStats['skipped']++;
-
+    $stmtEntry->execute([':race_code' => $raceCode]);
+    $entries = $stmtEntry->fetchAll(PDO::FETCH_ASSOC);
+    if (count($entries) !== 6) {
+        $skipped++;
         $skipReasons['not_6_boats']++;
-
         continue;
     }
 
-
-    //--------------------------------------------------
-    // 展示データ取得
-    //
-    // 現行 tenji_api.php と同じ exhibition_live を使用。
-    //--------------------------------------------------
-
-    $sqlExhibition = <<<SQL
-
-SELECT
-
-    re.lane_number AS lane,
-
-    el.exhibition_time,
-
-    el.start_timing,
-
-    el.lap_time,
-
-    el.around_time,
-
-    el.straight_time
-
-FROM boat_race.exhibition_live el
-
-JOIN boat_race.race_entry re
-
-  ON el.race_code =
-     re.race_code
-
- AND el.player_id =
-     re.player_id
-
-WHERE el.race_code =
-      :race_code
-
-ORDER BY
-    re.lane_number
-
-SQL;
-
-
-    $stmtExhibition =
-        $pdo->prepare(
-            $sqlExhibition
-        );
-
-
-    $stmtExhibition->execute([
-
-        ':race_code' =>
-            $raceCode,
-    ]);
-
-
-    $exhibitions =
-        $stmtExhibition->fetchAll(
-            PDO::FETCH_ASSOC
-        );
-
-
-    //--------------------------------------------------
-    // 展示6艇が揃っているか
-    //--------------------------------------------------
-
-    if (
-        count($exhibitions) !== 6
-    ) {
-
-        $raceStats['skipped']++;
-
+    $stmtEx->execute([':race_code' => $raceCode]);
+    $exRows = $stmtEx->fetchAll(PDO::FETCH_ASSOC);
+    if (count($exRows) !== 6) {
+        $skipped++;
         $skipReasons['missing_exhibition']++;
-
         continue;
     }
 
-
-    //--------------------------------------------------
-    // 場コード取得
-    //--------------------------------------------------
-
-    $jyo =
-        substr(
-            $raceCode,
-            8,
-            3
-        );
-
-
-    //--------------------------------------------------
-    // 場名取得
-    //--------------------------------------------------
-
-    $sqlName = <<<SQL
-
-SELECT stadium_name
-
-FROM boat_race.stadium_master
-
-WHERE stadium_code =
-      :jyo
-
-LIMIT 1
-
-SQL;
-
-
-    $stmtName =
-        $pdo->prepare(
-            $sqlName
-        );
-
-
-    $stmtName->execute([
-
-        ':jyo' =>
-            $jyo,
-    ]);
-
-
-    $stadiumName =
-        $stmtName->fetchColumn();
-
-
+    $jyo = substr($raceCode, 8, 3);
+    $stmtName->execute([':jyo' => $jyo]);
+    $stadiumName = $stmtName->fetchColumn();
     if (!$stadiumName) {
-
-        $raceStats['skipped']++;
-
+        $skipped++;
         $skipReasons['missing_average']++;
-
         continue;
     }
 
-
-    //--------------------------------------------------
-    // 6か月展示平均
-    //--------------------------------------------------
-
-    $sqlAvg = <<<SQL
-
-SELECT
-    avg_exhibition_time_6m
-
-FROM boat_race.exhibition_avg_6m
-
-WHERE stadium_name =
-      :stadium_name
-
-LIMIT 1
-
-SQL;
-
-
-    $stmtAvg =
-        $pdo->prepare(
-            $sqlAvg
-        );
-
-
-    $stmtAvg->execute([
-
-        ':stadium_name' =>
-            $stadiumName,
-    ]);
-
-
-    $avgExhibition =
-        (float)$stmtAvg->fetchColumn();
-
-
-    if (
-        $avgExhibition <= 0
-    ) {
-
-        $raceStats['skipped']++;
-
+    $stmtAvg->execute([':stadium_name' => $stadiumName]);
+    $avgExhibition = (float)$stmtAvg->fetchColumn();
+    if ($avgExhibition <= 0) {
+        $skipped++;
         $skipReasons['missing_average']++;
-
         continue;
     }
 
-
-    //--------------------------------------------------
-    // 6艇平均
-    //--------------------------------------------------
-
-    $lapValues = [];
-
-    $mawariValues = [];
-
-    $straightValues = [];
-
-
-    foreach (
-        $exhibitions as $row
-    ) {
-
-        $lapValues[] =
-            (float)$row['lap_time'];
-
-        $mawariValues[] =
-            (float)$row['around_time'];
-
-        $straightValues[] =
-            (float)$row['straight_time'];
-    }
-
-
-    $avgLap =
-        array_sum($lapValues)
-        / count($lapValues);
-
-
-    $avgMawari =
-        array_sum($mawariValues)
-        / count($mawariValues);
-
-
-    $avgStraight =
-        array_sum($straightValues)
-        / count($straightValues);
-
-
-    //--------------------------------------------------
-    // 実着順を lane → rank にする
-    //--------------------------------------------------
-
-    $actualRanks = [];
-
-
-    foreach (
-        $entries as $entry
-    ) {
-
-        $lane =
-            (int)$entry['lane'];
-
-
-        $rankRaw =
-            $entry['rank'];
-
-
-        if (
-            $rankRaw === null ||
-            $rankRaw === ''
-        ) {
-
-            $actualRank =
-                5.5;
-
-        } elseif (
-            in_array(
-                (string)$rankRaw,
-                ['1', '2', '3', '4', '5', '6'],
-                true
-            )
-        ) {
-
-            $actualRank =
-                (float)$rankRaw;
-
+    $actual = [];
+    foreach ($entries as $entry) {
+        $lane = (int)$entry['lane'];
+        $raw = $entry['rank'];
+        if ($raw === null || $raw === '') {
+            $actual[$lane] = 5.5;
+        } elseif (in_array((string)$raw, ['1', '2', '3', '4', '5', '6'], true)) {
+            $actual[$lane] = (float)$raw;
         } else {
-
-            $actualRanks[$lane] =
-                null;
-
-            continue;
+            $actual[$lane] = null;
         }
-
-
-        $actualRanks[$lane] =
-            $actualRank;
     }
 
-
-    //--------------------------------------------------
-    // 実着順不正チェック
-    //--------------------------------------------------
-
-    $invalidRank =
-        false;
-
-
-    foreach (
-        range(1, 6) as $lane
-    ) {
-
-        if (
-            !isset($actualRanks[$lane])
-            ||
-            $actualRanks[$lane] === null
-        ) {
-
-            $invalidRank =
-                true;
-
+    $invalidRank = false;
+    foreach (range(1, 6) as $lane) {
+        if (!array_key_exists($lane, $actual) || $actual[$lane] === null) {
+            $invalidRank = true;
             break;
         }
     }
-
-
     if ($invalidRank) {
-
-        $raceStats['skipped']++;
-
+        $skipped++;
         $skipReasons['invalid_rank']++;
-
         continue;
     }
 
+    $lapValues = array_map(fn(array $r): float => (float)$r['lap_time'], $exRows);
+    $mawariValues = array_map(fn(array $r): float => (float)$r['around_time'], $exRows);
+    $straightValues = array_map(fn(array $r): float => (float)$r['straight_time'], $exRows);
 
-    //--------------------------------------------------
-    // 二次評価計算
-    //--------------------------------------------------
+    $avgLap = array_sum($lapValues) / 6.0;
+    $avgMawari = array_sum($mawariValues) / 6.0;
+    $avgStraight = array_sum($straightValues) / 6.0;
 
     $boats = [];
-
-
-    foreach (
-        $exhibitions as $row
-    ) {
-
-        $lane =
-            (int)$row['lane'];
-
-
-        $evaluation =
-            calcSecondEval(
-
-                $lane,
-
-                (float)$row['exhibition_time'],
-
-                $avgExhibition,
-
-                (float)$row['start_timing'],
-
-                (float)$row['lap_time'],
-
-                $avgLap,
-
-                (float)$row['around_time'],
-
-                $avgMawari,
-
-                (float)$row['straight_time'],
-
-                $avgStraight
-            );
-
-
-        $boats[] = [
-
-            'lane' =>
-                $lane,
-
-            'final_2nd_score' =>
-                $evaluation['final_2nd_score'],
-
-            'actual_rank' =>
-                $actualRanks[$lane],
-
-            'evaluation' =>
-                $evaluation,
-        ];
-    }
-
-
-    //--------------------------------------------------
-    // 二次評価順位付け
-    //--------------------------------------------------
-
-    assignCompetitionRanks(
-        $boats
-    );
-
-
-    //--------------------------------------------------
-    // 集計
-    //--------------------------------------------------
-
-    foreach (
-        $boats as $boat
-    ) {
-
-        $scoreRank =
-            (int)$boat['score_rank'];
-
-
-        $lane =
-            (int)$boat['lane'];
-
-
-        $actualRank =
-            (float)$boat['actual_rank'];
-
-
-        //--------------------------------------------------
-        // 順位別
-        //--------------------------------------------------
-
-        if (
-            !isset(
-                $byScoreRank[$scoreRank]
-            )
-        ) {
-
-            $byScoreRank[$scoreRank] =
-                newBucket();
-        }
-
-
-        addBucket(
-            $byScoreRank[$scoreRank],
-            $actualRank
-        );
-
-
-        //--------------------------------------------------
-        // 艇番別
-        //--------------------------------------------------
-
-        if (
-            !isset(
-                $byLane[$lane]
-            )
-        ) {
-
-            $byLane[$lane] =
-                newBucket();
-        }
-
-
-        addBucket(
-            $byLane[$lane],
-            $actualRank
-        );
-
-
-        $raceStats['boats']++;
-    }
-
-
-    $raceStats['processed']++;
-}
-
-
-//--------------------------------------------------
-// 結果表示
-//--------------------------------------------------
-
-echo "\n";
-
-echo
-    "========================================\n";
-
-echo
-    "検証結果\n";
-
-echo
-    "========================================\n";
-
-
-echo
-    "処理レース: "
-    . $raceStats['processed']
-    . "\n";
-
-
-echo
-    "スキップレース: "
-    . $raceStats['skipped']
-    . "\n";
-
-
-echo
-    "処理艇数: "
-    . $raceStats['boats']
-    . "\n";
-
-
-echo "\n";
-
-
-//--------------------------------------------------
-// スキップ理由
-//--------------------------------------------------
-
-echo
-    "【スキップ理由】\n";
-
-
-foreach (
-    $skipReasons as $reason => $count
-) {
-
-    echo
-        sprintf(
-            "%-24s : %d\n",
-            $reason,
-            $count
-        );
-}
-
-
-echo "\n";
-
-
-//--------------------------------------------------
-// 二次評価順位別
-//--------------------------------------------------
-
-echo
-    "========================================\n";
-
-echo
-    "【二次評価順位別 成績】\n";
-
-echo
-    "========================================\n";
-
-
-ksort(
-    $byScoreRank
-);
-
-
-foreach (
-    $byScoreRank as $rank => $bucket
-) {
-
-    $result =
-        finalizeBucket(
-            $bucket
-        );
-
-
-    echo
-        sprintf(
-            "順位 %d : "
-            . "N=%d "
-            . "1着=%d(%.2f%%) "
-            . "2着=%d(%.2f%%) "
-            . "3着=%d(%.2f%%) "
-            . "3連対=%d(%.2f%%) "
-            . "平均着順=%.3f\n",
-
-            $rank,
-
-            $result['count'],
-
-            $result['first'],
-            $result['first_rate'],
-
-            $result['second'],
-            $result['second_rate'],
-
-            $result['third'],
-            $result['third_rate'],
-
-            $result['top3'],
-            $result['top3_rate'],
-
-            $result['avg_actual_rank']
-                ?? 0.0
-        );
-}
-
-
-echo "\n";
-
-
-//--------------------------------------------------
-// 艇番別
-//--------------------------------------------------
-
-echo
-    "========================================\n";
-
-echo
-    "【艇番別 成績】\n";
-
-echo
-    "========================================\n";
-
-
-ksort(
-    $byLane
-);
-
-
-foreach (
-    $byLane as $lane => $bucket
-) {
-
-    $result =
-        finalizeBucket(
-            $bucket
-        );
-
-
-    echo
-        sprintf(
-            "%d号艇 : "
-            . "N=%d "
-            . "1着=%d(%.2f%%) "
-            . "2着=%d(%.2f%%) "
-            . "3着=%d(%.2f%%) "
-            . "3連対=%d(%.2f%%) "
-            . "平均着順=%.3f\n",
-
+    foreach ($exRows as $row) {
+        $lane = (int)$row['lane'];
+        $score = calcSecondEval(
             $lane,
-
-            $result['count'],
-
-            $result['first'],
-            $result['first_rate'],
-
-            $result['second'],
-            $result['second_rate'],
-
-            $result['third'],
-            $result['third_rate'],
-
-            $result['top3'],
-            $result['top3_rate'],
-
-            $result['avg_actual_rank']
-                ?? 0.0
+            (float)$row['exhibition_time'],
+            $avgExhibition,
+            (float)$row['start_timing'],
+            (float)$row['lap_time'],
+            $avgLap,
+            (float)$row['around_time'],
+            $avgMawari,
+            (float)$row['straight_time'],
+            $avgStraight
         );
+
+        $boats[] = array_merge([
+            'lane' => $lane,
+            'actual_rank' => $actual[$lane],
+        ], $score);
+    }
+
+    assignCompetitionRanks($boats);
+
+    foreach ($boats as $boat) {
+        $rank = (int)$boat['score_rank'];
+        if ($rank >= 1 && $rank <= 6) {
+            addBucket($byRank[$rank], (float)$boat['actual_rank']);
+        }
+    }
+
+    $processed++;
 }
 
+echo "========================================\n";
+echo "二次評価 健康診断（ST_BAND本番ロジック）\n";
+echo "========================================\n";
+echo "期間       : {$from} ～ {$to}\n";
+echo "対象レース : {$total}\n";
+echo "処理レース : {$processed}\n";
+echo "スキップ   : {$skipped}\n";
+echo "順位方式   : 競争順位（同点は同順位）\n";
+echo "\n【スキップ理由】\n";
+foreach ($skipReasons as $key => $value) {
+    printf("%-24s : %d\n", $key, $value);
+}
 
-echo "\n";
+echo "\n========================================\n";
+echo "【順位別 成績】\n";
+echo "========================================\n";
+for ($rank = 1; $rank <= 6; $rank++) {
+    $b = $byRank[$rank];
+    $n = $b['count'];
+    $avg = $n > 0 ? $b['sum_rank'] / $n : 0.0;
 
+    printf(
+        "順位%d N=%5d 1着=%6.2f%% 2着=%6.2f%% 3着=%6.2f%% 2連=%6.2f%% 3連=%6.2f%% 平均=%.3f\n",
+        $rank,
+        $n,
+        pct($b['first'], $n),
+        pct($b['second'], $n),
+        pct($b['third'], $n),
+        pct($b['top2'], $n),
+        pct($b['top3'], $n),
+        $avg
+    );
+}
 
-//--------------------------------------------------
-// 終了
-//--------------------------------------------------
-
-echo
-    "========================================\n";
-
-echo
-    "二次評価 検証終了\n";
-
-echo
-    "========================================\n";
+echo "\nST判定 : <=0.00=3 / <=0.12=5 / <=0.20=3 / <=0.30=2 / >0.30=1\n";
+echo "========================================\n";
+echo "検証終了\n";
+echo "========================================\n";
