@@ -246,7 +246,8 @@ class FinalPredictionExporter
             $this->predictionLogic->buildFinalPredictions(
                 $tenjiList,
                 $kimariteData,
-                $tenjiTestData
+                $tenjiTestData,
+                $results
             );
 
         $summary =

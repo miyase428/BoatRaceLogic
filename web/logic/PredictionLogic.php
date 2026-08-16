@@ -8,7 +8,12 @@ class PredictionLogic
         return ($f > 1.0) ? $f / 100.0 : $f;
     }
 
-    public function buildFinalPredictions(array $tenji_list, array $kimarite_data, array $tenji_test_data): array
+    public function buildFinalPredictions(
+        array $tenji_list,
+        array $kimarite_data,
+        array $tenji_test_data,
+        array $first_results = []
+    ): array
     {
         // 1コース決まり手
         $k1 = $kimarite_data['1']['6month'] ?? $kimarite_data['1'] ?? [];
@@ -28,6 +33,7 @@ class PredictionLogic
             $rate3_dec = (float)($api_item['three_in_rate_3m'] ?? 0);
 
             $t_data = $tenji_list[$i - 1] ?? [];
+            $first_data = $first_results[$i - 1] ?? [];
             $k_data = $kimarite_data[(string)$boat]['6month'] ?? $kimarite_data[(string)$boat] ?? [];
 
             $score_s = (float)($t_data['ex_sougou'] ?? 0);
@@ -131,6 +137,8 @@ class PredictionLogic
                 'typeBonus'       => $typeBonus,
                 'final3'          => $final3,
                 'getBonus'        => (float)($t_data['tenkai_morai'] ?? 0),
+                'first_total_score' => (float)($first_data['total_score'] ?? 0),
+                'second_score'      => $final2,
             ];
         }
 
@@ -177,6 +185,86 @@ public function buildSummary(array $final_predictions): array
 
         // スコア順の艇番リスト（例: [6, 4, 5, 2, 1, 3]）
         $rank_boats = array_column(array_values($sorted_preds), 'boat');
+
+        // ------------------------------------------------------------
+        // STEP 4
+        // 一次差 5～10 × 二次差 1～2 の場合、一次1位を本命へ昇格
+        // ------------------------------------------------------------
+
+        $primary_override_condition = false;
+        $primary_override_applied = false;
+        $primary_override_boat = null;
+        $primary_gap = null;
+        $second_gap = null;
+
+        // 一次スコア順
+        $primary_sorted = $final_predictions;
+
+        uasort($primary_sorted, function ($a, $b) {
+            return ($b['first_total_score'] ?? 0)
+                <=> ($a['first_total_score'] ?? 0);
+        });
+
+        $primary_rows = array_values($primary_sorted);
+
+        // 二次スコア順
+        $secondary_sorted = $final_predictions;
+
+        uasort($secondary_sorted, function ($a, $b) {
+            return ($b['second_score'] ?? 0)
+                <=> ($a['second_score'] ?? 0);
+        });
+
+        $secondary_rows = array_values($secondary_sorted);
+
+        if (
+            count($primary_rows) >= 2 &&
+            count($secondary_rows) >= 2
+        ) {
+            $primary1 = $primary_rows[0];
+            $primary2 = $primary_rows[1];
+
+            $secondary1 = $secondary_rows[0];
+            $secondary2 = $secondary_rows[1];
+
+            $primary_gap =
+                (float)$primary1['first_total_score']
+                - (float)$primary2['first_total_score'];
+
+            $second_gap =
+                (float)$secondary1['second_score']
+                - (float)$secondary2['second_score'];
+
+            if (
+                $primary_gap >= 5.0 &&
+                $primary_gap < 10.0 &&
+                $second_gap >= 1.0 &&
+                $second_gap < 2.0
+            ) {
+                $primary_override_condition = true;
+
+                $primary_override_boat =
+                    (int)$primary1['boat'];
+
+                // 現在の最終1位と一次1位が違う場合だけ並び替える
+                if (($rank_boats[0] ?? null) !== $primary_override_boat) {
+
+                    $rank_boats = array_values(
+                        array_filter(
+                            $rank_boats,
+                            fn($boat) => $boat !== $primary_override_boat
+                        )
+                    );
+
+                    array_unshift(
+                        $rank_boats,
+                        $primary_override_boat
+                    );
+
+                    $primary_override_applied = true;
+                }
+            }
+        }
 
         $honmei_head = $rank_boats[0] ?? 1;
         $taikou_head = $rank_boats[1] ?? 2;
@@ -237,6 +325,12 @@ public function buildSummary(array $final_predictions): array
             'kiru_kako'        => $kiru_kako,
             'honmei_kai'       => $honmei_kai,
             'taikou_kai'       => $taikou_kai,
+            'rank_boats'                 => $rank_boats,
+            'primary_override_condition' => $primary_override_condition,
+            'primary_override_applied'   => $primary_override_applied,
+            'primary_override_boat'      => $primary_override_boat,
+            'primary_gap'                => $primary_gap,
+            'second_gap'                 => $second_gap,
         ];
     }
 }

@@ -71,7 +71,8 @@ class IndexController
         $final_predictions = $predictionLogic->buildFinalPredictions(
             $tenji_list,
             $kimarite_data,
-            $tenji_test_data
+            $tenji_test_data,
+            $results
         );
         $summary = $predictionLogic->buildSummary($final_predictions);
 
