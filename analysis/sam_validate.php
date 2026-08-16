@@ -13,6 +13,9 @@ declare(strict_types=1);
  * 指定期間の生データからSUM差分を再計算し、
  * 場×コース基準成績との差（lift）で理論単体の方向性を確認する。
  *
+ * race_result_detail.rank が NULL / 空の場合は、
+ * プロジェクト共通ルールに合わせて着外=5.5として扱う。
+ *
  * 実行:
  *   php analysis/sam_validate.php 2026-06-15 2026-07-14
  *   php analysis/sam_validate.php 2026-07-15 2026-08-14
@@ -59,16 +62,9 @@ try {
 }
 
 const INTERVALS = [
-    '-0.6未満',
-    '-0.6--0.4',
-    '-0.4--0.2',
-    '-0.2-0.0',
-    '0.0-0.2',
-    '0.2-0.4',
-    '0.4-0.6',
-    '0.6以上',
+    '-0.6未満', '-0.6--0.4', '-0.4--0.2', '-0.2-0.0',
+    '0.0-0.2', '0.2-0.4', '0.4-0.6', '0.6以上',
 ];
-
 const ZONES = ['GOOD', 'NEUTRAL', 'BAD'];
 
 function getInterval(float $v): string
@@ -93,12 +89,8 @@ function getZone(float $v): string
 function newBucket(): array
 {
     return [
-        'count' => 0,
-        'first' => 0,
-        'top2' => 0,
-        'top3' => 0,
-        'sum_rank' => 0.0,
-        'mix' => [],
+        'count' => 0, 'first' => 0, 'top2' => 0, 'top3' => 0,
+        'sum_rank' => 0.0, 'mix' => [],
     ];
 }
 
@@ -109,19 +101,13 @@ function addBucket(array &$b, string $venue, int $course, float $rank): void
     if ($rank <= 2.0) $b['top2']++;
     if ($rank <= 3.0) $b['top3']++;
     $b['sum_rank'] += $rank;
-
     if (!isset($b['mix'][$venue])) $b['mix'][$venue] = [];
     $b['mix'][$venue][$course] = ($b['mix'][$venue][$course] ?? 0) + 1;
 }
 
 function newBase(): array
 {
-    return [
-        'count' => 0,
-        'first' => 0,
-        'top2' => 0,
-        'top3' => 0,
-    ];
+    return ['count' => 0, 'first' => 0, 'top2' => 0, 'top3' => 0];
 }
 
 function addBase(array &$b, float $rank): void
@@ -148,7 +134,6 @@ function expectedRate(array $bucket, array $venueCourseBase, string $metric): fl
 {
     $count = (int)$bucket['count'];
     if ($count === 0) return 0.0;
-
     $sum = 0.0;
     foreach ($bucket['mix'] as $venue => $courses) {
         foreach ($courses as $course => $n) {
@@ -167,17 +152,11 @@ function summarize(array $bucket, array $venueCourseBase): array
     $top2 = safeRate((int)$bucket['top2'], $n);
     $top3 = safeRate((int)$bucket['top3'], $n);
     $avg = $n > 0 ? $bucket['sum_rank'] / $n : 0.0;
-
     $expFirst = expectedRate($bucket, $venueCourseBase, 'first');
     $expTop2 = expectedRate($bucket, $venueCourseBase, 'top2');
     $expTop3 = expectedRate($bucket, $venueCourseBase, 'top3');
-
     return [
-        'n' => $n,
-        'first' => $first,
-        'top2' => $top2,
-        'top3' => $top3,
-        'avg' => $avg,
+        'n' => $n, 'first' => $first, 'top2' => $top2, 'top3' => $top3, 'avg' => $avg,
         'lift_first' => $first - $expFirst,
         'lift_top2' => $top2 - $expTop2,
         'lift_top3' => $top3 - $expTop3,
@@ -189,13 +168,10 @@ function zoneJudgement(array $zoneBuckets, array $base): string
     $g = summarize($zoneBuckets['GOOD'], $base);
     $n = summarize($zoneBuckets['NEUTRAL'], $base);
     $b = summarize($zoneBuckets['BAD'], $base);
-
     if ($g['n'] < 50 || $n['n'] < 50 || $b['n'] < 50) return 'SMALL';
-
     $firstOrder = $g['lift_first'] > $n['lift_first'] && $n['lift_first'] > $b['lift_first'];
     $top3Order = $g['lift_top3'] > $n['lift_top3'] && $n['lift_top3'] > $b['lift_top3'];
     $signs = $g['lift_top3'] > 0.0 && $b['lift_top3'] < 0.0;
-
     if ($firstOrder && $top3Order && $signs) return 'OK';
     if (($firstOrder || $top3Order) && $signs) return 'MIXED';
     return 'NG';
@@ -231,7 +207,6 @@ $intervalBuckets = [];
 foreach (INTERVALS as $label) $intervalBuckets[$label] = newBucket();
 $zoneBuckets = [];
 foreach (ZONES as $zone) $zoneBuckets[$zone] = newBucket();
-
 $venueZones = [];
 $venueCourseBase = [];
 $venueCounts = [];
@@ -291,14 +266,20 @@ foreach ($races as $raceCodeRaw) {
     $stmtResult->execute([':race_code' => $raceCode]);
     $resultRows = $stmtResult->fetchAll(PDO::FETCH_ASSOC);
     $rankByCourse = [];
+    $invalidRank = false;
     foreach ($resultRows as $row) {
         $course = (int)$row['entry_course'];
         $raw = $row['rank'];
-        if ($raw !== null && in_array((string)$raw, ['1','2','3','4','5','6'], true)) {
+        if ($raw === null || $raw === '') {
+            $rankByCourse[$course] = 5.5;
+        } elseif (in_array((string)$raw, ['1','2','3','4','5','6'], true)) {
             $rankByCourse[$course] = (float)$raw;
+        } else {
+            $invalidRank = true;
+            break;
         }
     }
-    if (count($rankByCourse) === 0) {
+    if ($invalidRank || count($rankByCourse) !== 6) {
         $skip['missing_result']++;
         continue;
     }
@@ -316,8 +297,6 @@ foreach ($races as $raceCodeRaw) {
     $processedRaces++;
 
     foreach ($sumRawByCourse as $course => $sumRaw) {
-        if (!isset($rankByCourse[$course])) continue;
-
         $rank = $rankByCourse[$course];
         $diff = $sumRaw - $avgSum;
         $interval = getInterval($diff);
@@ -327,11 +306,9 @@ foreach ($races as $raceCodeRaw) {
             $venueCourseBase[$venue][$course] = newBase();
         }
         addBase($venueCourseBase[$venue][$course], $rank);
-
         addBucket($intervalBuckets[$interval], $venue, $course, $rank);
         addBucket($zoneBuckets[$zone], $venue, $course, $rank);
         addBucket($venueZones[$venue][$zone], $venue, $course, $rank);
-
         $validBoats++;
         $venueCounts[$venue]['boats']++;
     }
@@ -347,12 +324,11 @@ echo "対象レース : {$totalRaces}\n";
 echo "処理レース : {$processedRaces}\n";
 echo "評価艇数   : {$validBoats}\n";
 echo "場条件     : " . ($venueFilter !== '' ? $venueFilter : '全場') . "\n";
+echo "着外処理   : rank NULL/空 = 5.5\n";
 echo "補正方法   : 同期間の場×コース基準成績との差(lift)\n";
 
 echo "\n【除外・スキップ参考】\n";
-foreach ($skip as $k => $v) {
-    printf("%-24s : %d\n", $k, $v);
-}
+foreach ($skip as $k => $v) printf("%-24s : %d\n", $k, $v);
 
 echo "\n========================================\n";
 echo "【SUM差分 8区間】\n";
