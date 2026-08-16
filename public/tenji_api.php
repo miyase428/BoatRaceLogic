@@ -13,14 +13,16 @@ function calcExhibitionScore($diff) {
 }
 
 //--------------------------------------
-// ST評価関数
+// ST評価関数（ST_BAND）
+//
+// 検証結果に基づき、展示STは「早いほど高評価」ではなく
+// 0.00～0.12を良好帯域として評価する。
 //--------------------------------------
 function calcStScore($st) {
-    if ($st <= -0.05) return 1;
-    if ($st < 0)     return 2;
-    if ($st <= 0.05) return 5;
-    if ($st <= 0.12) return 4;
-    if ($st <= 0.20) return 2;
+    if ($st <= 0.00) return 3;
+    if ($st <= 0.12) return 5;
+    if ($st <= 0.20) return 3;
+    if ($st <= 0.30) return 2;
     return 1;
 }
 
@@ -82,8 +84,8 @@ try {
 // race_code 取得
 //--------------------------------------
 #$race_code = $_POST["race_code"] ?? "";
-$race_code = $_GET["race_code"] 
-          ?? $_POST["race_code"] 
+$race_code = $_GET["race_code"]
+          ?? $_POST["race_code"]
           ?? "";
 
 if ($race_code === "") {
