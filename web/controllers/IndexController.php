@@ -7,6 +7,7 @@ require_once __DIR__ . '/../logic/ExhibitionLogic.php';
 require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/SlitLogic.php';
+require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
 
 class IndexController
 {
@@ -39,9 +40,14 @@ class IndexController
         $predictionLogic  = new PredictionLogicProduction();
         $samLogic         = new SamLogic();
         $slitLogic        = new SlitLogic();
+        $baseWinRateLogic = new BaseWinRateLogic();
 
         // 1. 出走表データ
         [$entries, $results, $api_error] = $apiClient->fetchCalcScores($race_code);
+
+        // 1-2. 展示前の基本1着率
+        // 場×コース → 選手×コース(K=20) → 選手×場×コース(K=10) → 6艇100%正規化
+        $base_win_rate_data = $baseWinRateLogic->calculate($race_code);
 
         // 2. 決まり手データ
         [$kimarite_data, $kimarite_error] = $apiClient->fetchKimarite($race_code, $in_course);
@@ -108,6 +114,7 @@ class IndexController
             'entries'         => $entries,
             'results'         => $results,
             'api_error'       => $api_error,
+            'base_win_rate_data' => $base_win_rate_data,
             'kimarite_data'   => $kimarite_data,
             'kimarite_error'  => $kimarite_error,
             'tenji_list'      => $tenji_list,
