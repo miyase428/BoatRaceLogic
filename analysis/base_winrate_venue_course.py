@@ -15,6 +15,8 @@
 - race_result_detail の1着艇について entry_course が分かれば、
   そのレースは各コースの分母を1ずつ増やし、1着艇の実進入コースだけ勝数を1増やせる。
 - これにより、保存期間の短い exhibition_live に依存せず全履歴を使える。
+- 場の集計キーは stadium_name ではなく race_code 内の3文字場コードを使用する。
+  過去の名称表記揺れ（例: BWK の「琵琶湖」「びわこ」）は同一場として統合する。
 
 結果:
 - race_result_detail の1着艇だけを使用する。
@@ -39,6 +41,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from slit_validate_v2 import connect_db
+
+
+PLACE_NAMES = {
+    "KRY": "桐生", "TDA": "戸田", "EDG": "江戸川", "HWJ": "平和島",
+    "TMG": "多摩川", "HMN": "浜名湖", "GMG": "蒲郡", "TKN": "常滑",
+    "TSU": "津", "MKN": "三国", "BWK": "びわこ", "SME": "住之江",
+    "AMG": "尼崎", "NRT": "鳴門", "MRG": "丸亀", "KJM": "児島",
+    "MYJ": "宮島", "TKY": "徳山", "SMS": "下関", "WKM": "若松",
+    "ASY": "芦屋", "FKO": "福岡", "KRT": "唐津", "OMR": "大村",
+}
 
 
 def as_int(v):
@@ -88,7 +100,6 @@ def load_rows(start_date, end_date):
     sql = f"""
         SELECT
             rm.race_date,
-            rm.stadium_name,
             rm.race_code,
             rrd.player_id::text,
             rrd.rank,
@@ -107,7 +118,7 @@ def load_rows(start_date, end_date):
     with connect_db() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
-            for race_date, stadium_name, race_code, player_id, rank, entry_course in cur.fetchall():
+            for race_date, race_code, player_id, rank, entry_course in cur.fetchall():
                 d = race_date
                 if min_date is None or d < min_date:
                     min_date = d
@@ -116,7 +127,6 @@ def load_rows(start_date, end_date):
 
                 races[str(race_code)].append({
                     "race_date": d,
-                    "stadium_name": str(stadium_name or "").strip(),
                     "player_id": str(player_id or "").strip(),
                     "rank": as_int(rank),
                     "course": as_int(entry_course),
@@ -134,7 +144,8 @@ def main():
     if not races:
         raise RuntimeError("対象レースがありません")
 
-    # stats[(place_code, stadium_name)][course] = {n, wins}
+    # stats[place_code][course] = {n, wins}
+    # stadium_name は過去に表記揺れがあるため集計キーに使用しない。
     stats = defaultdict(lambda: {c: {"n": 0, "wins": 0} for c in range(1, 7)})
     eligible_races_by_place = Counter()
     total_races_by_place = Counter()
@@ -143,9 +154,7 @@ def main():
     for race_code in sorted(races):
         rows = races[race_code]
         place_code = race_code[8:11] if len(race_code) >= 11 else "???"
-        stadium_name = rows[0]["stadium_name"] if rows else ""
-        place_key = (place_code, stadium_name)
-        total_races_by_place[place_key] += 1
+        total_races_by_place[place_code] += 1
 
         winners = [r for r in rows if r["rank"] == 1]
         if len(winners) == 0:
@@ -160,13 +169,13 @@ def main():
             skip["winner_course_missing_or_invalid"] += 1
             continue
 
-        eligible_races_by_place[place_key] += 1
+        eligible_races_by_place[place_code] += 1
 
         # 各レースには実進入1～6コースが1艇ずつ存在するため、
         # 採用レース1件につき全コースの分母を1増やす。
         for c in range(1, 7):
-            stats[place_key][c]["n"] += 1
-        stats[place_key][winner_course]["wins"] += 1
+            stats[place_code][c]["n"] += 1
+        stats[place_code][winner_course]["wins"] += 1
 
     eligible_total = sum(eligible_races_by_place.values())
     if eligible_total == 0:
@@ -181,6 +190,7 @@ def main():
     print(f"採用率            : {eligible_total / len(races) * 100:.2f}%")
     print("展示性能指標      : 不使用")
     print("進入位置          : race_result_detail.entry_course（1着艇のみ）")
+    print("場集計キー        : race_code の3文字場コード（名称表記揺れを統合）")
     print("本番変更          : なし")
 
     print("\n【skip】")
@@ -201,16 +211,16 @@ def main():
 
     all_course = {c: {"n": 0, "wins": 0} for c in range(1, 7)}
 
-    for place_key in sorted(stats, key=lambda x: x[0]):
-        code, name = place_key
-        er = eligible_races_by_place[place_key]
-        tr = total_races_by_place[place_key]
+    for code in sorted(stats):
+        name = PLACE_NAMES.get(code, "")
+        er = eligible_races_by_place[code]
+        tr = total_races_by_place[code]
         label = f"{code}:{name}" if name else code
 
         cells = []
         rate_sum = 0.0
         for c in range(1, 7):
-            s = stats[place_key][c]
+            s = stats[code][c]
             n = s["n"]
             w = s["wins"]
             r = (w / n * 100.0) if n else 0.0
@@ -238,7 +248,7 @@ def main():
     print("\n【確認ポイント】")
     print("・1着艇の実進入コースだけを使うので、exhibition_liveの保存期間には依存しない")
     print("・採用レースごとに1～6コースの分母を1ずつ増やすため、6コース1着率の合計は原則100%になる")
-    print("・まず採用率が大きく改善するか、古い期間でも1着艇entry_courseが保存されているかを確認する")
+    print("・場は3文字コード単位で集計するため、過去の名称変更・表記揺れでは分裂しない")
     print("・この段階では選手要素・平滑化・正規化・展示補正は一切入れない")
     print("=" * 118)
 
