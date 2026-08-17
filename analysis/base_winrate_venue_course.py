@@ -6,18 +6,20 @@
 
 目的:
 - 展示タイム、展示ST、周回、周り足、直線などの展示性能指標を一切使わず、
-  過去結果から「場×進入コース」の素の1着率を確認する。
+  過去結果から「場×実進入コース」の素の1着率を確認する。
 - まだ選手補正・平滑化・6艇正規化・本番ロジックへの組込みは行わない。
 
-進入コース:
-- race_entry の6艇を母集団とし、exhibition_live.entry_course を
-  「実際の進入コースを復元するための位置情報」としてのみ利用する。
-- 展示のタイム/ST/足指標は使用しない。
-- 6艇すべての進入コースが1～6で一意に揃うレースだけ採用する。
+考え方:
+- 1レースには実進入1～6コースが1艇ずつ存在するため、
+  場×コースの1着率を出すだけなら6艇全員の実進入を復元する必要はない。
+- race_result_detail の1着艇について entry_course が分かれば、
+  そのレースは各コースの分母を1ずつ増やし、1着艇の実進入コースだけ勝数を1増やせる。
+- これにより、保存期間の短い exhibition_live に依存せず全履歴を使える。
 
 結果:
 - race_result_detail の1着艇だけを使用する。
-- 5/6着が保存されていない場でも分母は race_entry 6艇なので影響しない。
+- 5/6着が保存されていない場でも影響しない。
+- 1着艇が一意で、かつ実進入コースが1～6のレースだけ採用する。
 
 Usage:
     # DB内の全期間
@@ -81,25 +83,21 @@ def load_rows(start_date, end_date):
     if where:
         where_sql = "WHERE " + " AND ".join(where)
 
+    # race_master を母集団にして、結果行は全件LEFT JOINする。
+    # Python側で rank=1 を一意に確認することで、欠損や重複も診断できる。
     sql = f"""
         SELECT
             rm.race_date,
             rm.stadium_name,
-            re.race_code,
-            re.player_id::text,
-            el.entry_course,
-            rrd.rank
-        FROM boat_race.race_entry re
-        JOIN boat_race.race_master rm
-          ON rm.race_code = re.race_code
-        LEFT JOIN boat_race.exhibition_live el
-          ON el.race_code = re.race_code
-         AND el.player_id = re.player_id
+            rm.race_code,
+            rrd.player_id::text,
+            rrd.rank,
+            rrd.entry_course
+        FROM boat_race.race_master rm
         LEFT JOIN boat_race.race_result_detail rrd
-          ON rrd.race_code = re.race_code
-         AND rrd.player_id = re.player_id
+          ON rrd.race_code = rm.race_code
         {where_sql}
-        ORDER BY re.race_code, re.player_id
+        ORDER BY rm.race_code, rrd.rank NULLS LAST, rrd.player_id
     """
 
     races = defaultdict(list)
@@ -109,7 +107,7 @@ def load_rows(start_date, end_date):
     with connect_db() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
-            for race_date, stadium_name, race_code, player_id, entry_course, rank in cur.fetchall():
+            for race_date, stadium_name, race_code, player_id, rank, entry_course in cur.fetchall():
                 d = race_date
                 if min_date is None or d < min_date:
                     min_date = d
@@ -120,8 +118,8 @@ def load_rows(start_date, end_date):
                     "race_date": d,
                     "stadium_name": str(stadium_name or "").strip(),
                     "player_id": str(player_id or "").strip(),
-                    "course": as_int(entry_course),
                     "rank": as_int(rank),
+                    "course": as_int(entry_course),
                 })
 
     return races, min_date, max_date
@@ -149,33 +147,23 @@ def main():
         place_key = (place_code, stadium_name)
         total_races_by_place[place_key] += 1
 
-        if len(rows) != 6 or len({r["player_id"] for r in rows}) != 6:
-            skip["not_6_entries"] += 1
-            continue
-
-        courses = [r["course"] for r in rows]
-        # entry_course が NULL / 空 / 1～6以外なら sorted() 前に除外する。
-        # None を含むリストを sorted() すると Python 3 では TypeError になるため。
-        if any(c not in range(1, 7) for c in courses):
-            skip["missing_or_invalid_course"] += 1
-            continue
-        if sorted(courses) != [1, 2, 3, 4, 5, 6]:
-            skip["not_6_unique_courses"] += 1
-            continue
-
         winners = [r for r in rows if r["rank"] == 1]
+        if len(winners) == 0:
+            skip["winner_missing"] += 1
+            continue
         if len(winners) != 1:
             skip["winner_not_unique"] += 1
             continue
 
         winner_course = winners[0]["course"]
         if winner_course not in range(1, 7):
-            skip["winner_course_invalid"] += 1
+            skip["winner_course_missing_or_invalid"] += 1
             continue
 
         eligible_races_by_place[place_key] += 1
 
-        # 1レースにつき各コース1艇ずつなので、各コースの分母を1増やす。
+        # 各レースには実進入1～6コースが1艇ずつ存在するため、
+        # 採用レース1件につき全コースの分母を1増やす。
         for c in range(1, 7):
             stats[place_key][c]["n"] += 1
         stats[place_key][winner_course]["wins"] += 1
@@ -185,25 +173,23 @@ def main():
         raise RuntimeError("採用できるレースが0件です")
 
     print("=" * 118)
-    print("基礎1着率 STEP 1：場×進入コース")
+    print("基礎1着率 STEP 1：場×実進入コース")
     print("=" * 118)
     print(f"DB対象期間        : {min_date} ～ {max_date}")
     print(f"全レース          : {len(races)}")
     print(f"採用レース        : {eligible_total}")
     print(f"採用率            : {eligible_total / len(races) * 100:.2f}%")
     print("展示性能指標      : 不使用")
-    print("進入位置          : exhibition_live.entry_course を位置情報としてのみ利用")
+    print("進入位置          : race_result_detail.entry_course（1着艇のみ）")
     print("本番変更          : なし")
 
     print("\n【skip】")
     for key in [
-        "not_6_entries",
-        "missing_or_invalid_course",
-        "not_6_unique_courses",
+        "winner_missing",
         "winner_not_unique",
-        "winner_course_invalid",
+        "winner_course_missing_or_invalid",
     ]:
-        print(f"{key:<28}: {skip[key]}")
+        print(f"{key:<34}: {skip[key]}")
 
     print("\n【場×コース 1着率】")
     header = (
@@ -229,12 +215,12 @@ def main():
             w = s["wins"]
             r = (w / n * 100.0) if n else 0.0
             rate_sum += r
-            cells.append(f"{r:6.2f}%({w:>4}/{n:<4})")
+            cells.append(f"{r:6.2f}%({w:>5}/{n:<5})")
             all_course[c]["n"] += n
             all_course[c]["wins"] += w
 
         print(
-            f"{label:<13} {er:>5}/{tr:<5}  "
+            f"{label:<13} {er:>6}/{tr:<6}  "
             + "  ".join(cells)
             + f"  {rate_sum:6.2f}%"
         )
@@ -246,12 +232,13 @@ def main():
         s = all_course[c]
         r = s["wins"] / s["n"] * 100.0 if s["n"] else 0.0
         all_sum += r
-        all_cells.append(f"{r:6.2f}%({s['wins']:>4}/{s['n']:<4})")
-    print(f"ALL           {eligible_total:>5}/{len(races):<5}  " + "  ".join(all_cells) + f"  {all_sum:6.2f}%")
+        all_cells.append(f"{r:6.2f}%({s['wins']:>5}/{s['n']:<5})")
+    print(f"ALL           {eligible_total:>6}/{len(races):<6}  " + "  ".join(all_cells) + f"  {all_sum:6.2f}%")
 
     print("\n【確認ポイント】")
-    print("・同一場では採用レースごとに1～6コースが1艇ずつなので、6コース1着率の合計は原則100%になる")
-    print("・まず採用率と各場の件数を確認し、進入データ不足で特定場だけ偏っていないかを見る")
+    print("・1着艇の実進入コースだけを使うので、exhibition_liveの保存期間には依存しない")
+    print("・採用レースごとに1～6コースの分母を1ずつ増やすため、6コース1着率の合計は原則100%になる")
+    print("・まず採用率が大きく改善するか、古い期間でも1着艇entry_courseが保存されているかを確認する")
     print("・この段階では選手要素・平滑化・正規化・展示補正は一切入れない")
     print("=" * 118)
 
