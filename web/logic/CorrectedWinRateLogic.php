@@ -14,7 +14,7 @@ class CorrectedWinRateLogic
         }
 
         $python = '/usr/bin/python3';
-        $cmd = $python . ' ' . escapeshellarg($script) . ' ' . escapeshellarg($raceCode) . ' 2>&1';
+        $cmd = $python . ' ' . escapeshellarg($script) . ' ' . escapeshellarg($raceCode);
         $raw = shell_exec($cmd);
 
         if ($raw === null || trim($raw) === '') {
