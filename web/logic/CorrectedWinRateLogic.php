@@ -4,7 +4,8 @@ class CorrectedWinRateLogic
 {
     public function calculate(string $raceCode): array
     {
-        $script = realpath(__DIR__ . '/../../forecast/corrected_winrate_live.py');
+        // STEP8-4の検証式と全工程一致を確認済みのexact版を本番Webで使用する。
+        $script = realpath(__DIR__ . '/../../forecast/corrected_winrate_live_exact.py');
         if ($script === false) {
             return [
                 'status' => 'error',
