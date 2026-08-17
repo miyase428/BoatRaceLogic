@@ -6,7 +6,8 @@
 
 目的:
 - 展示性能を使わず、対象レース6艇について「選手×今回場×今回コース」の生1着率を確認する。
-- 各選手について、対象レース以前に「今回場かつ今回コース」で走った履歴を新しい順に最大100走集計する。
+- STEP2と同じく、各選手の対象レース以前の直近100走を先に母集団として固定する。
+- その直近100走の中から「今回場かつ今回コース」に一致する履歴だけを集計する。
 - この段階では平滑化・6艇100%正規化・本番組込みは行わない。
 
 今回コース:
@@ -89,12 +90,8 @@ def load_target(conn, race_code):
     return race_date, place_code, stadium_name, boats
 
 
-def load_prior_at_venue(conn, player_id, place_code, target_date, target_race_code):
-    """対象場での過去出走を新しい順に取得する。
-
-    race_codeの8～10文字目の3文字場コードで統一し、場名称の表記揺れを避ける。
-    ここではSQL側でコースを絞らず、実進入を復元した後にPython側で今回コースへ絞る。
-    """
+def load_last_100(conn, player_id, target_date, target_race_code):
+    """対象レース以前の直近100走を、場を限定せず取得する。"""
     sql = """
         SELECT
             re.race_code,
@@ -117,12 +114,12 @@ def load_prior_at_venue(conn, player_id, place_code, target_date, target_race_co
             LIMIT 1
         ) el ON TRUE
         WHERE re.player_id::text = %s
-          AND SUBSTRING(re.race_code, 9, 3) = %s
           AND (
                 rm.race_date < %s::date
                 OR (rm.race_date = %s::date AND re.race_code < %s)
               )
         ORDER BY rm.race_date DESC, re.race_code DESC
+        LIMIT 100
     """
 
     with conn.cursor() as cur:
@@ -130,7 +127,6 @@ def load_prior_at_venue(conn, player_id, place_code, target_date, target_race_co
             sql,
             (
                 player_id,
-                place_code,
                 target_date.isoformat(),
                 target_date.isoformat(),
                 target_race_code,
@@ -154,9 +150,13 @@ def load_prior_at_venue(conn, player_id, place_code, target_date, target_race_co
             course = lc
             source = "lane_fallback"
 
+        race_code = str(race_code)
+        place_code = race_code[8:11] if len(race_code) >= 11 else "???"
+
         out.append({
-            "race_code": str(race_code),
+            "race_code": race_code,
             "race_date": race_date,
+            "place_code": place_code,
             "rank": as_int(rank),
             "course": course,
             "course_source": source,
@@ -165,9 +165,10 @@ def load_prior_at_venue(conn, player_id, place_code, target_date, target_race_co
     return out
 
 
-def summarize(history, target_course):
-    # 「今回場×今回コース」に合う履歴を新しい順に最大100走。
-    same = [r for r in history if r["course"] == target_course][:100]
+def summarize(history, target_place_code, target_course):
+    same_venue = [r for r in history if r["place_code"] == target_place_code]
+    same = [r for r in same_venue if r["course"] == target_course]
+
     finish = Counter()
     sources = Counter(r["course_source"] for r in same)
 
@@ -190,7 +191,8 @@ def summarize(history, target_course):
     newest = same[0]["race_date"] if same else None
 
     return {
-        "venue_history_n": len(history),
+        "history_n": len(history),
+        "venue_history_n": len(same_venue),
         "same_n": n,
         "first": wins,
         "second": finish["second"],
@@ -216,23 +218,23 @@ def main():
 
         results = []
         for boat in boats:
-            history = load_prior_at_venue(
+            history = load_last_100(
                 conn,
                 boat["player_id"],
-                place_code,
                 target_date,
                 race_code,
             )
-            summary = summarize(history, boat["course"])
+            summary = summarize(history, place_code, boat["course"])
             results.append({**boat, **summary})
 
-    print("=" * 150)
+    print("=" * 154)
     print("基礎1着率 STEP 3：選手×場×コース（直近100走）")
-    print("=" * 150)
+    print("=" * 154)
     print(f"対象レース      : {race_code}")
     print(f"対象日          : {target_date}")
     print(f"対象場          : {place_code}:{stadium_name}")
-    print("履歴母集団      : 対象レース以前・同じ場×同じ実進入コースの直近最大100走")
+    print("履歴母集団      : 各選手の対象レース以前・直近100走（全場）")
+    print("抽出条件        : 直近100走の中から今回場×今回実進入コース")
     print("今回コース      : 展示不使用のため枠番=コース")
     print("平滑化          : なし")
     print("100%正規化      : なし")
@@ -240,9 +242,9 @@ def main():
 
     print("\n【6艇の選手×今回場×今回コース実績】")
     print(
-        "艇  選手ID   選手名             今回C  同場全N  同場同C N  1着  2着  3着  着外   生1着率   3連対率   履歴期間              コース元(result/ex/lane)"
+        "艇  選手ID   選手名             今回C  履歴N  同場N  同場同C N  1着  2着  3着  着外   生1着率   3連対率   履歴期間              コース元(result/ex/lane)"
     )
-    print("-" * 150)
+    print("-" * 154)
 
     for r in results:
         s = r["sources"]
@@ -256,8 +258,9 @@ def main():
             f"{r['player_id']:<8} "
             f"{r['player_name'][:16]:<16} "
             f"{r['course']:>3}C   "
-            f"{r['venue_history_n']:>5}    "
-            f"{r['same_n']:>5}    "
+            f"{r['history_n']:>3}   "
+            f"{r['venue_history_n']:>3}      "
+            f"{r['same_n']:>3}      "
             f"{r['first']:>3}  {r['second']:>3}  {r['third']:>3}  {r['outside']:>3}   "
             f"{r['win_rate']:>7.2f}%   {r['top3_rate']:>7.2f}%   "
             f"{period:<23} "
@@ -265,12 +268,12 @@ def main():
         )
 
     print("\n【確認ポイント】")
-    print("・同場×同コースのNがどの程度確保できるかを最優先で見る")
-    print("・Nが少ない選手ほど生1着率は大きく振れるため、この時点では値そのものを最終評価に使わない")
-    print("・履歴期間が極端に長くなる場合は、平滑化だけでなく鮮度の扱いも後で検討する")
+    print("・STEP2と同じ直近100走を母集団に固定し、その中で同場×同コースのNを確認する")
+    print("・Nが0～数走でも異常ではない。少数標本はSTEP4の平滑化で広い母集団へ戻す")
+    print("・古い同場実績を100件集める方式ではないため、選手の現在性を優先できる")
     print("・lane_fallbackが多い場合は、実進入コース復元の精度を再確認する")
-    print("・ここまでの3要素を確認してから、STEP4で平滑化方式を比較する")
-    print("=" * 150)
+    print("・ここまでの3要素を揃えてから、STEP4で平滑化方式を比較する")
+    print("=" * 154)
 
 
 if __name__ == "__main__":
