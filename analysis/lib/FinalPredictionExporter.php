@@ -2,20 +2,20 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../common/db_connect.php';
-require_once __DIR__ . '/../../web/api/ApiClient.php';
-require_once __DIR__ . '/../../web/logic/PredictionLogic.php';
+require_once __DIR__ . '/../../web/api/ApiClientProduction.php';
+require_once __DIR__ . '/../../web/logic/PredictionLogicProduction.php';
 
 class FinalPredictionExporter
 {
     private PDO $pdo;
-    private ApiClient $apiClient;
-    private PredictionLogic $predictionLogic;
+    private ApiClientProduction $apiClient;
+    private PredictionLogicProduction $predictionLogic;
 
     public function __construct()
     {
         $this->pdo = getPDO();
-        $this->apiClient = new ApiClient();
-        $this->predictionLogic = new PredictionLogic();
+        $this->apiClient = new ApiClientProduction();
+        $this->predictionLogic = new PredictionLogicProduction();
     }
 
     /**
