@@ -1,375 +1,522 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+スリット体系 v2 健康診断
+
+目的:
+- 本番STが6艇揃わない場も含め、24場で「予測スリットパターン → 実着順」の有効性を検証する。
+- 予測方法を2方式比較する。
+    A) EX_ONLY      : 展示STのみ
+    B) PLAYER_CORR  : 展示ST + 選手別の過去 展示→本番ST 平均差
+- PLAYER_CORR は対象レース日より前のデータだけを使用し、未来情報の混入を防ぐ。
+- 展示STと本番STの結合は race_code + player_id で行う。
+- race_result_detail が上位4着までしかない場では、結果に存在しない艇を 5.5 着扱いする。
+  ただし 1～4着が揃っているレースのみ評価対象とする。
+- 本番STが6艇揃うレースについては、補助診断として予測パターンと実パターンの一致率も出す。
+
+Usage:
+    python3 analysis/slit_validate_v2.py 2026-06-15 2026-07-14
+"""
+
+from __future__ import annotations
+
+import bisect
 import json
+import os
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
 
-import psycopg2
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+COURSE_DIR = os.path.join(ROOT, "theories", "course_correction")
+sys.path.insert(0, COURSE_DIR)
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-THEORY_DIR = REPO_ROOT / "theories" / "course_correction"
-sys.path.insert(0, str(THEORY_DIR))
-from classify_slit_pattern import classify_slit_pattern
+from classify_slit_pattern import classify_slit_pattern  # noqa: E402
+from predict_pattern import connect_db  # noqa: E402
 
-DB_CONFIG = {
-    "host": "192.168.0.208",
-    "port": 5432,
-    "dbname": "devdb",
-    "user": "miyase428",
-    "password": "herunia0113",
-}
 
 PATTERN_NAMES = {
-    1: "通常型", 2: "横一線", 3: "1・2先行", 4: "スロー先行",
-    5: "壁なし", 6: "2・3遅れ", 7: "中凹み", 8: "3号艇攻め",
-    9: "中ぶくれ", 10: "1号艇遅れ", 11: "外側先行", 12: "ダッシュ先行",
+    1: "内側先行",
+    2: "横一線",
+    3: "1・2先行",
+    4: "スロー先行",
+    5: "壁なし",
+    6: "2・3号艇遅れ",
+    7: "中凹み",
+    8: "3号艇攻め",
+    9: "中ぶくれ",
+    10: "1号艇遅れ",
+    11: "外側先行",
+    12: "ダッシュ先行",
 }
 
-BOOL_FEATURES = [
-    "inside_fast", "wall_none", "middle_attack", "dash_fast",
-    "inside_late", "line_abreast", "two_three_late", "middle_hollow",
-    "middle_bulge", "one_two_fast", "outside_attack",
-]
+METHODS = ("EX_ONLY", "PLAYER_CORR")
+BOOL_FEATURES = (
+    "inside_fast",
+    "wall_none",
+    "middle_attack",
+    "dash_fast",
+    "inside_late",
+    "line_abreast",
+    "two_three_late",
+    "middle_hollow",
+    "middle_bulge",
+    "one_two_fast",
+    "outside_attack",
+)
 
 
-def connect_db():
-    return psycopg2.connect(**DB_CONFIG)
+def ymd(s: str) -> str:
+    dt = datetime.strptime(s, "%Y-%m-%d")
+    return dt.strftime("%Y%m%d")
 
 
-def normalize_rank(rank, has_result):
-    if not has_result:
-        return None
-    if rank is None or rank == "":
-        return 5.5
+def to_float(v):
     try:
-        v = float(rank)
+        if v is None or v == "":
+            return None
+        return float(v)
     except (TypeError, ValueError):
         return None
-    return v if 1 <= v <= 6 else None
+
+
+def to_rank(v):
+    try:
+        if v is None or v == "":
+            return None
+        return int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def load_settings():
-    with (THEORY_DIR / "venue_slit_settings.json").open(encoding="utf-8") as f:
+    path = os.path.join(COURSE_DIR, "venue_slit_settings.json")
+    with open(path, encoding="utf-8") as f:
         return json.load(f)["default"]
 
 
-def load_rows(end_date):
-    sql = """
+def fetch_target_data(start_ymd: str, end_ymd: str):
+    conn = connect_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT race_code, player_id, entry_course, start_timing
+        FROM boat_race.exhibition_live
+        WHERE SUBSTRING(race_code, 1, 8) BETWEEN %s AND %s
+        ORDER BY race_code, entry_course
+        """,
+        (start_ymd, end_ymd),
+    )
+    exhibition_rows = cur.fetchall()
+
+    cur.execute(
+        """
+        SELECT race_code, player_id, entry_course, start_timing, rank
+        FROM boat_race.race_result_detail
+        WHERE SUBSTRING(race_code, 1, 8) BETWEEN %s AND %s
+        ORDER BY race_code, entry_course, player_id
+        """,
+        (start_ymd, end_ymd),
+    )
+    result_rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+    return exhibition_rows, result_rows
+
+
+def fetch_player_delta_history(end_ymd: str):
+    """選手ごとの (日付, 本番ST - 展示ST) 履歴を作る。"""
+    conn = connect_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
         SELECT
-            re.race_code,
-            re.player_id,
-            el.entry_course,
-            el.start_timing AS exhibition_st,
-            rrd.start_timing AS real_st,
-            rrd.rank,
-            (rrd.race_code IS NOT NULL) AS has_result
-        FROM boat_race.race_entry re
-        LEFT JOIN boat_race.exhibition_live el
-          ON el.race_code = re.race_code
-         AND el.player_id = re.player_id
-        LEFT JOIN boat_race.race_result_detail rrd
-          ON rrd.race_code = re.race_code
-         AND rrd.player_id = re.player_id
-        WHERE re.race_date <= %s
-        ORDER BY re.race_code, el.entry_course NULLS LAST, re.player_id
-    """
-    with connect_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (end_date,))
-            return cur.fetchall()
+            r.race_code,
+            r.player_id,
+            r.start_timing AS real_st,
+            e.start_timing AS exhibition_st
+        FROM boat_race.race_result_detail r
+        JOIN boat_race.exhibition_live e
+          ON r.race_code = e.race_code
+         AND r.player_id = e.player_id
+        WHERE r.start_timing IS NOT NULL
+          AND e.start_timing IS NOT NULL
+          AND SUBSTRING(r.race_code, 1, 8) <= %s
+        ORDER BY r.player_id, r.race_code
+        """,
+        (end_ymd,),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    raw = defaultdict(list)
+    for race_code, player_id, real_st, ex_st in rows:
+        real = to_float(real_st)
+        ex = to_float(ex_st)
+        if real is None or ex is None:
+            continue
+        raw[str(player_id)].append((str(race_code)[:8], real - ex))
+
+    history = {}
+    for pid, vals in raw.items():
+        vals.sort(key=lambda x: x[0])
+        dates = []
+        prefix = [0.0]
+        for d, delta in vals:
+            dates.append(d)
+            prefix.append(prefix[-1] + delta)
+        history[pid] = (dates, prefix)
+
+    return history
 
 
-def group_races(rows):
-    races = defaultdict(list)
-    for race_code, player_id, entry_course, ex_st, real_st, rank, has_result in rows:
-        course = None
-        if entry_course is not None:
-            try:
-                c = int(entry_course)
-                if 1 <= c <= 6:
-                    course = c
-            except (TypeError, ValueError):
-                pass
-        races[race_code].append({
-            "player_id": str(player_id),
-            "course": course,
-            "ex_st": float(ex_st) if ex_st is not None else None,
-            "real_st": float(real_st) if real_st is not None else None,
-            "rank": normalize_rank(rank, bool(has_result)),
-            "has_result": bool(has_result),
-        })
-    return races
+def prior_player_delta(history, player_id: str, target_date: str):
+    item = history.get(str(player_id))
+    if not item:
+        return 0.0, 0
+    dates, prefix = item
+    # 対象レース当日は全部除外し、前日までだけ使う。
+    n = bisect.bisect_left(dates, target_date)
+    if n <= 0:
+        return 0.0, 0
+    return prefix[n] / n, n
 
 
-def new_lane_counts():
-    return {c: {"n": 0, "win": 0, "top3": 0, "rank_sum": 0.0} for c in range(1, 7)}
+def group_target(exhibition_rows, result_rows):
+    ex_by_race = defaultdict(list)
+    for race_code, player_id, entry_course, st in exhibition_rows:
+        ex_by_race[str(race_code)].append(
+            {
+                "player_id": str(player_id),
+                "entry_course": int(entry_course) if entry_course is not None else None,
+                "st": to_float(st),
+            }
+        )
+
+    res_by_race = defaultdict(list)
+    for race_code, player_id, entry_course, st, rank in result_rows:
+        res_by_race[str(race_code)].append(
+            {
+                "player_id": str(player_id),
+                "entry_course": int(entry_course) if entry_course is not None else None,
+                "st": to_float(st),
+                "rank": to_rank(rank),
+            }
+        )
+
+    return ex_by_race, res_by_race
 
 
-def add_result(counts, lane, rank):
-    b = counts[lane]
-    b["n"] += 1
-    b["rank_sum"] += rank
-    if rank == 1.0:
-        b["win"] += 1
-    if rank <= 3.0:
-        b["top3"] += 1
+def new_stat():
+    return {"n": 0, "win": 0, "top2": 0, "top3": 0, "sum_rank": 0.0}
 
 
-def rate(x, n):
-    return x / n if n else 0.0
+def add_stat(stat, rank: float):
+    stat["n"] += 1
+    stat["sum_rank"] += rank
+    if rank == 1:
+        stat["win"] += 1
+    if rank <= 2:
+        stat["top2"] += 1
+    if rank <= 3:
+        stat["top3"] += 1
+
+
+def rates(stat):
+    n = stat["n"]
+    if n == 0:
+        return {"win": 0.0, "top2": 0.0, "top3": 0.0, "avg": 0.0}
+    return {
+        "win": stat["win"] / n,
+        "top2": stat["top2"] / n,
+        "top3": stat["top3"] / n,
+        "avg": stat["sum_rank"] / n,
+    }
+
+
+def valid_exhibition(ex_rows):
+    if len(ex_rows) != 6:
+        return False
+    courses = [r["entry_course"] for r in ex_rows]
+    if sorted(courses) != [1, 2, 3, 4, 5, 6]:
+        return False
+    if any(r["st"] is None for r in ex_rows):
+        return False
+    if len({r["player_id"] for r in ex_rows}) != 6:
+        return False
+    return True
+
+
+def valid_top4_results(res_rows):
+    ranks = [r["rank"] for r in res_rows if r["rank"] is not None]
+    return all(x in ranks for x in (1, 2, 3, 4))
+
+
+def build_actual_pattern(res_rows, settings):
+    usable = [
+        r for r in res_rows
+        if r["entry_course"] in (1, 2, 3, 4, 5, 6) and r["st"] is not None
+    ]
+    if len(usable) != 6:
+        return None
+    by_course = {r["entry_course"]: r["st"] for r in usable}
+    if sorted(by_course.keys()) != [1, 2, 3, 4, 5, 6]:
+        return None
+    st = [by_course[c] for c in range(1, 7)]
+    return classify_slit_pattern(st, settings)
+
+
+def evaluate(start_ymd: str, end_ymd: str):
+    settings = load_settings()
+    exhibition_rows, result_rows = fetch_target_data(start_ymd, end_ymd)
+    history = fetch_player_delta_history(end_ymd)
+    ex_by_race, res_by_race = group_target(exhibition_rows, result_rows)
+
+    baseline = {c: new_stat() for c in range(1, 7)}
+    cells = {method: defaultdict(new_stat) for method in METHODS}
+    pattern_races = {method: defaultdict(int) for method in METHODS}
+
+    exact_match = {method: {"match": 0, "total": 0} for method in METHODS}
+    feature_match = {
+        method: {f: {"match": 0, "total": 0} for f in BOOL_FEATURES}
+        for method in METHODS
+    }
+
+    counters = defaultdict(int)
+    corr_history_counts = []
+
+    all_races = sorted(ex_by_race.keys())
+    counters["target_races"] = len(all_races)
+
+    for race_code in all_races:
+        ex_rows = sorted(ex_by_race[race_code], key=lambda r: r["entry_course"] or 99)
+        if not valid_exhibition(ex_rows):
+            counters["skip_exhibition_not6"] += 1
+            continue
+
+        res_rows = res_by_race.get(race_code, [])
+        if not valid_top4_results(res_rows):
+            counters["skip_result_top4_missing"] += 1
+            continue
+
+        result_by_player = {}
+        for r in res_rows:
+            result_by_player[r["player_id"]] = r["rank"]
+
+        target_date = race_code[:8]
+        ex_st = [r["st"] for r in ex_rows]
+        corrected_st = []
+        for r in ex_rows:
+            delta, n_hist = prior_player_delta(history, r["player_id"], target_date)
+            corrected_st.append(r["st"] + delta)
+            corr_history_counts.append(n_hist)
+
+        pred = {
+            "EX_ONLY": classify_slit_pattern(ex_st, settings),
+            "PLAYER_CORR": classify_slit_pattern(corrected_st, settings),
+        }
+
+        # 同じ処理レース集合でコース基準成績を作る。
+        for r in ex_rows:
+            rank = result_by_player.get(r["player_id"])
+            rank_value = float(rank) if rank is not None else 5.5
+            add_stat(baseline[r["entry_course"]], rank_value)
+
+        for method in METHODS:
+            pattern_id, features = pred[method]
+            pattern_races[method][pattern_id] += 1
+
+            for r in ex_rows:
+                rank = result_by_player.get(r["player_id"])
+                rank_value = float(rank) if rank is not None else 5.5
+                add_stat(cells[method][(pattern_id, r["entry_course"])], rank_value)
+
+        # 本番STが6艇揃うレースだけ、パターン再現率を補助診断する。
+        actual = build_actual_pattern(res_rows, settings)
+        if actual is not None:
+            actual_pid, actual_features = actual
+            counters["actual_st6_races"] += 1
+            for method in METHODS:
+                pred_pid, pred_features = pred[method]
+                exact_match[method]["total"] += 1
+                if pred_pid == actual_pid:
+                    exact_match[method]["match"] += 1
+                for f in BOOL_FEATURES:
+                    feature_match[method][f]["total"] += 1
+                    if bool(pred_features.get(f)) == bool(actual_features.get(f)):
+                        feature_match[method][f]["match"] += 1
+
+        counters["processed_races"] += 1
+
+    return {
+        "settings": settings,
+        "baseline": baseline,
+        "cells": cells,
+        "pattern_races": pattern_races,
+        "exact_match": exact_match,
+        "feature_match": feature_match,
+        "counters": counters,
+        "corr_history_counts": corr_history_counts,
+    }
 
 
 def pct(x):
     return f"{x * 100:6.2f}%"
 
 
-def pp(x):
-    return f"{x * 100:+6.2f}"
+def print_report(start_date: str, end_date: str, data):
+    baseline = data["baseline"]
+    cells = data["cells"]
+    pattern_races = data["pattern_races"]
+    exact_match = data["exact_match"]
+    feature_match = data["feature_match"]
+    counters = data["counters"]
+    history_counts = data["corr_history_counts"]
 
+    base_rates = {c: rates(baseline[c]) for c in range(1, 7)}
 
-def compute(start_date, end_date):
-    start_ymd = datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y%m%d")
-    end_ymd = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y%m%d")
-    settings = load_settings()
-    races = group_races(load_rows(end_date))
+    print("========================================")
+    print("スリット体系 v2 健康診断")
+    print("========================================")
+    print(f"期間            : {start_date} ～ {end_date}")
+    print("結果対応        : race_code + player_id")
+    print("欠損着順        : 1～4着確認後、結果に無い艇=5.5")
+    print("補正履歴        : 対象レース日の前日まで（未来情報なし）")
+    print("比較            : EX_ONLY vs PLAYER_CORR")
+    print()
 
-    corr_sum = defaultdict(float)
-    corr_n = defaultdict(int)
+    print("【処理状況】")
+    print(f"対象レース      : {counters['target_races']}")
+    print(f"処理レース      : {counters['processed_races']}")
+    print(f"展示6艇不足skip : {counters['skip_exhibition_not6']}")
+    print(f"1～4着不足skip  : {counters['skip_result_top4_missing']}")
+    print(f"本番ST6艇レース : {counters['actual_st6_races']}  ※一致率診断用")
+    if history_counts:
+        zero = sum(1 for n in history_counts if n == 0)
+        avg_hist = sum(history_counts) / len(history_counts)
+        print(f"選手補正履歴0件 : {zero}/{len(history_counts)} ({zero/len(history_counts)*100:.2f}%)")
+        print(f"平均補正履歴件数: {avg_hist:.2f}")
+    print()
 
-    baseline = new_lane_counts()
-    actual_counts = {pid: new_lane_counts() for pid in range(1, 13)}
-    exhibition_counts = {pid: new_lane_counts() for pid in range(1, 13)}
-    predicted_counts = {pid: new_lane_counts() for pid in range(1, 13)}
-    feature_counts = {name: new_lane_counts() for name in BOOL_FEATURES}
+    print("【コース基準成績（同一評価レース集合）】")
+    for c in range(1, 7):
+        r = base_rates[c]
+        print(
+            f"C{c} N={baseline[c]['n']:5d} "
+            f"1着={pct(r['win'])} 2連={pct(r['top2'])} 3連={pct(r['top3'])} 平均={r['avg']:.3f}"
+        )
+    print()
 
-    actual_freq = Counter()
-    exhibition_freq = Counter()
-    predicted_freq = Counter()
-    feature_races = Counter()
+    for method in METHODS:
+        print("========================================")
+        print(f"方式: {method}")
+        print("========================================")
+        print("【予測パターン分布】")
+        total_patterns = sum(pattern_races[method].values())
+        for pid in range(1, 13):
+            n = pattern_races[method].get(pid, 0)
+            share = n / total_patterns if total_patterns else 0.0
+            print(f"P{pid:02d} {PATTERN_NAMES[pid]:10s} N={n:5d} ({share*100:5.2f}%)")
+        print()
 
-    result = {
-        "target_total": 0, "processed": 0,
-        "skip_not6_entry": 0, "skip_not6_exhibition": 0,
-        "skip_missing_st": 0, "skip_missing_result": 0,
-        "exhibition_match": 0, "predicted_match": 0,
-        "exhibition_predicted_same": 0,
-    }
+        eligible = []
+        weighted_n = 0
+        weighted_abs_win = 0.0
+        weighted_abs_top3 = 0.0
 
-    for race_code in sorted(races):
-        boats = races[race_code]
-        race_ymd = race_code[:8]
-        is_target = start_ymd <= race_ymd <= end_ymd
-        if is_target:
-            result["target_total"] += 1
-
-        # race_entry should normally be six unique players.
-        if len(boats) != 6:
-            if is_target:
-                result["skip_not6_entry"] += 1
-            continue
-
-        by_course = {}
-        duplicate_course = False
-        for b in boats:
-            c = b["course"]
-            if c is None:
+        for (pid, course), stat in cells[method].items():
+            if stat["n"] < 50:
                 continue
-            if c in by_course:
-                duplicate_course = True
-            by_course[c] = b
+            r = rates(stat)
+            b = base_rates[course]
+            win_lift = r["win"] - b["win"]
+            top3_lift = r["top3"] - b["top3"]
+            score = abs(win_lift) + abs(top3_lift)
+            eligible.append((score, pid, course, stat, r, win_lift, top3_lift))
+            weighted_n += stat["n"]
+            weighted_abs_win += stat["n"] * abs(win_lift)
+            weighted_abs_top3 += stat["n"] * abs(top3_lift)
 
-        valid_exhibition = (
-            not duplicate_course
-            and len(by_course) == 6
-            and set(by_course) == set(range(1, 7))
-        )
-        if not valid_exhibition:
-            if is_target:
-                result["skip_not6_exhibition"] += 1
-            continue
+        print("【シグナル要約（N>=50 の pattern×course）】")
+        if weighted_n:
+            print(f"加重平均 |1着lift| : {weighted_abs_win/weighted_n*100:.2f}pt")
+            print(f"加重平均 |3連lift| : {weighted_abs_top3/weighted_n*100:.2f}pt")
+        else:
+            print("対象セルなし")
+        print()
 
-        complete_st = all(
-            by_course[c]["ex_st"] is not None and by_course[c]["real_st"] is not None
-            for c in range(1, 7)
-        )
-        complete_result = all(by_course[c]["rank"] is not None for c in range(1, 7))
+        print("【影響が大きい pattern×course 上位15セル（N>=50）】")
+        eligible.sort(reverse=True, key=lambda x: x[0])
+        for _, pid, course, stat, r, win_lift, top3_lift in eligible[:15]:
+            print(
+                f"P{pid:02d} {PATTERN_NAMES[pid]:10s} C{course} "
+                f"N={stat['n']:4d} "
+                f"1着={pct(r['win'])} lift={win_lift*100:+6.2f}pt "
+                f"3連={pct(r['top3'])} lift={top3_lift*100:+6.2f}pt "
+                f"平均={r['avg']:.3f}"
+            )
+        print()
 
-        if is_target:
-            if not complete_st:
-                result["skip_missing_st"] += 1
-            elif not complete_result:
-                result["skip_missing_result"] += 1
-            else:
-                ex_st = [by_course[c]["ex_st"] for c in range(1, 7)]
-                real_st = [by_course[c]["real_st"] for c in range(1, 7)]
-                pred_st = []
-                for c in range(1, 7):
-                    pid = by_course[c]["player_id"]
-                    corr = corr_sum[pid] / corr_n[pid] if corr_n[pid] else 0.0
-                    pred_st.append(by_course[c]["ex_st"] + corr)
+        print("【1コースへの影響（N>=30）】")
+        for pid in range(1, 13):
+            stat = cells[method].get((pid, 1))
+            if not stat or stat["n"] < 30:
+                continue
+            r = rates(stat)
+            b = base_rates[1]
+            print(
+                f"P{pid:02d} {PATTERN_NAMES[pid]:10s} "
+                f"N={stat['n']:4d} "
+                f"1着={pct(r['win'])} lift={(r['win']-b['win'])*100:+6.2f}pt "
+                f"3連={pct(r['top3'])} lift={(r['top3']-b['top3'])*100:+6.2f}pt "
+                f"平均={r['avg']:.3f}"
+            )
+        print()
 
-                actual_pid, _ = classify_slit_pattern(real_st, settings)
-                exhibition_pid, _ = classify_slit_pattern(ex_st, settings)
-                predicted_pid, predicted_features = classify_slit_pattern(pred_st, settings)
+    print("========================================")
+    print("本番ST6艇があるレースでの補助診断")
+    print("========================================")
+    for method in METHODS:
+        m = exact_match[method]
+        acc = m["match"] / m["total"] if m["total"] else 0.0
+        print(f"{method:11s} パターン完全一致 : {m['match']}/{m['total']} = {acc*100:.2f}%")
 
-                actual_freq[actual_pid] += 1
-                exhibition_freq[exhibition_pid] += 1
-                predicted_freq[predicted_pid] += 1
-                result["exhibition_match"] += int(exhibition_pid == actual_pid)
-                result["predicted_match"] += int(predicted_pid == actual_pid)
-                result["exhibition_predicted_same"] += int(exhibition_pid == predicted_pid)
+        feature_total = 0
+        feature_match_total = 0
+        for f in BOOL_FEATURES:
+            fm = feature_match[method][f]
+            feature_total += fm["total"]
+            feature_match_total += fm["match"]
+        feature_acc = feature_match_total / feature_total if feature_total else 0.0
+        print(f"{method:11s} 特徴フラグ一致   : {feature_match_total}/{feature_total} = {feature_acc*100:.2f}%")
+    print()
 
-                for c in range(1, 7):
-                    rank = by_course[c]["rank"]
-                    add_result(baseline, c, rank)
-                    add_result(actual_counts[actual_pid], c, rank)
-                    add_result(exhibition_counts[exhibition_pid], c, rank)
-                    add_result(predicted_counts[predicted_pid], c, rank)
-
-                for name in BOOL_FEATURES:
-                    if predicted_features.get(name) is True:
-                        feature_races[name] += 1
-                        for c in range(1, 7):
-                            add_result(feature_counts[name], c, by_course[c]["rank"])
-
-                result["processed"] += 1
-
-        # Leak-free rolling correction: update only after current race evaluation.
-        if complete_st:
-            for c in range(1, 7):
-                b = by_course[c]
-                pid = b["player_id"]
-                corr_sum[pid] += b["real_st"] - b["ex_st"]
-                corr_n[pid] += 1
-
-    result.update({
-        "start": start_date, "end": end_date,
-        "baseline": baseline,
-        "actual_counts": actual_counts,
-        "exhibition_counts": exhibition_counts,
-        "predicted_counts": predicted_counts,
-        "feature_counts": feature_counts,
-        "actual_freq": actual_freq,
-        "exhibition_freq": exhibition_freq,
-        "predicted_freq": predicted_freq,
-        "feature_races": feature_races,
-    })
-    return result
-
-
-def lane_metrics(counts, baseline, lane):
-    c = counts[lane]
-    b = baseline[lane]
-    n = c["n"]
-    bn = b["n"]
-    win = rate(c["win"], n)
-    top3 = rate(c["top3"], n)
-    avg = c["rank_sum"] / n if n else 0.0
-    bwin = rate(b["win"], bn)
-    btop3 = rate(b["top3"], bn)
-    return n, win, top3, avg, win - bwin, top3 - btop3
-
-
-def print_pattern_table(title, freq, counts, baseline, processed):
-    print(f"\n【{title}】")
-    print("PID 名称             R数    構成比 | 1号艇 1着/lift 3連/lift | 最強外艇(2-6) 1着/lift")
-    for pid in range(1, 13):
-        n = freq[pid]
-        if n == 0:
-            print(f"{pid:>2}  {PATTERN_NAMES[pid]:<14} {0:>5} {0:>7.2f}% | -")
-            continue
-        _, w1, t31, _, lw1, lt31 = lane_metrics(counts[pid], baseline, 1)
-        best = None
-        for lane in range(2, 7):
-            _, w, _, _, lw, _ = lane_metrics(counts[pid], baseline, lane)
-            cand = (lw, w, lane)
-            if best is None or cand > best:
-                best = cand
-        bl, bw, lane = best
-        print(
-            f"{pid:>2}  {PATTERN_NAMES[pid]:<14} {n:>5} {n/processed*100:>7.2f}% | "
-            f"{pct(w1)}/{pp(lw1)} {pct(t31)}/{pp(lt31)} | "
-            f"{lane}号艇 {pct(bw)}/{pp(bl)}"
-        )
-
-
-def print_features(r):
-    print("\n【予測ST 特徴フラグ別】")
-    print("特徴                  R数 | 1号艇 1着/lift 3連/lift | 最強外艇(2-6) 1着/lift")
-    for name in BOOL_FEATURES:
-        n = r["feature_races"][name]
-        if n == 0:
-            print(f"{name:<22} {0:>5} | -")
-            continue
-        counts = r["feature_counts"][name]
-        _, w1, t31, _, lw1, lt31 = lane_metrics(counts, r["baseline"], 1)
-        best = None
-        for lane in range(2, 7):
-            _, w, _, _, lw, _ = lane_metrics(counts, r["baseline"], lane)
-            cand = (lw, w, lane)
-            if best is None or cand > best:
-                best = cand
-        bl, bw, lane = best
-        print(
-            f"{name:<22} {n:>5} | {pct(w1)}/{pp(lw1)} {pct(t31)}/{pp(lt31)} | "
-            f"{lane}号艇 {pct(bw)}/{pp(bl)}"
-        )
-
-
-def print_result(r):
-    p = r["processed"]
-    print("=" * 72)
-    print("スリット体系 健康診断 v2（race_entry母集団 / player_id対応）")
-    print("=" * 72)
-    print(f"期間                 : {r['start']} ～ {r['end']}")
-    print(f"対象レース           : {r['target_total']}")
-    print(f"処理レース           : {p}")
-    print(f"not_6 race_entry      : {r['skip_not6_entry']}")
-    print(f"not_6 exhibition      : {r['skip_not6_exhibition']}")
-    print(f"missing ST            : {r['skip_missing_st']}")
-    print(f"missing result        : {r['skip_missing_result']}")
-    print("対応                 : race_entry → exhibition/result を race_code + player_id")
-    print("補正履歴             : 対象レースより前だけを累積（リークなし）")
-    print("着外処理             : 結果行あり + rank NULL/空 = 5.5")
-    if p == 0:
-        return
-
-    print("\n【予測パターン再現率】")
-    print(f"展示STそのまま → 本番pattern一致 : {r['exhibition_match']}/{p} = {r['exhibition_match']/p*100:.2f}%")
-    print(f"展示ST+選手補正 → 本番pattern一致 : {r['predicted_match']}/{p} = {r['predicted_match']/p*100:.2f}%")
-    print(f"展示pattern と補正patternの一致   : {r['exhibition_predicted_same']}/{p} = {r['exhibition_predicted_same']/p*100:.2f}%")
-    print(f"選手補正による一致率差             : {(r['predicted_match']-r['exhibition_match'])/p*100:+.2f}pt")
-
-    print("\n【コース基準】")
-    for lane in range(1, 7):
-        b = r["baseline"][lane]
-        n = b["n"]
-        print(f"{lane}号艇 N={n:>5} 1着={pct(rate(b['win'],n))} 3連={pct(rate(b['top3'],n))} 平均={b['rank_sum']/n if n else 0:.3f}")
-
-    print_pattern_table("本番STで分類（理論そのもの）", r["actual_freq"], r["actual_counts"], r["baseline"], p)
-    print_pattern_table("展示STのみで分類（比較用）", r["exhibition_freq"], r["exhibition_counts"], r["baseline"], p)
-    print_pattern_table("展示ST＋選手補正で分類（Web想定）", r["predicted_freq"], r["predicted_counts"], r["baseline"], p)
-    print_features(r)
-
-    print("\n" + "=" * 72)
-    print("見るポイント")
-    print("=" * 72)
-    print("・v1より not_6 が大幅に減るか")
-    print("・本番STの強いパターン差が2期間再現するか")
-    print("・展示ST+補正の一致率が展示ST単体より改善するか")
-    print("・予測pattern/特徴フラグの方向性が2期間で再現するか")
-    print("=" * 72)
+    print("見るポイント:")
+    print("1) 2期間で同じ pattern×course の lift 符号・大きさが再現するか")
+    print("2) EX_ONLY と PLAYER_CORR のどちらが安定してシグナルを分けるか")
+    print("3) 本番ST6艇サブセットでは、どちらのパターン一致率が高いか")
+    print("4) PLAYER_CORR が弱ければ、上位4着中心の本番ST履歴による選択バイアスを疑う")
+    print("========================================")
 
 
 def main():
     if len(sys.argv) != 3:
         print("Usage: python3 analysis/slit_validate_v2.py YYYY-MM-DD YYYY-MM-DD")
         sys.exit(1)
-    start_date, end_date = sys.argv[1], sys.argv[2]
-    datetime.strptime(start_date, "%Y-%m-%d")
-    datetime.strptime(end_date, "%Y-%m-%d")
-    print_result(compute(start_date, end_date))
+
+    start_date = sys.argv[1]
+    end_date = sys.argv[2]
+    start_ymd = ymd(start_date)
+    end_ymd = ymd(end_date)
+    if start_ymd > end_ymd:
+        raise SystemExit("開始日は終了日以前にしてください")
+
+    data = evaluate(start_ymd, end_ymd)
+    print_report(start_date, end_date, data)
 
 
 if __name__ == "__main__":
