@@ -10,7 +10,6 @@ THEORY_DIR = REPO_ROOT / "theories" / "course_correction"
 sys.path.insert(0, str(THEORY_DIR))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from classify_slit_pattern import classify_slit_pattern
 from slit_pattern_condition_analyze import prepare_races
 from slit_buff_rebuild_validate import (
     calc_baseline,
@@ -67,13 +66,15 @@ def main():
     if not rows:
         raise RuntimeError("生成対象レースが0件です")
 
-    baseline, baseline_counts = calc_baseline(rows)
+    baseline, _ = calc_baseline(rows)
     pattern_rates, pattern_counts = calc_pattern_rates(rows)
     buff = calc_buff(pattern_rates, baseline, pattern_counts)
     buff = zero_inactive_metrics(buff)
 
-    out_buff = THEORY_DIR / "buff_debuff_slit.json"
-    out_meta = THEORY_DIR / "buff_debuff_slit_meta.json"
+    # 本番buff_debuff_slit.jsonはこの段階では上書きしない。
+    # 候補を確認後、ユーザーが明示的に置換する。
+    out_buff = THEORY_DIR / "buff_debuff_slit_candidate.json"
+    out_meta = THEORY_DIR / "buff_debuff_slit_candidate_meta.json"
 
     with out_buff.open("w", encoding="utf-8") as f:
         json.dump(stringify_keys(buff), f, indent=2, ensure_ascii=False)
@@ -81,6 +82,7 @@ def main():
 
     meta = {
         "version": 2,
+        "status": "candidate",
         "prediction_method": "C_ST_RANK",
         "pattern_classifier": "current production classify_slit_pattern + venue_slit_settings.json",
         "training_start": start_date,
@@ -98,6 +100,7 @@ def main():
             "buff is learned from predicted C_ST_RANK PID -> actual finish outcome",
             "win/trio passed bidirectional validation and final holdout",
             "place2/place3 are intentionally forced to zero",
+            "candidate file does not affect slit_api.php until explicitly promoted",
         ],
     }
 
@@ -106,7 +109,7 @@ def main():
         f.write("\n")
 
     print("=" * 108)
-    print("スリット 本番buff生成（C_ST_RANK予測PID → 実着順）")
+    print("スリット 本番buff候補生成（C_ST_RANK予測PID → 実着順）")
     print("=" * 108)
     print(f"期間       : {start_date} ～ {end_date}")
     print(f"使用期     : {', '.join(terms)}")
@@ -115,6 +118,7 @@ def main():
     print(f"cap        : ±{MAX_CAP:.2f}")
     print("採用指標   : win / trio")
     print("0補正      : place2 / place3")
+    print("本番JSON   : 未変更")
     print("\n【skip】")
     for key in ["not_6_entry", "not_6_exhibition", "missing_ex_st", "bad_result", "missing_racer_term_or_st"]:
         print(f"{key:<29}: {skip[key]}")
@@ -135,7 +139,7 @@ def main():
                     inactive_nonzero += 1
     print(f"win/trio 最大絶対値 : {max_abs:.6f} (cap={MAX_CAP:.2f})")
     print(f"place2/place3 非0セル: {inactive_nonzero}")
-    print(f"出力       : {out_buff}")
+    print(f"候補       : {out_buff}")
     print(f"meta       : {out_meta}")
     print("=" * 108)
 
