@@ -1,9 +1,9 @@
-import sys
 import json
-import psycopg2
-from collections import defaultdict
-from argparse import ArgumentParser
 import os
+from argparse import ArgumentParser
+from collections import defaultdict
+
+import psycopg2
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -16,7 +16,7 @@ DB_CONFIG = {
     "password": "herunia0113",
 }
 
-# sum 区間定義（ラベルと境界）
+# SUM区間定義（ラベルと境界）
 SUM_INTERVALS = [
     ("-0.6未満", float("-inf"), -0.6),
     ("-0.6--0.4", -0.6, -0.4),
@@ -30,14 +30,14 @@ SUM_INTERVALS = [
 
 
 def load_features(path: str = "features.json") -> dict:
-    """features.json を読み込む"""
+    """features.json を読み込む。"""
     full_path = os.path.join(BASE_DIR, path)
     with open(full_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def get_sum_interval_label(value: float) -> str:
-    """sum の差分値を区間ラベルに変換"""
+    """SUM差分値を区間ラベルへ変換する。"""
     for label, low, high in SUM_INTERVALS:
         if low <= value < high:
             return label
@@ -45,7 +45,7 @@ def get_sum_interval_label(value: float) -> str:
 
 
 def connect_db():
-    """PostgreSQL に接続"""
+    """PostgreSQLへ接続する。"""
     return psycopg2.connect(
         host=DB_CONFIG["host"],
         port=DB_CONFIG["port"],
@@ -56,17 +56,19 @@ def connect_db():
 
 
 def fetch_exhibition_data(conn, jyo: str):
-    """展示データ取得"""
+    """展示データを選手ID付きで取得する。"""
     sql = """
         SELECT
-            race_code,
-            entry_course,
-            exhibition_time,
-            lap_time,
-            around_time,
-            straight_time
-        FROM boat_race.exhibition_live
-        WHERE SUBSTRING(race_code, 9, 3) = %s
+            el.race_code,
+            el.player_id,
+            el.entry_course,
+            el.exhibition_time,
+            el.lap_time,
+            el.around_time,
+            el.straight_time
+        FROM boat_race.exhibition_live el
+        WHERE SUBSTRING(el.race_code, 9, 3) = %s
+        ORDER BY el.race_code, el.entry_course
     """
     cur = conn.cursor()
     cur.execute(sql, (jyo,))
@@ -76,14 +78,19 @@ def fetch_exhibition_data(conn, jyo: str):
 
 
 def fetch_result_data(conn, jyo: str):
-    """レース結果データ取得"""
+    """
+    実着順を race_code + player_id で取得する。
+
+    展示進入コースと結果側の entry_course を直接対応させず、
+    選手IDで同一選手を対応させる。
+    """
     sql = """
         SELECT
-            race_code,
-            entry_course,
-            rank
-        FROM boat_race.race_result_detail
-        WHERE SUBSTRING(race_code, 9, 3) = %s
+            rrd.race_code,
+            rrd.player_id,
+            rrd.rank
+        FROM boat_race.race_result_detail rrd
+        WHERE SUBSTRING(rrd.race_code, 9, 3) = %s
     """
     cur = conn.cursor()
     cur.execute(sql, (jyo,))
@@ -92,13 +99,39 @@ def fetch_result_data(conn, jyo: str):
     return rows
 
 
+def normalize_rank(rank):
+    """プロジェクト共通ルールに合わせ、NULL/空の着順は5.5扱い。"""
+    if rank is None or rank == "":
+        return 5.5
+
+    try:
+        value = int(rank)
+    except (TypeError, ValueError):
+        return None
+
+    if 1 <= value <= 6:
+        return float(value)
+
+    return None
+
+
 def build_race_dicts(exhibition_rows, result_rows):
-    """展示データと結果データを race_code 単位に整理"""
+    """展示と結果を race_code 単位に整理する。"""
     exhibitions_by_race = defaultdict(list)
-    for race_code, entry_course, ex_time, lap, around, straight in exhibition_rows:
+
+    for (
+        race_code,
+        player_id,
+        entry_course,
+        ex_time,
+        lap,
+        around,
+        straight,
+    ) in exhibition_rows:
         exhibitions_by_race[race_code].append(
             {
                 "race_code": race_code,
+                "player_id": str(player_id),
                 "entry_course": int(entry_course),
                 "exhibition_time": float(ex_time) if ex_time is not None else None,
                 "lap_time": float(lap) if lap is not None else None,
@@ -107,20 +140,37 @@ def build_race_dicts(exhibition_rows, result_rows):
             }
         )
 
-    rank_by_race_course = {}
-    for race_code, entry_course, rank in result_rows:
-        key = (race_code, int(entry_course))
-        rank_by_race_course[key] = int(rank) if rank is not None else None
+    rank_by_race_player = {}
+    for race_code, player_id, rank in result_rows:
+        normalized = normalize_rank(rank)
+        if normalized is None:
+            continue
+        rank_by_race_player[(race_code, str(player_id))] = normalized
 
-    return exhibitions_by_race, rank_by_race_course
+    return exhibitions_by_race, rank_by_race_player
+
+
+def new_count_bucket():
+    return {"total": 0, "win": 0, "place2": 0, "place3": 0, "trio": 0}
+
+
+def add_rank(bucket: dict, rank: float):
+    bucket["total"] += 1
+    if rank == 1.0:
+        bucket["win"] += 1
+    if rank == 2.0:
+        bucket["place2"] += 1
+    if rank == 3.0:
+        bucket["place3"] += 1
+    if rank <= 3.0:
+        bucket["trio"] += 1
 
 
 def compute_stats_for_jyo(jyo: str, features: dict):
-    """指定場の統計を計算して stats 構造を返す"""
-
+    """指定場のSUM統計（コース基準との差）を計算する。"""
     feature_cols = features.get(jyo)
-    if not feature_cols:
-        raise ValueError(f"features.json に場コード {jyo} の設定がありません。")
+    if not feature_cols or len(feature_cols) != 3:
+        raise ValueError(f"features.json に場コード {jyo} の3項目設定がありません。")
 
     conn = connect_db()
     try:
@@ -129,102 +179,103 @@ def compute_stats_for_jyo(jyo: str, features: dict):
     finally:
         conn.close()
 
-    exhibitions_by_race, rank_by_race_course = build_race_dicts(
-        exhibition_rows, result_rows
+    exhibitions_by_race, rank_by_race_player = build_race_dicts(
+        exhibition_rows,
+        result_rows,
     )
 
-    # コース基準カウンタ（win, 2着, 3着, 3連対）
-    course_counts = {
-        c: {"total": 0, "win": 0, "place2": 0, "place3": 0, "trio": 0}
-        for c in range(1, 7)
-    }
-
-    # 区間 × コースのカウンタ
+    course_counts = {c: new_count_bucket() for c in range(1, 7)}
     interval_course_counts = {
-        c: {
-            label: {"total": 0, "win": 0, "place2": 0, "place3": 0, "trio": 0}
-            for (label, _, _) in SUM_INTERVALS
-        }
+        c: {label: new_count_bucket() for (label, _, _) in SUM_INTERVALS}
         for c in range(1, 7)
     }
 
-    # レース単位で sum_raw → avg_sum → 差分 sum を計算
+    processed_races = 0
+    skipped_not_6 = 0
+    skipped_missing_feature = 0
+    skipped_missing_result = 0
+
     for race_code, boats in exhibitions_by_race.items():
-        if not boats:
+        # 検証v2と同じく、展示6艇が揃ったレースだけを対象にする。
+        if len(boats) != 6:
+            skipped_not_6 += 1
             continue
 
-        sum_raw_list = []
-        for b in boats:
-            try:
-                vals = [float(b[col]) for col in feature_cols if b[col] is not None]
-            except KeyError:
-                continue
+        sum_rows = []
+        invalid_feature = False
 
-            if len(vals) != len(feature_cols):
-                continue
+        for boat in boats:
+            vals = []
+            for col in feature_cols:
+                value = boat.get(col)
+                if value is None:
+                    invalid_feature = True
+                    break
+                vals.append(float(value))
 
-            sum_raw = sum(vals)
-            sum_raw_list.append((b["entry_course"], sum_raw))
+            if invalid_feature:
+                break
 
-        if not sum_raw_list:
+            sum_rows.append(
+                {
+                    "player_id": boat["player_id"],
+                    "entry_course": boat["entry_course"],
+                    "sum_raw": sum(vals),
+                }
+            )
+
+        if invalid_feature or len(sum_rows) != 6:
+            skipped_missing_feature += 1
             continue
 
-        avg_sum = sum(v for _, v in sum_raw_list) / len(sum_raw_list)
+        # 6艇すべての結果対応が取れるレースだけを対象にする。
+        ranks = {}
+        invalid_result = False
+        for row in sum_rows:
+            key = (race_code, row["player_id"])
+            if key not in rank_by_race_player:
+                invalid_result = True
+                break
+            ranks[row["player_id"]] = rank_by_race_player[key]
 
-        for entry_course, sum_raw in sum_raw_list:
-            key = (race_code, entry_course)
-            rank = rank_by_race_course.get(key)
-            if rank is None:
-                continue
+        if invalid_result or len(ranks) != 6:
+            skipped_missing_result += 1
+            continue
 
-            sum_diff = sum_raw - avg_sum
+        avg_sum = sum(row["sum_raw"] for row in sum_rows) / 6.0
+
+        for row in sum_rows:
+            entry_course = row["entry_course"]
+            rank = ranks[row["player_id"]]
+            sum_diff = row["sum_raw"] - avg_sum
             interval_label = get_sum_interval_label(sum_diff)
 
-            # コース基準カウンタ
-            cstat = course_counts[entry_course]
-            cstat["total"] += 1
-            if rank == 1:
-                cstat["win"] += 1
-            if rank == 2:
-                cstat["place2"] += 1
-            if rank == 3:
-                cstat["place3"] += 1
-            if rank <= 3:
-                cstat["trio"] += 1
+            add_rank(course_counts[entry_course], rank)
+            add_rank(interval_course_counts[entry_course][interval_label], rank)
 
-            # 区間別カウンタ
-            istat = interval_course_counts[entry_course][interval_label]
-            istat["total"] += 1
-            if rank == 1:
-                istat["win"] += 1
-            if rank == 2:
-                istat["place2"] += 1
-            if rank == 3:
-                istat["place3"] += 1
-            if rank <= 3:
-                istat["trio"] += 1
+        processed_races += 1
 
     # コース基準着順率
     course_rates = {}
     for c in range(1, 7):
         total = course_counts[c]["total"]
         if total == 0:
-            course_rates[c] = {"win": 0.0, "place2": 0.0, "place3": 0.0, "trio": 0.0}
+            course_rates[c] = {
+                "win": 0.0,
+                "place2": 0.0,
+                "place3": 0.0,
+                "trio": 0.0,
+            }
             continue
 
-        win = course_counts[c]["win"] / total
-        place2 = course_counts[c]["place2"] / total
-        place3 = course_counts[c]["place3"] / total
-        trio = course_counts[c]["trio"] / total  # 3連対率
-
         course_rates[c] = {
-            "win": win,
-            "place2": place2,
-            "place3": place3,
-            "trio": trio,
+            "win": course_counts[c]["win"] / total,
+            "place2": course_counts[c]["place2"] / total,
+            "place3": course_counts[c]["place3"] / total,
+            "trio": course_counts[c]["trio"] / total,
         }
 
-    # バフデバフ計算
+    # 区間ごとのコース基準差（バフ/デバフ）
     stats_for_jyo = {}
     for c in range(1, 7):
         stats_for_jyo[str(c)] = {}
@@ -246,7 +297,7 @@ def compute_stats_for_jyo(jyo: str, features: dict):
             win = istat["win"] / total
             place2 = istat["place2"] / total
             place3 = istat["place3"] / total
-            trio = istat["trio"] / total  # 3連対率
+            trio = istat["trio"] / total
 
             stats_for_jyo[str(c)][label] = {
                 "win": round(win - base["win"], 4),
@@ -255,12 +306,23 @@ def compute_stats_for_jyo(jyo: str, features: dict):
                 "trio": round(trio - base["trio"], 4),
             }
 
-    return {jyo: stats_for_jyo}
+    return {
+        jyo: stats_for_jyo,
+        "_meta": {
+            "venue": jyo,
+            "features": feature_cols,
+            "result_mapping": "race_code+player_id",
+            "null_rank": 5.5,
+            "processed_races": processed_races,
+            "skipped_not_6_exhibition": skipped_not_6,
+            "skipped_missing_feature": skipped_missing_feature,
+            "skipped_missing_result": skipped_missing_result,
+        },
+    }
 
 
 def save_stats_to_json(stats: dict, jyo: str):
     filename = os.path.join(BASE_DIR, f"stats_{jyo}.json")
-
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
 
@@ -270,11 +332,13 @@ def print_stats_as_json(stats: dict):
 
 
 def main():
-    parser = ArgumentParser(description="Generate new SAM stats (buff/debuff) for a given stadium.")
+    parser = ArgumentParser(
+        description="Generate new SUM stats (buff/debuff) for a given stadium."
+    )
     parser.add_argument("jyo", type=str, help="Stadium code (e.g., OMR, TDA, KRY)")
     args = parser.parse_args()
 
-    jyo = args.jyo
+    jyo = args.jyo.upper()
     features = load_features()
 
     stats = compute_stats_for_jyo(jyo, features)
