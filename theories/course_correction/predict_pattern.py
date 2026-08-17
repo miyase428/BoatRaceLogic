@@ -20,6 +20,7 @@ DB_CONFIG = {
 }
 
 PREDICTION_METHOD = "C_ST_RANK"
+FALLBACK_METHOD = "A_EX_FALLBACK"
 
 
 def connect_db():
@@ -106,7 +107,7 @@ def load_entry_from_race_code(race_code):
 
         entries.append({
             "course": course,
-            "player_id": player_id,
+            "player_id": str(player_id).strip(),
             "ex_st": ex_st,
         })
 
@@ -133,7 +134,7 @@ def load_course_profiles(term_info, entries):
         SELECT {', '.join(columns)}
         FROM boat_race.racer_results
         WHERE term_info::text = %s
-          AND player_id = ANY(%s)
+          AND player_id::text = ANY(%s)
     """
 
     conn = connect_db()
@@ -145,7 +146,7 @@ def load_course_profiles(term_info, entries):
 
     racer_map = {}
     for row in rows:
-        player_id = row[0]
+        player_id = str(row[0]).strip()
         overall_st = as_float(row[1])
         idx = 2
         courses = {}
@@ -173,7 +174,8 @@ def load_course_profiles(term_info, entries):
         rr = racer_map.get(player_id)
 
         if rr is None:
-            missing_players.append(str(player_id))
+            profiles.append(None)
+            missing_players.append(player_id)
             continue
 
         course_data = rr["courses"][course]
@@ -181,7 +183,8 @@ def load_course_profiles(term_info, entries):
         if avg_st is None or avg_st <= 0:
             avg_st = rr["overall_st"]
         if avg_st is None or avg_st <= 0:
-            missing_players.append(str(player_id))
+            profiles.append(None)
+            missing_players.append(player_id)
             continue
 
         avg_rank = course_data["avg_rank"]
@@ -195,16 +198,7 @@ def load_course_profiles(term_info, entries):
             "avg_rank": avg_rank,
         })
 
-    if missing_players:
-        raise Exception(
-            f"racer_results の期別コースST情報が不足しています: "
-            f"term={term_info} / player_id={','.join(missing_players)}"
-        )
-
-    if len(profiles) != 6:
-        raise Exception(f"racer_results のコース情報が6艇分揃いません: term={term_info}")
-
-    return profiles
+    return profiles, missing_players
 
 
 # ------------------------------------------------------------
@@ -256,6 +250,20 @@ def make_predicted_st(entries, profiles):
     }
 
 
+def make_exhibition_fallback(entries, profiles):
+    ex_st = [entry["ex_st"] for entry in entries]
+
+    return {
+        "exhibition_st": ex_st,
+        "course_average_st": [profile["avg_st"] if profile else None for profile in profiles],
+        "course_average_rank": [profile["avg_rank"] if profile else None for profile in profiles],
+        "course_st_adjustment": [0.0] * 6,
+        "rank_adjustment": [0.0] * 6,
+        "total_adjustment": [0.0] * 6,
+        "predicted_st": list(ex_st),
+    }
+
+
 # ------------------------------------------------------------
 # ④ パターンIDを算出
 # ------------------------------------------------------------
@@ -271,8 +279,16 @@ def predict_pattern(race_code):
 
     entries = load_entry_from_race_code(race_code)
     term_info = term_info_for_race_code(race_code)
-    profiles = load_course_profiles(term_info, entries)
-    predicted = make_predicted_st(entries, profiles)
+    profiles, missing_players = load_course_profiles(term_info, entries)
+
+    if missing_players:
+        # C_ST_RANKに必要な6艇分の期別コース情報が揃わない場合は、
+        # 検証済みベースラインの展示STのみへ安全にフォールバックする。
+        prediction_method = FALLBACK_METHOD
+        predicted = make_exhibition_fallback(entries, profiles)
+    else:
+        prediction_method = PREDICTION_METHOD
+        predicted = make_predicted_st(entries, profiles)
 
     pattern_id, features = classify_slit_pattern(predicted["predicted_st"], settings)
 
@@ -280,16 +296,17 @@ def predict_pattern(race_code):
     entry_courses = [entry["course"] for entry in entries]
 
     # 旧 predict_detail の correction は参照互換用に残す。
-    # 値は旧「展示→本番ST補正」ではなく、C_ST_RANKの合計補正秒。
+    # C_ST_RANK時は合計補正秒、A_EXフォールバック時は0秒。
     correction = {
-        str(player_ids[i]): predicted["total_adjustment"][i]
+        player_ids[i]: predicted["total_adjustment"][i]
         for i in range(6)
     }
 
     return {
         "race_code": race_code,
-        "prediction_method": PREDICTION_METHOD,
+        "prediction_method": prediction_method,
         "term_info": term_info,
+        "missing_racer_profiles": missing_players,
         "entry_courses": entry_courses,
         "player_ids": player_ids,
         "exhibition_st": predicted["exhibition_st"],
