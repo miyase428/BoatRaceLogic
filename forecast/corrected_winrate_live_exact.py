@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""Web用 補正後1着率のSUM統計をSTEP8-4と完全同順序で構築するラッパー。
+"""Web用 補正後1着率をSTEP8-4と完全同定義で構築するラッパー。
 
-corrected_winrate_live.py の基本1着率・展示補正・スリット補正はそのまま利用し、
-SUM統計だけを analysis/base_winrate_sum_compare.py の時系列更新条件へ揃える。
+corrected_winrate_live.py の表示/API骨格を利用しつつ、
+以下をSTEP8-4の時系列検証定義へ揃える。
+
+- 場×コース基準: 勝者コースを result -> exhibition -> lane の順で復元
+- SUM統計: レースを時系列で処理し、レース終了後に統計更新
+
+展示補正・スリット補正の式自体は元liveをそのまま利用する。
 """
 
 from __future__ import annotations
@@ -40,6 +45,132 @@ def _feature_value(row, name):
     if key is None:
         raise RuntimeError(f"未対応SUM feature: {name}")
     return row[key]
+
+
+def load_venue_course_prior_exact(conn, race_code, target_date, place_code):
+    """STEP8-4と同じ場×コース基準勝率を対象レース直前までで作る。"""
+    sql = """
+        WITH base_rows AS (
+            SELECT
+                re.race_code,
+                re.lane_number,
+                rrd.rank,
+                rrd.entry_course AS result_course,
+                el.entry_course AS exhibition_course
+            FROM boat_race.race_entry re
+            JOIN boat_race.race_master rm
+              ON rm.race_code = re.race_code
+            LEFT JOIN boat_race.race_result_detail rrd
+              ON rrd.race_code = re.race_code
+             AND rrd.player_id = re.player_id
+            LEFT JOIN LATERAL (
+                SELECT x.entry_course
+                FROM boat_race.exhibition_live x
+                WHERE x.race_code = re.race_code
+                  AND x.player_id = re.player_id
+                LIMIT 1
+            ) el ON TRUE
+            WHERE SUBSTRING(re.race_code, 9, 3) = %s
+              AND (
+                    rm.race_date < %s::date
+                    OR (rm.race_date = %s::date AND re.race_code < %s)
+                  )
+        ),
+        winner_rows AS (
+            SELECT
+                race_code,
+                COUNT(*) FILTER (WHERE rank = '1') AS winner_count,
+                MAX(
+                    CASE WHEN rank = '1' THEN
+                        CASE
+                            WHEN result_course::text ~ '^[1-6]$'
+                                THEN result_course::int
+                            WHEN exhibition_course::text ~ '^[1-6]$'
+                                THEN exhibition_course::int
+                            WHEN lane_number::text ~ '^[1-6]$'
+                                THEN lane_number::int
+                            ELSE NULL
+                        END
+                    ELSE NULL END
+                ) AS winner_course
+            FROM base_rows
+            GROUP BY race_code
+        )
+        SELECT winner_course, COUNT(*) AS wins
+        FROM winner_rows
+        WHERE winner_count = 1
+          AND winner_course BETWEEN 1 AND 6
+        GROUP BY winner_course
+        ORDER BY winner_course
+    """
+
+    counts = {c: 0 for c in range(1, 7)}
+    with conn.cursor() as cur:
+        cur.execute(
+            sql,
+            (
+                place_code,
+                target_date.isoformat(),
+                target_date.isoformat(),
+                race_code,
+            ),
+        )
+        for course, wins in cur.fetchall():
+            c = live.valid_course(course)
+            if c is not None:
+                counts[c] = int(wins or 0)
+
+    total = sum(counts.values())
+    if total <= 0:
+        raise RuntimeError(f"{place_code} の対象レース以前の場×コース履歴がありません")
+
+    return {
+        c: {
+            "n": total,
+            "wins": counts[c],
+            "rate": counts[c] / total,
+        }
+        for c in range(1, 7)
+    }
+
+
+def build_remapped_base_exact(conn, race_code, target_date, place_code, boats, exhibition):
+    """STEP8-4と同じ場基準を使い、展示進入へ基本1着率をリマップする。"""
+    venue = load_venue_course_prior_exact(
+        conn,
+        race_code,
+        target_date,
+        place_code,
+    )
+
+    raw = []
+    detail = {}
+
+    for boat in sorted(boats, key=lambda r: r["lane"]):
+        lane = int(boat["lane"])
+        course = exhibition[lane]["course"]
+        history = live.load_last_100(
+            conn,
+            boat["player_id"],
+            target_date,
+            race_code,
+        )
+        counts = live.player_counts(history, course, place_code)
+        p0 = venue[course]["rate"]
+        p_pc = (counts["pc_w"] + live.K_PC * p0) / (counts["pc_n"] + live.K_PC)
+        p_final = (counts["pvc_w"] + live.K_PVC * p_pc) / (counts["pvc_n"] + live.K_PVC)
+        raw.append(p_final)
+        detail[lane] = {
+            "course": course,
+            "p0": p0,
+            "p_pc": p_pc,
+            "p_final_raw": p_final,
+        }
+
+    probs = live.normalize(raw)
+    if probs is None:
+        raise RuntimeError("展示進入リマップ後の基本1着率を正規化できません")
+    return probs, detail
 
 
 def load_sum_stats_exact(conn, race_code, target_date, place_code, feature_cols):
@@ -255,7 +386,8 @@ def load_sum_stats_exact(conn, race_code, target_date, place_code, feature_cols)
     return stats
 
 
-# 元liveのmain()が参照する関数だけ差し替える。
+# 元liveのmain()が参照する関数をSTEP8-4互換版へ差し替える。
+live.build_remapped_base = build_remapped_base_exact
 live.load_sum_stats = load_sum_stats_exact
 
 
