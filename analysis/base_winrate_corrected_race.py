@@ -9,7 +9,7 @@
 - 展示進入へリマップ
 - EX_TOTAL beta=+0.100
 - SUM_RAW gamma=+2.0
-- スリット win buff: 過去180日学習、K=40、cap=±0.08、alpha=0.50
+- スリット win buff: 過去180日学習、K=40、cap=±0.08、alpha=0.25
 
 このスクリプトは過去レースで途中値を確認する診断用。
 本番Webロジックはまだ変更しない。
@@ -46,7 +46,7 @@ from base_winrate_slit_compare import (
     apply_slit_buff,
 )
 
-SLIT_ALPHA = 0.50
+SLIT_ALPHA = 0.25
 
 
 def pct(x):
@@ -173,7 +173,7 @@ def main():
     print(f"SUM skip件数種別   : {len(sum_skip)}")
     print(f"slit skip件数種別  : {len(slit_skip)}")
     print("・slit元buffはalpha適用前のPID×展示進入C win buff")
-    print("・実際にはalpha=0.50を掛けてから6艇を再正規化")
+    print("・実際にはalpha=0.25を掛けてから6艇を再正規化")
     print("・この結果確認後にWeb用の補正後1着率ロジックへ進む")
     print("=" * 150)
 
