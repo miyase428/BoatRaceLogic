@@ -154,6 +154,11 @@ def main():
             continue
 
         courses = [r["course"] for r in rows]
+        # entry_course が NULL / 空 / 1～6以外なら sorted() 前に除外する。
+        # None を含むリストを sorted() すると Python 3 では TypeError になるため。
+        if any(c not in range(1, 7) for c in courses):
+            skip["missing_or_invalid_course"] += 1
+            continue
         if sorted(courses) != [1, 2, 3, 4, 5, 6]:
             skip["not_6_unique_courses"] += 1
             continue
@@ -193,6 +198,7 @@ def main():
     print("\n【skip】")
     for key in [
         "not_6_entries",
+        "missing_or_invalid_course",
         "not_6_unique_courses",
         "winner_not_unique",
         "winner_course_invalid",
