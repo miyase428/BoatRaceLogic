@@ -32,7 +32,9 @@ from base_winrate_slit_compare import (  # noqa: E402
     learn_buff,
 )
 
-CACHE_VERSION = "v1"
+# v2: STEP8-4と同じく、records自体はtarget_dateまで構築してから
+# learn_buff側でbuff_end（前日）までに絞る。
+CACHE_VERSION = "v2"
 
 
 def stringify_keys(obj):
@@ -68,7 +70,9 @@ def main():
     buff_start = inclusive_window_start(buff_end, SLIT_BUFF_DAYS)
 
     try:
-        records, skip, _ = build_slit_records(buff_start, buff_end)
+        # STEP8-4と完全に同じrecords構築範囲にする。
+        # 対象日レースはrecordsには含めるが、learn_buffはbuff_endまでしか使わない。
+        records, skip, _ = build_slit_records(buff_start, target_date)
         buff, rows, freq = learn_buff(records, buff_start, buff_end)
         payload = {
             "target_date": target_date.isoformat(),
