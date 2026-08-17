@@ -2,9 +2,9 @@
 require_once __DIR__ . '/../../common/db_connect.php';
 require_once __DIR__ . '/../../config/place_map.php';
 
-require_once __DIR__ . '/../api/ApiClient.php';
+require_once __DIR__ . '/../api/ApiClientProduction.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
-require_once __DIR__ . '/../logic/PredictionLogic.php';
+require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/SlitLogic.php';
 
@@ -34,9 +34,9 @@ class IndexController
             'ASY' => '芦屋',   'FKO' => '福岡',   'KRT' => '唐津',   'OMR' => '大村',
         ];
 
-        $apiClient        = new ApiClient();
+        $apiClient        = new ApiClientProduction();
         $exhibitionLogic  = new ExhibitionLogic();
-        $predictionLogic  = new PredictionLogic();
+        $predictionLogic  = new PredictionLogicProduction();
         $samLogic         = new SamLogic();
         $slitLogic        = new SlitLogic();
 
