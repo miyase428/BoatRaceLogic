@@ -8,6 +8,7 @@ require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/SlitLogic.php';
 require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
+require_once __DIR__ . '/../logic/CorrectedWinRateLogic.php';
 
 class IndexController
 {
@@ -35,12 +36,13 @@ class IndexController
             'ASY' => '芦屋',   'FKO' => '福岡',   'KRT' => '唐津',   'OMR' => '大村',
         ];
 
-        $apiClient        = new ApiClientProduction();
-        $exhibitionLogic  = new ExhibitionLogic();
-        $predictionLogic  = new PredictionLogicProduction();
-        $samLogic         = new SamLogic();
-        $slitLogic        = new SlitLogic();
-        $baseWinRateLogic = new BaseWinRateLogic();
+        $apiClient             = new ApiClientProduction();
+        $exhibitionLogic       = new ExhibitionLogic();
+        $predictionLogic       = new PredictionLogicProduction();
+        $samLogic              = new SamLogic();
+        $slitLogic             = new SlitLogic();
+        $baseWinRateLogic      = new BaseWinRateLogic();
+        $correctedWinRateLogic = new CorrectedWinRateLogic();
 
         // 1. 出走表データ
         [$entries, $results, $api_error] = $apiClient->fetchCalcScores($race_code);
@@ -60,7 +62,7 @@ class IndexController
 
         if (isset($_POST["update_exhibition"])) {
             $target_race_code = $_POST["race_code"] ?? $race_code;
-            
+
             // 展示API経由等でスクレイピング・DB登録を実行
             [$update_message, $debug_msg] = $apiClient->updateExhibition($target_race_code);
         }
@@ -85,13 +87,45 @@ class IndexController
         // -------------------------------------------------------------
         // 5. サム理論マスタ & ロジック適用
         // -------------------------------------------------------------
-        // ApiClientから [マスタデータ, エラーメッセージ] のペアで受け取る
-        // 5. サム理論マスタ & ロジック適用
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
         [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory($tenji_list, $sam_master_data);
+
         // 6. スリット体系
         [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
         $feature_name = $slitLogic->getFeatureNames();
+
+        // 6-2. 補正後1着率
+        // 展示6艇が完全に揃った時だけ、STEP8採用式を実行する。
+        $correctedReady = count($tenji_list) === 6;
+        $seenCourses = [];
+        if ($correctedReady) {
+            foreach ($tenji_list as $t) {
+                $course = (int)($t['tenji_course'] ?? 0);
+                if (
+                    $course < 1 || $course > 6
+                    || isset($seenCourses[$course])
+                    || !is_numeric($t['exhibition'] ?? null)
+                    || !is_numeric($t['st'] ?? null)
+                    || !is_numeric($t['lap'] ?? null)
+                    || !is_numeric($t['mawari'] ?? null)
+                    || !is_numeric($t['straight'] ?? null)
+                ) {
+                    $correctedReady = false;
+                    break;
+                }
+                $seenCourses[$course] = true;
+            }
+        }
+
+        if ($correctedReady && count($seenCourses) === 6) {
+            $corrected_win_rate_data = $correctedWinRateLogic->calculate($race_code);
+        } else {
+            $corrected_win_rate_data = [
+                'status' => 'waiting',
+                'boats' => [],
+                'error' => '展示情報待ち',
+            ];
+        }
 
         // 7. lane colors（枠番カラー）
         $lane_colors = [
@@ -115,6 +149,7 @@ class IndexController
             'results'         => $results,
             'api_error'       => $api_error,
             'base_win_rate_data' => $base_win_rate_data,
+            'corrected_win_rate_data' => $corrected_win_rate_data,
             'kimarite_data'   => $kimarite_data,
             'kimarite_error'  => $kimarite_error,
             'tenji_list'      => $tenji_list,
@@ -123,11 +158,11 @@ class IndexController
             'debug_msg'       => $debug_msg,
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
-            'overall_avg'       => $overall_avg,           // ★ ビューに渡す
-            'sam_master_data'   => $sam_master_data,     // ★ここを追加！
-            'sam_error'         => $sam_error,             // サム理論APIのエラーメッセージ
-            'sam_intervals'     => SamLogic::INTERVALS,    // 区間定義（表示用）
-            'sam_metrics'       => SamLogic::METRICS,      // メトリクス定義（表示用）
+            'overall_avg'       => $overall_avg,
+            'sam_master_data'   => $sam_master_data,
+            'sam_error'         => $sam_error,
+            'sam_intervals'     => SamLogic::INTERVALS,
+            'sam_metrics'       => SamLogic::METRICS,
             'slit_data'       => $slit_data,
             'slit_pattern'    => $slit_pattern,
             'feature_name'    => $feature_name,
