@@ -1,11 +1,11 @@
 <?php
 header("Content-Type: application/json; charset=utf-8");
 
+require_once __DIR__ . '/../common/db_connect.php';
+
 // ------------------------------------------------------------
 // 1. race_code と in_course を受け取る
 // ------------------------------------------------------------
-#$race_code = $_POST['race_code'] ?? null;
-#$in        = $_POST['in_course'] ?? null;
 $race_code = $_GET['race_code']
           ?? $_POST['race_code']
           ?? null;
@@ -13,7 +13,6 @@ $race_code = $_GET['race_code']
 $in = $_GET['in_course']
    ?? $_POST['in_course']
    ?? null;
-
 
 if (!$race_code || !$in || strlen($in) !== 6) {
     echo json_encode([
@@ -38,13 +37,7 @@ $in_course = [
 // ------------------------------------------------------------
 // 3. PostgreSQL 接続
 // ------------------------------------------------------------
-$pdo = new PDO(
-    #"pgsql:host=192.168.0.205;dbname=devdb",
-    "pgsql:host=192.168.0.208;dbname=devdb",
-    "miyase428",
-    "herunia0113",
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$pdo = getPDO();
 
 // ------------------------------------------------------------
 // 4. 決まり手テンプレート
@@ -58,12 +51,23 @@ function empty_kimarite() {
         "nogashi"       => 0,
         "sasare"        => 0,
         "makurare"      => 0,
-        "makurarezashi" => 0
+        "makurarezashi" => 0,
+        "_sample_n"     => 0,
+        "_counts"       => [
+            "nige"          => 0,
+            "sashi"         => 0,
+            "makuri"        => 0,
+            "makurizashi"   => 0,
+            "nogashi"       => 0,
+            "sasare"        => 0,
+            "makurare"      => 0,
+            "makurarezashi" => 0,
+        ],
     ];
 }
 
 // ------------------------------------------------------------
-// 5. 期間ごとの SQL（完全軽量化版）
+// 5. 期間ごとの SQL（率の計算ロジックは従来のまま）
 // ------------------------------------------------------------
 function load_kimarite($pdo, $race_code, $in_course, $months) {
 
@@ -154,10 +158,21 @@ ORDER BY tm.today_course;
     }
 
     foreach ($rows as $r) {
-        if ($r["technique_type"] === null) continue;
         $course = intval($r["course"]);
-        $rate = round(100.0 * $r["cnt"] / $r["total_cnt"], 1);
-        $result[$course][$r["technique_type"]] = $rate;
+        $cnt = intval($r["cnt"]);
+        $total = intval($r["total_cnt"]);
+
+        // technique_type がNULLの行も母数には含まれるため、先に保存する。
+        $result[$course]["_sample_n"] = $total;
+
+        if ($r["technique_type"] === null) {
+            continue;
+        }
+
+        $type = $r["technique_type"];
+        $rate = $total > 0 ? round(100.0 * $cnt / $total, 1) : 0.0;
+        $result[$course][$type] = $rate;
+        $result[$course]["_counts"][$type] = $cnt;
     }
 
     return $result;
