@@ -1,5 +1,6 @@
 <?php
 
+require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../web/api/ApiClientProduction.php';
 require_once __DIR__ . '/../web/logic/PredictionLogicProduction.php';
 
@@ -24,13 +25,30 @@ $logic = new PredictionLogicProduction();
 $entryByBoat = [];
 $nameByBoat = [];
 $playerByBoat = [];
+
 foreach ($entries as $e) {
     $boat = (int)($e['lane_number'] ?? 0);
     if ($boat < 1 || $boat > 6) {
         continue;
     }
     $nameByBoat[$boat] = (string)($e['player_name'] ?? '');
-    $playerByBoat[$boat] = (string)($e['player_id'] ?? '');
+}
+
+// fetchCalcScores() の entries は player_id を必ずしも返さないため、
+// tenji_test の期待player_idは race_entry を正として艇番ごとに取得する。
+$pdo = getPDO();
+$stmt = $pdo->prepare(<<<SQL
+    SELECT lane_number, player_id::text
+    FROM boat_race.race_entry
+    WHERE race_code = :race_code
+    ORDER BY lane_number
+SQL);
+$stmt->execute([':race_code' => $raceCode]);
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $boat = (int)($row['lane_number'] ?? 0);
+    if ($boat >= 1 && $boat <= 6) {
+        $playerByBoat[$boat] = trim((string)($row['player_id'] ?? ''));
+    }
 }
 
 $courseToBoat = [];
@@ -44,6 +62,7 @@ foreach ($tenjiList as $idx => $t) {
 }
 ksort($entryByBoat);
 ksort($courseToBoat);
+ksort($playerByBoat);
 
 $laneToCourse = '';
 $courseToLane = '';
@@ -94,9 +113,9 @@ $mappingOk = true;
 for ($course = 1; $course <= 6; $course++) {
     $boat = $courseToBoat[$course] ?? 0;
     $row = $testByCourse[$course] ?? [];
-    $actualPid = (string)($row['player_id'] ?? '');
-    $expectedPid = (string)($playerByBoat[$boat] ?? '');
-    $ok = $boat > 0 && $actualPid !== '' && $actualPid === $expectedPid;
+    $actualPid = trim((string)($row['player_id'] ?? ''));
+    $expectedPid = trim((string)($playerByBoat[$boat] ?? ''));
+    $ok = $boat > 0 && $actualPid !== '' && $expectedPid !== '' && $actualPid === $expectedPid;
     if (!$ok) $mappingOk = false;
 
     printf(
