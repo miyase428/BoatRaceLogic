@@ -23,6 +23,7 @@ if (strpos($html, $marker) !== false) {
 
 // スリット体系はコース基準の値なので、進入マップが取れている場合だけ
 // 「コース」と「艇番」を別列で表示する。
+// コースは「1コース」のような通常文字、艇番だけ色付きバッジにする。
 // SUM / スリットの計算値は一切変更せず、表示だけを加工する。
 if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
     $slitMarker = '<!-- ■ スリット体系 -->';
@@ -57,14 +58,16 @@ if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
                 . $boat
                 . '号艇</span></td>';
 
-            $pattern = '/(<td>\s*<span class="lane-badge"[^>]*>\s*)'
+            // 元のコース色付きバッジセルを丸ごと「1コース」の通常文字セルへ置換し、
+            // その直後に実艇番の色付きバッジ列を追加する。
+            $pattern = '/<td>\s*<span class="lane-badge"[^>]*>\s*'
                 . preg_quote((string)$course, '/')
-                . '(\s*<\/span>\s*<\/td>)/s';
+                . '\s*<\/span>\s*<\/td>/s';
 
             $slitHtml = preg_replace_callback(
                 $pattern,
                 static function (array $m) use ($course, $boatBadge): string {
-                    return $m[1] . $course . 'C' . $m[2] . $boatBadge;
+                    return '<td>' . $course . 'コース</td>' . $boatBadge;
                 },
                 $slitHtml,
                 1
