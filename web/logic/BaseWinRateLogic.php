@@ -105,16 +105,28 @@ class BaseWinRateLogic
 
     private function loadTarget(PDO $pdo, string $raceCode): array
     {
+        $raceCode = strtoupper(trim($raceCode));
+        if (!preg_match('/^[0-9]{8}[A-Z0-9]{3}[0-9]{2}$/', $raceCode)) {
+            throw new RuntimeException('基本1着率: race_codeの形式が不正です');
+        }
+
+        $dateText = substr($raceCode, 0, 8);
+        $date = DateTimeImmutable::createFromFormat('!Ymd', $dateText);
+        if ($date === false || $date->format('Ymd') !== $dateText) {
+            throw new RuntimeException('基本1着率: race_codeの日付が不正です');
+        }
+
+        $targetDate = $date->format('Y-m-d');
+        $placeCode = substr($raceCode, 8, 3);
+
+        // 現在～直近レースでは race_entry / exhibition_live が先に入り、
+        // race_master がまだ未登録のことがあるため、対象6艇は race_entry 単体から取得する。
         $sql = <<<SQL
             SELECT
-                rm.race_date,
-                rm.stadium_name,
                 re.lane_number,
                 re.player_id::text AS player_id,
                 re.player_name
             FROM boat_race.race_entry re
-            JOIN boat_race.race_master rm
-              ON rm.race_code = re.race_code
             WHERE re.race_code = ?
             ORDER BY re.lane_number
         SQL;
@@ -127,9 +139,19 @@ class BaseWinRateLogic
             throw new RuntimeException('基本1着率: 対象レースの出走艇が6艇ではありません');
         }
 
-        $targetDate = (string)$rows[0]['race_date'];
-        $stadiumName = trim((string)($rows[0]['stadium_name'] ?? ''));
-        $placeCode = strlen($raceCode) >= 11 ? substr($raceCode, 8, 3) : '???';
+        // 場名は計算には使わない。race_master がまだ無い場合は場コードを表示用fallbackにする。
+        $stadiumName = $placeCode;
+        $masterStmt = $pdo->prepare(
+            "SELECT stadium_name FROM boat_race.race_master " .
+            "WHERE SUBSTRING(race_code, 9, 3) = ? " .
+            "AND stadium_name IS NOT NULL AND BTRIM(stadium_name) <> '' " .
+            "ORDER BY race_date DESC, race_code DESC LIMIT 1"
+        );
+        $masterStmt->execute([$placeCode]);
+        $masterName = $masterStmt->fetchColumn();
+        if ($masterName !== false && trim((string)$masterName) !== '') {
+            $stadiumName = trim((string)$masterName);
+        }
 
         $boats = [];
         foreach ($rows as $row) {
