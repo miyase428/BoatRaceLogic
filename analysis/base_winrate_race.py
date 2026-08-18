@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -50,11 +51,22 @@ def valid_course(v):
 
 
 def load_target(conn, race_code):
+    race_code = str(race_code or "").strip().upper()
+    if len(race_code) != 13 or not race_code[:8].isdigit() or not race_code[11:13].isdigit():
+        raise RuntimeError(f"race_codeの形式が不正です: {race_code}")
+
+    try:
+        target_date = datetime.strptime(race_code[:8], "%Y%m%d").date()
+    except ValueError as exc:
+        raise RuntimeError(f"race_codeの日付が不正です: {race_code}") from exc
+
+    place_code = race_code[8:11]
+
+    # 現在～直近レースでは race_entry / exhibition_live が先に入り、
+    # race_master がまだ未登録のことがあるため、対象6艇は race_entry 単体から取得する。
     sql = """
-        SELECT rm.race_date, rm.stadium_name, re.lane_number,
-               re.player_id::text, re.player_name
+        SELECT re.lane_number, re.player_id::text, re.player_name
         FROM boat_race.race_entry re
-        JOIN boat_race.race_master rm ON rm.race_code = re.race_code
         WHERE re.race_code = %s
         ORDER BY re.lane_number
     """
@@ -63,11 +75,28 @@ def load_target(conn, race_code):
         rows = cur.fetchall()
     if len(rows) != 6:
         raise RuntimeError(f"対象レースの出走艇が6艇ではありません: {len(rows)}艇")
-    target_date = rows[0][0]
-    stadium_name = str(rows[0][1] or "").strip()
-    place_code = race_code[8:11] if len(race_code) >= 11 else "???"
+
+    # 場名は計算には使わない。race_master がまだ無い場合は場コードをfallbackにする。
+    stadium_name = place_code
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT stadium_name
+            FROM boat_race.race_master
+            WHERE SUBSTRING(race_code, 9, 3) = %s
+              AND stadium_name IS NOT NULL
+              AND BTRIM(stadium_name) <> ''
+            ORDER BY race_date DESC, race_code DESC
+            LIMIT 1
+            """,
+            (place_code,),
+        )
+        row = cur.fetchone()
+        if row and str(row[0] or "").strip():
+            stadium_name = str(row[0]).strip()
+
     boats = []
-    for _, _, lane, player_id, player_name in rows:
+    for lane, player_id, player_name in rows:
         lane = valid_course(lane)
         if lane is None:
             raise RuntimeError("対象レースに不正なlane_numberがあります")
