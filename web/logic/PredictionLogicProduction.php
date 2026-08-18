@@ -7,6 +7,10 @@ require_once __DIR__ . '/PredictionLogic.php';
  *
  * 2・4号艇の切り保護だけを旧getBonus判定へ一時的に渡し、
  * スコア補正とは完全に分離する。
+ *
+ * 進入変更時は、親ロジックが前提としている「1..6 = コース順」に
+ * tenji / 一次評価 / 3連対率を並べ替えて計算し、最後に艇番へ戻す。
+ * 通常進入123456では並べ替え結果が元配列と同一になる。
  */
 class PredictionLogicProduction extends PredictionLogic
 {
@@ -18,12 +22,106 @@ class PredictionLogicProduction extends PredictionLogic
     ): array {
         $working_tenji = $tenji_list;
 
-        // 親ロジックの切り判定だけに保護フラグを渡す。
+        // 親ロジックの切り判定だけに2・4号艇保護フラグを渡す。
         foreach ($working_tenji as &$t) {
             $t['tenkai_morai'] = (int)($t['kiru_protect_24'] ?? 0);
         }
         unset($t);
 
+        $boatToCourse = [];
+        $courseToBoat = [];
+        $tenjiByBoat = [];
+
+        foreach ($working_tenji as $idx => $t) {
+            $boat = (int)($t['teiban'] ?? ($idx + 1));
+            $course = (int)($t['tenji_course'] ?? 0);
+
+            if (
+                $boat < 1 || $boat > 6
+                || $course < 1 || $course > 6
+                || isset($boatToCourse[$boat])
+                || isset($courseToBoat[$course])
+            ) {
+                return $this->buildLegacyOrder(
+                    $working_tenji,
+                    $kimarite_data,
+                    $tenji_test_data,
+                    $first_results
+                );
+            }
+
+            $boatToCourse[$boat] = $course;
+            $courseToBoat[$course] = $boat;
+            $tenjiByBoat[$boat] = $t;
+        }
+
+        if (count($boatToCourse) !== 6 || count($courseToBoat) !== 6) {
+            return $this->buildLegacyOrder(
+                $working_tenji,
+                $kimarite_data,
+                $tenji_test_data,
+                $first_results
+            );
+        }
+
+        // 親ロジックを「コース順」で動かす。
+        $tenjiByCourse = [];
+        $firstByCourse = [];
+
+        for ($course = 1; $course <= 6; $course++) {
+            $boat = $courseToBoat[$course];
+            $tenjiByCourse[] = $tenjiByBoat[$boat];
+            $firstByCourse[] = $first_results[$boat - 1] ?? [];
+        }
+
+        $coursePredictions = parent::buildFinalPredictions(
+            $tenjiByCourse,
+            $kimarite_data,
+            $tenji_test_data,
+            $firstByCourse
+        );
+
+        // 親の出力キー1..6はこの時点では「コース」。実際の艇番へ戻す。
+        $final_predictions = [];
+        for ($course = 1; $course <= 6; $course++) {
+            $boat = $courseToBoat[$course];
+            $fp = $coursePredictions[$course] ?? [];
+
+            $fp['boat'] = $boat;
+            $fp['waku'] = $boat;
+            $fp['course'] = $course;
+
+            // 親ロジック内の「★2差し」等はコース番号で生成されるため、
+            // 画面上はその評価を受ける実艇番へ戻す。
+            foreach (['flg_sashi', 'flg_makuri', 'flg_makurizashi'] as $flagKey) {
+                if (isset($fp[$flagKey]) && is_string($fp[$flagKey])) {
+                    $fp[$flagKey] = str_replace(
+                        "★{$course}",
+                        "★{$boat}",
+                        $fp[$flagKey]
+                    );
+                }
+            }
+
+            $fp['kiruProtect'] = ($boat === 2 || $boat === 4) ? 1 : 0;
+            $fp['getBonus'] = 0;
+
+            $final_predictions[$boat] = $fp;
+        }
+
+        ksort($final_predictions);
+        return $final_predictions;
+    }
+
+    /**
+     * 展示進入がまだ完全でない時だけ、従来の艇番順ロジックへ戻す。
+     */
+    private function buildLegacyOrder(
+        array $working_tenji,
+        array $kimarite_data,
+        array $tenji_test_data,
+        array $first_results
+    ): array {
         $final_predictions = parent::buildFinalPredictions(
             $working_tenji,
             $kimarite_data,
@@ -31,9 +129,8 @@ class PredictionLogicProduction extends PredictionLogic
             $first_results
         );
 
-        // 出力上は「展開もらいボーナス」を残さない。
-        // 切り保護は独立した kiruProtect フラグとして明示する。
         foreach ($final_predictions as $boat => &$fp) {
+            $fp['course'] = (int)($working_tenji[$boat - 1]['tenji_course'] ?? $boat);
             $fp['kiruProtect'] = ($boat === 2 || $boat === 4) ? 1 : 0;
             $fp['getBonus'] = 0;
         }
