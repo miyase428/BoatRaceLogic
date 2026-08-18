@@ -63,4 +63,48 @@ if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
     }
 }
 
+// スリット3着率は固定2期間検証で両期間ともBrier悪化だったため本番未採用。
+// 0.00%だと「補正効果が本当に0」と誤解しやすいので、画面上は未採用と明示する。
+$slitPlace3DisplayScript = <<<'HTML'
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const headings = Array.from(document.querySelectorAll('h2'));
+    const heading = headings.find(function (el) {
+        return el.textContent.includes('スリット体系');
+    });
+    if (!heading) return;
+
+    const section = heading.parentElement;
+    const table = section ? section.querySelector('table') : null;
+    if (!table) return;
+
+    const headers = table.querySelectorAll('thead th');
+    if (headers.length >= 5) {
+        headers[3].textContent = '3着率（未採用）';
+    }
+
+    table.querySelectorAll('tbody tr').forEach(function (row) {
+        if (row.cells.length >= 5) {
+            row.cells[3].innerHTML = '<span style="color:#94a3b8;">—</span>';
+            row.cells[3].title = '固定2期間検証でBrierが両期間とも悪化したため未採用';
+        }
+    });
+
+    if (!section.querySelector('.slit-place3-note')) {
+        const note = document.createElement('div');
+        note.className = 'slit-place3-note';
+        note.style.marginTop = '8px';
+        note.style.fontSize = '12px';
+        note.style.color = '#94a3b8';
+        note.textContent = '※3着率は固定2期間検証で悪化したため未採用。2着率は採用済み。';
+        table.parentElement.insertAdjacentElement('afterend', note);
+    }
+});
+</script>
+HTML;
+
+if (strpos($html, '</body>') !== false) {
+    $html = str_replace('</body>', $slitPlace3DisplayScript . "\n</body>", $html);
+}
+
 echo $html;
