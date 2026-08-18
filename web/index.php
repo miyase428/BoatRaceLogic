@@ -108,6 +108,37 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 HTML;
 
+// 展示サム理論（レース適用値）のJ/K/Lは内部列名のまま計算に使い、
+// 画面見出しだけ features.json の実際の3指標名へ置き換える。
+// 設定が読めない場合は J列/K列/L列へ安全にフォールバックする。
+$samFeatureLabels = ['J列', 'K列', 'L列'];
+$samFeatureDisplayNames = [
+    'exhibition_time' => '展示タイム',
+    'lap_time'        => '周回',
+    'around_time'     => '周り足',
+    'straight_time'   => '直線',
+];
+$samFeaturesPath = __DIR__ . '/../theories/new_sam/features.json';
+
+if (is_file($samFeaturesPath)) {
+    $samFeaturesJson = file_get_contents($samFeaturesPath);
+    $samFeaturesAll = is_string($samFeaturesJson)
+        ? json_decode($samFeaturesJson, true)
+        : null;
+    $samFeatureKeys = is_array($samFeaturesAll)
+        ? ($samFeaturesAll[$selected_place] ?? [])
+        : [];
+
+    if (is_array($samFeatureKeys) && count($samFeatureKeys) >= 3) {
+        for ($i = 0; $i < 3; $i++) {
+            $key = (string)($samFeatureKeys[$i] ?? '');
+            if (isset($samFeatureDisplayNames[$key])) {
+                $samFeatureLabels[$i] = $samFeatureDisplayNames[$key];
+            }
+        }
+    }
+}
+
 // 展示サム理論（レース適用値）もスリット体系と同じ見た目に揃える。
 // コースは「1コース」の通常文字、艇番だけ横長の色付きバッジで別列表示する。
 // SUMの計算値・course参照自体は変更しない。
@@ -121,13 +152,23 @@ if ($samAppliedPos !== false && $samMasterPos !== false) {
     $samAppliedHtml = substr($html, $samAppliedPos, $samMasterPos - $samAppliedPos);
     $afterSamApplied = substr($html, $samMasterPos);
 
-    // 見出しを「コース | 艇番 | ...」へ変更。
+    // 見出しを「コース | 艇番 | 実際のSUM3指標 | ...」へ変更。
     $samAppliedHtml = preg_replace(
         '/<th>コース<\/th>/',
         '<th>コース</th><th>艇番</th>',
         $samAppliedHtml,
         1
     ) ?? $samAppliedHtml;
+
+    $samAppliedHtml = str_replace(
+        ['<th>J列</th>', '<th>K列</th>', '<th>L列</th>'],
+        [
+            '<th>' . htmlspecialchars($samFeatureLabels[0], ENT_QUOTES, 'UTF-8') . '</th>',
+            '<th>' . htmlspecialchars($samFeatureLabels[1], ENT_QUOTES, 'UTF-8') . '</th>',
+            '<th>' . htmlspecialchars($samFeatureLabels[2], ENT_QUOTES, 'UTF-8') . '</th>',
+        ],
+        $samAppliedHtml
+    );
 
     // 既存の6つのコースバッジを、コース通常文字＋実艇番バッジへ置換。
     $samCourseIndex = 0;
