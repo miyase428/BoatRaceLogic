@@ -21,8 +21,8 @@ if (strpos($html, $marker) !== false) {
     $html = str_replace($marker, $baseWinRatePanel . "\n    " . $marker, $html);
 }
 
-// 最終予想の先頭列を「艇番 | 枠番 | コース」に分離する。
-// 艇番だけ横長の色付きバッジ、枠番・コースは通常文字で表示する。
+// 最終予想の先頭列を「艇番 | コース」に整理する。
+// 艇番だけ横長の色付きバッジ、コースは通常文字で表示する。
 // 進入変更時も展示進入マップを使うが、最終予想の計算値・本命対抗・買い目は変更しない。
 $finalMarker = '<!-- ■ 最終予想（Excel完全一致） -->';
 $finalPos = strpos($html, $finalMarker);
@@ -36,7 +36,7 @@ if ($finalPos !== false && $finalEndPos !== false) {
 
     $finalHtml = preg_replace(
         '/<th>艇番<\/th>\s*<th>枠番<\/th>/',
-        '<th>艇番</th><th>枠番</th><th>コース</th>',
+        '<th>艇番</th><th>コース</th>',
         $finalHtml,
         1
     ) ?? $finalHtml;
@@ -61,7 +61,6 @@ if ($finalPos !== false && $finalEndPos !== false) {
             . '号艇</span></td>';
 
         $replacement = $boatBadge
-            . '<td>' . $boat . '枠</td>'
             . '<td>' . $course . 'コース</td>';
 
         $pattern = '/<td>\s*'
