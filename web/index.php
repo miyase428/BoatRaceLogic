@@ -21,8 +21,8 @@ if (strpos($html, $marker) !== false) {
     $html = str_replace($marker, $baseWinRatePanel . "\n    " . $marker, $html);
 }
 
-// 最終予想の先頭列を「艇番 | コース」に整理する。
-// 艇番だけ横長の色付きバッジ、コースは通常文字で表示する。
+// 最終予想の先頭列を「コース | 艇番」に整理する。
+// コースは通常文字、艇番だけ横長の色付きバッジで表示する。
 // 進入変更時も展示進入マップを使うが、最終予想の計算値・本命対抗・買い目は変更しない。
 $finalMarker = '<!-- ■ 最終予想（Excel完全一致） -->';
 $finalPos = strpos($html, $finalMarker);
@@ -36,7 +36,7 @@ if ($finalPos !== false && $finalEndPos !== false) {
 
     $finalHtml = preg_replace(
         '/<th>艇番<\/th>\s*<th>枠番<\/th>/',
-        '<th>艇番</th><th>コース</th>',
+        '<th>コース</th><th>艇番</th>',
         $finalHtml,
         1
     ) ?? $finalHtml;
@@ -60,8 +60,8 @@ if ($finalPos !== false && $finalEndPos !== false) {
             . $boat
             . '号艇</span></td>';
 
-        $replacement = $boatBadge
-            . '<td>' . $course . 'コース</td>';
+        $replacement = '<td>' . $course . 'コース</td>'
+            . $boatBadge;
 
         $pattern = '/<td>\s*'
             . preg_quote((string)$boat, '/')
@@ -96,8 +96,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const rows = Array.from(tbody.querySelectorAll('tr'));
     rows.sort(function (a, b) {
-        const aCourse = parseInt((a.cells[1]?.textContent || '').replace(/[^0-9]/g, ''), 10) || 99;
-        const bCourse = parseInt((b.cells[1]?.textContent || '').replace(/[^0-9]/g, ''), 10) || 99;
+        const aCourse = parseInt((a.cells[0]?.textContent || '').replace(/[^0-9]/g, ''), 10) || 99;
+        const bCourse = parseInt((b.cells[0]?.textContent || '').replace(/[^0-9]/g, ''), 10) || 99;
         return aCourse - bCourse;
     });
 
