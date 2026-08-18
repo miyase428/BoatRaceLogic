@@ -4,8 +4,6 @@ class CorrectedWinRateLogic
 {
     public function calculate(string $raceCode, ?string $virtualLaneToCourse = null): array
     {
-        $placeCode = substr($raceCode, 8, 3);
-
         if ($virtualLaneToCourse !== null) {
             if (!preg_match('/^[1-6]{6}$/', $virtualLaneToCourse)) {
                 return [
@@ -24,18 +22,12 @@ class CorrectedWinRateLogic
                     'error' => '仮想進入は1～6を1回ずつ指定してください',
                 ];
             }
-
-            // 通常exact版は変更せず、仮想進入専用ラッパーだけを使用する。
-            $scriptName = 'corrected_winrate_live_virtual.py';
-        } else {
-            // 通常22場はSTEP8-4完全一致のexact版を維持する。
-            // AMG/TKYはstraight_timeが実質存在しないため、2期間検証済みの
-            // EX_TOTAL3(展示+周回+周り足)専用exact版を使用する。
-            $scriptName = in_array($placeCode, ['AMG', 'TKY'], true)
-                ? 'corrected_winrate_live_exact_amg_tky.py'
-                : 'corrected_winrate_live_exact.py';
         }
 
+        // 既存のexact / AMG-TKY / 仮想進入チェーンは専用Pythonラッパー側で選択する。
+        // その最終 corrected_rate にだけ、2期間ホールドアウト検証済みの
+        // RAW_TEMP後段較正を適用する。既存チェーン本体は変更しない。
+        $scriptName = 'corrected_winrate_live_calibrated.py';
         $script = realpath(__DIR__ . '/../../forecast/' . $scriptName);
         if ($script === false) {
             return [
