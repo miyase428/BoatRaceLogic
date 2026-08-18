@@ -67,15 +67,16 @@ THRESHOLDS = {
     "makurarezashi": 0.20,
 }
 
+# SQL SELECT の決まり手列順と必ず一致させる。
 KEYS = (
     "nige",
-    "sashi",
-    "makuri",
-    "makurizashi",
-    "nogashi",
     "sasare",
     "makurare",
     "makurarezashi",
+    "nogashi",
+    "sashi",
+    "makuri",
+    "makurizashi",
 )
 
 
@@ -405,7 +406,6 @@ def evaluate_period(old: dict, new: dict):
         if o["course"] != n["course"]:
             continue
 
-        # actual情報は共通targetから来る。actual_event用にplayer_idを持たせる。
         base = dict(n)
         base["player_id"] = key[1]
         course = n["course"]
@@ -503,7 +503,6 @@ def print_period(label: str, start: str, end: str, r: dict):
 
 
 def main():
-    # 期間は固定。引数を受け取らず、結果を見て期間を動かさない。
     for _, start, end in PERIODS:
         parse_date(start)
         parse_date(end)
