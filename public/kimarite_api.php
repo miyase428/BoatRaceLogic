@@ -67,9 +67,21 @@ function empty_kimarite() {
 }
 
 // ------------------------------------------------------------
-// 5. 期間ごとの SQL（率の計算ロジックは従来のまま）
+// 5. 期間ごとの決まり手集計
 // ------------------------------------------------------------
+// 固定2期間検証で採用した race_entry 母集団方式。
+// - 母集団: race_entry（完了レースのみ）
+// - 実進入: race_result_detail.entry_course を優先
+//           本人 result_detail 行が欠けた場合だけ exhibition_live.entry_course で補完
+// - 1コース敗戦系 / 2コース逃がし: 勝者側の決まり手・勝者コースから再構築
+// - 3～6コース勝利系: 勝者が本人かつ勝者の決まり手から集計
+// - 集計対象: 全場 / 選手×今回の展示進入コース
+//
+// 既存仕様を維持し、期間の基準日は CURRENT_DATE のまま。
 function load_kimarite($pdo, $race_code, $in_course, $months) {
+    if (!in_array((int)$months, [6, 12], true)) {
+        throw new InvalidArgumentException('months must be 6 or 12');
+    }
 
     $sql = "
 WITH tm AS (
@@ -89,53 +101,117 @@ today_members AS (
         re.player_id,
         tm.today_course
     FROM boat_race.race_entry re
-    JOIN tm ON tm.waku = re.lane_number
+    JOIN tm
+      ON tm.waku = re.lane_number
     WHERE re.race_code = :race_code
 ),
 
 past AS (
     SELECT
-        rrd.player_id,
-        rrd.entry_course,
-        TRIM(rrd.rank) AS rank,
-        rrd.technique,
-        (
-            SELECT entry_course
-            FROM boat_race.race_result_detail r1
-            WHERE r1.race_code = rrd.race_code
-              AND TRIM(r1.rank) = '1'
-            LIMIT 1
-        ) AS winner_course
-    FROM boat_race.race_result_detail rrd
+        re.player_id,
+        COALESCE(rd.entry_course, ex.entry_course)::integer AS entry_course,
+        w.player_id AS winner_player_id,
+        w.entry_course::integer AS winner_course,
+        TRIM(COALESCE(w.technique, '')) AS winner_technique
+    FROM boat_race.race_entry re
     JOIN boat_race.race_master rm
-      ON rrd.race_code = rm.race_code
+      ON rm.race_code = re.race_code
+
+    LEFT JOIN LATERAL (
+        SELECT rrd.entry_course
+        FROM boat_race.race_result_detail rrd
+        WHERE rrd.race_code = re.race_code
+          AND rrd.player_id = re.player_id
+          AND rrd.entry_course BETWEEN 1 AND 6
+        LIMIT 1
+    ) rd ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT el.entry_course
+        FROM boat_race.exhibition_live el
+        WHERE el.race_code = re.race_code
+          AND el.player_id = re.player_id
+          AND el.entry_course BETWEEN 1 AND 6
+        LIMIT 1
+    ) ex ON TRUE
+
+    JOIN LATERAL (
+        SELECT
+            rrd.player_id,
+            rrd.entry_course,
+            rrd.technique
+        FROM boat_race.race_result_detail rrd
+        WHERE rrd.race_code = re.race_code
+          AND TRIM(rrd.rank) = '1'
+        LIMIT 1
+    ) w ON TRUE
+
     WHERE rm.race_date >= CURRENT_DATE - INTERVAL '{$months} months'
-      AND rrd.player_id IN (SELECT player_id FROM today_members)
+      AND re.player_id IN (SELECT player_id FROM today_members)
+),
+
+agg AS (
+    SELECT
+        tm.today_course AS course,
+        COUNT(p.player_id) AS total_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course = 1
+              AND p.winner_player_id = tm.player_id
+        ) AS nige_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course = 1
+              AND p.winner_player_id <> tm.player_id
+              AND p.winner_technique = '差し'
+        ) AS sasare_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course = 1
+              AND p.winner_player_id <> tm.player_id
+              AND p.winner_technique = 'まくり'
+        ) AS makurare_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course = 1
+              AND p.winner_player_id <> tm.player_id
+              AND p.winner_technique = 'まくり差し'
+        ) AS makurarezashi_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course = 2
+              AND p.winner_player_id <> tm.player_id
+              AND p.winner_course = 1
+        ) AS nogashi_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course <> 1
+              AND p.winner_player_id = tm.player_id
+              AND p.winner_technique = '差し'
+        ) AS sashi_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course <> 1
+              AND p.winner_player_id = tm.player_id
+              AND p.winner_technique = 'まくり'
+        ) AS makuri_cnt,
+
+        COUNT(*) FILTER (
+            WHERE tm.today_course <> 1
+              AND p.winner_player_id = tm.player_id
+              AND p.winner_technique = 'まくり差し'
+        ) AS makurizashi_cnt
+
+    FROM today_members tm
+    LEFT JOIN past p
+      ON p.player_id = tm.player_id
+     AND p.entry_course = tm.today_course::integer
+    GROUP BY tm.today_course, tm.player_id
 )
 
-SELECT
-    tm.today_course AS course,
-    CASE
-        WHEN p.entry_course = 1 AND p.rank = '1' THEN 'nige'
-        WHEN p.entry_course = 1 AND p.rank != '1' AND p.technique = '差し' THEN 'sasare'
-        WHEN p.entry_course = 1 AND p.rank != '1' AND p.technique = 'まくり' THEN 'makurare'
-        WHEN p.entry_course = 1 AND p.rank != '1' AND p.technique = 'まくり差し' THEN 'makurarezashi'
-
-        WHEN p.entry_course = 2 AND p.rank != '1' AND p.winner_course = 1 THEN 'nogashi'
-
-        WHEN p.rank = '1' AND p.technique = '差し' THEN 'sashi'
-        WHEN p.rank = '1' AND p.technique = 'まくり' THEN 'makuri'
-        WHEN p.rank = '1' AND p.technique = 'まくり差し' THEN 'makurizashi'
-        ELSE NULL
-    END AS technique_type,
-    COUNT(*) AS cnt,
-    SUM(COUNT(*)) OVER (PARTITION BY tm.today_course) AS total_cnt
-FROM past p
-JOIN today_members tm
-  ON p.player_id = tm.player_id
- AND p.entry_course = tm.today_course::integer
-GROUP BY tm.today_course, technique_type
-ORDER BY tm.today_course;
+SELECT *
+FROM agg
+ORDER BY course;
 ";
 
     $stmt = $pdo->prepare($sql);
@@ -151,28 +227,38 @@ ORDER BY tm.today_course;
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // --- コース別にテンプレートを埋める ---
     $result = [];
     for ($c = 1; $c <= 6; $c++) {
         $result[$c] = empty_kimarite();
     }
 
+    $countColumns = [
+        'nige'          => 'nige_cnt',
+        'sashi'         => 'sashi_cnt',
+        'makuri'        => 'makuri_cnt',
+        'makurizashi'   => 'makurizashi_cnt',
+        'nogashi'       => 'nogashi_cnt',
+        'sasare'        => 'sasare_cnt',
+        'makurare'      => 'makurare_cnt',
+        'makurarezashi' => 'makurarezashi_cnt',
+    ];
+
     foreach ($rows as $r) {
-        $course = intval($r["course"]);
-        $cnt = intval($r["cnt"]);
-        $total = intval($r["total_cnt"]);
-
-        // technique_type がNULLの行も母数には含まれるため、先に保存する。
-        $result[$course]["_sample_n"] = $total;
-
-        if ($r["technique_type"] === null) {
+        $course = intval($r['course'] ?? 0);
+        if ($course < 1 || $course > 6) {
             continue;
         }
 
-        $type = $r["technique_type"];
-        $rate = $total > 0 ? round(100.0 * $cnt / $total, 1) : 0.0;
-        $result[$course][$type] = $rate;
-        $result[$course]["_counts"][$type] = $cnt;
+        $total = intval($r['total_cnt'] ?? 0);
+        $result[$course]['_sample_n'] = $total;
+
+        foreach ($countColumns as $key => $column) {
+            $cnt = intval($r[$column] ?? 0);
+            $result[$course]['_counts'][$key] = $cnt;
+            $result[$course][$key] = $total > 0
+                ? round(100.0 * $cnt / $total, 1)
+                : 0.0;
+        }
     }
 
     return $result;
