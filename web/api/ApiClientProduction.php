@@ -36,4 +36,55 @@ class ApiClientProduction extends ApiClient
 
         return [$tenji_list, $tenji_error];
     }
+
+    /**
+     * tenji_test.php は tenji1..6 を「1～6コースにいる艇番」として受け取る。
+     *
+     * 親ApiClientは旧仕様として「艇番ごとの展示コース」をそのまま渡していたため、
+     * 進入変更時に逆写像が必要になる。本番ラッパーで course -> boat へ変換してから
+     * 親メソッドへ渡し、通常進入123456では従来と完全に同じ引数になるようにする。
+     */
+    public function fetchTenjiTest(string $race_code, array $tenji_list): array
+    {
+        $courseToBoat = [];
+        $seenBoats = [];
+
+        foreach ($tenji_list as $idx => $t) {
+            $boat = (int)($t['teiban'] ?? ($idx + 1));
+            $course = (int)($t['tenji_course'] ?? 0);
+
+            if (
+                $boat < 1 || $boat > 6
+                || $course < 1 || $course > 6
+                || isset($seenBoats[$boat])
+                || isset($courseToBoat[$course])
+            ) {
+                // 展示進入がまだ完全でない場合は旧経路へフォールバック。
+                return parent::fetchTenjiTest($race_code, $tenji_list);
+            }
+
+            $seenBoats[$boat] = true;
+            $courseToBoat[$course] = $boat;
+        }
+
+        if (count($courseToBoat) !== 6 || count($seenBoats) !== 6) {
+            return parent::fetchTenjiTest($race_code, $tenji_list);
+        }
+
+        $proxy = [];
+        for ($course = 1; $course <= 6; $course++) {
+            if (!isset($courseToBoat[$course])) {
+                return parent::fetchTenjiTest($race_code, $tenji_list);
+            }
+
+            // 親メソッドは tenji_course を tenji1..6 の値として送るため、
+            // ここでは「そのコースにいる艇番」を意図的に格納する。
+            $proxy[] = [
+                'teiban' => $courseToBoat[$course],
+                'tenji_course' => $courseToBoat[$course],
+            ];
+        }
+
+        return parent::fetchTenjiTest($race_code, $proxy);
+    }
 }
