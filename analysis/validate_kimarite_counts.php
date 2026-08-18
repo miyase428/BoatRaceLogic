@@ -26,6 +26,9 @@ $metricKeys = [
     'makurarezashi',
 ];
 
+/**
+ * 本番APIとは別クエリで、採用済みrace_entry母集団方式を再計算する。
+ */
 function loadIndependentCounts(PDO $pdo, string $playerId, int $course, int $months): array
 {
     if ($course < 1 || $course > 6) {
@@ -35,77 +38,115 @@ function loadIndependentCounts(PDO $pdo, string $playerId, int $course, int $mon
         throw new RuntimeException('monthsは6または12のみです');
     }
 
-    // course/months は上で整数範囲を検証済み。
     $sql = "
-WITH past AS (
+WITH base AS (
     SELECT
-        TRIM(rrd.rank) AS rank,
-        rrd.technique,
-        (
-            SELECT r1.entry_course
-            FROM boat_race.race_result_detail r1
-            WHERE r1.race_code = rrd.race_code
-              AND TRIM(r1.rank) = '1'
-            LIMIT 1
-        ) AS winner_course
-    FROM boat_race.race_result_detail rrd
+        re.race_code,
+        COALESCE(rd.entry_course, ex.entry_course)::integer AS resolved_course,
+        w.player_id::text AS winner_player_id,
+        w.entry_course::integer AS winner_course,
+        TRIM(COALESCE(w.technique, '')) AS winner_technique
+    FROM boat_race.race_entry re
     JOIN boat_race.race_master rm
-      ON rm.race_code = rrd.race_code
+      ON rm.race_code = re.race_code
+
+    LEFT JOIN LATERAL (
+        SELECT rrd.entry_course
+        FROM boat_race.race_result_detail rrd
+        WHERE rrd.race_code = re.race_code
+          AND rrd.player_id = re.player_id
+          AND rrd.entry_course BETWEEN 1 AND 6
+        LIMIT 1
+    ) rd ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT el.entry_course
+        FROM boat_race.exhibition_live el
+        WHERE el.race_code = re.race_code
+          AND el.player_id = re.player_id
+          AND el.entry_course BETWEEN 1 AND 6
+        LIMIT 1
+    ) ex ON TRUE
+
+    JOIN LATERAL (
+        SELECT rrd.player_id, rrd.entry_course, rrd.technique
+        FROM boat_race.race_result_detail rrd
+        WHERE rrd.race_code = re.race_code
+          AND TRIM(rrd.rank) = '1'
+        LIMIT 1
+    ) w ON TRUE
+
     WHERE rm.race_date >= CURRENT_DATE - INTERVAL '{$months} months'
-      AND rrd.player_id::text = :player_id
-      AND rrd.entry_course = {$course}
-), typed AS (
-    SELECT
-        CASE
-            WHEN {$course} = 1 AND rank = '1' THEN 'nige'
-            WHEN {$course} = 1 AND rank != '1' AND technique = '差し' THEN 'sasare'
-            WHEN {$course} = 1 AND rank != '1' AND technique = 'まくり' THEN 'makurare'
-            WHEN {$course} = 1 AND rank != '1' AND technique = 'まくり差し' THEN 'makurarezashi'
-            WHEN {$course} = 2 AND rank != '1' AND winner_course = 1 THEN 'nogashi'
-            WHEN rank = '1' AND technique = '差し' THEN 'sashi'
-            WHEN rank = '1' AND technique = 'まくり' THEN 'makuri'
-            WHEN rank = '1' AND technique = 'まくり差し' THEN 'makurizashi'
-            ELSE NULL
-        END AS technique_type
-    FROM past
+      AND re.player_id::text = :player_id
+),
+filtered AS (
+    SELECT *
+    FROM base
+    WHERE resolved_course = {$course}
 )
-SELECT technique_type, COUNT(*) AS cnt
-FROM typed
-GROUP BY technique_type
+SELECT
+    COUNT(*) AS sample_n,
+    COUNT(*) FILTER (
+        WHERE {$course} = 1
+          AND winner_player_id = :player_id
+    ) AS nige,
+    COUNT(*) FILTER (
+        WHERE {$course} <> 1
+          AND winner_player_id = :player_id
+          AND winner_technique = '差し'
+    ) AS sashi,
+    COUNT(*) FILTER (
+        WHERE {$course} <> 1
+          AND winner_player_id = :player_id
+          AND winner_technique = 'まくり'
+    ) AS makuri,
+    COUNT(*) FILTER (
+        WHERE {$course} <> 1
+          AND winner_player_id = :player_id
+          AND winner_technique = 'まくり差し'
+    ) AS makurizashi,
+    COUNT(*) FILTER (
+        WHERE {$course} = 2
+          AND winner_player_id <> :player_id
+          AND winner_course = 1
+    ) AS nogashi,
+    COUNT(*) FILTER (
+        WHERE {$course} = 1
+          AND winner_player_id <> :player_id
+          AND winner_technique = '差し'
+    ) AS sasare,
+    COUNT(*) FILTER (
+        WHERE {$course} = 1
+          AND winner_player_id <> :player_id
+          AND winner_technique = 'まくり'
+    ) AS makurare,
+    COUNT(*) FILTER (
+        WHERE {$course} = 1
+          AND winner_player_id <> :player_id
+          AND winner_technique = 'まくり差し'
+    ) AS makurarezashi
+FROM filtered
 ";
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':player_id' => $playerId]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-    $counts = [
-        'nige' => 0,
-        'sashi' => 0,
-        'makuri' => 0,
-        'makurizashi' => 0,
-        'nogashi' => 0,
-        'sasare' => 0,
-        'makurare' => 0,
-        'makurarezashi' => 0,
-    ];
-    $total = 0;
-
-    foreach ($rows as $row) {
-        $cnt = (int)($row['cnt'] ?? 0);
-        $total += $cnt;
-        $type = $row['technique_type'] ?? null;
-        if ($type !== null && array_key_exists($type, $counts)) {
-            $counts[$type] = $cnt;
-        }
-    }
-
+    $n = (int)($row['sample_n'] ?? 0);
+    $counts = [];
     $rates = [];
-    foreach ($counts as $key => $cnt) {
-        $rates[$key] = $total > 0 ? round(100.0 * $cnt / $total, 1) : 0.0;
+
+    foreach ([
+        'nige', 'sashi', 'makuri', 'makurizashi',
+        'nogashi', 'sasare', 'makurare', 'makurarezashi'
+    ] as $key) {
+        $cnt = (int)($row[$key] ?? 0);
+        $counts[$key] = $cnt;
+        $rates[$key] = $n > 0 ? round(100.0 * $cnt / $n, 1) : 0.0;
     }
 
     return [
-        'n' => $total,
+        'n' => $n,
         'counts' => $counts,
         'rates' => $rates,
     ];
@@ -201,12 +242,14 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
 }
 
 printf("%s\n", str_repeat('=', 118));
-printf("決まり手 率・回数・母数 検証: %s\n", $raceCode);
+printf("決まり手 本番再構築版 率・回数・母数 検証: %s\n", $raceCode);
 printf("%s\n", str_repeat('=', 118));
 printf("場                  : %s\n", $place);
 printf("艇→展示C            : %s\n", $effectiveInCourse);
+printf("母集団               : race_entry / 完了レースのみ\n");
+printf("実進入               : result_detail優先 / 欠損時exhibition_live\n");
 printf("集計対象             : 全場 / 選手×展示進入コース\n");
-printf("期間基準             : CURRENT_DATEから直近6ヶ月・1年（現行APIと同条件）\n");
+printf("期間基準             : CURRENT_DATEから直近6ヶ月・1年\n");
 if ($calcError !== '') printf("calc error          : %s\n", $calcError);
 if ($tenjiError !== '') printf("tenji error         : %s\n", $tenjiError);
 if ($kimariteError !== '') printf("kimarite error      : %s\n", $kimariteError);
