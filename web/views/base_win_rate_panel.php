@@ -10,6 +10,27 @@ $correctedMethod = $corrected_win_rate_data['method'] ?? [];
 $correctedExLabel = in_array($selected_place ?? '', ['AMG', 'TKY'], true)
     ? 'EX_TOTAL3（展示＋周回＋周り足）'
     : 'EX_TOTAL';
+
+// 決まり手表はコース基準のまま、見出しに展示進入の実艇番を併記する。
+// 表示専用。決まり手集計・最終予想ロジックには影響させない。
+$kimariteHeaderMap = [];
+for ($course = 1; $course <= 6; $course++) {
+    $boat = !empty($entry_map_ready)
+        ? (int)($boat_by_entry_course[$course] ?? $course)
+        : $course;
+
+    if ($boat < 1 || $boat > 6) {
+        $boat = $course;
+    }
+
+    $boatColor = $lane_colors[$boat] ?? $lane_colors[1];
+    $kimariteHeaderMap[(string)$course] = [
+        'boat'   => $boat,
+        'bg'     => (string)($boatColor['bg'] ?? '#334155'),
+        'text'   => (string)($boatColor['text'] ?? '#ffffff'),
+        'border' => (string)($boatColor['border'] ?? '#64748b'),
+    ];
+}
 ?>
 
 <div style="margin: 18px 0 14px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px;">
@@ -88,3 +109,50 @@ $correctedExLabel = in_array($selected_place ?? '', ['AMG', 'TKY'], true)
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const entryMap = <?= json_encode($kimariteHeaderMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+    document.querySelectorAll('tr').forEach(function (row) {
+        const cells = Array.from(row.cells || []);
+        if (cells.length < 7 || cells[0].textContent.trim() !== '決まり手') {
+            return;
+        }
+
+        for (let course = 1; course <= 6; course++) {
+            const cell = cells[course];
+            const info = entryMap[String(course)];
+            if (!cell || !info) continue;
+
+            cell.innerHTML = '';
+
+            const courseLabel = document.createElement('div');
+            courseLabel.textContent = course + 'コース';
+            courseLabel.style.whiteSpace = 'nowrap';
+            cell.appendChild(courseLabel);
+
+            const badgeWrap = document.createElement('div');
+            badgeWrap.style.marginTop = '4px';
+
+            const badge = document.createElement('span');
+            badge.className = 'lane-badge';
+            badge.textContent = info.boat + '号艇';
+            badge.style.backgroundColor = info.bg;
+            badge.style.color = info.text;
+            badge.style.border = '1px solid ' + info.border;
+            badge.style.display = 'inline-block';
+            badge.style.minWidth = '54px';
+            badge.style.padding = '2px 7px';
+            badge.style.borderRadius = '4px';
+            badge.style.boxSizing = 'border-box';
+            badge.style.whiteSpace = 'nowrap';
+            badge.style.textAlign = 'center';
+            badge.style.fontWeight = 'bold';
+
+            badgeWrap.appendChild(badge);
+            cell.appendChild(badgeWrap);
+        }
+    });
+});
+</script>
