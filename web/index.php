@@ -16,6 +16,15 @@ ob_start();
 include __DIR__ . '/views/index_view.php';
 $html = ob_get_clean();
 
+// 展示・評価情報の J/K/L は内部計算用として残し、画面表示だけ削除する。
+// SUM・二次評価・最終予想などの計算値には影響させない。
+foreach (['J列', 'K列', 'L列(メイン評価)'] as $hiddenTenjiLabel) {
+    $pattern = '/<tr>\s*<td[^>]*>\s*'
+        . preg_quote($hiddenTenjiLabel, '/')
+        . '\s*<\/td>.*?<\/tr>/s';
+    $html = preg_replace($pattern, '', $html, 1) ?? $html;
+}
+
 $marker = '<!-- ■ 総合出走・展示マトリクス -->';
 if (strpos($html, $marker) !== false) {
     $html = str_replace($marker, $baseWinRatePanel . "\n    " . $marker, $html);
