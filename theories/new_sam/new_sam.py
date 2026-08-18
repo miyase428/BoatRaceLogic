@@ -81,16 +81,27 @@ def fetch_result_data(conn, jyo: str):
     """
     実着順を race_code + player_id で取得する。
 
-    展示進入コースと結果側の entry_course を直接対応させず、
-    選手IDで同一選手を対応させる。
+    race_entry を6艇の母集団にし、race_result_detail が欠けている艇は
+    NULLとして返す。normalize_rank() でプロジェクト共通の5.5着扱いにする。
+    ただし未確定レースを混ぜないため、1着結果が存在する完了レースだけを対象にする。
     """
     sql = """
         SELECT
-            rrd.race_code,
-            rrd.player_id,
+            re.race_code,
+            re.player_id,
             rrd.rank
-        FROM boat_race.race_result_detail rrd
-        WHERE SUBSTRING(rrd.race_code, 9, 3) = %s
+        FROM boat_race.race_entry re
+        LEFT JOIN boat_race.race_result_detail rrd
+          ON rrd.race_code = re.race_code
+         AND rrd.player_id = re.player_id
+        WHERE SUBSTRING(re.race_code, 9, 3) = %s
+          AND EXISTS (
+                SELECT 1
+                FROM boat_race.race_result_detail winner
+                WHERE winner.race_code = re.race_code
+                  AND winner.rank = '1'
+          )
+        ORDER BY re.race_code, re.lane_number
     """
     cur = conn.cursor()
     cur.execute(sql, (jyo,))
@@ -228,7 +239,8 @@ def compute_stats_for_jyo(jyo: str, features: dict):
             skipped_missing_feature += 1
             continue
 
-        # 6艇すべての結果対応が取れるレースだけを対象にする。
+        # race_entry母集団から6艇すべての結果対応を作る。
+        # lower rank欠損はnormalize_rank()で5.5着扱い。
         ranks = {}
         invalid_result = False
         for row in sum_rows:
@@ -311,8 +323,9 @@ def compute_stats_for_jyo(jyo: str, features: dict):
         "_meta": {
             "venue": jyo,
             "features": feature_cols,
-            "result_mapping": "race_code+player_id",
+            "result_mapping": "race_entry + race_code+player_id",
             "null_rank": 5.5,
+            "completed_race_filter": "winner rank=1 exists",
             "processed_races": processed_races,
             "skipped_not_6_exhibition": skipped_not_6,
             "skipped_missing_feature": skipped_missing_feature,
