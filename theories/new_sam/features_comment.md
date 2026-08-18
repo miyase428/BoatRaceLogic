@@ -11,12 +11,12 @@
     "MKN": ["exhibition_time", "lap_time", "straight_time"],      # 三国：伸び寄り
     "BWK": ["exhibition_time", "lap_time", "around_time"],        # びわこ：ターン寄り
     "SME": ["exhibition_time", "lap_time", "around_time"],        # 住之江：ターン寄り
-    "AMG": ["exhibition_time", "lap_time", "straight_time"],      # 尼崎：伸び寄り
+    "AMG": ["exhibition_time", "lap_time", "around_time"],        # 尼崎：straight_time実績データ欠損のためaround_timeを代替採用
     "NRT": ["exhibition_time", "lap_time", "straight_time"],      # 鳴門：伸び寄り
     "MRG": ["exhibition_time", "lap_time", "around_time"],        # 丸亀：ターン寄り
     "KJM": ["exhibition_time", "lap_time", "around_time"],        # 児島：ターン寄り
     "MYJ": ["exhibition_time", "lap_time", "around_time"],        # 宮島：ターン寄り
-    "TKY": ["exhibition_time", "lap_time", "straight_time"],      # 徳山：伸び寄り
+    "TKY": ["exhibition_time", "lap_time", "around_time"],        # 徳山：straight_time実績データほぼ欠損のためaround_timeを代替採用
     "SMS": ["exhibition_time", "lap_time", "straight_time"],      # 下関：伸び寄り
     "WKM": ["exhibition_time", "lap_time", "straight_time"],      # 若松：伸び寄り
     "ASY": ["exhibition_time", "lap_time", "straight_time"],      # 芦屋：伸び寄り
