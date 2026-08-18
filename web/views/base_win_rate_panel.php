@@ -11,13 +11,15 @@ $correctedExLabel = in_array($selected_place ?? '', ['AMG', 'TKY'], true)
     ? 'EX_TOTAL3（展示＋周回＋周り足）'
     : 'EX_TOTAL';
 
-// 決まり手表はコース基準のまま、見出しに展示進入の実艇番を併記する。
-// 表示専用。決まり手集計・最終予想ロジックには影響させない。
+// 決まり手表は「予想に使うコース基準」で見出しを作る。
+// 通常時は展示進入、仮想進入モード時は試算進入。
+$kimariteCourseToBoat = !empty($prediction_boat_by_course)
+    ? $prediction_boat_by_course
+    : ($boat_by_entry_course ?? []);
+
 $kimariteHeaderMap = [];
 for ($course = 1; $course <= 6; $course++) {
-    $boat = !empty($entry_map_ready)
-        ? (int)($boat_by_entry_course[$course] ?? $course)
-        : $course;
+    $boat = (int)($kimariteCourseToBoat[$course] ?? $course);
 
     if ($boat < 1 || $boat > 6) {
         $boat = $course;
@@ -33,6 +35,22 @@ for ($course = 1; $course <= 6; $course++) {
 }
 ?>
 
+<?php if (!empty($simulation_active)): ?>
+    <div style="margin: 14px 0; background:#172554; border:1px solid #3b82f6; border-radius:8px; padding:11px 14px; color:#dbeafe;">
+        <strong>🧪 仮想進入モード</strong>
+        <span style="margin-left:12px;">展示進入 <?= htmlspecialchars((string)($exhibition_entry_order ?? '123456')) ?></span>
+        <span style="margin:0 8px; color:#93c5fd;">→</span>
+        <span>試算進入 <strong><?= htmlspecialchars((string)($prediction_entry_order ?? '123456')) ?></strong></span>
+        <div style="margin-top:4px; font-size:12px; color:#bfdbfe;">
+            決まり手・基本/補正後1着率・本命/対抗・最終順位は試算進入で再計算。展示値そのものは実測値を使用。
+        </div>
+    </div>
+<?php elseif (!empty($virtual_entry_error)): ?>
+    <div style="margin:14px 0; background:#450a0a; border:1px solid #ef4444; border-radius:8px; padding:10px 14px; color:#fecaca;">
+        <?= htmlspecialchars((string)$virtual_entry_error) ?>
+    </div>
+<?php endif; ?>
+
 <div style="margin: 18px 0 14px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px;">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
         <div>
@@ -43,6 +61,11 @@ for ($course = 1; $course <= 6; $course++) {
             <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
                 補正後：展示進入 → <?= htmlspecialchars($correctedExLabel) ?> β=0.10 → SUM_RAW γ=2.0 → スリット α=0.25 / 各段階6艇100%正規化
             </div>
+            <?php if (!empty($simulation_active)): ?>
+                <div style="font-size:12px; color:#93c5fd; margin-top:3px;">
+                    ※現在は仮想進入 <?= htmlspecialchars((string)$prediction_entry_order) ?> 基準で計算
+                </div>
+            <?php endif; ?>
         </div>
         <?php if (!empty($baseWinBoats)): ?>
             <div style="font-size:12px; color:#94a3b8; white-space:nowrap;">
@@ -114,13 +137,85 @@ for ($course = 1; $course <= 6; $course++) {
 document.addEventListener('DOMContentLoaded', function () {
     const entryMap = <?= json_encode($kimariteHeaderMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const kimariteData = <?= json_encode($kimarite_data ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const exhibitionEntryOrder = <?= json_encode((string)($exhibition_entry_order ?? '123456'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const virtualEntry = <?= json_encode((string)($virtual_entry ?? '123456'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const simulateEntry = <?= !empty($simulate_entry) ? 'true' : 'false' ?>;
+    const entryMapReady = <?= !empty($entry_map_ready) ? 'true' : 'false' ?>;
+
+    // 旧「進入コース(6桁)」欄を、展示進入表示＋仮想進入試算UIへ置き換える。
+    const oldInput = document.querySelector('input[name="in_course"]');
+    const formGroup = oldInput ? oldInput.closest('.form-group') : null;
+    if (formGroup) {
+        formGroup.innerHTML = '';
+
+        const label = document.createElement('label');
+        label.textContent = '進入シミュレーション';
+        formGroup.appendChild(label);
+
+        const actual = document.createElement('div');
+        actual.style.marginBottom = '7px';
+        actual.style.fontSize = '13px';
+        actual.style.color = '#cbd5e1';
+        actual.innerHTML = '展示進入：<strong style="color:#f8fafc;">' +
+            (entryMapReady ? exhibitionEntryOrder : '展示情報待ち') + '</strong>';
+        formGroup.appendChild(actual);
+
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '7px';
+        row.style.flexWrap = 'wrap';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'simulate_entry';
+        checkbox.value = '1';
+        checkbox.checked = simulateEntry;
+        checkbox.id = 'simulate-entry-checkbox';
+        checkbox.style.width = 'auto';
+        checkbox.style.margin = '0';
+
+        const checkLabel = document.createElement('label');
+        checkLabel.htmlFor = 'simulate-entry-checkbox';
+        checkLabel.textContent = '仮想進入で試算';
+        checkLabel.style.margin = '0';
+        checkLabel.style.whiteSpace = 'nowrap';
+        checkLabel.style.cursor = 'pointer';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.name = 'virtual_entry';
+        input.maxLength = 6;
+        input.inputMode = 'numeric';
+        input.value = virtualEntry;
+        input.placeholder = '例: 126345';
+        input.style.width = '92px';
+        input.style.margin = '0';
+        input.style.opacity = checkbox.checked ? '1' : '0.55';
+
+        checkbox.addEventListener('change', function () {
+            input.style.opacity = checkbox.checked ? '1' : '0.55';
+        });
+
+        row.appendChild(checkbox);
+        row.appendChild(checkLabel);
+        row.appendChild(input);
+        formGroup.appendChild(row);
+
+        const help = document.createElement('div');
+        help.style.marginTop = '5px';
+        help.style.fontSize = '11px';
+        help.style.color = '#94a3b8';
+        help.textContent = 'コース順の艇番を入力（例: 126345 = 3Cに6号艇）';
+        formGroup.appendChild(help);
+    }
 
     const matrixTable = document.querySelector('.matrix-table');
     if (!matrixTable) return;
 
     const rows = Array.from(matrixTable.querySelectorAll('tbody tr'));
 
-    // コース見出しに今回の展示進入艇を併記する。
+    // コース見出しに「予想で使う艇番」を併記する。
     rows.forEach(function (row) {
         const cells = Array.from(row.cells || []);
         if (cells.length < 7 || cells[0].textContent.trim() !== '決まり手') {
@@ -163,7 +258,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // 決まり手の率に「発生回数 / 選手×コースの集計母数」を併記する。
-    // 例: 4.0%（1/25）。率・背景色そのものは既存表示を維持する。
     const metricKeys = {
         '逃げ / 逃がし':      {1: 'nige',            2: 'nogashi'},
         '差され / 差し':      {1: 'sasare',          2: 'sashi', 3: 'sashi', 4: 'sashi', 5: 'sashi', 6: 'sashi'},
