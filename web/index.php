@@ -22,7 +22,7 @@ if (strpos($html, $marker) !== false) {
 }
 
 // スリット体系はコース基準の値なので、進入マップが取れている場合だけ
-// 「4C（5号艇）」のように実艇番を併記する。
+// 「コース」と「艇番」を別列で表示する。
 // SUM / スリットの計算値は一切変更せず、表示だけを加工する。
 if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
     $slitMarker = '<!-- ■ スリット体系 -->';
@@ -32,27 +32,39 @@ if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
         $beforeSlit = substr($html, 0, $slitPos);
         $slitHtml = substr($html, $slitPos);
 
+        // 見出しを「コース | 艇番 | ...」へ変更。
+        $slitHtml = preg_replace(
+            '/<th>コース<\/th>/',
+            '<th>コース</th><th>艇番</th>',
+            $slitHtml,
+            1
+        ) ?? $slitHtml;
+
         for ($course = 1; $course <= 6; $course++) {
             $boat = (int)($boat_by_entry_course[$course] ?? 0);
             if ($boat < 1 || $boat > 6) {
                 continue;
             }
 
-            $pattern = '/(<span class="lane-badge"[^>]*>\s*)'
+            $boatColor = $lane_colors[$boat] ?? $lane_colors[1];
+            $boatBadge = '<td><span class="lane-badge" style="background-color:'
+                . htmlspecialchars($boatColor['bg'], ENT_QUOTES, 'UTF-8')
+                . '; color:'
+                . htmlspecialchars($boatColor['text'], ENT_QUOTES, 'UTF-8')
+                . '; border:1px solid '
+                . htmlspecialchars($boatColor['border'], ENT_QUOTES, 'UTF-8')
+                . ';">'
+                . $boat
+                . '号艇</span></td>';
+
+            $pattern = '/(<td>\s*<span class="lane-badge"[^>]*>\s*)'
                 . preg_quote((string)$course, '/')
-                . '(\s*<\/span>)/s';
+                . '(\s*<\/span>\s*<\/td>)/s';
 
             $slitHtml = preg_replace_callback(
                 $pattern,
-                static function (array $m) use ($course, $boat): string {
-                    // コース番号だけを色付きバッジ内に残し、号艇表示はバッジ外へ出す。
-                    // 1号艇・5号艇の黒文字が暗い背景に溶けるのを防ぐ。
-                    return $m[1]
-                        . $course . 'C'
-                        . $m[2]
-                        . '<span style="margin-left:4px; color:#f8fafc; font-size:12px;">（'
-                        . $boat
-                        . '号艇）</span>';
+                static function (array $m) use ($course, $boatBadge): string {
+                    return $m[1] . $course . 'C' . $m[2] . $boatBadge;
                 },
                 $slitHtml,
                 1
@@ -79,14 +91,14 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!table) return;
 
     const headers = table.querySelectorAll('thead th');
-    if (headers.length >= 5) {
-        headers[3].textContent = '3着率（未採用）';
+    if (headers.length >= 6) {
+        headers[4].textContent = '3着率（未採用）';
     }
 
     table.querySelectorAll('tbody tr').forEach(function (row) {
-        if (row.cells.length >= 5) {
-            row.cells[3].innerHTML = '<span style="color:#94a3b8;">—</span>';
-            row.cells[3].title = '固定2期間検証でBrierが両期間とも悪化したため未採用';
+        if (row.cells.length >= 6) {
+            row.cells[4].innerHTML = '<span style="color:#94a3b8;">—</span>';
+            row.cells[4].title = '固定2期間検証でBrierが両期間とも悪化したため未採用';
         }
     });
 
