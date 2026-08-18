@@ -113,8 +113,15 @@ for ($course = 1; $course <= 6; $course++) {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const entryMap = <?= json_encode($kimariteHeaderMap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const kimariteData = <?= json_encode($kimarite_data ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-    document.querySelectorAll('tr').forEach(function (row) {
+    const matrixTable = document.querySelector('.matrix-table');
+    if (!matrixTable) return;
+
+    const rows = Array.from(matrixTable.querySelectorAll('tbody tr'));
+
+    // コース見出しに今回の展示進入艇を併記する。
+    rows.forEach(function (row) {
         const cells = Array.from(row.cells || []);
         if (cells.length < 7 || cells[0].textContent.trim() !== '決まり手') {
             return;
@@ -152,6 +159,60 @@ document.addEventListener('DOMContentLoaded', function () {
 
             badgeWrap.appendChild(badge);
             cell.appendChild(badgeWrap);
+        }
+    });
+
+    // 決まり手の率に「発生回数 / 選手×コースの集計母数」を併記する。
+    // 例: 4.0%（1/25）。率・背景色そのものは既存表示を維持する。
+    const metricKeys = {
+        '逃げ / 逃がし':      {1: 'nige',            2: 'nogashi'},
+        '差され / 差し':      {1: 'sasare',          2: 'sashi', 3: 'sashi', 4: 'sashi', 5: 'sashi', 6: 'sashi'},
+        '捲られ / 捲り':      {1: 'makurare',        2: 'makuri', 3: 'makuri', 4: 'makuri', 5: 'makuri', 6: 'makuri'},
+        '捲られ差 / 捲り差し': {1: 'makurarezashi',   2: 'makurizashi', 3: 'makurizashi', 4: 'makurizashi', 5: 'makurizashi', 6: 'makurizashi'}
+    };
+
+    let period = null;
+
+    rows.forEach(function (row) {
+        const cells = Array.from(row.cells || []);
+        if (!cells.length) return;
+
+        const label = cells[0].textContent.trim();
+
+        if (label.includes('決まり手（直近1年）')) {
+            period = '1year';
+            return;
+        }
+        if (label.includes('決まり手（直近6ヶ月）')) {
+            period = '6month';
+            return;
+        }
+
+        const rowKeys = metricKeys[label];
+        if (!period || !rowKeys || cells.length < 7) {
+            return;
+        }
+
+        for (let course = 1; course <= 6; course++) {
+            const key = rowKeys[course];
+            if (!key) continue;
+
+            const courseData = kimariteData[String(course)] || kimariteData[course] || {};
+            const periodData = courseData[period] || {};
+            const sampleN = Number(periodData._sample_n || 0);
+            const counts = periodData._counts || {};
+            const count = Number(counts[key] || 0);
+            const rate = Number(periodData[key] || 0);
+            const cell = cells[course];
+            if (!cell) continue;
+
+            if (sampleN > 0) {
+                cell.textContent = rate.toFixed(1) + '%（' + count + '/' + sampleN + '）';
+                cell.title = '発生 ' + count + '回 / 選手がこのコースを走った集計対象 ' + sampleN + '走';
+            } else {
+                cell.textContent = '-';
+                cell.title = '集計対象なし';
+            }
         }
     });
 });
