@@ -7,6 +7,9 @@ $correctedWinBoats = $corrected_win_rate_data['boats'] ?? [];
 $correctedWinStatus = $corrected_win_rate_data['status'] ?? 'error';
 $correctedWinError = $corrected_win_rate_data['error'] ?? '';
 $correctedMethod = $corrected_win_rate_data['method'] ?? [];
+$correctedExLabel = in_array($selected_place ?? '', ['AMG', 'TKY'], true)
+    ? 'EX_TOTAL3（展示＋周回＋周り足）'
+    : 'EX_TOTAL';
 ?>
 
 <div style="margin: 18px 0 14px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px;">
@@ -17,7 +20,7 @@ $correctedMethod = $corrected_win_rate_data['method'] ?? [];
                 基本：場×コース → 選手×コース → 選手×場×コース / BB_MEDIUM K=20・10
             </div>
             <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
-                補正後：展示進入 → EX_TOTAL β=0.10 → SUM_RAW γ=2.0 → スリット α=0.25 / 各段階6艇100%正規化
+                補正後：展示進入 → <?= htmlspecialchars($correctedExLabel) ?> β=0.10 → SUM_RAW γ=2.0 → スリット α=0.25 / 各段階6艇100%正規化
             </div>
         </div>
         <?php if (!empty($baseWinBoats)): ?>
