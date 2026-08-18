@@ -42,8 +42,14 @@ if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
                 . preg_quote((string)$course, '/')
                 . '(\s*<\/span>)/s';
 
-            $replacement = '$1' . $course . 'C（' . $boat . '号艇）$2';
-            $slitHtml = preg_replace($pattern, $replacement, $slitHtml, 1) ?? $slitHtml;
+            $slitHtml = preg_replace_callback(
+                $pattern,
+                static function (array $m) use ($course, $boat): string {
+                    return $m[1] . $course . 'C（' . $boat . '号艇）' . $m[2];
+                },
+                $slitHtml,
+                1
+            ) ?? $slitHtml;
         }
 
         $html = $beforeSlit . $slitHtml;
