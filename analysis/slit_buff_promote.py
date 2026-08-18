@@ -3,7 +3,6 @@ import argparse
 import json
 import math
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -14,8 +13,8 @@ PRODUCTION = THEORY_DIR / "buff_debuff_slit.json"
 BACKUP = THEORY_DIR / "buff_debuff_slit.pre_c_st_rank_backup.json"
 
 METRICS = ("win", "place2", "place3", "trio")
-ACTIVE = ("win", "trio")
-INACTIVE = ("place2", "place3")
+ACTIVE = ("win", "place2", "trio")
+INACTIVE = ("place3",)
 MAX_CAP = 0.08
 EPS = 1e-12
 
@@ -74,7 +73,7 @@ def validate_candidate(buff, meta):
 
     if inactive_nonzero:
         sample = inactive_nonzero[:5]
-        raise RuntimeError(f"place2/place3に非0値があります: {sample}")
+        raise RuntimeError(f"place3に非0値があります: {sample}")
 
     if meta.get("prediction_method") != "C_ST_RANK":
         raise RuntimeError(
@@ -83,9 +82,9 @@ def validate_candidate(buff, meta):
 
     active_metrics = set(meta.get("active_metrics", []))
     inactive_metrics = set(meta.get("inactive_metrics", []))
-    if active_metrics != {"win", "trio"}:
+    if active_metrics != {"win", "place2", "trio"}:
         raise RuntimeError(f"meta active_metrics が不正です: {active_metrics}")
-    if inactive_metrics != {"place2", "place3"}:
+    if inactive_metrics != {"place3"}:
         raise RuntimeError(f"meta inactive_metrics が不正です: {inactive_metrics}")
 
     k = as_finite_number(meta.get("k"), "meta.k")
@@ -153,8 +152,9 @@ def main():
     print(f"学習期間     : {result['training_start']} ～ {result['training_end']}")
     print(f"処理レース   : {result['processed_races']}")
     print(f"検証セル     : {result['cells']} (12PID × 6course)")
-    print(f"win/trio max : {result['max_abs']:.6f} (cap={MAX_CAP:.2f})")
-    print("place2/place3: 全セル 0 確認")
+    print(f"active max   : {result['max_abs']:.6f} (cap={MAX_CAP:.2f})")
+    print("active       : win / place2 / trio")
+    print("place3       : 全セル 0 確認（未採用）")
     print("prediction   : C_ST_RANK")
     print("K            : 40")
     print("\n【PID件数】")
