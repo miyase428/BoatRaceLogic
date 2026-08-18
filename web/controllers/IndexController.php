@@ -218,14 +218,26 @@ class IndexController
 
         // -------------------------------------------------------------
         // 6. サム理論マスタ & ロジック適用
-        // SUMの画面表示は実際の展示進入・展示値を表示する。
+        // 展示値は実測のまま、仮想進入時だけコース配置を試算進入へ差し替える。
         // -------------------------------------------------------------
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
-        [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory($tenji_list, $sam_master_data);
+        [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory(
+            $prediction_tenji_list,
+            $sam_master_data
+        );
 
+        // -------------------------------------------------------------
         // 7. スリット体系
-        // この独立表示は実際の展示進入。補正後1着率の仮想モード内部では専用PIDを再計算する。
-        [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
+        // 通常時は実展示、仮想進入時は展示STを保持したまま試算コースでPIDを再計算する。
+        // -------------------------------------------------------------
+        if ($simulation_active) {
+            [$slit_data, $slit_pattern] = $apiClient->fetchSlitVirtual(
+                $race_code,
+                $effective_in_course
+            );
+        } else {
+            [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
+        }
         $feature_name = $slitLogic->getFeatureNames();
 
         // 「3の先攻め」は艇番ではなく3コース位置を表すため表示を明示する。
@@ -233,11 +245,11 @@ class IndexController
             $slit_pattern['name'] = '3コース先攻め';
         }
 
-        // 実展示で進入変更があった時はスリット説明に course -> boat を明示する。
-        if ($entry_changed) {
+        // 進入変更時はスリット説明に、実際に計算へ使った course -> boat を明示する。
+        if ($prediction_entry_changed) {
             $entryParts = [];
             for ($course = 1; $course <= 6; $course++) {
-                $boat = (int)($boat_by_entry_course[$course] ?? 0);
+                $boat = (int)($prediction_boat_by_course[$course] ?? 0);
                 if ($boat > 0) {
                     $entryParts[] = $course . 'C=' . $boat . '号艇';
                 }
@@ -245,15 +257,10 @@ class IndexController
 
             if ($entryParts) {
                 $baseDesc = trim((string)($slit_pattern['desc'] ?? ''));
-                $mapDesc = '展示進入: ' . implode(' / ', $entryParts);
+                $mapLabel = $simulation_active ? '試算進入' : '展示進入';
+                $mapDesc = $mapLabel . ': ' . implode(' / ', $entryParts);
                 $slit_pattern['desc'] = $baseDesc !== '' ? $baseDesc . ' ｜ ' . $mapDesc : $mapDesc;
             }
-        }
-
-        if ($simulation_active) {
-            $baseDesc = trim((string)($slit_pattern['desc'] ?? ''));
-            $note = 'このスリット欄は展示実測。仮想進入の補正後1着率では試算進入でPIDを再計算。';
-            $slit_pattern['desc'] = $baseDesc !== '' ? $baseDesc . ' ｜ ' . $note : $note;
         }
 
         // 7-2. 補正後1着率
@@ -306,8 +313,8 @@ class IndexController
             6 => ['bg' => '#22c55e', 'text' => '#ffffff', 'border' => '#16a34a'],
         ];
 
-        // SUMは実展示の course を変えず、表示直前だけ「4C（5号艇）」形式にする。
-        if ($entry_changed) {
+        // SUMは計算に使ったコースを「4C（5号艇）」形式へ整える。
+        if ($prediction_entry_changed) {
             foreach ($sam_applied_list as &$s) {
                 $boat = (int)($s['teiban'] ?? 0);
                 $course = (int)($s['course'] ?? 0);
@@ -341,10 +348,9 @@ class IndexController
             'entry_map_ready' => $entry_map_ready,
             'entry_changed' => $entry_changed,
             'prediction_entry_changed' => $prediction_entry_changed,
-            // web/index.phpの最終予想表示はこのmapを見るため、仮想時だけ予想mapを渡す。
+            // 最終予想・SUM・スリット表示は、仮想時だけ試算mapを見る。
             'entry_course_by_boat' => $simulation_active ? $prediction_course_by_boat : $entry_course_by_boat,
-            // SUM/スリット表示は実展示を維持するため、こちらは常に実展示map。
-            'boat_by_entry_course' => $boat_by_entry_course,
+            'boat_by_entry_course' => $simulation_active ? $prediction_boat_by_course : $boat_by_entry_course,
             'prediction_course_by_boat' => $prediction_course_by_boat,
             'prediction_boat_by_course' => $prediction_boat_by_course,
             'entries'         => $entries,
