@@ -148,6 +148,14 @@ $api = new ApiClientProduction();
 [$entries, $firstResults, $calcError] = $api->fetchCalcScores($raceCode);
 [$tenjiList, $tenjiError] = $api->fetchTenji($raceCode, $firstResults, $place);
 
+$nameByBoat = [];
+foreach ($entries as $entry) {
+    $boat = (int)($entry['lane_number'] ?? 0);
+    if ($boat >= 1 && $boat <= 6) {
+        $nameByBoat[$boat] = trim((string)($entry['player_name'] ?? ''));
+    }
+}
+
 $courseByBoat = [];
 $boatByCourse = [];
 foreach ($tenjiList as $idx => $t) {
@@ -177,20 +185,18 @@ for ($boat = 1; $boat <= 6; $boat++) {
 
 $pdo = getPDO();
 $stmt = $pdo->prepare(<<<SQL
-    SELECT re.lane_number, re.player_id::text, COALESCE(re.player_name, '')
-    FROM boat_race.race_entry re
-    WHERE re.race_code = :race_code
-    ORDER BY re.lane_number
+    SELECT lane_number, player_id::text
+    FROM boat_race.race_entry
+    WHERE race_code = :race_code
+    ORDER BY lane_number
 SQL);
 $stmt->execute([':race_code' => $raceCode]);
 
 $playerByBoat = [];
-$nameByBoat = [];
-foreach ($stmt->fetchAll(PDO::FETCH_NUM) as $row) {
-    $boat = (int)$row[0];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $boat = (int)($row['lane_number'] ?? 0);
     if ($boat >= 1 && $boat <= 6) {
-        $playerByBoat[$boat] = trim((string)$row[1]);
-        $nameByBoat[$boat] = trim((string)$row[2]);
+        $playerByBoat[$boat] = trim((string)($row['player_id'] ?? ''));
     }
 }
 
@@ -226,11 +232,16 @@ for ($course = 1; $course <= 6; $course++) {
         $allOk = false;
     }
 
+    $displayName = $nameByBoat[$boat] ?? '';
+    if ($displayName === '') {
+        $displayName = $pid;
+    }
+
     printf(
         "%-8s %-8s %-18s %7d %7d %-8s %-8s\n",
         $course . 'コース',
         $boat . '号艇',
-        $nameByBoat[$boat] !== '' ? $nameByBoat[$boat] : $pid,
+        $displayName,
         $oneYear['n'],
         $sixMonth['n'],
         $ok1 ? 'OK' : 'NG',
