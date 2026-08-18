@@ -253,6 +253,7 @@ foreach ([12 => ['label' => '直近1年', 'period' => '1year'], 6 => ['label' =>
                 $oldN,
                 $newRate,
                 $newCount,
+                $new['n'],
                 $newRate - $oldRate
             );
         }
