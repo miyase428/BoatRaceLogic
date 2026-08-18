@@ -21,6 +21,64 @@ if (strpos($html, $marker) !== false) {
     $html = str_replace($marker, $baseWinRatePanel . "\n    " . $marker, $html);
 }
 
+// 最終予想の先頭列を「艇番 | 枠番 | コース」に分離する。
+// 艇番だけ横長の色付きバッジ、枠番・コースは通常文字で表示する。
+// 進入変更時も展示進入マップを使うが、最終予想の計算値・本命対抗・買い目は変更しない。
+$finalMarker = '<!-- ■ 最終予想（Excel完全一致） -->';
+$finalPos = strpos($html, $finalMarker);
+$finalEndMarker = '<!-- ■ 展示サム理論マスタデータ -->';
+$finalEndPos = $finalPos !== false ? strpos($html, $finalEndMarker, $finalPos) : false;
+
+if ($finalPos !== false && $finalEndPos !== false) {
+    $beforeFinal = substr($html, 0, $finalPos);
+    $finalHtml = substr($html, $finalPos, $finalEndPos - $finalPos);
+    $afterFinal = substr($html, $finalEndPos);
+
+    $finalHtml = preg_replace(
+        '/<th>艇番<\/th>\s*<th>枠番<\/th>/',
+        '<th>艇番</th><th>枠番</th><th>コース</th>',
+        $finalHtml,
+        1
+    ) ?? $finalHtml;
+
+    for ($boat = 1; $boat <= 6; $boat++) {
+        $course = !empty($entry_map_ready)
+            ? (int)($entry_course_by_boat[$boat] ?? $boat)
+            : $boat;
+        if ($course < 1 || $course > 6) {
+            $course = $boat;
+        }
+
+        $boatColor = $lane_colors[$boat] ?? $lane_colors[1];
+        $boatBadge = '<td><span class="lane-badge" style="background-color:'
+            . htmlspecialchars($boatColor['bg'], ENT_QUOTES, 'UTF-8')
+            . '; color:'
+            . htmlspecialchars($boatColor['text'], ENT_QUOTES, 'UTF-8')
+            . '; border:1px solid '
+            . htmlspecialchars($boatColor['border'], ENT_QUOTES, 'UTF-8')
+            . '; display:inline-block !important; width:auto !important; height:auto !important; min-width:58px; padding:3px 8px !important; border-radius:5px !important; box-sizing:border-box; white-space:nowrap; overflow:visible !important; line-height:1.4; text-align:center; font-weight:bold; font-size:13px;">'
+            . $boat
+            . '号艇</span></td>';
+
+        $replacement = $boatBadge
+            . '<td>' . $boat . '枠</td>'
+            . '<td>' . $course . 'コース</td>';
+
+        $pattern = '/<td>\s*'
+            . preg_quote((string)$boat, '/')
+            . '\s*<\/td>\s*<td>\s*<span class="lane-badge"[^>]*>.*?<\/span>\s*<\/td>/s';
+
+        $finalHtml = preg_replace(
+            $pattern,
+            $replacement,
+            $finalHtml,
+            1
+        ) ?? $finalHtml;
+    }
+
+    $html = $beforeFinal . $finalHtml . $afterFinal;
+}
+
 // 展示サム理論（レース適用値）もスリット体系と同じ見た目に揃える。
 // コースは「1コース」の通常文字、艇番だけ横長の色付きバッジで別列表示する。
 // SUMの計算値・course参照自体は変更しない。
