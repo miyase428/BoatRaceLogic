@@ -54,7 +54,7 @@ if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
                 . htmlspecialchars($boatColor['text'], ENT_QUOTES, 'UTF-8')
                 . '; border:1px solid '
                 . htmlspecialchars($boatColor['border'], ENT_QUOTES, 'UTF-8')
-                . ';">'
+                . '; display:inline-block !important; width:auto !important; height:auto !important; min-width:58px; padding:3px 8px !important; border-radius:5px !important; box-sizing:border-box; white-space:nowrap; overflow:visible !important; line-height:1.4; text-align:center; font-weight:bold; font-size:13px;">'
                 . $boat
                 . '号艇</span></td>';
 
