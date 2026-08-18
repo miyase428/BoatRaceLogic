@@ -21,6 +21,73 @@ if (strpos($html, $marker) !== false) {
     $html = str_replace($marker, $baseWinRatePanel . "\n    " . $marker, $html);
 }
 
+// 展示サム理論（レース適用値）もスリット体系と同じ見た目に揃える。
+// コースは「1コース」の通常文字、艇番だけ横長の色付きバッジで別列表示する。
+// SUMの計算値・course参照自体は変更しない。
+$samAppliedMarker = '<!-- ■ 展示サム理論マスタデータ -->';
+$samAppliedPos = strpos($html, $samAppliedMarker);
+$samMasterHeading = '<h2>📐 サム理論（コース・区間別マスタ）</h2>';
+$samMasterPos = $samAppliedPos !== false ? strpos($html, $samMasterHeading, $samAppliedPos) : false;
+
+if ($samAppliedPos !== false && $samMasterPos !== false) {
+    $beforeSamApplied = substr($html, 0, $samAppliedPos);
+    $samAppliedHtml = substr($html, $samAppliedPos, $samMasterPos - $samAppliedPos);
+    $afterSamApplied = substr($html, $samMasterPos);
+
+    // 見出しを「コース | 艇番 | ...」へ変更。
+    $samAppliedHtml = preg_replace(
+        '/<th>コース<\/th>/',
+        '<th>コース</th><th>艇番</th>',
+        $samAppliedHtml,
+        1
+    ) ?? $samAppliedHtml;
+
+    // 既存の6つのコースバッジを、コース通常文字＋実艇番バッジへ置換。
+    $samCourseIndex = 0;
+    $samAppliedHtml = preg_replace_callback(
+        '/<td>\s*<span class="lane-badge"[^>]*>.*?<\/span>\s*<\/td>/s',
+        static function (array $m) use (&$samCourseIndex, $entry_map_ready, $boat_by_entry_course, $lane_colors): string {
+            $samCourseIndex++;
+            $course = $samCourseIndex;
+            if ($course < 1 || $course > 6) {
+                return $m[0];
+            }
+
+            $boat = $entry_map_ready
+                ? (int)($boat_by_entry_course[$course] ?? $course)
+                : $course;
+            if ($boat < 1 || $boat > 6) {
+                $boat = $course;
+            }
+
+            $boatColor = $lane_colors[$boat] ?? $lane_colors[1];
+            $boatBadge = '<td><span class="lane-badge" style="background-color:'
+                . htmlspecialchars($boatColor['bg'], ENT_QUOTES, 'UTF-8')
+                . '; color:'
+                . htmlspecialchars($boatColor['text'], ENT_QUOTES, 'UTF-8')
+                . '; border:1px solid '
+                . htmlspecialchars($boatColor['border'], ENT_QUOTES, 'UTF-8')
+                . '; display:inline-block !important; width:auto !important; height:auto !important; min-width:58px; padding:3px 8px !important; border-radius:5px !important; box-sizing:border-box; white-space:nowrap; overflow:visible !important; line-height:1.4; text-align:center; font-weight:bold; font-size:13px;">'
+                . $boat
+                . '号艇</span></td>';
+
+            return '<td>' . $course . 'コース</td>' . $boatBadge;
+        },
+        $samAppliedHtml,
+        6
+    ) ?? $samAppliedHtml;
+
+    // 艇番列を1列追加したため、フッターの列数だけ合わせる。
+    $samAppliedHtml = preg_replace(
+        '/<td colspan="4"([^>]*)>全体平均:<\/td>/',
+        '<td colspan="5"$1>全体平均:</td>',
+        $samAppliedHtml,
+        1
+    ) ?? $samAppliedHtml;
+
+    $html = $beforeSamApplied . $samAppliedHtml . $afterSamApplied;
+}
+
 // スリット体系はコース基準の値なので、進入マップが取れている場合だけ
 // 「コース」と「艇番」を別列で表示する。
 // コースは「1コース」のような通常文字、艇番だけ色付きバッジにする。
