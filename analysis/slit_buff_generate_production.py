@@ -20,7 +20,7 @@ from slit_buff_rebuild_validate import (
 
 K = 40.0
 MAX_CAP = 0.08
-ACTIVE_METRICS = {"win", "trio"}
+ACTIVE_METRICS = {"win", "place2", "trio"}
 ALL_METRICS = ("win", "place2", "place3", "trio")
 
 PATTERN_NAMES = {
@@ -81,7 +81,7 @@ def main():
         f.write("\n")
 
     meta = {
-        "version": 2,
+        "version": 3,
         "status": "candidate",
         "prediction_method": "C_ST_RANK",
         "pattern_classifier": "current production classify_slit_pattern + venue_slit_settings.json",
@@ -91,15 +91,16 @@ def main():
         "processed_races": len(rows),
         "k": K,
         "max_cap": MAX_CAP,
-        "active_metrics": ["win", "trio"],
-        "inactive_metrics": ["place2", "place3"],
+        "active_metrics": ["win", "place2", "trio"],
+        "inactive_metrics": ["place3"],
         "pid_counts": {str(pid): freq[pid] for pid in range(1, 13)},
         "skip": {k: int(v) for k, v in skip.items()},
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "notes": [
             "buff is learned from predicted C_ST_RANK PID -> actual finish outcome",
-            "win/trio passed bidirectional validation and final holdout",
-            "place2/place3 are intentionally forced to zero",
+            "win/trio passed prior bidirectional validation and final holdout",
+            "place2 passed fixed two-period Brier validation on 2026-08-18",
+            "place3 failed both fixed holdouts and is intentionally forced to zero",
             "candidate file does not affect slit_api.php until explicitly promoted",
         ],
     }
@@ -116,8 +117,8 @@ def main():
     print(f"処理レース : {len(rows)}")
     print(f"K          : {int(K)}")
     print(f"cap        : ±{MAX_CAP:.2f}")
-    print("採用指標   : win / trio")
-    print("0補正      : place2 / place3")
+    print("採用指標   : win / place2 / trio")
+    print("0補正      : place3")
     print("本番JSON   : 未変更")
     print("\n【skip】")
     for key in ["not_6_entry", "not_6_exhibition", "missing_ex_st", "bad_result", "missing_racer_term_or_st"]:
@@ -134,11 +135,10 @@ def main():
         for course in range(1, 7):
             for metric in ACTIVE_METRICS:
                 max_abs = max(max_abs, abs(buff[pid][course][metric]))
-            for metric in ("place2", "place3"):
-                if abs(buff[pid][course][metric]) > 1e-12:
-                    inactive_nonzero += 1
-    print(f"win/trio 最大絶対値 : {max_abs:.6f} (cap={MAX_CAP:.2f})")
-    print(f"place2/place3 非0セル: {inactive_nonzero}")
+            if abs(buff[pid][course]["place3"]) > 1e-12:
+                inactive_nonzero += 1
+    print(f"active最大絶対値 : {max_abs:.6f} (cap={MAX_CAP:.2f})")
+    print(f"place3 非0セル   : {inactive_nonzero}")
     print(f"候補       : {out_buff}")
     print(f"meta       : {out_meta}")
     print("=" * 108)
