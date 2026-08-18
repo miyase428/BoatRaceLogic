@@ -51,11 +51,8 @@ class IndexController
         // 場×コース → 選手×コース(K=20) → 選手×場×コース(K=10) → 6艇100%正規化
         $base_win_rate_data = $baseWinRateLogic->calculate($race_code);
 
-        // 2. 決まり手データ
-        [$kimarite_data, $kimarite_error] = $apiClient->fetchKimarite($race_code, $in_course);
-
         // -------------------------------------------------------------
-        // ★【②展示情報の更新処理】（「展示情報を更新」ボタン押下時）
+        // 2. 展示情報の更新処理（「展示情報を更新」ボタン押下時）
         // -------------------------------------------------------------
         $update_message = '';
         $debug_msg = '';
@@ -68,12 +65,72 @@ class IndexController
         }
 
         // -------------------------------------------------------------
-        // 3. 展示データ（①初回は既存/ハイフン、②更新後は最新DBを取得）
+        // 3. 展示データ（更新後は最新DBを取得）
         // -------------------------------------------------------------
         [$tenji_list, $tenji_error] = $apiClient->fetchTenji($race_code, $results, $selected_place);
 
         // -------------------------------------------------------------
-        // 4. 最終予想ロジック（③最新のtenji_listを使って再計算）
+        // 3-2. 展示進入マップを1回だけ構築
+        // lane -> course / course -> lane をWeb全体の共通定義として使う。
+        // 展示がまだ揃っていない場合は、従来どおりフォームのin_courseを使う。
+        // -------------------------------------------------------------
+        $entry_course_by_boat = [];
+        $boat_by_entry_course = [];
+        $entry_map_ready = count($tenji_list) === 6;
+
+        if ($entry_map_ready) {
+            foreach ($tenji_list as $idx => $t) {
+                $boat = (int)($t['teiban'] ?? ($idx + 1));
+                $course = (int)($t['tenji_course'] ?? 0);
+
+                if (
+                    $boat < 1 || $boat > 6
+                    || $course < 1 || $course > 6
+                    || isset($entry_course_by_boat[$boat])
+                    || isset($boat_by_entry_course[$course])
+                    || !is_numeric($t['exhibition'] ?? null)
+                    || !is_numeric($t['st'] ?? null)
+                ) {
+                    $entry_map_ready = false;
+                    break;
+                }
+
+                $entry_course_by_boat[$boat] = $course;
+                $boat_by_entry_course[$course] = $boat;
+            }
+        }
+
+        if (!$entry_map_ready || count($entry_course_by_boat) !== 6 || count($boat_by_entry_course) !== 6) {
+            $entry_map_ready = false;
+            $entry_course_by_boat = [];
+            $boat_by_entry_course = [];
+        } else {
+            ksort($entry_course_by_boat);
+            ksort($boat_by_entry_course);
+        }
+
+        $effective_in_course = $in_course;
+        if ($entry_map_ready) {
+            $effective_in_course = '';
+            for ($boat = 1; $boat <= 6; $boat++) {
+                $effective_in_course .= (string)$entry_course_by_boat[$boat];
+            }
+        }
+        $entry_changed = $entry_map_ready && $effective_in_course !== '123456';
+
+        // -------------------------------------------------------------
+        // 4. 決まり手データ
+        // 展示が揃った後に取得し、進入変更時は実際の lane -> course を自動反映する。
+        // -------------------------------------------------------------
+        [$kimarite_data, $kimarite_error] = $apiClient->fetchKimarite(
+            $race_code,
+            $effective_in_course
+        );
+
+        // -------------------------------------------------------------
+        // 5. 最終予想ロジック
+        // ApiClientProduction / PredictionLogicProduction が進入マップを使って
+        // course順へ並べ替えて計算し、最後に艇番へ戻す。
         // -------------------------------------------------------------
         $tenji_test_data = $apiClient->fetchTenjiTest($race_code, $tenji_list);
         $final_predictions = $predictionLogic->buildFinalPredictions(
@@ -85,16 +142,16 @@ class IndexController
         $summary = $predictionLogic->buildSummary($final_predictions);
 
         // -------------------------------------------------------------
-        // 5. サム理論マスタ & ロジック適用
+        // 6. サム理論マスタ & ロジック適用
         // -------------------------------------------------------------
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
         [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory($tenji_list, $sam_master_data);
 
-        // 6. スリット体系
+        // 7. スリット体系
         [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
         $feature_name = $slitLogic->getFeatureNames();
 
-        // 6-2. 補正後1着率
+        // 7-2. 補正後1着率
         // 通常22場は展示5項目完備、AMG/TKYは検証済みEX_TOTAL3のためstraight不要。
         $correctedReady = count($tenji_list) === 6;
         $seenCourses = [];
@@ -131,7 +188,7 @@ class IndexController
             ];
         }
 
-        // 7. lane colors（枠番カラー）
+        // 8. lane colors（枠番カラー）
         $lane_colors = [
             1 => ['bg' => '#f8fafc', 'text' => '#0f172a', 'border' => '#e2e8f0'],
             2 => ['bg' => '#1e293b', 'text' => '#f8fafc', 'border' => '#475569'],
@@ -149,6 +206,11 @@ class IndexController
             'place_map'       => $place_map,
             'place_names'     => $place_names,
             'in_course'       => $in_course,
+            'effective_in_course' => $effective_in_course,
+            'entry_map_ready' => $entry_map_ready,
+            'entry_changed' => $entry_changed,
+            'entry_course_by_boat' => $entry_course_by_boat,
+            'boat_by_entry_course' => $boat_by_entry_course,
             'entries'         => $entries,
             'results'         => $results,
             'api_error'       => $api_error,
