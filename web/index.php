@@ -78,6 +78,36 @@ if ($finalPos !== false && $finalEndPos !== false) {
     $html = $beforeFinal . $finalHtml . $afterFinal;
 }
 
+// 最終予想テーブルは表示だけ展示コース順（1→6C）に並べる。
+// 本命・対抗・買い目などの計算順や値は変更しない。
+$finalCourseSortScript = <<<'HTML'
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const headings = Array.from(document.querySelectorAll('h2'));
+    const heading = headings.find(function (el) {
+        return el.textContent.includes('最終予想');
+    });
+    if (!heading) return;
+
+    const tableContainer = heading.nextElementSibling;
+    const table = tableContainer ? tableContainer.querySelector('table') : null;
+    const tbody = table ? table.querySelector('tbody') : null;
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort(function (a, b) {
+        const aCourse = parseInt((a.cells[1]?.textContent || '').replace(/[^0-9]/g, ''), 10) || 99;
+        const bCourse = parseInt((b.cells[1]?.textContent || '').replace(/[^0-9]/g, ''), 10) || 99;
+        return aCourse - bCourse;
+    });
+
+    rows.forEach(function (row) {
+        tbody.appendChild(row);
+    });
+});
+</script>
+HTML;
+
 // 展示サム理論（レース適用値）もスリット体系と同じ見た目に揃える。
 // コースは「1コース」の通常文字、艇番だけ横長の色付きバッジで別列表示する。
 // SUMの計算値・course参照自体は変更しない。
@@ -243,7 +273,11 @@ document.addEventListener('DOMContentLoaded', function () {
 HTML;
 
 if (strpos($html, '</body>') !== false) {
-    $html = str_replace('</body>', $slitPlace3DisplayScript . "\n</body>", $html);
+    $html = str_replace(
+        '</body>',
+        $finalCourseSortScript . "\n" . $slitPlace3DisplayScript . "\n</body>",
+        $html
+    );
 }
 
 echo $html;
