@@ -87,12 +87,12 @@ function load_kimarite($pdo, $race_code, $in_course, $months) {
 WITH tm AS (
     SELECT *
     FROM (VALUES
-        (1, :in1),
-        (2, :in2),
-        (3, :in3),
-        (4, :in4),
-        (5, :in5),
-        (6, :in6)
+        (1, CAST(:in1 AS integer)),
+        (2, CAST(:in2 AS integer)),
+        (3, CAST(:in3 AS integer)),
+        (4, CAST(:in4 AS integer)),
+        (5, CAST(:in5 AS integer)),
+        (6, CAST(:in6 AS integer))
     ) AS v(waku, today_course)
 ),
 
