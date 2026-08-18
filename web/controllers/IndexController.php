@@ -329,6 +329,8 @@ class IndexController
             'race_code'       => $race_code,
             'place_map'       => $place_map,
             'place_names'     => $place_names,
+            // 旧ビューが初期HTMLを作るための互換値。DOMContentLoaded後に新UIへ置換する。
+            'in_course'       => '123456',
             'simulate_entry'  => $simulate_entry,
             'simulation_active' => $simulation_active,
             'virtual_entry'   => $virtual_entry,
@@ -339,7 +341,9 @@ class IndexController
             'entry_map_ready' => $entry_map_ready,
             'entry_changed' => $entry_changed,
             'prediction_entry_changed' => $prediction_entry_changed,
-            'entry_course_by_boat' => $entry_course_by_boat,
+            // web/index.phpの最終予想表示はこのmapを見るため、仮想時だけ予想mapを渡す。
+            'entry_course_by_boat' => $simulation_active ? $prediction_course_by_boat : $entry_course_by_boat,
+            // SUM/スリット表示は実展示を維持するため、こちらは常に実展示map。
             'boat_by_entry_course' => $boat_by_entry_course,
             'prediction_course_by_boat' => $prediction_course_by_boat,
             'prediction_boat_by_course' => $prediction_boat_by_course,
