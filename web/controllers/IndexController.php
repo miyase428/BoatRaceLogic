@@ -95,12 +95,16 @@ class IndexController
         $feature_name = $slitLogic->getFeatureNames();
 
         // 6-2. 補正後1着率
-        // 展示6艇が完全に揃った時だけ、STEP8採用式を実行する。
+        // 通常22場は展示5項目完備、AMG/TKYは検証済みEX_TOTAL3のためstraight不要。
         $correctedReady = count($tenji_list) === 6;
         $seenCourses = [];
+        $requiresStraight = !in_array($selected_place, ['AMG', 'TKY'], true);
+
         if ($correctedReady) {
             foreach ($tenji_list as $t) {
                 $course = (int)($t['tenji_course'] ?? 0);
+                $straightMissing = $requiresStraight && !is_numeric($t['straight'] ?? null);
+
                 if (
                     $course < 1 || $course > 6
                     || isset($seenCourses[$course])
@@ -108,7 +112,7 @@ class IndexController
                     || !is_numeric($t['st'] ?? null)
                     || !is_numeric($t['lap'] ?? null)
                     || !is_numeric($t['mawari'] ?? null)
-                    || !is_numeric($t['straight'] ?? null)
+                    || $straightMissing
                 ) {
                     $correctedReady = false;
                     break;
