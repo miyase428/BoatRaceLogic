@@ -5,12 +5,22 @@ class BaseWinRateLogic
     private const K_PC = 20.0;
     private const K_PVC = 10.0;
 
-    public function calculate(string $raceCode): array
+    public function calculate(string $raceCode, array $courseByBoat = []): array
     {
         try {
             $pdo = getPDO();
 
             [$targetDate, $placeCode, $stadiumName, $boats] = $this->loadTarget($pdo, $raceCode);
+
+            if ($courseByBoat !== []) {
+                $this->assertCourseMap($courseByBoat);
+                foreach ($boats as &$boat) {
+                    $lane = (int)$boat['lane'];
+                    $boat['course'] = (int)$courseByBoat[$lane];
+                }
+                unset($boat);
+            }
+
             $venue = $this->loadVenueCoursePrior($pdo, $raceCode, $targetDate, $placeCode);
 
             $results = [];
@@ -55,6 +65,7 @@ class BaseWinRateLogic
                 'target_date' => $targetDate,
                 'place_code' => $placeCode,
                 'stadium_name' => $stadiumName,
+                'virtual_entry' => $courseByBoat !== [],
                 'error' => '',
             ];
         } catch (Throwable $e) {
@@ -65,8 +76,30 @@ class BaseWinRateLogic
                 'method' => 'BB_MEDIUM',
                 'k_pc' => self::K_PC,
                 'k_pvc' => self::K_PVC,
+                'virtual_entry' => $courseByBoat !== [],
                 'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    private function assertCourseMap(array $courseByBoat): void
+    {
+        if (count($courseByBoat) !== 6) {
+            throw new RuntimeException('基本1着率: 仮想進入が6艇分ではありません');
+        }
+
+        $courses = [];
+        for ($boat = 1; $boat <= 6; $boat++) {
+            $course = $this->validCourse($courseByBoat[$boat] ?? null);
+            if ($course === null) {
+                throw new RuntimeException('基本1着率: 仮想進入に不正なコースがあります');
+            }
+            $courses[] = $course;
+        }
+
+        sort($courses);
+        if ($courses !== [1, 2, 3, 4, 5, 6]) {
+            throw new RuntimeException('基本1着率: 仮想進入は1～6コースを1回ずつ指定してください');
         }
     }
 
