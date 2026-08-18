@@ -72,7 +72,12 @@ if (!class_exists('SamLogic')) {
             }
             unset($s);
 
-            // 修正後: ★ タプル形式で全体平均（$overall_avg）も一緒に返す
+            // 進入変更時もラベルと展示値が同じ艇を指すよう、出力はコース順に統一する。
+            uasort(
+                $sam_applied_list,
+                static fn(array $a, array $b): int => (int)$a['course'] <=> (int)$b['course']
+            );
+
             return [$sam_applied_list, $overall_avg];
         }
    }
