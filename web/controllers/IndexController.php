@@ -21,7 +21,34 @@ class IndexController
         $selected_date   = $_GET['date']  ?? date('Y-m-d');
         $selected_place  = $_GET['place'] ?? 'OMR';
         $selected_race   = $_GET['race']  ?? '12';
-        $in_course       = $_GET['in_course'] ?? '123456';
+
+        // 仮想進入は「コース順の艇番」で入力する。
+        // 例: 126345 = 1C=1号艇 / 2C=2号艇 / 3C=6号艇 / 4C=3号艇 / 5C=4号艇 / 6C=5号艇。
+        $simulate_entry = (($_GET['simulate_entry'] ?? '') === '1');
+        $virtual_entry = preg_replace('/\s+/', '', (string)($_GET['virtual_entry'] ?? '123456'));
+        $virtual_entry_error = '';
+        $virtual_course_by_boat = [];
+        $virtual_boat_by_course = [];
+
+        if ($simulate_entry) {
+            $digits = str_split($virtual_entry);
+            $sorted = $digits;
+            sort($sorted);
+
+            if (strlen($virtual_entry) !== 6 || $sorted !== ['1', '2', '3', '4', '5', '6']) {
+                $virtual_entry_error = '仮想進入は1～6号艇を1回ずつ使う6桁で入力してください。例: 126345';
+            } else {
+                for ($course = 1; $course <= 6; $course++) {
+                    $boat = (int)$virtual_entry[$course - 1];
+                    $virtual_boat_by_course[$course] = $boat;
+                    $virtual_course_by_boat[$boat] = $course;
+                }
+                ksort($virtual_course_by_boat);
+                ksort($virtual_boat_by_course);
+            }
+        }
+
+        $simulation_active = $simulate_entry && $virtual_entry_error === '';
 
         $formatted_date  = date('Ymd', strtotime($selected_date));
         $race_code       = $formatted_date . $selected_place . sprintf('%02d', $selected_race);
@@ -47,9 +74,12 @@ class IndexController
         // 1. 出走表データ
         [$entries, $results, $api_error] = $apiClient->fetchCalcScores($race_code);
 
-        // 1-2. 展示前の基本1着率
-        // 場×コース → 選手×コース(K=20) → 選手×場×コース(K=10) → 6艇100%正規化
-        $base_win_rate_data = $baseWinRateLogic->calculate($race_code);
+        // 1-2. 基本1着率
+        // 通常時は従来どおり枠=コース。仮想進入モードだけ指定コースへ置き換える。
+        $base_win_rate_data = $baseWinRateLogic->calculate(
+            $race_code,
+            $simulation_active ? $virtual_course_by_boat : []
+        );
 
         // -------------------------------------------------------------
         // 2. 展示情報の更新処理（「展示情報を更新」ボタン押下時）
@@ -70,9 +100,8 @@ class IndexController
         [$tenji_list, $tenji_error] = $apiClient->fetchTenji($race_code, $results, $selected_place);
 
         // -------------------------------------------------------------
-        // 3-2. 展示進入マップを1回だけ構築
-        // lane -> course / course -> lane をWeb全体の共通定義として使う。
-        // 展示がまだ揃っていない場合は、従来どおりフォームのin_courseを使う。
+        // 3-2. 実際の展示進入マップ
+        // boat -> course / course -> boat。ここは仮想進入でも書き換えない。
         // -------------------------------------------------------------
         $entry_course_by_boat = [];
         $boat_by_entry_course = [];
@@ -109,18 +138,56 @@ class IndexController
             ksort($boat_by_entry_course);
         }
 
-        $effective_in_course = $in_course;
+        // 画面表示用の「コース順の艇番」。
+        $exhibition_entry_order = '123456';
         if ($entry_map_ready) {
-            $effective_in_course = '';
-            for ($boat = 1; $boat <= 6; $boat++) {
-                $effective_in_course .= (string)$entry_course_by_boat[$boat];
+            $exhibition_entry_order = '';
+            for ($course = 1; $course <= 6; $course++) {
+                $exhibition_entry_order .= (string)$boat_by_entry_course[$course];
             }
         }
-        $entry_changed = $entry_map_ready && $effective_in_course !== '123456';
+
+        // -------------------------------------------------------------
+        // 3-3. 予想に使う進入マップ
+        // 通常時 = 展示進入、仮想進入ON = 手入力した試算進入。
+        // -------------------------------------------------------------
+        if ($simulation_active) {
+            $prediction_course_by_boat = $virtual_course_by_boat;
+            $prediction_boat_by_course = $virtual_boat_by_course;
+            $prediction_entry_order = $virtual_entry;
+        } elseif ($entry_map_ready) {
+            $prediction_course_by_boat = $entry_course_by_boat;
+            $prediction_boat_by_course = $boat_by_entry_course;
+            $prediction_entry_order = $exhibition_entry_order;
+        } else {
+            $prediction_course_by_boat = array_combine(range(1, 6), range(1, 6));
+            $prediction_boat_by_course = array_combine(range(1, 6), range(1, 6));
+            $prediction_entry_order = '123456';
+        }
+
+        // kimarite_api等の既存内部形式は「艇番 -> コース」の6桁。
+        $effective_in_course = '';
+        for ($boat = 1; $boat <= 6; $boat++) {
+            $effective_in_course .= (string)($prediction_course_by_boat[$boat] ?? $boat);
+        }
+
+        $entry_changed = $entry_map_ready && $exhibition_entry_order !== '123456';
+        $prediction_entry_changed = $prediction_entry_order !== '123456';
+
+        // 展示値そのものは実測のまま、tenji_courseだけ試算配置へ差し替える。
+        $prediction_tenji_list = $tenji_list;
+        if ($simulation_active) {
+            foreach ($prediction_tenji_list as &$t) {
+                $boat = (int)($t['teiban'] ?? 0);
+                if ($boat >= 1 && $boat <= 6 && isset($prediction_course_by_boat[$boat])) {
+                    $t['tenji_course'] = (int)$prediction_course_by_boat[$boat];
+                }
+            }
+            unset($t);
+        }
 
         // -------------------------------------------------------------
         // 4. 決まり手データ
-        // 展示が揃った後に取得し、進入変更時は実際の lane -> course を自動反映する。
         // -------------------------------------------------------------
         [$kimarite_data, $kimarite_error] = $apiClient->fetchKimarite(
             $race_code,
@@ -129,23 +196,21 @@ class IndexController
 
         // -------------------------------------------------------------
         // 5. 最終予想ロジック
-        // ApiClientProduction / PredictionLogicProduction が進入マップを使って
-        // course順へ並べ替えて計算し、最後に艇番へ戻す。
+        // 仮想進入時はtenji_courseだけ試算配置にし、展示値は実測値を維持する。
         // -------------------------------------------------------------
-        $tenji_test_data = $apiClient->fetchTenjiTest($race_code, $tenji_list);
+        $tenji_test_data = $apiClient->fetchTenjiTest($race_code, $prediction_tenji_list);
         $final_predictions = $predictionLogic->buildFinalPredictions(
-            $tenji_list,
+            $prediction_tenji_list,
             $kimarite_data,
             $tenji_test_data,
             $results
         );
         $summary = $predictionLogic->buildSummary($final_predictions);
 
-        // 最終予想の計算後だけ表示用に「枠 / 展示進入」を併記する。
-        // buildSummary() 後なので、本命・対抗・買い目ロジックには影響しない。
-        if ($entry_changed) {
+        // 最終予想の計算後だけ表示用に「枠 / 予想進入」を併記する。
+        if ($prediction_entry_changed) {
             foreach ($final_predictions as $boat => &$fp) {
-                $course = (int)($fp['course'] ?? ($entry_course_by_boat[$boat] ?? $boat));
+                $course = (int)($fp['course'] ?? ($prediction_course_by_boat[$boat] ?? $boat));
                 $fp['waku'] = $boat . '枠 / ' . $course . 'C';
             }
             unset($fp);
@@ -153,11 +218,13 @@ class IndexController
 
         // -------------------------------------------------------------
         // 6. サム理論マスタ & ロジック適用
+        // SUMの画面表示は実際の展示進入・展示値を表示する。
         // -------------------------------------------------------------
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
         [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory($tenji_list, $sam_master_data);
 
         // 7. スリット体系
+        // この独立表示は実際の展示進入。補正後1着率の仮想モード内部では専用PIDを再計算する。
         [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
         $feature_name = $slitLogic->getFeatureNames();
 
@@ -166,7 +233,7 @@ class IndexController
             $slit_pattern['name'] = '3コース先攻め';
         }
 
-        // 進入変更時はスリット説明に course -> boat を明示する。
+        // 実展示で進入変更があった時はスリット説明に course -> boat を明示する。
         if ($entry_changed) {
             $entryParts = [];
             for ($course = 1; $course <= 6; $course++) {
@@ -181,6 +248,12 @@ class IndexController
                 $mapDesc = '展示進入: ' . implode(' / ', $entryParts);
                 $slit_pattern['desc'] = $baseDesc !== '' ? $baseDesc . ' ｜ ' . $mapDesc : $mapDesc;
             }
+        }
+
+        if ($simulation_active) {
+            $baseDesc = trim((string)($slit_pattern['desc'] ?? ''));
+            $note = 'このスリット欄は展示実測。仮想進入の補正後1着率では試算進入でPIDを再計算。';
+            $slit_pattern['desc'] = $baseDesc !== '' ? $baseDesc . ' ｜ ' . $note : $note;
         }
 
         // 7-2. 補正後1着率
@@ -211,7 +284,10 @@ class IndexController
         }
 
         if ($correctedReady && count($seenCourses) === 6) {
-            $corrected_win_rate_data = $correctedWinRateLogic->calculate($race_code);
+            $corrected_win_rate_data = $correctedWinRateLogic->calculate(
+                $race_code,
+                $simulation_active ? $effective_in_course : null
+            );
         } else {
             $corrected_win_rate_data = [
                 'status' => 'waiting',
@@ -230,8 +306,7 @@ class IndexController
             6 => ['bg' => '#22c55e', 'text' => '#ffffff', 'border' => '#16a34a'],
         ];
 
-        // SUMは計算済みの course を変えず、表示直前だけ「4C（5号艇）」形式にする。
-        // lane_colorsにも同じ表示キーを追加し、実艇番の色を維持する。
+        // SUMは実展示の course を変えず、表示直前だけ「4C（5号艇）」形式にする。
         if ($entry_changed) {
             foreach ($sam_applied_list as &$s) {
                 $boat = (int)($s['teiban'] ?? 0);
@@ -254,12 +329,20 @@ class IndexController
             'race_code'       => $race_code,
             'place_map'       => $place_map,
             'place_names'     => $place_names,
-            'in_course'       => $in_course,
+            'simulate_entry'  => $simulate_entry,
+            'simulation_active' => $simulation_active,
+            'virtual_entry'   => $virtual_entry,
+            'virtual_entry_error' => $virtual_entry_error,
+            'exhibition_entry_order' => $exhibition_entry_order,
+            'prediction_entry_order' => $prediction_entry_order,
             'effective_in_course' => $effective_in_course,
             'entry_map_ready' => $entry_map_ready,
             'entry_changed' => $entry_changed,
+            'prediction_entry_changed' => $prediction_entry_changed,
             'entry_course_by_boat' => $entry_course_by_boat,
             'boat_by_entry_course' => $boat_by_entry_course,
+            'prediction_course_by_boat' => $prediction_course_by_boat,
+            'prediction_boat_by_course' => $prediction_boat_by_course,
             'entries'         => $entries,
             'results'         => $results,
             'api_error'       => $api_error,
