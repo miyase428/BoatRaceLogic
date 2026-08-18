@@ -141,6 +141,16 @@ class IndexController
         );
         $summary = $predictionLogic->buildSummary($final_predictions);
 
+        // 最終予想の計算後だけ表示用に「枠 / 展示進入」を併記する。
+        // buildSummary() 後なので、本命・対抗・買い目ロジックには影響しない。
+        if ($entry_changed) {
+            foreach ($final_predictions as $boat => &$fp) {
+                $course = (int)($fp['course'] ?? ($entry_course_by_boat[$boat] ?? $boat));
+                $fp['waku'] = $boat . '枠 / ' . $course . 'C';
+            }
+            unset($fp);
+        }
+
         // -------------------------------------------------------------
         // 6. サム理論マスタ & ロジック適用
         // -------------------------------------------------------------
@@ -150,6 +160,28 @@ class IndexController
         // 7. スリット体系
         [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
         $feature_name = $slitLogic->getFeatureNames();
+
+        // 「3の先攻め」は艇番ではなく3コース位置を表すため表示を明示する。
+        if (($slit_pattern['name'] ?? '') === '3の先攻め') {
+            $slit_pattern['name'] = '3コース先攻め';
+        }
+
+        // 進入変更時はスリット説明に course -> boat を明示する。
+        if ($entry_changed) {
+            $entryParts = [];
+            for ($course = 1; $course <= 6; $course++) {
+                $boat = (int)($boat_by_entry_course[$course] ?? 0);
+                if ($boat > 0) {
+                    $entryParts[] = $course . 'C=' . $boat . '号艇';
+                }
+            }
+
+            if ($entryParts) {
+                $baseDesc = trim((string)($slit_pattern['desc'] ?? ''));
+                $mapDesc = '展示進入: ' . implode(' / ', $entryParts);
+                $slit_pattern['desc'] = $baseDesc !== '' ? $baseDesc . ' ｜ ' . $mapDesc : $mapDesc;
+            }
+        }
 
         // 7-2. 補正後1着率
         // 通常22場は展示5項目完備、AMG/TKYは検証済みEX_TOTAL3のためstraight不要。
@@ -197,6 +229,23 @@ class IndexController
             5 => ['bg' => '#eab308', 'text' => '#0f172a', 'border' => '#ca8a04'],
             6 => ['bg' => '#22c55e', 'text' => '#ffffff', 'border' => '#16a34a'],
         ];
+
+        // SUMは計算済みの course を変えず、表示直前だけ「4C（5号艇）」形式にする。
+        // lane_colorsにも同じ表示キーを追加し、実艇番の色を維持する。
+        if ($entry_changed) {
+            foreach ($sam_applied_list as &$s) {
+                $boat = (int)($s['teiban'] ?? 0);
+                $course = (int)($s['course'] ?? 0);
+                if ($boat < 1 || $boat > 6 || $course < 1 || $course > 6) {
+                    continue;
+                }
+
+                $courseLabel = $course . 'C（' . $boat . '号艇）';
+                $lane_colors[$courseLabel] = $lane_colors[$boat] ?? $lane_colors[$course];
+                $s['course'] = $courseLabel;
+            }
+            unset($s);
+        }
 
         $viewData = [
             'selected_date'   => $selected_date,
