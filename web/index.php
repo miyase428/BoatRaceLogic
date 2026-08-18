@@ -45,7 +45,14 @@ if (!empty($entry_map_ready) && !empty($boat_by_entry_course)) {
             $slitHtml = preg_replace_callback(
                 $pattern,
                 static function (array $m) use ($course, $boat): string {
-                    return $m[1] . $course . 'C（' . $boat . '号艇）' . $m[2];
+                    // コース番号だけを色付きバッジ内に残し、号艇表示はバッジ外へ出す。
+                    // 1号艇・5号艇の黒文字が暗い背景に溶けるのを防ぐ。
+                    return $m[1]
+                        . $course . 'C'
+                        . $m[2]
+                        . '<span style="margin-left:4px; color:#f8fafc; font-size:12px;">（'
+                        . $boat
+                        . '号艇）</span>';
                 },
                 $slitHtml,
                 1
