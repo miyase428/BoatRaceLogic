@@ -93,6 +93,15 @@ for ($course = 1; $course <= 6; $course++) {
                 </thead>
                 <tbody>
                     <tr>
+                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">場1着率（コース別）</td>
+                        <?php for ($i = 1; $i <= 6; $i++): ?>
+                            <?php $rate = isset($baseWinBoats[$i]['p0']) ? ((float)$baseWinBoats[$i]['p0'] * 100.0) : null; ?>
+                            <td style="padding:10px 8px; text-align:center; font-size:16px; font-weight:bold; color:#cbd5e1;">
+                                <?= $rate !== null ? number_format($rate, 2) . '%' : '-' ?>
+                            </td>
+                        <?php endfor; ?>
+                    </tr>
+                    <tr style="border-top:1px solid #334155;">
                         <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">基本1着率</td>
                         <?php for ($i = 1; $i <= 6; $i++): ?>
                             <?php $rate = $baseWinBoats[$i]['normalized_rate'] ?? null; ?>
