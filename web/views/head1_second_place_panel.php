@@ -128,161 +128,26 @@ ksort($head1SecondCourseToBoat);
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const courseByBoat = <?= json_encode($prediction_course_by_boat ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    const laneColors = <?= json_encode($lane_colors ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const table = document.querySelector('.summary-box table');
+    if (!table) return;
 
-    const summary = document.querySelector('.summary-box table');
-    if (!summary) return;
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const removeIndexes = [];
 
-    const headers = Array.from(summary.querySelectorAll('thead th')).map(function (th) {
-        return th.textContent.trim();
+    headers.forEach(function (th, index) {
+        const label = th.textContent.trim();
+        if (label === '相手候補(加工)' || label === '切る艇(加工)') {
+            removeIndexes.push(index);
+        }
     });
 
-    const headIndex = headers.indexOf('頭');
-    const aiteIndex = headers.indexOf('相手候補');
-    const kiruIndex = headers.indexOf('切る艇');
-    const betIndex = headers.findIndex(function (text) {
-        return text.includes('買い目候補');
-    });
-
-    function courseOf(boat) {
-        const course = Number(courseByBoat[String(boat)] ?? courseByBoat[boat] ?? boat);
-        return course >= 1 && course <= 6 ? course : boat;
-    }
-
-    function makeBoatCourse(boat, compact) {
-        const course = courseOf(boat);
-        const color = laneColors[String(boat)] || laneColors[boat] || laneColors['1'] || laneColors[1] || {};
-        const wrap = document.createElement('span');
-        wrap.style.display = 'inline-flex';
-        wrap.style.flexDirection = 'column';
-        wrap.style.alignItems = 'center';
-        wrap.style.justifyContent = 'center';
-        wrap.style.margin = compact ? '1px 2px' : '2px 4px';
-        wrap.style.verticalAlign = 'middle';
-
-        const courseLabel = document.createElement('span');
-        courseLabel.textContent = course + 'C';
-        courseLabel.style.fontSize = compact ? '10px' : '11px';
-        courseLabel.style.color = '#cbd5e1';
-        courseLabel.style.lineHeight = '1.2';
-        courseLabel.style.whiteSpace = 'nowrap';
-
-        const badge = document.createElement('span');
-        badge.className = 'lane-badge';
-        badge.textContent = boat + '号艇';
-        badge.style.backgroundColor = color.bg || '#334155';
-        badge.style.color = color.text || '#ffffff';
-        badge.style.border = '1px solid ' + (color.border || '#64748b');
-        badge.style.display = 'inline-block';
-        badge.style.minWidth = compact ? '46px' : '54px';
-        badge.style.padding = compact ? '1px 5px' : '2px 7px';
-        badge.style.borderRadius = '4px';
-        badge.style.boxSizing = 'border-box';
-        badge.style.whiteSpace = 'nowrap';
-        badge.style.textAlign = 'center';
-        badge.style.fontWeight = 'bold';
-        badge.style.fontSize = compact ? '11px' : '12px';
-
-        wrap.appendChild(courseLabel);
-        wrap.appendChild(badge);
-        return wrap;
-    }
-
-    function parseBoats(text) {
-        const matches = String(text || '').match(/[1-6]/g) || [];
-        const out = [];
-        matches.forEach(function (v) {
-            const boat = Number(v);
-            if (!out.includes(boat)) out.push(boat);
-        });
-        return out;
-    }
-
-    function renderBoatList(cell, originalText) {
-        const boats = parseBoats(originalText);
-        if (!boats.length) return;
-        cell.textContent = '';
-        const wrap = document.createElement('div');
-        wrap.style.display = 'flex';
-        wrap.style.justifyContent = 'center';
-        wrap.style.alignItems = 'flex-end';
-        wrap.style.flexWrap = 'wrap';
-        wrap.style.gap = '2px';
-        boats.forEach(function (boat) {
-            wrap.appendChild(makeBoatCourse(boat, false));
-        });
-        cell.appendChild(wrap);
-    }
-
-    function renderBet(cell, originalText) {
-        const bet = String(originalText || '').trim();
-        if (!bet) return;
-
-        cell.textContent = '';
-
-        const raw = document.createElement('div');
-        raw.textContent = bet;
-        raw.style.fontWeight = 'bold';
-        raw.style.color = '#38bdf8';
-        raw.style.whiteSpace = 'nowrap';
-        cell.appendChild(raw);
-
-        const label = document.createElement('div');
-        label.textContent = '進入対応';
-        label.style.fontSize = '10px';
-        label.style.color = '#94a3b8';
-        label.style.marginTop = '5px';
-        cell.appendChild(label);
-
-        const visual = document.createElement('div');
-        visual.style.display = 'flex';
-        visual.style.alignItems = 'flex-end';
-        visual.style.justifyContent = 'center';
-        visual.style.gap = '4px';
-        visual.style.marginTop = '2px';
-        visual.style.whiteSpace = 'nowrap';
-
-        const groups = bet.split('-');
-        groups.forEach(function (group, groupIndex) {
-            if (groupIndex > 0) {
-                const hyphen = document.createElement('span');
-                hyphen.textContent = '-';
-                hyphen.style.color = '#94a3b8';
-                hyphen.style.paddingBottom = '5px';
-                visual.appendChild(hyphen);
+    removeIndexes.sort(function (a, b) { return b - a; });
+    removeIndexes.forEach(function (index) {
+        Array.from(table.rows).forEach(function (row) {
+            if (row.cells[index]) {
+                row.deleteCell(index);
             }
-
-            const groupWrap = document.createElement('span');
-            groupWrap.style.display = 'inline-flex';
-            groupWrap.style.alignItems = 'flex-end';
-            groupWrap.style.gap = '1px';
-
-            (group.match(/[1-6]/g) || []).forEach(function (v) {
-                groupWrap.appendChild(makeBoatCourse(Number(v), true));
-            });
-            visual.appendChild(groupWrap);
         });
-
-        cell.appendChild(visual);
-    }
-
-    Array.from(summary.querySelectorAll('tbody tr')).forEach(function (row) {
-        const cells = row.cells;
-        if (!cells || !cells.length) return;
-
-        if (headIndex >= 0 && cells[headIndex]) {
-            renderBoatList(cells[headIndex], cells[headIndex].textContent);
-        }
-        if (aiteIndex >= 0 && cells[aiteIndex]) {
-            renderBoatList(cells[aiteIndex], cells[aiteIndex].textContent);
-        }
-        if (kiruIndex >= 0 && cells[kiruIndex]) {
-            renderBoatList(cells[kiruIndex], cells[kiruIndex].textContent);
-        }
-        if (betIndex >= 0 && cells[betIndex]) {
-            renderBet(cells[betIndex], cells[betIndex].textContent);
-        }
     });
 });
 </script>
