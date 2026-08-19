@@ -14,6 +14,23 @@ $head1SecondWarning = $head1SecondData['warning'] ?? '';
 $head1SecondVenueN = (int)($head1SecondData['venue_n'] ?? 0);
 $head1SecondGlobalN = (int)($head1SecondData['global_n'] ?? 0);
 $head1SecondK = (float)($head1SecondData['k_pc'] ?? 10.0);
+
+// 2着率の計算結果そのものから course -> boat を作り、
+// 見出しと数値を同じ進入基準でコース順に表示する。
+$head1SecondCourseToBoat = [];
+foreach ($head1SecondBoats as $boatKey => $row) {
+    $boat = (int)($row['lane'] ?? $boatKey);
+    $course = (int)($row['course'] ?? $boat);
+    if ($boat >= 1 && $boat <= 6 && $course >= 1 && $course <= 6) {
+        $head1SecondCourseToBoat[$course] = $boat;
+    }
+}
+for ($course = 1; $course <= 6; $course++) {
+    if (!isset($head1SecondCourseToBoat[$course])) {
+        $head1SecondCourseToBoat[$course] = $course;
+    }
+}
+ksort($head1SecondCourseToBoat);
 ?>
 
 <div style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
@@ -37,14 +54,22 @@ $head1SecondK = (float)($head1SecondData['k_pc'] ?? 10.0);
             <table style="width:100%; min-width:760px; border-collapse:collapse;">
                 <thead>
                     <tr style="background-color:#1e293b;">
-                        <th style="padding:8px; text-align:left; min-width:130px;">項目 / 艇番</th>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php $c = $lane_colors[$i] ?? $lane_colors[1]; ?>
+                        <th style="padding:8px; text-align:left; min-width:130px;">項目 / 進入</th>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $boat = (int)($head1SecondCourseToBoat[$course] ?? $course);
+                                $c = $lane_colors[$boat] ?? $lane_colors[1];
+                            ?>
                             <th style="padding:8px; text-align:center; min-width:95px;">
-                                <span class="lane-badge"
-                                      style="background-color:<?= $c['bg'] ?>; color:<?= $c['text'] ?>; border:1px solid <?= $c['border'] ?>; padding:2px 8px; border-radius:4px;">
-                                    <?= $i ?>号艇
-                                </span>
+                                <div style="font-weight:bold; color:#f8fafc; white-space:nowrap;">
+                                    <?= $course ?>コース
+                                </div>
+                                <div style="margin-top:4px;">
+                                    <span class="lane-badge"
+                                          style="background-color:<?= $c['bg'] ?>; color:<?= $c['text'] ?>; border:1px solid <?= $c['border'] ?>; display:inline-block; min-width:54px; padding:2px 7px; border-radius:4px; box-sizing:border-box; white-space:nowrap; text-align:center; font-weight:bold;">
+                                        <?= $boat ?>号艇
+                                    </span>
+                                </div>
                             </th>
                         <?php endfor; ?>
                     </tr>
@@ -52,35 +77,25 @@ $head1SecondK = (float)($head1SecondData['k_pc'] ?? 10.0);
                 <tbody>
                     <tr>
                         <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">場2着率</td>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
-                                $rate = $head1SecondBoats[$i]['venue_rate'] ?? null;
-                                $course = (int)($head1SecondBoats[$i]['course'] ?? $i);
+                                $boat = (int)($head1SecondCourseToBoat[$course] ?? $course);
+                                $rate = $head1SecondBoats[$boat]['venue_rate'] ?? null;
                             ?>
-                            <td style="padding:10px 8px; text-align:center; color:#cbd5e1;">
-                                <div style="font-size:16px; font-weight:bold;">
-                                    <?= $i === 1 ? '-' : ($rate !== null ? number_format((float)$rate, 2) . '%' : '-') ?>
-                                </div>
-                                <?php if ($i !== 1): ?>
-                                    <div style="font-size:11px; color:#64748b; margin-top:2px;"><?= $course ?>C</div>
-                                <?php endif; ?>
+                            <td style="padding:10px 8px; text-align:center; font-size:16px; font-weight:bold; color:#cbd5e1;">
+                                <?= $boat === 1 ? '-' : ($rate !== null ? number_format((float)$rate, 2) . '%' : '-') ?>
                             </td>
                         <?php endfor; ?>
                     </tr>
                     <tr style="border-top:1px solid #334155;">
                         <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">基本2着率</td>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
-                                $rate = $head1SecondBoats[$i]['basic_rate'] ?? null;
-                                $course = (int)($head1SecondBoats[$i]['course'] ?? $i);
+                                $boat = (int)($head1SecondCourseToBoat[$course] ?? $course);
+                                $rate = $head1SecondBoats[$boat]['basic_rate'] ?? null;
                             ?>
-                            <td style="padding:10px 8px; text-align:center; color:#a78bfa;">
-                                <div style="font-size:18px; font-weight:bold;">
-                                    <?= $i === 1 ? '-' : ($rate !== null ? number_format((float)$rate, 2) . '%' : '-') ?>
-                                </div>
-                                <?php if ($i !== 1): ?>
-                                    <div style="font-size:11px; color:#64748b; margin-top:2px;"><?= $course ?>C</div>
-                                <?php endif; ?>
+                            <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#a78bfa;">
+                                <?= $boat === 1 ? '-' : ($rate !== null ? number_format((float)$rate, 2) . '%' : '-') ?>
                             </td>
                         <?php endfor; ?>
                     </tr>
