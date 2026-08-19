@@ -386,6 +386,24 @@ tr:hover > td {
     color: var(--text-muted) !important;
 }
 
+/* 明るい背景で発光して見える強調文字を少しくすませる */
+.container :not(.lane-badge):not(.type-badge)[style*="color: #38bdf8"],
+.container :not(.lane-badge):not(.type-badge)[style*="color:#38bdf8"] {
+    color: #2f789f !important;
+}
+
+.container :not(.lane-badge):not(.type-badge)[style*="color: #fbbf24"],
+.container :not(.lane-badge):not(.type-badge)[style*="color:#fbbf24"],
+.container :not(.lane-badge):not(.type-badge)[style*="color: #f59e0b"],
+.container :not(.lane-badge):not(.type-badge)[style*="color:#f59e0b"] {
+    color: #aa741f !important;
+}
+
+.container :not(.lane-badge):not(.type-badge)[style*="color: #a78bfa"],
+.container :not(.lane-badge):not(.type-badge)[style*="color:#a78bfa"] {
+    color: #75659b !important;
+}
+
 /* 決まり手のヒートマップは既存色を維持 */
 .matrix-table td[style*="background:#f87171"],
 .matrix-table td[style*="background:#fb923c"],
