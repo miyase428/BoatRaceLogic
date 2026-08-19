@@ -189,6 +189,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const simulateEntry = <?= !empty($simulate_entry) ? 'true' : 'false' ?>;
     const entryMapReady = <?= !empty($entry_map_ready) ? 'true' : 'false' ?>;
 
+    // サム理論の区間別マスタは普段は閉じ、必要なときだけ表示する。
+    const samBlock = document.getElementById('sam-block');
+    const samToggleButton = document.getElementById('toggle-sam');
+    if (samBlock && samToggleButton) {
+        samBlock.style.display = 'none';
+        samToggleButton.textContent = 'サム理論を表示する';
+    }
+
     // 旧「進入コース(6桁)」欄を、展示進入表示＋仮想進入試算UIへ置き換える。
     const oldInput = document.querySelector('input[name="in_course"]');
     const formGroup = oldInput ? oldInput.closest('.form-group') : null;
