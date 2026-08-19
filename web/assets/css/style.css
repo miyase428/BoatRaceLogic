@@ -3,18 +3,18 @@
 ================================= */
 
 :root {
-    --page-bg: #f7f3ea;
-    --surface: #fffdf8;
-    --surface-soft: #faf7f0;
-    --surface-muted: #f1ece2;
-    --border: #e4ddd0;
-    --border-strong: #d5cabb;
-    --text: #334155;
-    --text-strong: #1f2937;
-    --text-muted: #64748b;
-    --accent: #0284c7;
-    --accent-dark: #0369a1;
-    --accent-soft: #eaf5fb;
+    --page-bg: #eee7db;
+    --surface: #f8f4ec;
+    --surface-soft: #f2ece2;
+    --surface-muted: #e8dfd2;
+    --border: #d8cdbc;
+    --border-strong: #cbbda9;
+    --text: #3f4b5a;
+    --text-strong: #2b3440;
+    --text-muted: #6b7785;
+    --accent: #0f7ab8;
+    --accent-dark: #0b679b;
+    --accent-soft: #dfeef7;
 }
 
 body {
@@ -84,7 +84,7 @@ label {
 
 input,
 select {
-    background-color: #ffffff;
+    background-color: #fbf8f2;
     border: 1px solid var(--border-strong);
     color: var(--text-strong);
     padding: 8px 12px;
@@ -94,7 +94,7 @@ select {
 
 input:focus,
 select:focus {
-    outline: 2px solid rgba(2, 132, 199, 0.18);
+    outline: 2px solid rgba(15, 122, 184, 0.16);
     border-color: var(--accent);
 }
 
@@ -119,7 +119,7 @@ button:hover {
 
 .code-box {
     background-color: var(--accent-soft);
-    border: 1px solid #b9dff1;
+    border: 1px solid #b8d3df;
     padding: 12px 20px;
     border-radius: 8px;
     display: flex;
@@ -130,7 +130,7 @@ button:hover {
 
 .code-label {
     font-size: 13px;
-    color: #47677a;
+    color: #526a78;
 }
 
 .code-value {
@@ -148,7 +148,7 @@ button:hover {
 .table-container {
     overflow-x: auto;
     margin-top: 10px;
-    background-color: #ffffff;
+    background-color: var(--surface);
     border-radius: 8px;
     border: 1px solid var(--border);
 }
@@ -163,7 +163,7 @@ table {
 
 th {
     background-color: var(--surface-muted);
-    color: #475569;
+    color: #4b5563;
     padding: 8px 6px;
     font-weight: 600;
     border-bottom: 2px solid var(--border-strong);
@@ -174,11 +174,11 @@ td {
     padding: 8px 6px;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
-    background-color: #ffffff;
+    background-color: var(--surface);
 }
 
 tr:hover > td {
-    background-color: #fffaf0;
+    background-color: #f3ecdf;
 }
 
 /* ===============================
@@ -272,7 +272,7 @@ tr:hover > td {
 }
 
 .summary-box table {
-    background-color: #ffffff;
+    background-color: var(--surface);
 }
 
 /* ===============================
@@ -284,7 +284,7 @@ tr:hover > td {
     font-family: monospace;
 }
 
-.sam-course-bg-1 { background-color: rgba(248, 250, 252, 0.9); }
+.sam-course-bg-1 { background-color: rgba(248, 250, 252, 0.75); }
 .sam-course-bg-2 { background-color: rgba(100, 116, 139, 0.10); }
 .sam-course-bg-3 { background-color: rgba(239, 68, 68, 0.08); }
 .sam-course-bg-4 { background-color: rgba(59, 130, 246, 0.08); }
@@ -296,7 +296,7 @@ tr:hover > td {
 ================================= */
 
 .card {
-    background-color: #ffffff;
+    background-color: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px;
@@ -425,7 +425,7 @@ tr:hover > td {
     -webkit-overflow-scrolling: touch;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background-color: #ffffff;
+    background-color: var(--surface);
 }
 
 /* PC・スマホ共通：マトリクス表のパディングをさらに削り、最小幅の呪縛を解除 */
