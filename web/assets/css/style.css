@@ -461,6 +461,81 @@ tr:hover > td {
     border-right: 1px solid var(--border) !important;
 }
 
+/* ===============================
+   最終予想詳細表：横スクロール削減
+   summary-box直前のtable-containerだけを対象
+================================= */
+
+.table-container:has(+ .summary-box) {
+    overflow-x: visible;
+}
+
+.table-container:has(+ .summary-box) table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 11px;
+}
+
+.table-container:has(+ .summary-box) th,
+.table-container:has(+ .summary-box) td {
+    padding: 7px 4px;
+    white-space: normal;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+/* 展開フラグ4列は内部値として残し、通常表示では畳む */
+.table-container:has(+ .summary-box) th:nth-child(6),
+.table-container:has(+ .summary-box) td:nth-child(6),
+.table-container:has(+ .summary-box) th:nth-child(7),
+.table-container:has(+ .summary-box) td:nth-child(7),
+.table-container:has(+ .summary-box) th:nth-child(8),
+.table-container:has(+ .summary-box) td:nth-child(8),
+.table-container:has(+ .summary-box) th:nth-child(9),
+.table-container:has(+ .summary-box) td:nth-child(9),
+.table-container:has(+ .summary-box) th:nth-child(11),
+.table-container:has(+ .summary-box) td:nth-child(11) {
+    display: none;
+}
+
+.table-container:has(+ .summary-box) th:nth-child(1),
+.table-container:has(+ .summary-box) th:nth-child(2) {
+    width: 8%;
+}
+
+.table-container:has(+ .summary-box) th:nth-child(3),
+.table-container:has(+ .summary-box) th:nth-child(4) {
+    width: 14%;
+}
+
+.table-container:has(+ .summary-box) th:nth-child(5) {
+    width: 13%;
+}
+
+.table-container:has(+ .summary-box) th:nth-child(10) {
+    width: 15%;
+}
+
+.table-container:has(+ .summary-box) th:nth-child(12) {
+    width: 13%;
+}
+
+.table-container:has(+ .summary-box) th:nth-child(13) {
+    width: 7%;
+}
+
+/* スマホではさらに詰めて、必要なら表全体だけ横スクロールを許可 */
+@media (max-width: 600px) {
+    .table-container:has(+ .summary-box) {
+        overflow-x: auto;
+    }
+
+    .table-container:has(+ .summary-box) table {
+        min-width: 640px;
+        table-layout: auto;
+    }
+}
+
 /* スマホ（画面幅600px以下）で1〜6号艇を1画面に収容 */
 @media (max-width: 600px) {
     body {
