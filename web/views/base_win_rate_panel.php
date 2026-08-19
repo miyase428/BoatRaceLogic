@@ -320,3 +320,5 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<?php include __DIR__ . '/head1_second_place_panel.php'; ?>
