@@ -1,4 +1,20 @@
 <?php
+// 通常時の進入変更だけ、基本1着率を展示進入基準で再計算する。
+// 仮想進入時はController側ですでに試算進入を渡しているため再計算しない。
+if (
+    empty($simulation_active)
+    && !empty($prediction_entry_changed)
+    && !empty($prediction_course_by_boat)
+    && is_array($prediction_course_by_boat)
+    && !empty($race_code)
+) {
+    $baseWinRateLogicForPanel = new BaseWinRateLogic();
+    $base_win_rate_data = $baseWinRateLogicForPanel->calculate(
+        (string)$race_code,
+        $prediction_course_by_boat
+    );
+}
+
 $baseWinBoats = $base_win_rate_data['boats'] ?? [];
 $baseWinError = $base_win_rate_data['error'] ?? '';
 $baseWinRawTotal = (float)($base_win_rate_data['raw_total'] ?? 0.0);
@@ -11,7 +27,7 @@ $correctedExLabel = in_array($selected_place ?? '', ['AMG', 'TKY'], true)
     ? 'EX_TOTAL3（展示＋周回＋周り足）'
     : 'EX_TOTAL';
 
-// 決まり手表は「予想に使うコース基準」で見出しを作る。
+// 決まり手表・1着率表は「予想に使うコース基準」で見出しを作る。
 // 通常時は展示進入、仮想進入モード時は試算進入。
 $kimariteCourseToBoat = !empty($prediction_boat_by_course)
     ? $prediction_boat_by_course
@@ -79,14 +95,23 @@ for ($course = 1; $course <= 6; $course++) {
             <table style="width:100%; min-width:760px; border-collapse:collapse;">
                 <thead>
                     <tr style="background-color:#1e293b;">
-                        <th style="padding:8px; text-align:left; min-width:130px;">項目 / 艇番</th>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php $c = $lane_colors[$i] ?? $lane_colors[1]; ?>
+                        <th style="padding:8px; text-align:left; min-width:130px;">項目 / 進入</th>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $header = $kimariteHeaderMap[(string)$course] ?? [];
+                                $boat = (int)($header['boat'] ?? $course);
+                                $c = $lane_colors[$boat] ?? $lane_colors[1];
+                            ?>
                             <th style="padding:8px; text-align:center; min-width:95px;">
-                                <span class="lane-badge"
-                                      style="background-color:<?= $c['bg'] ?>; color:<?= $c['text'] ?>; border:1px solid <?= $c['border'] ?>; padding:2px 8px; border-radius:4px;">
-                                    <?= $i ?>号艇
-                                </span>
+                                <div style="font-weight:bold; color:#f8fafc; white-space:nowrap;">
+                                    <?= $course ?>コース
+                                </div>
+                                <div style="margin-top:4px;">
+                                    <span class="lane-badge"
+                                          style="background-color:<?= $c['bg'] ?>; color:<?= $c['text'] ?>; border:1px solid <?= $c['border'] ?>; display:inline-block; min-width:54px; padding:2px 7px; border-radius:4px; box-sizing:border-box; white-space:nowrap; text-align:center; font-weight:bold;">
+                                        <?= $boat ?>号艇
+                                    </span>
+                                </div>
                             </th>
                         <?php endfor; ?>
                     </tr>
@@ -94,8 +119,13 @@ for ($course = 1; $course <= 6; $course++) {
                 <tbody>
                     <tr>
                         <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">場1着率（コース別）</td>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php $rate = isset($baseWinBoats[$i]['p0']) ? ((float)$baseWinBoats[$i]['p0'] * 100.0) : null; ?>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
+                                $rate = isset($baseWinBoats[$boat]['p0'])
+                                    ? ((float)$baseWinBoats[$boat]['p0'] * 100.0)
+                                    : null;
+                            ?>
                             <td style="padding:10px 8px; text-align:center; font-size:16px; font-weight:bold; color:#cbd5e1;">
                                 <?= $rate !== null ? number_format($rate, 2) . '%' : '-' ?>
                             </td>
@@ -103,8 +133,11 @@ for ($course = 1; $course <= 6; $course++) {
                     </tr>
                     <tr style="border-top:1px solid #334155;">
                         <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">基本1着率</td>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php $rate = $baseWinBoats[$i]['normalized_rate'] ?? null; ?>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
+                                $rate = $baseWinBoats[$boat]['normalized_rate'] ?? null;
+                            ?>
                             <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#38bdf8;">
                                 <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
                             </td>
@@ -112,8 +145,13 @@ for ($course = 1; $course <= 6; $course++) {
                     </tr>
                     <tr style="border-top:1px solid #334155;">
                         <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">補正後1着率</td>
-                        <?php for ($i = 1; $i <= 6; $i++): ?>
-                            <?php $rate = $correctedWinBoats[(string)$i]['corrected_rate'] ?? $correctedWinBoats[$i]['corrected_rate'] ?? null; ?>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
+                                $rate = $correctedWinBoats[(string)$boat]['corrected_rate']
+                                    ?? $correctedWinBoats[$boat]['corrected_rate']
+                                    ?? null;
+                            ?>
                             <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#fbbf24;">
                                 <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
                             </td>
