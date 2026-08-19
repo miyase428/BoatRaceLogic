@@ -8,6 +8,9 @@ require_once __DIR__ . '/PredictionLogic.php';
  * 2・4号艇の切り保護だけを旧getBonus判定へ一時的に渡し、
  * スコア補正とは完全に分離する。
  *
+ * 一次評価3位の艇が現行ロジックで「切る艇」になった場合は、
+ * 過去検証で有効だったR3_ONLYルールとして切りを解除する。
+ *
  * 進入変更時は、親ロジックが前提としている「1..6 = コース順」に
  * tenji / 一次評価 / 3連対率を並べ替えて計算し、最後に艇番へ戻す。
  * 通常進入123456では並べ替え結果が元配列と同一になる。
@@ -110,7 +113,8 @@ class PredictionLogicProduction extends PredictionLogic
         }
 
         ksort($final_predictions);
-        return $final_predictions;
+
+        return $this->applyPrimaryRank3CutProtection($final_predictions);
     }
 
     /**
@@ -135,6 +139,54 @@ class PredictionLogicProduction extends PredictionLogic
             $fp['getBonus'] = 0;
         }
         unset($fp);
+
+        return $this->applyPrimaryRank3CutProtection($final_predictions);
+    }
+
+    /**
+     * R3_ONLY:
+     * 現行の切り判定後、一次評価3位の艇だけ切りを解除する。
+     *
+     * 順位付けはFinalPredictionExporterのfirst_rankと同じく、
+     * first_total_score降順・同点時は艇番昇順で1～6位を振る。
+     */
+    private function applyPrimaryRank3CutProtection(array $final_predictions): array
+    {
+        if (count($final_predictions) !== 6) {
+            return $final_predictions;
+        }
+
+        $primarySorted = $final_predictions;
+
+        uasort($primarySorted, static function (array $a, array $b): int {
+            $scoreA = (float)($a['first_total_score'] ?? 0);
+            $scoreB = (float)($b['first_total_score'] ?? 0);
+
+            if ($scoreA == $scoreB) {
+                return (int)($a['boat'] ?? 0) <=> (int)($b['boat'] ?? 0);
+            }
+
+            return $scoreA < $scoreB ? 1 : -1;
+        });
+
+        $rank = 1;
+        foreach ($primarySorted as $fp) {
+            if ($rank === 3) {
+                $boat = (int)($fp['boat'] ?? 0);
+
+                if (
+                    $boat >= 1 && $boat <= 6
+                    && isset($final_predictions[$boat])
+                    && (int)($final_predictions[$boat]['kiru'] ?? 0) === 1
+                ) {
+                    $final_predictions[$boat]['kiru'] = 0;
+                }
+
+                break;
+            }
+
+            $rank++;
+        }
 
         return $final_predictions;
     }
