@@ -131,7 +131,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const table = document.querySelector('.summary-box table');
     if (!table) return;
 
-    const headers = Array.from(table.querySelectorAll('thead th'));
+    const laneColors = <?= json_encode($lane_colors ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+    // 買い目生成用の加工列は内部値として残し、画面だけ非表示にする。
+    let headers = Array.from(table.querySelectorAll('thead th'));
     const removeIndexes = [];
 
     headers.forEach(function (th, index) {
@@ -148,6 +151,71 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.deleteCell(index);
             }
         });
+    });
+
+    headers = Array.from(table.querySelectorAll('thead th')).map(function (th) {
+        return th.textContent.trim();
+    });
+
+    const headIndex = headers.indexOf('頭');
+    const aiteIndex = headers.indexOf('相手候補');
+    const kiruIndex = headers.indexOf('切る艇');
+
+    function makeBoatBadge(boat) {
+        const color = laneColors[String(boat)] || laneColors[boat] || laneColors['1'] || laneColors[1] || {};
+        const badge = document.createElement('span');
+        badge.className = 'lane-badge';
+        badge.textContent = boat + '号艇';
+        badge.style.backgroundColor = color.bg || '#334155';
+        badge.style.color = color.text || '#ffffff';
+        badge.style.border = '1px solid ' + (color.border || '#64748b');
+        badge.style.display = 'inline-block';
+        badge.style.minWidth = '54px';
+        badge.style.padding = '2px 7px';
+        badge.style.borderRadius = '4px';
+        badge.style.boxSizing = 'border-box';
+        badge.style.whiteSpace = 'nowrap';
+        badge.style.textAlign = 'center';
+        badge.style.fontWeight = 'bold';
+        return badge;
+    }
+
+    function parseBoats(text) {
+        const matches = String(text || '').match(/[1-6]/g) || [];
+        const boats = [];
+        matches.forEach(function (value) {
+            const boat = Number(value);
+            if (!boats.includes(boat)) {
+                boats.push(boat);
+            }
+        });
+        return boats;
+    }
+
+    function renderBoatBadges(cell) {
+        if (!cell) return;
+        const boats = parseBoats(cell.textContent);
+        if (!boats.length) return;
+
+        cell.textContent = '';
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.justifyContent = 'center';
+        wrap.style.alignItems = 'center';
+        wrap.style.flexWrap = 'wrap';
+        wrap.style.gap = '5px';
+
+        boats.forEach(function (boat) {
+            wrap.appendChild(makeBoatBadge(boat));
+        });
+
+        cell.appendChild(wrap);
+    }
+
+    Array.from(table.querySelectorAll('tbody tr')).forEach(function (row) {
+        if (headIndex >= 0) renderBoatBadges(row.cells[headIndex]);
+        if (aiteIndex >= 0) renderBoatBadges(row.cells[aiteIndex]);
+        if (kiruIndex >= 0) renderBoatBadges(row.cells[kiruIndex]);
     });
 });
 </script>
