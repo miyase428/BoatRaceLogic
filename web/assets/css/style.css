@@ -536,6 +536,61 @@ tr:hover > td {
     }
 }
 
+/* ===============================
+   サム理論詳細：ライトテーマ向けヒートマップ
+================================= */
+
+/* 既存の弱い正負は、背景と文字を控えめにして情報量を抑える */
+#sam-block td[style*="rgba(239, 68, 68, 0.1)"] {
+    background-color: #f8e8e5 !important;
+    color: #a85b54 !important;
+    font-weight: 500 !important;
+}
+
+#sam-block td[style*="rgba(59, 130, 246, 0.1)"] {
+    background-color: #edf3f9 !important;
+    color: #4c7398 !important;
+    font-weight: 500 !important;
+}
+
+/* 強い正負だけ、やや濃い背景＋太字で一目で分かるようにする */
+#sam-block td[style*="rgba(239, 68, 68, 0.2)"] {
+    background-color: #f3d6d2 !important;
+    color: #9f4038 !important;
+    font-weight: 700 !important;
+}
+
+#sam-block td[style*="rgba(59, 130, 246, 0.2)"] {
+    background-color: #dbe7f4 !important;
+    color: #315f8c !important;
+    font-weight: 700 !important;
+}
+
+/* win / trio はまず見る指標として行名を強調 */
+#sam-block tbody tr:nth-child(4n + 1) > td:nth-child(2),
+#sam-block tbody tr:nth-child(4n) > td:nth-child(2) {
+    color: var(--text-strong) !important;
+    font-weight: 700 !important;
+}
+
+/* 各コースの先頭に境界線を入れて、24行を6ブロックとして追いやすくする */
+#sam-block tbody tr:nth-child(4n + 1) > td {
+    border-top: 2px solid var(--border-strong) !important;
+}
+
+/* コース名セルも少し濃くしてブロックの起点を分かりやすくする */
+#sam-block tbody tr:nth-child(4n + 1) > td:first-child {
+    color: var(--text-strong);
+    font-weight: 700;
+    background-color: var(--surface-soft);
+}
+
+/* hoverでヒートマップ色を消さない */
+#sam-block tbody tr:hover > td[style*="rgba(239, 68, 68"],
+#sam-block tbody tr:hover > td[style*="rgba(59, 130, 246"] {
+    filter: brightness(0.985);
+}
+
 /* スマホ（画面幅600px以下）で1〜6号艇を1画面に収容 */
 @media (max-width: 600px) {
     body {
