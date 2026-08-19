@@ -8,6 +8,7 @@ declare(strict_types=1);
  *   CURRENT: 現行kiruのまま
  *   R1: 一次1位なら切らない
  *   R2: 一次2位以内なら切らない
+ *   R3_ONLY: 一次3位だけ切らない
  *   R3: 一次3位以内なら切らない
  *
  * 本命頭・final3順位は変更しない。
@@ -98,10 +99,13 @@ function validateFile(PDO $pdo, string $file): array
     }
     fclose($fp);
 
+    // 正数: 一次順位1～N位を保護
+    // -3: 一次3位だけを保護（R3の効果切り分け用）
     $scenarioDefs = [
         'CURRENT' => 0,
         'R1' => 1,
         'R2' => 2,
+        'R3_ONLY' => -3,
         'R3' => 3,
     ];
 
@@ -163,12 +167,17 @@ function validateFile(PDO $pdo, string $file): array
         foreach ($scenarioDefs as $name => $limit) {
             $kiru = $currentKiru;
 
-            if ($limit > 0) {
-                foreach ($boats as $lane => $b) {
-                    $firstRank = (int)$b['first_rank'];
-                    if (!empty($kiru[$lane]) && $firstRank >= 1 && $firstRank <= $limit) {
-                        $kiru[$lane] = false;
-                    }
+            foreach ($boats as $lane => $b) {
+                if (empty($kiru[$lane])) {
+                    continue;
+                }
+
+                $firstRank = (int)$b['first_rank'];
+
+                if ($limit > 0 && $firstRank >= 1 && $firstRank <= $limit) {
+                    $kiru[$lane] = false;
+                } elseif ($limit === -3 && $firstRank === 3) {
+                    $kiru[$lane] = false;
                 }
             }
 
@@ -299,12 +308,12 @@ function printResult(array $result, bool $pooled = false): void
     echo "払戻不足              : {$base['payout_missing']}\n\n";
 
     printf(
-        "%-8s %9s %10s %10s %14s %14s %10s %11s %11s\n",
+        "%-10s %9s %10s %10s %14s %14s %10s %11s %11s\n",
         '方式', '影響R', '平均点数', '的中率', '購入金額', '払戻', '回収率', '回収率差', '点数差'
     );
-    echo str_repeat('-', 112) . "\n";
+    echo str_repeat('-', 114) . "\n";
 
-    foreach (['CURRENT','R1','R2','R3'] as $name) {
+    foreach (['CURRENT','R1','R2','R3_ONLY','R3'] as $name) {
         $s = $stats[$name];
         $hitRate = pct($s['hits'], $s['races']);
         $rec = recovery($s);
@@ -313,7 +322,7 @@ function printResult(array $result, bool $pooled = false): void
         $curAvgPoints = avg($current['points'], $current['races']);
 
         printf(
-            "%-8s %9d %9.2f点 %9.2f%% %12s円 %12s円 %9.2f%% %+10.2fpt %+9.2f点\n",
+            "%-10s %9d %9.2f点 %9.2f%% %12s円 %12s円 %9.2f%% %+10.2fpt %+9.2f点\n",
             $name,
             $s['affected_races'],
             $avgPoints,
@@ -327,7 +336,7 @@ function printResult(array $result, bool $pooled = false): void
     }
 
     echo "\n【現行比の的中増減】\n";
-    foreach (['R1','R2','R3'] as $name) {
+    foreach (['R1','R2','R3_ONLY','R3'] as $name) {
         $s = $stats[$name];
         printf(
             "%s : 的中 %d → %d (%+d件) / 投資 %+s円 / 払戻 %+s円\n",
@@ -340,7 +349,7 @@ function printResult(array $result, bool $pooled = false): void
         );
     }
 
-    echo "\n判断方針: P1・P2の両方で的中増が再現し、回収率が大きく悪化しない単純ルールだけを採用候補とする。\n";
+    echo "\n判断方針: R3_ONLYで一次3位単独の寄与を確認し、P1・P2の両方で的中増が再現し、回収率が大きく悪化しない単純ルールだけを採用候補とする。\n";
 }
 
 function poolResults(array $results): array
@@ -358,6 +367,7 @@ function poolResults(array $results): array
             'CURRENT' => makeStats('CURRENT', 0),
             'R1' => makeStats('R1', 1),
             'R2' => makeStats('R2', 2),
+            'R3_ONLY' => makeStats('R3_ONLY', -3),
             'R3' => makeStats('R3', 3),
         ],
     ];
@@ -367,7 +377,7 @@ function poolResults(array $results): array
             $pooled['base'][$key] += (int)($result['base'][$key] ?? 0);
         }
 
-        foreach (['CURRENT','R1','R2','R3'] as $name) {
+        foreach (['CURRENT','R1','R2','R3_ONLY','R3'] as $name) {
             foreach (['races','affected_races','points','investment','hits','payout','hit_payout_sum'] as $key) {
                 $pooled['stats'][$name][$key] += (int)($result['stats'][$name][$key] ?? 0);
             }
