@@ -9,7 +9,8 @@ require_once __DIR__ . '/PredictionLogic.php';
  * スコア補正とは完全に分離する。
  *
  * 一次評価3位の艇が現行ロジックで「切る艇」になった場合は、
- * 過去検証で有効だったR3_ONLYルールとして切りを解除する。
+ * 過去検証で有効だったR3_ONLYルールとして本命買い目だけ切りを解除する。
+ * 対抗買い目はR3_ONLY適用前のkiruを使用する。
  *
  * 進入変更時は、親ロジックが前提としている「1..6 = コース順」に
  * tenji / 一次評価 / 3連対率を並べ替えて計算し、最後に艇番へ戻す。
@@ -94,6 +95,10 @@ class PredictionLogicProduction extends PredictionLogic
             $fp['waku'] = $boat;
             $fp['course'] = $course;
 
+            // R3_ONLY適用前の切り判定を保存する。
+            // 対抗買い目はこの値を使用する。
+            $fp['kiru_original'] = (int)($fp['kiru'] ?? 0);
+
             // 親ロジック内の「★2差し」等はコース番号で生成されるため、
             // 画面上はその評価を受ける実艇番へ戻す。
             foreach (['flg_sashi', 'flg_makuri', 'flg_makurizashi'] as $flagKey) {
@@ -114,7 +119,76 @@ class PredictionLogicProduction extends PredictionLogic
 
         ksort($final_predictions);
 
+        // final_predictions上のkiruは「本命買い目用」の切り判定とする。
         return $this->applyPrimaryRank3CutProtection($final_predictions);
+    }
+
+    /**
+     * HONMEI_ONLY:
+     * 親buildSummary()ではR3_ONLY適用後のkiruを使って本命・対抗を作る。
+     * その後、対抗買い目だけR3_ONLY適用前のkiru_originalで作り直す。
+     */
+    public function buildSummary(array $final_predictions): array
+    {
+        $summary = parent::buildSummary($final_predictions);
+
+        $rankBoats = $summary['rank_boats'] ?? [];
+        $taikouHead = (int)($summary['taikou_head'] ?? 0);
+
+        if (count($rankBoats) !== 6 || $taikouHead < 1 || $taikouHead > 6) {
+            $summary['r3_only_scope'] = 'HONMEI_ONLY';
+            return $summary;
+        }
+
+        $taikouKiruBoats = [];
+        foreach ($final_predictions as $boat => $fp) {
+            $originalKiru = (int)($fp['kiru_original'] ?? ($fp['kiru'] ?? 0));
+            if ($originalKiru === 1) {
+                $taikouKiruBoats[] = (int)$boat;
+            }
+        }
+
+        $taikouAite = [];
+        $taikouThird = [];
+
+        foreach ($rankBoats as $boat) {
+            $boat = (int)$boat;
+
+            if ($boat === $taikouHead) {
+                continue;
+            }
+
+            if (in_array($boat, $taikouKiruBoats, true)) {
+                continue;
+            }
+
+            $taikouThird[] = $boat;
+
+            if (count($taikouAite) < 3) {
+                $taikouAite[] = $boat;
+            }
+        }
+
+        sort($taikouAite);
+        sort($taikouThird);
+        sort($taikouKiruBoats);
+
+        $taikouAiteKako = implode('', $taikouAite);
+        $taikouThirdKako = implode('', $taikouThird);
+
+        $summary['taikou_aite_str'] = implode('・', $taikouAite);
+        $summary['taikou_aite_kako'] = $taikouAiteKako;
+        $summary['taikou_third_kako'] = $taikouThirdKako;
+        $summary['taikou_kiru_str'] = implode('・', $taikouKiruBoats);
+        $summary['taikou_kiru_kako'] = implode('', $taikouKiruBoats);
+        $summary['taikou_kai'] = $taikouHead . '-' . $taikouAiteKako . '-' . $taikouThirdKako;
+
+        // 既存のkiru_str / kiru_kakoは本命買い目用として維持する。
+        $summary['honmei_kiru_str'] = (string)($summary['kiru_str'] ?? '');
+        $summary['honmei_kiru_kako'] = (string)($summary['kiru_kako'] ?? '');
+        $summary['r3_only_scope'] = 'HONMEI_ONLY';
+
+        return $summary;
     }
 
     /**
@@ -135,6 +209,7 @@ class PredictionLogicProduction extends PredictionLogic
 
         foreach ($final_predictions as $boat => &$fp) {
             $fp['course'] = (int)($working_tenji[$boat - 1]['tenji_course'] ?? $boat);
+            $fp['kiru_original'] = (int)($fp['kiru'] ?? 0);
             $fp['kiruProtect'] = ($boat === 2 || $boat === 4) ? 1 : 0;
             $fp['getBonus'] = 0;
         }
@@ -146,6 +221,7 @@ class PredictionLogicProduction extends PredictionLogic
     /**
      * R3_ONLY:
      * 現行の切り判定後、一次評価3位の艇だけ切りを解除する。
+     * このkiruは本命買い目にだけ使用し、対抗はkiru_originalを使用する。
      *
      * 順位付けはFinalPredictionExporterのfirst_rankと同じく、
      * first_total_score降順・同点時は艇番昇順で1～6位を振る。
