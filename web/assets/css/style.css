@@ -1,11 +1,26 @@
 /* ===============================
-   Global Layout
+   Global Layout / Light Theme
 ================================= */
+
+:root {
+    --page-bg: #f7f3ea;
+    --surface: #fffdf8;
+    --surface-soft: #faf7f0;
+    --surface-muted: #f1ece2;
+    --border: #e4ddd0;
+    --border-strong: #d5cabb;
+    --text: #334155;
+    --text-strong: #1f2937;
+    --text-muted: #64748b;
+    --accent: #0284c7;
+    --accent-dark: #0369a1;
+    --accent-soft: #eaf5fb;
+}
 
 body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
-    background-color: #0f172a;
-    color: #f8fafc;
+    background-color: var(--page-bg);
+    color: var(--text);
     margin: 0;
     padding: 30px 20px;
     display: flex;
@@ -15,23 +30,23 @@ body {
 .container {
     max-width: 1200px;
     width: 100%;
-    background-color: #1e293b;
+    background-color: var(--surface);
     padding: 30px;
     border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-    border: 1px solid #334155;
+    box-shadow: 0 10px 28px rgba(92, 74, 48, 0.10);
+    border: 1px solid var(--border);
 }
 
 h1 {
-    color: #38bdf8;
+    color: var(--accent);
     font-size: 22px;
     margin-top: 0;
-    border-bottom: 2px solid #334155;
+    border-bottom: 2px solid var(--border);
     padding-bottom: 12px;
 }
 
 h2 {
-    color: #f8fafc;
+    color: var(--text-strong);
     font-size: 18px;
     margin-top: 35px;
     margin-bottom: 15px;
@@ -42,10 +57,10 @@ h2 {
 ================================= */
 
 .form-section {
-    background-color: #0f172a;
+    background-color: var(--surface-soft);
     padding: 20px;
     border-radius: 8px;
-    border: 1px solid #334155;
+    border: 1px solid var(--border);
     margin-bottom: 20px;
 }
 
@@ -64,21 +79,27 @@ h2 {
 
 label {
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--text-muted);
 }
 
 input,
 select {
-    background-color: #1e293b;
-    border: 1px solid #475569;
-    color: #fff;
+    background-color: #ffffff;
+    border: 1px solid var(--border-strong);
+    color: var(--text-strong);
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 14px;
 }
 
+input:focus,
+select:focus {
+    outline: 2px solid rgba(2, 132, 199, 0.18);
+    border-color: var(--accent);
+}
+
 button {
-    background-color: #0284c7;
+    background-color: var(--accent);
     color: white;
     border: none;
     padding: 10px 20px;
@@ -89,7 +110,7 @@ button {
 }
 
 button:hover {
-    background-color: #0369a1;
+    background-color: var(--accent-dark);
 }
 
 /* ===============================
@@ -97,8 +118,8 @@ button:hover {
 ================================= */
 
 .code-box {
-    background-color: #1e1b4b;
-    border: 1px solid #6366f1;
+    background-color: var(--accent-soft);
+    border: 1px solid #b9dff1;
     padding: 12px 20px;
     border-radius: 8px;
     display: flex;
@@ -109,13 +130,13 @@ button:hover {
 
 .code-label {
     font-size: 13px;
-    color: #a5b4fc;
+    color: #47677a;
 }
 
 .code-value {
     font-size: 20px;
     font-weight: bold;
-    color: #38bdf8;
+    color: var(--accent);
     letter-spacing: 2px;
     font-family: monospace;
 }
@@ -127,6 +148,9 @@ button:hover {
 .table-container {
     overflow-x: auto;
     margin-top: 10px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    border: 1px solid var(--border);
 }
 
 table {
@@ -134,21 +158,27 @@ table {
     border-collapse: collapse;
     font-size: 12px;
     text-align: center;
+    color: var(--text);
 }
 
 th {
-    background-color: #0f172a;
-    color: #94a3b8;
+    background-color: var(--surface-muted);
+    color: #475569;
     padding: 8px 6px;
     font-weight: 600;
-    border-bottom: 2px solid #334155;
+    border-bottom: 2px solid var(--border-strong);
     white-space: nowrap;
 }
 
 td {
     padding: 8px 6px;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid var(--border);
     white-space: nowrap;
+    background-color: #ffffff;
+}
+
+tr:hover > td {
+    background-color: #fffaf0;
 }
 
 /* ===============================
@@ -176,14 +206,15 @@ td {
 .no-data {
     padding: 20px;
     text-align: center;
-    color: #94a3b8;
-    background-color: #0f172a;
+    color: var(--text-muted);
+    background-color: var(--surface-soft);
+    border: 1px solid var(--border);
     border-radius: 8px;
 }
 
 .score-highlight {
     font-weight: bold;
-    color: #38bdf8;
+    color: var(--accent);
 }
 
 /* ===============================
@@ -195,7 +226,7 @@ td {
 }
 
 .border-top-course {
-    border-top: 2px solid #475569;
+    border-top: 2px solid var(--border-strong);
 }
 
 /* ===============================
@@ -206,8 +237,8 @@ td {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 4px;
-    background-color: #334155;
-    color: #f8fafc;
+    background-color: #64748b;
+    color: #ffffff;
     font-weight: bold;
     font-size: 11px;
 }
@@ -233,11 +264,15 @@ td {
 
 .summary-box {
     margin-top: 15px;
-    background-color: #0f172a;
-    border: 1px solid #334155;
+    background-color: var(--surface-soft);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 15px;
-    overflow-x: auto; /* ← すでに入っているのでOKですが、内部のテーブルが崩れる場合は wrapper を推奨 */
+    overflow-x: auto;
+}
+
+.summary-box table {
+    background-color: #ffffff;
 }
 
 /* ===============================
@@ -249,19 +284,20 @@ td {
     font-family: monospace;
 }
 
-.sam-course-bg-1 { background-color: rgba(248, 250, 252, 0.05); }
-.sam-course-bg-2 { background-color: rgba(30, 41, 59, 0.5); }
-.sam-course-bg-3 { background-color: rgba(239, 68, 68, 0.1); }
-.sam-course-bg-4 { background-color: rgba(59, 130, 246, 0.1); }
-.sam-course-bg-5 { background-color: rgba(234, 179, 8, 0.1); }
-.sam-course-bg-6 { background-color: rgba(34, 197, 94, 0.1); }
+.sam-course-bg-1 { background-color: rgba(248, 250, 252, 0.9); }
+.sam-course-bg-2 { background-color: rgba(100, 116, 139, 0.10); }
+.sam-course-bg-3 { background-color: rgba(239, 68, 68, 0.08); }
+.sam-course-bg-4 { background-color: rgba(59, 130, 246, 0.08); }
+.sam-course-bg-5 { background-color: rgba(234, 179, 8, 0.10); }
+.sam-course-bg-6 { background-color: rgba(34, 197, 94, 0.08); }
 
 /* ===============================
    スリット体系
 ================================= */
 
 .card {
-    background-color: #1e293b;
+    background-color: #ffffff;
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 10px;
     margin-top: 10px;
@@ -270,21 +306,94 @@ td {
 .card-header {
     font-weight: bold;
     margin-bottom: 8px;
-    color: #f8fafc;
+    color: var(--text-strong);
 }
 
 .card-body {
     font-size: 13px;
-    color: #cbd5e1;
+    color: var(--text);
 }
 
 .badge {
-    background-color: #0284c7;
+    background-color: var(--accent);
     color: #fff;
     padding: 3px 8px;
     border-radius: 4px;
     font-weight: bold;
 }
+
+/* ===============================
+   旧ビュー内のダーク系inline styleを
+   ライトテーマへ安全に上書き
+   ※ lane-badge / 色付き評価セルは維持
+================================= */
+
+.container :not(.lane-badge):not(.type-badge)[style*="background-color: #0f172a"],
+.container :not(.lane-badge):not(.type-badge)[style*="background-color:#0f172a"],
+.container :not(.lane-badge):not(.type-badge)[style*="background:#0f172a"] {
+    background-color: var(--surface-soft) !important;
+    color: var(--text) !important;
+}
+
+.container :not(.lane-badge):not(.type-badge)[style*="background-color: #1e293b"],
+.container :not(.lane-badge):not(.type-badge)[style*="background-color:#1e293b"],
+.container :not(.lane-badge):not(.type-badge)[style*="background:#1e293b"] {
+    background-color: var(--surface-muted) !important;
+    color: var(--text-strong) !important;
+}
+
+.container [style*="border-top: 2px solid #334155"],
+.container [style*="border-top:2px solid #334155"],
+.container [style*="border-bottom: 1px solid #334155"],
+.container [style*="border-bottom:1px solid #334155"] {
+    border-color: var(--border-strong) !important;
+}
+
+.container [style*="border: 1px solid #334155"],
+.container [style*="border:1px solid #334155"] {
+    border-color: var(--border) !important;
+}
+
+/* マトリクスの固定列・セクション見出し */
+.matrix-table th[style*="background-color: #1e293b"],
+.matrix-table th[style*="background-color:#1e293b"] {
+    background-color: var(--surface-muted) !important;
+    color: var(--text-strong) !important;
+}
+
+.matrix-table td[style*="background-color: #0f172a"],
+.matrix-table td[style*="background-color:#0f172a"],
+.matrix-table td[style*="background:#0f172a"] {
+    background-color: var(--surface-soft) !important;
+    color: var(--text-strong) !important;
+}
+
+.matrix-table tr[style*="background-color: #1e293b"] > td,
+.matrix-table tr[style*="background-color:#1e293b"] > td {
+    background-color: var(--surface-muted) !important;
+}
+
+/* inlineの白文字指定をライトテーマ用に調整。色付きバッジは除外 */
+.container :not(.lane-badge):not(.type-badge):not(.badge)[style*="color: #f8fafc"],
+.container :not(.lane-badge):not(.type-badge):not(.badge)[style*="color:#f8fafc"] {
+    color: var(--text-strong) !important;
+}
+
+.container :not(.lane-badge):not(.type-badge):not(.badge)[style*="color: #cbd5e1"],
+.container :not(.lane-badge):not(.type-badge):not(.badge)[style*="color:#cbd5e1"],
+.container :not(.lane-badge):not(.type-badge):not(.badge)[style*="color: #94a3b8"],
+.container :not(.lane-badge):not(.type-badge):not(.badge)[style*="color:#94a3b8"] {
+    color: var(--text-muted) !important;
+}
+
+/* 決まり手のヒートマップは既存色を維持 */
+.matrix-table td[style*="background:#f87171"],
+.matrix-table td[style*="background:#fb923c"],
+.matrix-table td[style*="background:#facc15"],
+.matrix-table td[style*="background:#60a5fa"] {
+    color: #0f172a !important;
+}
+
 /* 決まり手テーブルをスマホで横スクロール可能にする */
 .kimarite-wrapper {
     overflow-x: auto;
@@ -309,15 +418,19 @@ td {
         white-space: nowrap;
     }
 }
+
 /* 横スクロールを許可（スマホで必須） */
 .matrix-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background-color: #ffffff;
 }
 
 /* PC・スマホ共通：マトリクス表のパディングをさらに削り、最小幅の呪縛を解除 */
 .matrix-table {
-    min-width: auto !important; /* 900pxの強制最小幅を解除 */
+    min-width: auto !important;
     width: 100%;
 }
 
@@ -326,50 +439,47 @@ td {
 .matrix-table td {
     padding: 2px 4px !important;
     font-size: 12px;
-    border-left: 1px solid #334155;
-    border-right: 1px solid #334155;
+    border-left: 1px solid var(--border) !important;
+    border-right: 1px solid var(--border) !important;
 }
 
-/* スマホ（画面幅600px以下）で競艇日和さんのように1〜6号艇を1画面に強制収容する */
+/* スマホ（画面幅600px以下）で1〜6号艇を1画面に収容 */
 @media (max-width: 600px) {
-    /* ページ全体の余白を最小化 */
     body {
         padding: 4px 2px;
     }
-    
+
     .container {
         padding: 4px;
         width: 100%;
         box-sizing: border-box;
+        border-radius: 6px;
     }
 
-    /* テーブルを画面幅に完全にフィットさせ、はみ出しを禁止 */
     .matrix-table {
         width: 100% !important;
         min-width: 100% !important;
-        table-layout: fixed !important; /* 列幅を均等・固定化して崩れを防ぐ */
+        table-layout: fixed !important;
     }
 
-    /* すべてのセル（th, td）のパディングとフォントを限界突破して縮小 */
     .matrix-table th,
     .matrix-table td {
-        padding: 1px 0px !important;
-        font-size: 7.5px !important; /* スマホで6列＋項目名が入る最小サイズ */
+        padding: 1px 0 !important;
+        font-size: 7.5px !important;
         line-height: 1.1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        border-left: 1px solid #334155;
-        border-right: 1px solid #334155;
+        border-left: 1px solid var(--border) !important;
+        border-right: 1px solid var(--border) !important;
     }
 
-    /* 左端の「項目名」の列幅を確保し、残りを1〜6号艇で均等割にする */
     .matrix-table td:first-child,
     .matrix-table th:first-child {
-        width: 58px !important; /* 項目名が入る最低限の固定幅 */
+        width: 58px !important;
         padding-left: 2px !important;
         padding-right: 2px !important;
         font-size: 7.5px !important;
-        border-left: none;
+        border-left: none !important;
     }
 }
