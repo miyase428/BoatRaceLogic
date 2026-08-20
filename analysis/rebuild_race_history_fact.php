@@ -7,6 +7,7 @@ declare(strict_types=1);
  * 1レース=1行で以下を保持する。
  * - trifecta_valid       : 現行TrifectaProbabilityLogicのtop3_rows条件を満たす
  * - course_valid         : 現行AiTrioRateLogicの6艇course_rows条件を満たす
+ * - winner_valid         : 現行CorrectedWinRateLogicの場×コースprior用「1着が1艇かつ勝者コース有効」条件
  * - head1_prior_valid    : 現行Head1SecondPlaceLogicの場/全場2着率母集団条件を満たす
  * - head1_player_eligible: 現行Head1SecondPlaceLogicの選手直近100走用「1号艇1着」条件を満たす
  * - winner_lane          : 1着艇の枠番
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS {$table} (
     c3                     smallint,
     trifecta_valid         boolean NOT NULL DEFAULT false,
     course_valid           boolean NOT NULL DEFAULT false,
+    winner_valid           boolean NOT NULL DEFAULT false,
     head1_prior_valid      boolean NOT NULL DEFAULT false,
     head1_player_eligible  boolean NOT NULL DEFAULT false,
     rebuilt_at             timestamptz NOT NULL DEFAULT now()
@@ -48,6 +50,7 @@ SQL;
 
 $alterSqls = [
     "ALTER TABLE {$table} ADD COLUMN IF NOT EXISTS winner_lane smallint",
+    "ALTER TABLE {$table} ADD COLUMN IF NOT EXISTS winner_valid boolean NOT NULL DEFAULT false",
     "ALTER TABLE {$table} ADD COLUMN IF NOT EXISTS head1_prior_valid boolean NOT NULL DEFAULT false",
     "ALTER TABLE {$table} ADD COLUMN IF NOT EXISTS head1_player_eligible boolean NOT NULL DEFAULT false",
 ];
@@ -127,6 +130,7 @@ INSERT INTO {$table} (
     c3,
     trifecta_valid,
     course_valid,
+    winner_valid,
     head1_prior_valid,
     head1_player_eligible,
     rebuilt_at
@@ -156,6 +160,10 @@ SELECT
         AND valid_course_n = 6
         AND course_n = 6
     ) AS course_valid,
+    (
+        rank1_n = 1
+        AND c1 BETWEEN 1 AND 6
+    ) AS winner_valid,
     (
         row_n = 6
         AND lane_n = 6
@@ -188,6 +196,7 @@ $indexes = [
     "CREATE INDEX IF NOT EXISTS idx_race_history_fact_place_date_code ON {$table} (place_code, race_date, race_code)",
     "CREATE INDEX IF NOT EXISTS idx_race_history_fact_trifecta_date ON {$table} (race_date, race_code) WHERE trifecta_valid",
     "CREATE INDEX IF NOT EXISTS idx_race_history_fact_course_date ON {$table} (race_date, race_code) WHERE course_valid",
+    "CREATE INDEX IF NOT EXISTS idx_race_history_fact_winner_place_date ON {$table} (place_code, race_date, race_code) WHERE winner_valid",
     "CREATE INDEX IF NOT EXISTS idx_race_history_fact_head1_prior_date ON {$table} (race_date, race_code) WHERE head1_prior_valid",
 ];
 
@@ -226,6 +235,7 @@ SELECT
     COUNT(*) AS all_races,
     COUNT(*) FILTER (WHERE trifecta_valid) AS trifecta_valid_races,
     COUNT(*) FILTER (WHERE course_valid) AS course_valid_races,
+    COUNT(*) FILTER (WHERE winner_valid) AS winner_valid_races,
     COUNT(*) FILTER (WHERE head1_prior_valid) AS head1_prior_races,
     COUNT(*) FILTER (WHERE head1_player_eligible) AS head1_player_races,
     MIN(race_date) AS min_date,
@@ -238,6 +248,7 @@ printf("INSERT行数     : %d\n", (int)$inserted);
 printf("全レース       : %d\n", (int)($stats['all_races'] ?? 0));
 printf("3連単有効R     : %d\n", (int)($stats['trifecta_valid_races'] ?? 0));
 printf("6艇コース有効R : %d\n", (int)($stats['course_valid_races'] ?? 0));
+printf("勝者prior有効R : %d\n", (int)($stats['winner_valid_races'] ?? 0));
 printf("1号艇1着prior R: %d\n", (int)($stats['head1_prior_races'] ?? 0));
 printf("1号艇1着選手R  : %d\n", (int)($stats['head1_player_races'] ?? 0));
 printf("期間           : %s ～ %s\n", (string)($stats['min_date'] ?? '-'), (string)($stats['max_date'] ?? '-'));
