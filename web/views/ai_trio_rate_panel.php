@@ -262,4 +262,8 @@ document.addEventListener('DOMContentLoaded', function () {
 // AI3連対率まで計算済みの同一スコープを利用し、出目確率をその直後へ表示する。
 // 既存の最終予想・買い目ロジックには接続しない。
 include __DIR__ . '/trifecta_probability_panel.php';
+
+// C2/C3で検証した穴警戒HIGH + TRIO_OUTERを表示専用で追加する。
+// DOM読込後に最終予想の買い目直下へ移動し、買い目計算には接続しない。
+include __DIR__ . '/upset_alert_panel.php';
 ?>
