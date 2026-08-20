@@ -236,6 +236,7 @@ class TrifectaProbabilityLogic
                     'trio_beta' => self::TRIO_BETA,
                     'order_delta' => self::ORDER_DELTA,
                     'order_gamma' => self::ORDER_GAMMA,
+                    'history_source' => 'race_history_fact',
                 ],
             ];
         } catch (Throwable $e) {
@@ -258,68 +259,27 @@ class TrifectaProbabilityLogic
         string $targetRaceCode,
         string $placeCode
     ): array {
+        // 現行巨大JOINと同一条件で事前集約した1レース1行のFactを参照する。
+        // 20260820OMR01で旧母集団662,570Rと一致確認済み。
         $sql = <<<SQL
-            WITH top3_rows AS (
-                SELECT
-                    re.race_code,
-                    SUBSTRING(re.race_code, 9, 3) AS place_code,
-                    CASE WHEN rrd.rank::text ~ '^[1-3]$' THEN rrd.rank::int ELSE NULL END AS rank_no,
-                    COALESCE(
-                        CASE WHEN rrd.entry_course::text ~ '^[1-6]$' THEN rrd.entry_course::int ELSE NULL END,
-                        CASE WHEN el.entry_course::text ~ '^[1-6]$' THEN el.entry_course::int ELSE NULL END,
-                        CASE WHEN re.lane_number::text ~ '^[1-6]$' THEN re.lane_number::int ELSE NULL END
-                    ) AS actual_course
-                FROM boat_race.race_entry re
-                JOIN boat_race.race_master rm
-                  ON rm.race_code = re.race_code
-                LEFT JOIN boat_race.race_result_detail rrd
-                  ON rrd.race_code = re.race_code
-                 AND rrd.player_id = re.player_id
-                LEFT JOIN LATERAL (
-                    SELECT x.entry_course
-                    FROM boat_race.exhibition_live x
-                    WHERE x.race_code = re.race_code
-                      AND x.player_id = re.player_id
-                    LIMIT 1
-                ) el ON TRUE
-                WHERE (
-                        rm.race_date < ?::date
-                        OR (rm.race_date = ?::date AND re.race_code < ?)
-                      )
-                  AND rrd.rank::text IN ('1', '2', '3')
-            ),
-            race_patterns AS (
-                SELECT
-                    race_code,
-                    place_code,
-                    COUNT(*) AS row_n,
-                    COUNT(DISTINCT rank_no) AS rank_n,
-                    COUNT(DISTINCT actual_course) AS course_n,
-                    MAX(actual_course) FILTER (WHERE rank_no = 1) AS c1,
-                    MAX(actual_course) FILTER (WHERE rank_no = 2) AS c2,
-                    MAX(actual_course) FILTER (WHERE rank_no = 3) AS c3
-                FROM top3_rows
-                GROUP BY race_code, place_code
-            )
             SELECT
-                place_code,
                 c1,
                 c2,
                 c3,
-                COUNT(*) AS n
-            FROM race_patterns
-            WHERE row_n = 3
-              AND rank_n = 3
-              AND course_n = 3
-              AND c1 BETWEEN 1 AND 6
-              AND c2 BETWEEN 1 AND 6
-              AND c3 BETWEEN 1 AND 6
-            GROUP BY place_code, c1, c2, c3
-            ORDER BY place_code, c1, c2, c3
+                COUNT(*) AS global_n,
+                COUNT(*) FILTER (WHERE place_code = ?) AS venue_n
+            FROM boat_race.race_history_fact
+            WHERE trifecta_valid
+              AND (
+                    race_date < ?::date
+                    OR (race_date = ?::date AND race_code < ?)
+                  )
+            GROUP BY c1, c2, c3
+            ORDER BY c1, c2, c3
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$targetDate, $targetDate, $targetRaceCode]);
+        $stmt->execute([$placeCode, $targetDate, $targetDate, $targetRaceCode]);
 
         $global = [];
         $venue = [];
@@ -329,17 +289,16 @@ class TrifectaProbabilityLogic
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
             $pattern = [(int)$row['c1'], (int)$row['c2'], (int)$row['c3']];
             $key = $this->patternKey($pattern);
-            $n = (int)($row['n'] ?? 0);
-            if ($n <= 0) {
-                continue;
+            $gn = (int)($row['global_n'] ?? 0);
+            $vn = (int)($row['venue_n'] ?? 0);
+
+            if ($gn > 0) {
+                $global[$key] = $gn;
+                $globalN += $gn;
             }
-
-            $global[$key] = ($global[$key] ?? 0) + $n;
-            $globalN += $n;
-
-            if ((string)($row['place_code'] ?? '') === $placeCode) {
-                $venue[$key] = ($venue[$key] ?? 0) + $n;
-                $venueN += $n;
+            if ($vn > 0) {
+                $venue[$key] = $vn;
+                $venueN += $vn;
             }
         }
 
