@@ -36,6 +36,9 @@ $trifectaTop20 = is_array($trifectaData['top20'] ?? null) ? $trifectaData['top20
 $trifectaHistory = is_array($trifectaData['history'] ?? null) ? $trifectaData['history'] : [];
 $trifectaMethod = is_array($trifectaData['method'] ?? null) ? $trifectaData['method'] : [];
 $trifectaTotals = is_array($trifectaData['totals'] ?? null) ? $trifectaData['totals'] : [];
+$trifectaBoatByCourse = is_array($trifectaData['boat_by_course'] ?? null)
+    ? $trifectaData['boat_by_course']
+    : [];
 
 $trifectaCum = static function (array $rows, int $n): float {
     if ($n <= 0 || empty($rows)) {
@@ -114,63 +117,217 @@ $renderTrifectaTable = static function (array $rows, bool $full = false) use ($t
     </div>
     <?php
 };
+
+// ------------------------------------------------------------
+// イン1着時（1C頭）の2連単5通り
+// STEP3最終120通りを1C頭に条件付けし、2着コース別へ集約する。
+// 場平均は同じVENUE_K3000基礎出目から作るため、検証スクリプトと同一定義。
+// ------------------------------------------------------------
+$head1ExactaRows = [];
+$head1BaseMass = 0.0;
+$head1AiMass = 0.0;
+$head1BaseBySecondCourse = array_fill(2, 5, 0.0);
+$head1AiBySecondCourse = array_fill(2, 5, 0.0);
+
+if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
+    foreach ($trifectaRows as $row) {
+        $courses = is_array($row['courses'] ?? null) ? $row['courses'] : [];
+        if (count($courses) !== 3 || (int)$courses[0] !== 1) {
+            continue;
+        }
+
+        $secondCourse = (int)$courses[1];
+        if ($secondCourse < 2 || $secondCourse > 6) {
+            continue;
+        }
+
+        $baseP = (float)($row['base_probability'] ?? 0.0);
+        $aiP = (float)($row['probability'] ?? 0.0);
+        $head1BaseBySecondCourse[$secondCourse] += $baseP;
+        $head1AiBySecondCourse[$secondCourse] += $aiP;
+        $head1BaseMass += $baseP;
+        $head1AiMass += $aiP;
+    }
+
+    $headBoat = (int)($trifectaBoatByCourse[1] ?? 1);
+    for ($secondCourse = 2; $secondCourse <= 6; $secondCourse++) {
+        $secondBoat = (int)($trifectaBoatByCourse[$secondCourse] ?? $secondCourse);
+        $baseCond = $head1BaseMass > 0.0
+            ? $head1BaseBySecondCourse[$secondCourse] / $head1BaseMass
+            : 0.0;
+        $aiCond = $head1AiMass > 0.0
+            ? $head1AiBySecondCourse[$secondCourse] / $head1AiMass
+            : 0.0;
+
+        $head1ExactaRows[] = [
+            'second_course' => $secondCourse,
+            'head_boat' => $headBoat,
+            'second_boat' => $secondBoat,
+            'base' => $baseCond,
+            'ai' => $aiCond,
+            'delta' => $aiCond - $baseCond,
+        ];
+    }
+
+    $ranked = $head1ExactaRows;
+    usort($ranked, static function (array $a, array $b): int {
+        $cmp = ($b['ai'] <=> $a['ai']);
+        return $cmp !== 0 ? $cmp : ($a['second_course'] <=> $b['second_course']);
+    });
+    $rankByCourse = [];
+    foreach ($ranked as $idx => $row) {
+        $rankByCourse[(int)$row['second_course']] = $idx + 1;
+    }
+    foreach ($head1ExactaRows as &$row) {
+        $row['ai_rank'] = (int)($rankByCourse[(int)$row['second_course']] ?? 0);
+    }
+    unset($row);
+}
 ?>
 
+<!-- メイン表示：イン1着時の2連単 -->
 <div style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
     <div style="margin-bottom:10px;">
-        <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎲 出目確率</div>
+        <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎯 イン1着時 2連単</div>
         <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
-            基礎：場×1着C-2着C-3着C / VENUE_K3000 → 補正後1着率 α=1.00 → AI3連対率 β=1.25
+            1コースが1着になった場合の2着分布 / 2C～6Cの5通りを100%化
         </div>
         <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
-            2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
+            場平均：VENUE_K3000 / AI予想：補正後1着率＋AI3連対率＋2着3着順序補正を反映
+        </div>
+        <div style="font-size:11px; color:#6b7785; margin-top:3px;">
+            ※検証条件は「1Cが1着」。公式決まり手の「逃げ」だけに限定した値ではありません。
         </div>
         <?php if (!empty($simulation_active)): ?>
             <div style="font-size:12px; color:#aa741f; margin-top:3px;">
-                ※仮想進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を1着率・AI3連対率・出目確率へ反映した試算値
+                ※仮想進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を反映した試算値
             </div>
         <?php elseif (!empty($prediction_entry_changed)): ?>
             <div style="font-size:12px; color:#2f789f; margin-top:3px;">
-                ※展示進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を出目確率へ反映済み
+                ※展示進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を反映済み
             </div>
         <?php endif; ?>
     </div>
 
-    <?php if ($trifectaStatus === 'ok' && count($trifectaRows) === 120): ?>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px;">
-            <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
-                Top5累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 5) * 100.0, 2) ?>%</strong>
-            </div>
-            <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
-                Top10累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 10) * 100.0, 2) ?>%</strong>
-            </div>
-            <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
-                Top20累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 20) * 100.0, 2) ?>%</strong>
-            </div>
-            <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#94a3b8;">
-                場履歴 <?= number_format((int)($trifectaHistory['venue_n'] ?? 0)) ?>R
-            </div>
+    <?php if (count($head1ExactaRows) === 5): ?>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; min-width:620px; border-collapse:collapse;">
+                <thead>
+                    <tr style="background-color:#1e293b;">
+                        <th style="padding:8px; text-align:left; min-width:190px;">2連単</th>
+                        <th style="padding:8px; text-align:center; min-width:90px;">2着コース</th>
+                        <th style="padding:8px; text-align:right; min-width:105px;">場平均</th>
+                        <th style="padding:8px; text-align:right; min-width:105px;">AI予想</th>
+                        <th style="padding:8px; text-align:right; min-width:100px;">差</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($head1ExactaRows as $row): ?>
+                        <?php
+                            $headBoat = (int)$row['head_boat'];
+                            $secondBoat = (int)$row['second_boat'];
+                            $base = (float)$row['base'];
+                            $ai = (float)$row['ai'];
+                            $delta = (float)$row['delta'];
+                            $rank = (int)$row['ai_rank'];
+                        ?>
+                        <tr style="border-top:1px solid #334155;">
+                            <td style="padding:8px; white-space:nowrap;">
+                                <?= $trifectaBoatBadge($headBoat) ?>
+                                <span style="color:#64748b; margin:0 5px;">-</span>
+                                <?= $trifectaBoatBadge($secondBoat) ?>
+                                <?php if ($rank === 1): ?>
+                                    <span style="margin-left:7px; font-size:11px; font-weight:bold; color:#aa741f;">AI 1位</span>
+                                <?php endif; ?>
+                            </td>
+                            <td style="padding:8px; text-align:center; color:#cbd5e1;">
+                                1C→<?= (int)$row['second_course'] ?>C
+                            </td>
+                            <td style="padding:8px; text-align:right; color:#64748b; font-weight:bold;">
+                                <?= number_format($base * 100.0, 1) ?>%
+                            </td>
+                            <td style="padding:8px; text-align:right; font-size:18px; font-weight:bold; color:#aa741f;">
+                                <?= number_format($ai * 100.0, 1) ?>%
+                            </td>
+                            <td style="padding:8px; text-align:right; font-weight:bold; color:<?= $delta >= 0 ? '#2f789f' : '#6b7785' ?>;">
+                                <?= sprintf('%+.1fpt', $delta * 100.0) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-
-        <?= $renderTrifectaTable($trifectaTop20) ?>
-
-        <details style="margin-top:10px;">
-            <summary style="cursor:pointer; color:#cbd5e1; font-size:13px; font-weight:bold;">
-                120通りすべて表示
-            </summary>
-            <div style="margin-top:8px;">
-                <?= $renderTrifectaTable($trifectaRows, true) ?>
-            </div>
-        </details>
-
-        <div style="margin-top:8px; font-size:12px; color:#94a3b8;">
-            120通り合計 <?= number_format((float)($trifectaTotals['final'] ?? 0.0) * 100.0, 6) ?>%
-            / P1選択 → P2完全ホールドアウト検証済み
-            <?= !empty($simulation_active) ? ' / 仮想進入試算' : '' ?>
+        <div style="margin-top:8px; font-size:11px; color:#6b7785;">
+            場平均5通り=100% / AI予想5通り=100% / P2ホールドアウトで場平均よりLogLoss・Brier・Top1/Top2/Top3改善を確認済み
         </div>
     <?php else: ?>
         <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
-            出目確率：<?= htmlspecialchars($trifectaError !== '' ? $trifectaError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
+            イン1着時2連単：<?= htmlspecialchars($trifectaError !== '' ? $trifectaError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 </div>
+
+<!-- 参考情報：完成済み3連単120通りは削除せず折りたたんで保持 -->
+<details style="margin:0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; overflow:hidden;">
+    <summary style="cursor:pointer; padding:12px 14px; color:#cbd5e1; font-size:14px; font-weight:bold; background:#172033;">
+        📚 参考情報：3連単120通り 出目確率
+    </summary>
+    <div style="padding:14px;">
+        <div style="margin-bottom:10px;">
+            <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎲 出目確率</div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
+                基礎：場×1着C-2着C-3着C / VENUE_K3000 → 補正後1着率 α=1.00 → AI3連対率 β=1.25
+            </div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
+            </div>
+            <?php if (!empty($simulation_active)): ?>
+                <div style="font-size:12px; color:#aa741f; margin-top:3px;">
+                    ※仮想進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を1着率・AI3連対率・出目確率へ反映した試算値
+                </div>
+            <?php elseif (!empty($prediction_entry_changed)): ?>
+                <div style="font-size:12px; color:#2f789f; margin-top:3px;">
+                    ※展示進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を出目確率へ反映済み
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($trifectaStatus === 'ok' && count($trifectaRows) === 120): ?>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px;">
+                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
+                    Top5累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 5) * 100.0, 2) ?>%</strong>
+                </div>
+                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
+                    Top10累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 10) * 100.0, 2) ?>%</strong>
+                </div>
+                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
+                    Top20累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 20) * 100.0, 2) ?>%</strong>
+                </div>
+                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#94a3b8;">
+                    場履歴 <?= number_format((int)($trifectaHistory['venue_n'] ?? 0)) ?>R
+                </div>
+            </div>
+
+            <?= $renderTrifectaTable($trifectaTop20) ?>
+
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer; color:#cbd5e1; font-size:13px; font-weight:bold;">
+                    120通りすべて表示
+                </summary>
+                <div style="margin-top:8px;">
+                    <?= $renderTrifectaTable($trifectaRows, true) ?>
+                </div>
+            </details>
+
+            <div style="margin-top:8px; font-size:12px; color:#94a3b8;">
+                120通り合計 <?= number_format((float)($trifectaTotals['final'] ?? 0.0) * 100.0, 6) ?>%
+                / P1選択 → P2完全ホールドアウト検証済み
+                <?= !empty($simulation_active) ? ' / 仮想進入試算' : '' ?>
+            </div>
+        <?php else: ?>
+            <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
+                出目確率：<?= htmlspecialchars($trifectaError !== '' ? $trifectaError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</details>
