@@ -157,9 +157,11 @@ def rebuild_place(conn, place_code: str, feature_cols: list[str]) -> dict:
     special = place_code in SPECIAL_PLACES
     feature_signature = "+".join(feature_cols)
 
+    # DELETEから再構築完了までを同一トランザクションにする。
+    # named cursorを読み終える前にCOMMITするとカーソルが無効になるため、
+    # バッチINSERT中もCOMMITせず、場の再構築完了時に一度だけCOMMITする。
     with conn.cursor() as cur:
         cur.execute("DELETE FROM boat_race.sum_history_fact WHERE place_code = %s", (place_code,))
-    conn.commit()
 
     ex_hist = deque()
     ex_sum = 0.0
@@ -190,7 +192,7 @@ def rebuild_place(conn, place_code: str, feature_cols: list[str]) -> dict:
         """
         with conn.cursor() as cur:
             execute_values(cur, sql, batch, page_size=5000)
-        conn.commit()
+        # ここではCOMMITしない。named cursorを最後まで有効に保つ。
         inserted += len(batch)
         batch = []
 
@@ -329,7 +331,10 @@ def rebuild_place(conn, place_code: str, feature_cols: list[str]) -> dict:
         if current_code is not None:
             process_race(current_date, current_code, rows)
     finally:
-        cur.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
 
     flush_batch()
     with conn.cursor() as cur2:
