@@ -5,15 +5,21 @@ class AiTrioRateLogic
     private const K_PC = 20.0;
     private const K_PVC = 10.0;
 
-    // STEP3: P1 (2026-06-15～2026-07-14) で学習し、
-    // P2 (2026-07-15～2026-08-14) 完全ホールドアウトで検証した係数。
-    private const BETA_INTERCEPT = 0.031696;
-    private const BETA_BASE_LOGIT = 0.811785;
-    private const BETA_PRIMARY_Z = 0.453099;
-    private const BETA_SECONDARY_Z = 0.282800;
+    // STEP6 ENTRY_MODE:
+    // P1 (2026-06-15～2026-07-14) で展示進入基準として再学習し、
+    // P2 (2026-07-15～2026-08-14) 完全ホールドアウトでFRAME_MODEを上回った係数。
+    private const BETA_INTERCEPT = 0.033713;
+    private const BETA_BASE_LOGIT = 0.828225;
+    private const BETA_PRIMARY_Z = 0.433483;
+    private const BETA_SECONDARY_Z = 0.286814;
 
-    public function calculate(string $raceCode, array $primaryResults, array $tenjiList): array
-    {
+    public function calculate(
+        string $raceCode,
+        array $primaryResults,
+        array $tenjiList,
+        array $courseByBoat = [],
+        bool $virtualEntry = false
+    ): array {
         try {
             $primaryScores = $this->primaryScoreMap($primaryResults);
             if (count($primaryScores) !== 6) {
@@ -23,6 +29,13 @@ class AiTrioRateLogic
             $secondaryScores = $this->secondaryScoreMap($tenjiList);
             if (count($secondaryScores) !== 6) {
                 return $this->emptyResult('waiting', '展示情報待ち（二次評価が6艇分必要です）');
+            }
+
+            if ($courseByBoat === []) {
+                $courseByBoat = $this->courseMapFromTenji($tenjiList);
+            }
+            if (!$this->validCourseMap($courseByBoat)) {
+                return $this->emptyResult('waiting', '展示進入待ち（1～6コースが6艇分必要です）');
             }
 
             [$primaryZ, $primaryMean, $primarySd, $primaryZeroSd] = $this->zScores($primaryScores);
@@ -35,10 +48,8 @@ class AiTrioRateLogic
             $result = [];
             foreach ($boats as $boat) {
                 $lane = (int)$boat['lane'];
+                $targetCourse = (int)$courseByBoat[$lane];
 
-                // 検証時と同じく、今回コースは「枠番=コース」。
-                // 展示進入へのリマップはこのAI3連対率には入れない。
-                $targetCourse = $lane;
                 $history = $this->loadLast100($pdo, $boat['player_id'], $targetDate, $raceCode);
                 $counts = $this->playerCounts($history, $targetCourse, $placeCode);
 
@@ -58,8 +69,10 @@ class AiTrioRateLogic
                 $result[$lane] = [
                     ...$boat,
                     ...$counts,
+                    'course' => $targetCourse,
                     'venue_n' => (int)($prior[$targetCourse]['n'] ?? 0),
                     'venue_top3' => (int)($prior[$targetCourse]['top3'] ?? 0),
+                    'prior_source' => (string)($prior[$targetCourse]['source'] ?? 'neutral'),
                     'p0' => $p0,
                     'p_pc' => $pPc,
                     'p_base' => $pBase,
@@ -93,6 +106,8 @@ class AiTrioRateLogic
                 ],
                 'method' => [
                     'base' => 'BB_MEDIUM_RAW',
+                    'course_mode' => 'ENTRY_MODE',
+                    'entry_source' => $virtualEntry ? 'virtual' : 'exhibition',
                     'k_pc' => self::K_PC,
                     'k_pvc' => self::K_PVC,
                     'intercept' => self::BETA_INTERCEPT,
@@ -112,6 +127,7 @@ class AiTrioRateLogic
                     'secondary_zero_sd' => $secondaryZeroSd,
                 ],
                 'prior_source' => $priorSource,
+                'course_by_boat' => $courseByBoat,
                 'target_date' => $targetDate,
                 'place_code' => $placeCode,
                 'stadium_name' => $stadiumName,
@@ -130,6 +146,7 @@ class AiTrioRateLogic
             'totals' => ['base' => 0.0, 'ai' => 0.0],
             'method' => [
                 'base' => 'BB_MEDIUM_RAW',
+                'course_mode' => 'ENTRY_MODE',
                 'k_pc' => self::K_PC,
                 'k_pvc' => self::K_PVC,
                 'intercept' => self::BETA_INTERCEPT,
@@ -178,6 +195,43 @@ class AiTrioRateLogic
         }
         ksort($scores);
         return $scores;
+    }
+
+    private function courseMapFromTenji(array $rows): array
+    {
+        $map = [];
+        foreach ($rows as $index => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $lane = $this->validCourse($row['teiban'] ?? ($index + 1));
+            $course = $this->validCourse($row['tenji_course'] ?? null);
+            if ($lane === null || $course === null || isset($map[$lane])) {
+                continue;
+            }
+            $map[$lane] = $course;
+        }
+        ksort($map);
+        return $map;
+    }
+
+    private function validCourseMap(array $map): bool
+    {
+        if (count($map) !== 6) {
+            return false;
+        }
+
+        $courses = [];
+        for ($lane = 1; $lane <= 6; $lane++) {
+            $course = $this->validCourse($map[$lane] ?? null);
+            if ($course === null) {
+                return false;
+            }
+            $courses[] = $course;
+        }
+
+        sort($courses);
+        return $courses === [1, 2, 3, 4, 5, 6];
     }
 
     private function zScores(array $scores): array
@@ -240,7 +294,6 @@ class AiTrioRateLogic
             }
             $boats[] = [
                 'lane' => $lane,
-                'course' => $lane,
                 'player_id' => $playerId,
                 'player_name' => trim((string)($row['player_name'] ?? '')),
             ];
@@ -252,20 +305,42 @@ class AiTrioRateLogic
     private function loadCoursePrior(PDO $pdo, string $raceCode, string $targetDate, string $placeCode): array
     {
         $venue = $this->queryCoursePrior($pdo, $raceCode, $targetDate, $placeCode);
-        if ($this->priorHasHistory($venue)) {
-            return [$venue, 'venue'];
-        }
-
         $global = $this->queryCoursePrior($pdo, $raceCode, $targetDate, null);
-        if ($this->priorHasHistory($global)) {
-            return [$global, 'global'];
+
+        $out = [];
+        $sources = [];
+        for ($course = 1; $course <= 6; $course++) {
+            $vn = (int)($venue[$course]['n'] ?? 0);
+            $gn = (int)($global[$course]['n'] ?? 0);
+
+            if ($vn > 0) {
+                $out[$course] = [
+                    ...$venue[$course],
+                    'source' => 'venue',
+                ];
+                $sources[] = 'venue';
+            } elseif ($gn > 0) {
+                $out[$course] = [
+                    ...$global[$course],
+                    'source' => 'global',
+                ];
+                $sources[] = 'global';
+            } else {
+                $out[$course] = [
+                    'n' => 0,
+                    'top3' => 0,
+                    'rate' => 0.5,
+                    'source' => 'neutral_0.5',
+                ];
+                $sources[] = 'neutral_0.5';
+            }
         }
 
-        $neutral = [];
-        for ($course = 1; $course <= 6; $course++) {
-            $neutral[$course] = ['n' => 0, 'top3' => 0, 'rate' => 0.5];
-        }
-        return [$neutral, 'neutral_0.5'];
+        $sourceLabel = count(array_unique($sources)) === 1
+            ? $sources[0]
+            : 'mixed';
+
+        return [$out, $sourceLabel];
     }
 
     private function queryCoursePrior(PDO $pdo, string $raceCode, string $targetDate, ?string $placeCode): array
@@ -367,16 +442,6 @@ class AiTrioRateLogic
         }
 
         return $out;
-    }
-
-    private function priorHasHistory(array $prior): bool
-    {
-        for ($course = 1; $course <= 6; $course++) {
-            if ((int)($prior[$course]['n'] ?? 0) <= 0) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private function loadLast100(PDO $pdo, string $playerId, string $targetDate, string $targetRaceCode): array
