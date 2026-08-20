@@ -34,7 +34,6 @@ $trifectaError = (string)($trifectaData['error'] ?? '');
 $trifectaRows = is_array($trifectaData['rows'] ?? null) ? $trifectaData['rows'] : [];
 $trifectaTop20 = is_array($trifectaData['top20'] ?? null) ? $trifectaData['top20'] : [];
 $trifectaHistory = is_array($trifectaData['history'] ?? null) ? $trifectaData['history'] : [];
-$trifectaMethod = is_array($trifectaData['method'] ?? null) ? $trifectaData['method'] : [];
 $trifectaTotals = is_array($trifectaData['totals'] ?? null) ? $trifectaData['totals'] : [];
 $trifectaBoatByCourse = is_array($trifectaData['boat_by_course'] ?? null)
     ? $trifectaData['boat_by_course']
@@ -44,8 +43,10 @@ $trifectaCum = static function (array $rows, int $n): float {
     if ($n <= 0 || empty($rows)) {
         return 0.0;
     }
-    $slice = array_slice($rows, 0, $n);
-    return array_sum(array_map(static fn(array $r): float => (float)($r['probability'] ?? 0.0), $slice));
+    return array_sum(array_map(
+        static fn(array $r): float => (float)($r['probability'] ?? 0.0),
+        array_slice($rows, 0, $n)
+    ));
 };
 
 $trifectaBoatBadge = static function (int $boat) use ($lane_colors): string {
@@ -60,7 +61,7 @@ $trifectaBoatBadge = static function (int $boat) use ($lane_colors): string {
         . $boat . '号艇</span>';
 };
 
-$renderTrifectaTable = static function (array $rows, bool $full = false) use ($trifectaBoatBadge): void {
+$renderTrifectaTable = static function (array $rows) use ($trifectaBoatBadge): void {
     ?>
     <div style="overflow-x:auto;">
         <table style="width:100%; min-width:720px; border-collapse:collapse;">
@@ -118,11 +119,7 @@ $renderTrifectaTable = static function (array $rows, bool $full = false) use ($t
     <?php
 };
 
-// ------------------------------------------------------------
-// イン1着時（1C頭）の2連単5通り
-// STEP3最終120通りを1C頭に条件付けし、2着コース別へ集約する。
-// 場平均は同じVENUE_K3000基礎出目から作るため、検証スクリプトと同一定義。
-// ------------------------------------------------------------
+// イン1着時（1C頭）の2連単5通り。
 $head1ExactaRows = [];
 $head1BaseMass = 0.0;
 $head1AiMass = 0.0;
@@ -185,8 +182,8 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
 }
 ?>
 
-<!-- メイン表示：イン1着時の2連単 -->
-<div style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
+<!-- メイン表示：イン1着時の2連単。DOM読込後に最終予想の買い目直下へ移動する。 -->
+<div id="head1-exacta-panel" style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
     <div style="margin-bottom:10px;">
         <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎯 イン1着時 2連単</div>
         <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
@@ -281,15 +278,6 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
             <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
                 2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
             </div>
-            <?php if (!empty($simulation_active)): ?>
-                <div style="font-size:12px; color:#aa741f; margin-top:3px;">
-                    ※仮想進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を1着率・AI3連対率・出目確率へ反映した試算値
-                </div>
-            <?php elseif (!empty($prediction_entry_changed)): ?>
-                <div style="font-size:12px; color:#2f789f; margin-top:3px;">
-                    ※展示進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> を出目確率へ反映済み
-                </div>
-            <?php endif; ?>
         </div>
 
         <?php if ($trifectaStatus === 'ok' && count($trifectaRows) === 120): ?>
@@ -315,7 +303,7 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
                     120通りすべて表示
                 </summary>
                 <div style="margin-top:8px;">
-                    <?= $renderTrifectaTable($trifectaRows, true) ?>
+                    <?= $renderTrifectaTable($trifectaRows) ?>
                 </div>
             </details>
 
@@ -331,3 +319,16 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
         <?php endif; ?>
     </div>
 </details>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const exactaPanel = document.getElementById('head1-exacta-panel');
+    const summaryBox = document.querySelector('.summary-box');
+    if (!exactaPanel || !summaryBox) return;
+
+    // 最終予想の買い目表の直後へ表示だけ移動する。
+    // 出目確率・最終予想・買い目の計算値には一切影響しない。
+    summaryBox.insertAdjacentElement('afterend', exactaPanel);
+    exactaPanel.style.marginTop = '14px';
+});
+</script>
