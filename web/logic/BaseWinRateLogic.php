@@ -154,6 +154,8 @@ class BaseWinRateLogic
 
     private function loadVenueCoursePrior(PDO $pdo, string $raceCode, string $targetDate, string $placeCode): array
     {
+        // race_code は YYYYMMDD+場3文字+R2桁の固定形式なので、
+        // 旧「過去日 OR 同日でrace_codeが小さい」と race_code < target は等価。
         $sql = <<<SQL
             WITH winner_rows AS (
                 SELECT
@@ -167,14 +169,9 @@ class BaseWinRateLogic
                         END
                     ) AS winner_course
                 FROM boat_race.race_result_detail rrd
-                JOIN boat_race.race_master rm
-                  ON rm.race_code = rrd.race_code
                 WHERE rrd.rank = '1'
                   AND SUBSTRING(rrd.race_code, 9, 3) = ?
-                  AND (
-                        rm.race_date < ?::date
-                        OR (rm.race_date = ?::date AND rrd.race_code < ?)
-                      )
+                  AND rrd.race_code < ?
                 GROUP BY rrd.race_code
             )
             SELECT winner_course, COUNT(*) AS wins
@@ -186,7 +183,7 @@ class BaseWinRateLogic
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$placeCode, $targetDate, $targetDate, $raceCode]);
+        $stmt->execute([$placeCode, $raceCode]);
 
         $winsByCourse = array_fill(1, 6, 0);
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -215,6 +212,8 @@ class BaseWinRateLogic
 
     private function loadLast100(PDO $pdo, string $playerId, string $targetDate, string $targetRaceCode): array
     {
+        // race_master JOINと日付ソートを外し、player_id×race_code indexを直接使う。
+        // 固定race_code形式のため旧条件・並び順と完全一致する。
         $sql = <<<SQL
             SELECT
                 re.race_code,
@@ -223,8 +222,6 @@ class BaseWinRateLogic
                 rrd.entry_course AS result_course,
                 el.entry_course AS exhibition_course
             FROM boat_race.race_entry re
-            JOIN boat_race.race_master rm
-              ON rm.race_code = re.race_code
             LEFT JOIN boat_race.race_result_detail rrd
               ON rrd.race_code = re.race_code
              AND rrd.player_id = re.player_id
@@ -236,16 +233,13 @@ class BaseWinRateLogic
                 LIMIT 1
             ) el ON TRUE
             WHERE re.player_id::text = ?
-              AND (
-                    rm.race_date < ?::date
-                    OR (rm.race_date = ?::date AND re.race_code < ?)
-                  )
-            ORDER BY rm.race_date DESC, re.race_code DESC
+              AND re.race_code < ?
+            ORDER BY re.race_code DESC
             LIMIT 100
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$playerId, $targetDate, $targetDate, $targetRaceCode]);
+        $stmt->execute([$playerId, $targetRaceCode]);
 
         $history = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
