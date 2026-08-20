@@ -11,7 +11,13 @@ ob_start();
 include __DIR__ . '/views/base_win_rate_panel.php';
 $baseWinRatePanel = ob_get_clean();
 
-// 既存ビューはそのまま保ち、総合マトリクス直前へ基本1着率を差し込む
+// AI3連対率パネルを独立ビューとして生成。
+// 基本1着率パネル内には1号艇1着時2着率も含まれるため、その後ろへ追加する。
+ob_start();
+include __DIR__ . '/views/ai_trio_rate_panel.php';
+$aiTrioRatePanel = ob_get_clean();
+
+// 既存ビューはそのまま保ち、総合マトリクス直前へ確率パネルを差し込む
 ob_start();
 include __DIR__ . '/views/index_view.php';
 $html = ob_get_clean();
@@ -27,7 +33,11 @@ foreach (['J列', 'K列', 'L列(メイン評価)'] as $hiddenTenjiLabel) {
 
 $marker = '<!-- ■ 総合出走・展示マトリクス -->';
 if (strpos($html, $marker) !== false) {
-    $html = str_replace($marker, $baseWinRatePanel . "\n    " . $marker, $html);
+    $html = str_replace(
+        $marker,
+        $baseWinRatePanel . "\n" . $aiTrioRatePanel . "\n    " . $marker,
+        $html
+    );
 }
 
 // 最終予想の先頭列を「コース | 艇番」に整理する。
