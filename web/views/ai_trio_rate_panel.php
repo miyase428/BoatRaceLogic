@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
+require_once __DIR__ . '/../logic/RecentCourseTrioRateLogic.php';
 
 $aiTrioCourseByBoat = [];
 if (!empty($simulation_active) && is_array($prediction_course_by_boat ?? null)) {
@@ -22,6 +23,18 @@ $aiTrioError = (string)($aiTrioData['error'] ?? '');
 $aiTrioBoats = is_array($aiTrioData['boats'] ?? null) ? $aiTrioData['boats'] : [];
 $aiTrioTotals = is_array($aiTrioData['totals'] ?? null) ? $aiTrioData['totals'] : [];
 $aiTrioMethod = is_array($aiTrioData['method'] ?? null) ? $aiTrioData['method'] : [];
+
+// 最終予想テーブルの6ヶ月/3ヶ月は表示専用に、
+// 「その選手 × 今回進入コース」で対象レース日時点から集計する。
+// 既存の切る艇判定用 three_in_rate_6m / 3m は変更しない。
+$recentCourseTrioLogic = new RecentCourseTrioRateLogic();
+$recentCourseTrioData = $recentCourseTrioLogic->calculate(
+    (string)($race_code ?? ''),
+    $aiTrioCourseByBoat
+);
+$recentCourseTrioBoats = is_array($recentCourseTrioData['boats'] ?? null)
+    ? $recentCourseTrioData['boats']
+    : [];
 
 // 1着率・2着率と同じく、予想進入のコース順（1C→6C）で表示する。
 $aiTrioCourseToBoat = [];
@@ -155,3 +168,77 @@ ksort($aiTrioCourseToBoat);
         </div>
     <?php endif; ?>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const aiRates = <?= json_encode(array_map(
+        static fn(array $row) => isset($row['ai_rate']) ? (float)$row['ai_rate'] : null,
+        $aiTrioBoats
+    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+    const recentRates = <?= json_encode(array_map(
+        static fn(array $row) => [
+            'course' => (int)($row['course'] ?? 0),
+            'rate6' => isset($row['rate6_dec']) && $row['rate6_dec'] !== null ? (float)$row['rate6_dec'] * 100.0 : null,
+            'n6' => (int)($row['n6'] ?? 0),
+            'rate3' => isset($row['rate3_dec']) && $row['rate3_dec'] !== null ? (float)$row['rate3_dec'] * 100.0 : null,
+            'n3' => (int)($row['n3'] ?? 0),
+        ],
+        $recentCourseTrioBoats
+    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+
+    const headings = Array.from(document.querySelectorAll('h2'));
+    const heading = headings.find(function (el) {
+        return el.textContent.includes('最終予想');
+    });
+    if (!heading) return;
+
+    const tableContainer = heading.nextElementSibling;
+    const table = tableContainer ? tableContainer.querySelector('table') : null;
+    if (!table) return;
+
+    const headerCells = Array.from(table.querySelectorAll('thead th'));
+    const labels = headerCells.map(function (th) { return th.textContent.trim(); });
+    const rate6Index = labels.indexOf('直近6ヶ月3連対率');
+    const rate3Index = labels.indexOf('直近3ヶ月3連対率');
+    let aiIndex = labels.indexOf('↓3連対期待値');
+    if (aiIndex < 0) aiIndex = labels.indexOf('AI3連対率');
+
+    if (aiIndex >= 0) {
+        headerCells[aiIndex].textContent = 'AI3連対率';
+    }
+
+    Array.from(table.querySelectorAll('tbody tr')).forEach(function (row) {
+        // index.phpの表示加工後は2列目が「○号艇」。加工前でも枠番=艇番なので同じ値を拾える。
+        const boatCell = row.cells[1] || row.cells[0];
+        const match = String(boatCell?.textContent || '').match(/[1-6]/);
+        if (!match) return;
+        const boat = Number(match[0]);
+        const recent = recentRates[String(boat)] || recentRates[boat] || null;
+        const aiRate = aiRates[String(boat)] ?? aiRates[boat] ?? null;
+
+        if (recent && rate6Index >= 0 && row.cells[rate6Index]) {
+            row.cells[rate6Index].textContent = recent.rate6 !== null
+                ? Number(recent.rate6).toFixed(1) + '%'
+                : '-';
+            row.cells[rate6Index].title = recent.course + 'コース / 直近6ヶ月 ' + recent.n6 + '走';
+        }
+
+        if (recent && rate3Index >= 0 && row.cells[rate3Index]) {
+            row.cells[rate3Index].textContent = recent.rate3 !== null
+                ? Number(recent.rate3).toFixed(1) + '%'
+                : '-';
+            row.cells[rate3Index].title = recent.course + 'コース / 直近3ヶ月 ' + recent.n3 + '走';
+        }
+
+        if (aiIndex >= 0 && row.cells[aiIndex]) {
+            row.cells[aiIndex].textContent = aiRate !== null
+                ? Number(aiRate).toFixed(1) + '%'
+                : '-';
+            row.cells[aiIndex].title = 'ENTRY_MODE AI3連対率';
+            row.cells[aiIndex].style.fontWeight = '700';
+            row.cells[aiIndex].style.color = '#75659b';
+        }
+    });
+});
+</script>
