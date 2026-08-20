@@ -8,6 +8,7 @@ require_once __DIR__ . '/../web/logic/CorrectedWinRateLogic.php';
 require_once __DIR__ . '/../web/logic/RecentCourseTrioRateLogic.php';
 require_once __DIR__ . '/../web/logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/../web/logic/TrifectaProbabilityLogic.php';
+require_once __DIR__ . '/../web/logic/Head1SecondPlaceLogic.php';
 
 $raceCode = strtoupper(trim((string)($argv[1] ?? '')));
 if (!preg_match('/^(\d{8})([A-Z0-9]{3})(\d{2})$/', $raceCode, $m)) {
@@ -54,6 +55,7 @@ $correctedLogic = new CorrectedWinRateLogic();
 $recentLogic = new RecentCourseTrioRateLogic();
 $aiTrioLogic = new AiTrioRateLogic();
 $trifectaLogic = new TrifectaProbabilityLogic();
+$head1SecondLogic = new Head1SecondPlaceLogic();
 
 echo str_repeat('=', 88) . PHP_EOL;
 echo "Web表示 全主要処理 段階計測" . PHP_EOL;
@@ -133,6 +135,10 @@ $trifecta = timed('11 TrifectaProbabilityLogic', function () use ($trifectaLogic
     return $trifectaLogic->calculate($raceCode, $correctedBoats, $aiBoats, $courseByBoat);
 }, $times);
 
+$head1Second = timed('12 Head1SecondPlaceLogic', function () use ($head1SecondLogic, $raceCode, $courseByBoat) {
+    return $head1SecondLogic->calculate($raceCode, $courseByBoat);
+}, $times);
+
 $totalMs = (hrtime(true) - $all0) / 1_000_000.0;
 $sumMs = array_sum(array_map(static fn(array $x): float => (float)$x[1], $times));
 
@@ -152,6 +158,7 @@ echo "Corrected status : " . statusOf($corrected) . PHP_EOL;
 echo "AI trio status   : " . statusOf($aiTrio) . PHP_EOL;
 echo "Recent status    : " . statusOf($recent) . PHP_EOL;
 echo "Trifecta status  : " . statusOf($trifecta) . PHP_EOL;
+echo "Head1 status     : " . statusOf($head1Second) . PHP_EOL;
 if (is_array($recent) && !empty($recent['error'])) {
     echo "Recent error     : " . (string)$recent['error'] . PHP_EOL;
 }
@@ -160,5 +167,8 @@ if (is_array($aiTrio) && !empty($aiTrio['error'])) {
 }
 if (is_array($trifecta) && !empty($trifecta['error'])) {
     echo "Trifecta error   : " . (string)$trifecta['error'] . PHP_EOL;
+}
+if (is_array($head1Second) && !empty($head1Second['error'])) {
+    echo "Head1 error      : " . (string)$head1Second['error'] . PHP_EOL;
 }
 echo str_repeat('=', 88) . PHP_EOL;
