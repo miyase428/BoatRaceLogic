@@ -66,7 +66,7 @@ $renderTrifectaTable = static function (array $rows) use ($trifectaBoatBadge): v
     <div style="overflow-x:auto;">
         <table style="width:100%; min-width:720px; border-collapse:collapse;">
             <thead>
-                <tr style="background-color:#1e293b;">
+                <tr style="background-color:#e8dfd2; color:#2b3440;">
                     <th style="padding:7px 8px; text-align:center; width:54px;">順位</th>
                     <th style="padding:7px 8px; text-align:left; min-width:210px;">3連単</th>
                     <th style="padding:7px 8px; text-align:right; min-width:105px;">基礎出目</th>
@@ -84,31 +84,31 @@ $renderTrifectaTable = static function (array $rows) use ($trifectaBoatBadge): v
                     $delta = $final - $base;
                     $cum = (float)($row['cumulative_probability'] ?? 0.0);
                 ?>
-                <tr style="border-top:1px solid #334155;">
-                    <td style="padding:7px 8px; text-align:center; color:#94a3b8; font-weight:bold;">
+                <tr style="border-top:1px solid #d8cdbc;">
+                    <td style="padding:7px 8px; text-align:center; color:#6b7785; font-weight:bold;">
                         <?= (int)($row['rank'] ?? 0) ?>
                     </td>
                     <td style="padding:7px 8px; white-space:nowrap;">
                         <?php if (count($boats) === 3): ?>
                             <?= $trifectaBoatBadge((int)$boats[0]) ?>
-                            <span style="color:#64748b; margin:0 4px;">-</span>
+                            <span style="color:#8a8176; margin:0 4px;">-</span>
                             <?= $trifectaBoatBadge((int)$boats[1]) ?>
-                            <span style="color:#64748b; margin:0 4px;">-</span>
+                            <span style="color:#8a8176; margin:0 4px;">-</span>
                             <?= $trifectaBoatBadge((int)$boats[2]) ?>
                         <?php else: ?>
                             -
                         <?php endif; ?>
                     </td>
-                    <td style="padding:7px 8px; text-align:right; color:#94a3b8;">
+                    <td style="padding:7px 8px; text-align:right; color:#6b7785;">
                         <?= number_format($base * 100.0, 3) ?>%
                     </td>
                     <td style="padding:7px 8px; text-align:right; font-size:16px; font-weight:bold; color:#aa741f;">
                         <?= number_format($final * 100.0, 3) ?>%
                     </td>
-                    <td style="padding:7px 8px; text-align:right; color:<?= $delta >= 0 ? '#2f789f' : '#94a3b8' ?>;">
+                    <td style="padding:7px 8px; text-align:right; color:<?= $delta >= 0 ? '#2f789f' : '#6b7785' ?>;">
                         <?= sprintf('%+.3fpt', $delta * 100.0) ?>
                     </td>
-                    <td style="padding:7px 8px; text-align:right; color:#cbd5e1;">
+                    <td style="padding:7px 8px; text-align:right; color:#3f4b5a;">
                         <?= number_format($cum * 100.0, 2) ?>%
                     </td>
                 </tr>
@@ -183,13 +183,13 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
 ?>
 
 <!-- メイン表示：イン1着時の2連単。DOM読込後に最終予想の買い目直下へ移動する。 -->
-<div id="head1-exacta-panel" style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
+<div id="head1-exacta-panel" style="margin:0 0 10px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; padding:14px; color:#3f4b5a;">
     <div style="margin-bottom:10px;">
         <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎯 イン1着時 2連単</div>
-        <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
+        <div style="font-size:12px; color:#6b7785; margin-top:3px;">
             1コースが1着になった場合の2着分布 / 2C～6Cの5通りを100%化
         </div>
-        <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+        <div style="font-size:12px; color:#6b7785; margin-top:2px;">
             場平均：VENUE_K3000 / AI予想：補正後1着率＋AI3連対率＋2着3着順序補正を反映
         </div>
         <div style="font-size:11px; color:#6b7785; margin-top:3px;">
@@ -210,7 +210,7 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
         <div style="overflow-x:auto;">
             <table style="width:100%; min-width:620px; border-collapse:collapse;">
                 <thead>
-                    <tr style="background-color:#1e293b;">
+                    <tr style="background-color:#e8dfd2; color:#2b3440;">
                         <th style="padding:8px; text-align:left; min-width:190px;">2連単</th>
                         <th style="padding:8px; text-align:center; min-width:90px;">2着コース</th>
                         <th style="padding:8px; text-align:right; min-width:105px;">場平均</th>
@@ -228,19 +228,19 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
                             $delta = (float)$row['delta'];
                             $rank = (int)$row['ai_rank'];
                         ?>
-                        <tr style="border-top:1px solid #334155;">
+                        <tr style="border-top:1px solid #d8cdbc;">
                             <td style="padding:8px; white-space:nowrap;">
                                 <?= $trifectaBoatBadge($headBoat) ?>
-                                <span style="color:#64748b; margin:0 5px;">-</span>
+                                <span style="color:#8a8176; margin:0 5px;">-</span>
                                 <?= $trifectaBoatBadge($secondBoat) ?>
                                 <?php if ($rank === 1): ?>
                                     <span style="margin-left:7px; font-size:11px; font-weight:bold; color:#aa741f;">AI 1位</span>
                                 <?php endif; ?>
                             </td>
-                            <td style="padding:8px; text-align:center; color:#cbd5e1;">
+                            <td style="padding:8px; text-align:center; color:#3f4b5a;">
                                 1C→<?= (int)$row['second_course'] ?>C
                             </td>
-                            <td style="padding:8px; text-align:right; color:#64748b; font-weight:bold;">
+                            <td style="padding:8px; text-align:right; color:#6b7785; font-weight:bold;">
                                 <?= number_format($base * 100.0, 1) ?>%
                             </td>
                             <td style="padding:8px; text-align:right; font-size:18px; font-weight:bold; color:#aa741f;">
@@ -258,40 +258,40 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
             場平均5通り=100% / AI予想5通り=100% / P2ホールドアウトで場平均よりLogLoss・Brier・Top1/Top2/Top3改善を確認済み
         </div>
     <?php else: ?>
-        <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
+        <div style="padding:8px 10px; background-color:#f2ece2; border-radius:5px; color:#a33f32; font-size:13px;">
             イン1着時2連単：<?= htmlspecialchars($trifectaError !== '' ? $trifectaError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 </div>
 
 <!-- 参考情報：完成済み3連単120通りは削除せず折りたたんで保持 -->
-<details style="margin:0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; overflow:hidden;">
-    <summary style="cursor:pointer; padding:12px 14px; color:#cbd5e1; font-size:14px; font-weight:bold; background:#172033;">
+<details id="trifecta-reference-panel" style="margin:0 0 14px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; overflow:hidden; color:#3f4b5a;">
+    <summary style="cursor:pointer; padding:12px 14px; color:#3f4b5a; font-size:14px; font-weight:bold; background:#e8dfd2;">
         📚 参考情報：3連単120通り 出目確率
     </summary>
     <div style="padding:14px;">
         <div style="margin-bottom:10px;">
             <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎲 出目確率</div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
+            <div style="font-size:12px; color:#6b7785; margin-top:3px;">
                 基礎：場×1着C-2着C-3着C / VENUE_K3000 → 補正後1着率 α=1.00 → AI3連対率 β=1.25
             </div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+            <div style="font-size:12px; color:#6b7785; margin-top:2px;">
                 2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
             </div>
         </div>
 
         <?php if ($trifectaStatus === 'ok' && count($trifectaRows) === 120): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px;">
-                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
-                    Top5累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 5) * 100.0, 2) ?>%</strong>
+                <div style="background:#f2ece2; border:1px solid #d8cdbc; border-radius:5px; padding:6px 9px; font-size:12px; color:#3f4b5a;">
+                    Top5累計 <strong><?= number_format($trifectaCum($trifectaRows, 5) * 100.0, 2) ?>%</strong>
                 </div>
-                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
-                    Top10累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 10) * 100.0, 2) ?>%</strong>
+                <div style="background:#f2ece2; border:1px solid #d8cdbc; border-radius:5px; padding:6px 9px; font-size:12px; color:#3f4b5a;">
+                    Top10累計 <strong><?= number_format($trifectaCum($trifectaRows, 10) * 100.0, 2) ?>%</strong>
                 </div>
-                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#cbd5e1;">
-                    Top20累計 <strong style="color:#f8fafc;"><?= number_format($trifectaCum($trifectaRows, 20) * 100.0, 2) ?>%</strong>
+                <div style="background:#f2ece2; border:1px solid #d8cdbc; border-radius:5px; padding:6px 9px; font-size:12px; color:#3f4b5a;">
+                    Top20累計 <strong><?= number_format($trifectaCum($trifectaRows, 20) * 100.0, 2) ?>%</strong>
                 </div>
-                <div style="background:#1e293b; border-radius:5px; padding:6px 9px; font-size:12px; color:#94a3b8;">
+                <div style="background:#f2ece2; border:1px solid #d8cdbc; border-radius:5px; padding:6px 9px; font-size:12px; color:#6b7785;">
                     場履歴 <?= number_format((int)($trifectaHistory['venue_n'] ?? 0)) ?>R
                 </div>
             </div>
@@ -299,7 +299,7 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
             <?= $renderTrifectaTable($trifectaTop20) ?>
 
             <details style="margin-top:10px;">
-                <summary style="cursor:pointer; color:#cbd5e1; font-size:13px; font-weight:bold;">
+                <summary style="cursor:pointer; color:#3f4b5a; font-size:13px; font-weight:bold;">
                     120通りすべて表示
                 </summary>
                 <div style="margin-top:8px;">
@@ -307,13 +307,13 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
                 </div>
             </details>
 
-            <div style="margin-top:8px; font-size:12px; color:#94a3b8;">
+            <div style="margin-top:8px; font-size:12px; color:#6b7785;">
                 120通り合計 <?= number_format((float)($trifectaTotals['final'] ?? 0.0) * 100.0, 6) ?>%
                 / P1選択 → P2完全ホールドアウト検証済み
                 <?= !empty($simulation_active) ? ' / 仮想進入試算' : '' ?>
             </div>
         <?php else: ?>
-            <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
+            <div style="padding:8px 10px; background-color:#f2ece2; border-radius:5px; color:#a33f32; font-size:13px;">
                 出目確率：<?= htmlspecialchars($trifectaError !== '' ? $trifectaError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
             </div>
         <?php endif; ?>
@@ -323,12 +323,18 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const exactaPanel = document.getElementById('head1-exacta-panel');
+    const referencePanel = document.getElementById('trifecta-reference-panel');
     const summaryBox = document.querySelector('.summary-box');
     if (!exactaPanel || !summaryBox) return;
 
-    // 最終予想の買い目表の直後へ表示だけ移動する。
+    // 最終予想の買い目表 → 2連単 → 3連単参考情報、の順に表示だけ移動する。
     // 出目確率・最終予想・買い目の計算値には一切影響しない。
     summaryBox.insertAdjacentElement('afterend', exactaPanel);
     exactaPanel.style.marginTop = '14px';
+
+    if (referencePanel) {
+        exactaPanel.insertAdjacentElement('afterend', referencePanel);
+        referencePanel.style.marginTop = '0';
+    }
 });
 </script>
