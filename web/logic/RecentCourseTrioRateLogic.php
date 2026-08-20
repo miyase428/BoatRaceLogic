@@ -27,6 +27,7 @@ class RecentCourseTrioRateLogic
 
             $pdo = getPDO();
             [$targetDate, $boats] = $this->loadTarget($pdo, $raceCode);
+            [$cut6, $cut3] = $this->loadCutRaceCodes($pdo, $targetDate);
             $courses = $this->normalizeCourses($courseByBoat);
 
             $result = [];
@@ -36,7 +37,8 @@ class RecentCourseTrioRateLogic
                     $pdo,
                     (string)$row['player_id'],
                     $targetCourse,
-                    $targetDate,
+                    $cut6,
+                    $cut3,
                     $raceCode
                 );
 
@@ -112,6 +114,27 @@ class RecentCourseTrioRateLogic
         return [$targetDate, $boats];
     }
 
+    private function loadCutRaceCodes(PDO $pdo, string $targetDate): array
+    {
+        $sql = <<<SQL
+            SELECT
+                TO_CHAR(?::date - INTERVAL '6 months', 'YYYYMMDD') AS cut6,
+                TO_CHAR(?::date - INTERVAL '3 months', 'YYYYMMDD') AS cut3
+        SQL;
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$targetDate, $targetDate]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $cut6 = (string)($row['cut6'] ?? '');
+        $cut3 = (string)($row['cut3'] ?? '');
+        if (!preg_match('/^\d{8}$/', $cut6) || !preg_match('/^\d{8}$/', $cut3)) {
+            throw new RuntimeException('直近コース別3連対率: 集計開始日の計算に失敗しました');
+        }
+
+        return [$cut6, $cut3];
+    }
+
     private function normalizeCourses(array $courseByBoat): array
     {
         $out = [];
@@ -137,13 +160,17 @@ class RecentCourseTrioRateLogic
         PDO $pdo,
         string $playerId,
         int $targetCourse,
-        string $targetDate,
+        string $cut6,
+        string $cut3,
         string $targetRaceCode
     ): array {
+        // race_code は YYYYMMDD + 場3文字 + R2桁の固定形式。
+        // OLD/NEW比較で完全一致を確認済みのため、race_master JOINを外して
+        // player_id×race_code indexを使いやすい範囲検索へ置き換える。
         $sql = <<<SQL
             WITH hist AS (
                 SELECT
-                    rm.race_date,
+                    re.race_code,
                     EXISTS (
                         SELECT 1
                         FROM boat_race.race_result_detail w
@@ -165,8 +192,6 @@ class RecentCourseTrioRateLogic
                         ELSE NULL
                     END AS rank_num
                 FROM boat_race.race_entry re
-                JOIN boat_race.race_master rm
-                  ON rm.race_code = re.race_code
                 LEFT JOIN LATERAL (
                     SELECT rrd.entry_course, rrd.rank
                     FROM boat_race.race_result_detail rrd
@@ -183,11 +208,8 @@ class RecentCourseTrioRateLogic
                     LIMIT 1
                 ) ex ON TRUE
                 WHERE re.player_id::text = ?
-                  AND (
-                        rm.race_date < ?::date
-                        OR (rm.race_date = ?::date AND re.race_code < ?)
-                      )
-                  AND rm.race_date >= ?::date - INTERVAL '6 months'
+                  AND re.race_code >= ?
+                  AND re.race_code < ?
             )
             SELECT
                 COUNT(*) FILTER (
@@ -202,13 +224,13 @@ class RecentCourseTrioRateLogic
                 COUNT(*) FILTER (
                     WHERE completed
                       AND actual_course = ?
-                      AND race_date >= ?::date - INTERVAL '3 months'
+                      AND race_code >= ?
                 ) AS n3,
                 COUNT(*) FILTER (
                     WHERE completed
                       AND actual_course = ?
                       AND rank_num BETWEEN 1 AND 3
-                      AND race_date >= ?::date - INTERVAL '3 months'
+                      AND race_code >= ?
                 ) AS top3_3
             FROM hist
         SQL;
@@ -216,16 +238,14 @@ class RecentCourseTrioRateLogic
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             $playerId,
-            $targetDate,
-            $targetDate,
+            $cut6,
             $targetRaceCode,
-            $targetDate,
             $targetCourse,
             $targetCourse,
             $targetCourse,
-            $targetDate,
+            $cut3,
             $targetCourse,
-            $targetDate,
+            $cut3,
         ]);
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
