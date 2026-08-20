@@ -117,6 +117,7 @@ class AiTrioRateLogic
                     'normalize_300' => false,
                     'sum' => false,
                     'slit' => false,
+                    'history_source' => 'race_history_fact',
                 ],
                 'feature_stats' => [
                     'primary_mean' => $primaryMean,
@@ -307,8 +308,67 @@ class AiTrioRateLogic
 
     private function loadCoursePrior(PDO $pdo, string $raceCode, string $targetDate, string $placeCode): array
     {
-        $venue = $this->queryCoursePrior($pdo, $raceCode, $targetDate, $placeCode);
-        $global = $this->queryCoursePrior($pdo, $raceCode, $targetDate, null);
+        // 場別・全場を同じFact走査1回で取得する。
+        $sql = <<<SQL
+            WITH base AS (
+                SELECT c1, c2, c3, place_code
+                FROM boat_race.race_history_fact
+                WHERE course_valid
+                  AND (
+                        race_date < ?::date
+                        OR (race_date = ?::date AND race_code < ?)
+                      )
+            ),
+            courses AS (
+                SELECT generate_series(1, 6)::int AS course
+            )
+            SELECT
+                c.course,
+                COUNT(*) AS global_n,
+                COUNT(*) FILTER (WHERE b.place_code = ?) AS venue_n,
+                COUNT(*) FILTER (WHERE c.course IN (b.c1, b.c2, b.c3)) AS global_top3,
+                COUNT(*) FILTER (
+                    WHERE b.place_code = ?
+                      AND c.course IN (b.c1, b.c2, b.c3)
+                ) AS venue_top3
+            FROM base b
+            CROSS JOIN courses c
+            GROUP BY c.course
+            ORDER BY c.course
+        SQL;
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$targetDate, $targetDate, $raceCode, $placeCode, $placeCode]);
+
+        $global = [];
+        $venue = [];
+        for ($course = 1; $course <= 6; $course++) {
+            $global[$course] = ['n' => 0, 'top3' => 0, 'rate' => 0.5];
+            $venue[$course] = ['n' => 0, 'top3' => 0, 'rate' => 0.5];
+        }
+
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $course = $this->validCourse($row['course'] ?? null);
+            if ($course === null) {
+                continue;
+            }
+
+            $gn = (int)($row['global_n'] ?? 0);
+            $gt = (int)($row['global_top3'] ?? 0);
+            $vn = (int)($row['venue_n'] ?? 0);
+            $vt = (int)($row['venue_top3'] ?? 0);
+
+            $global[$course] = [
+                'n' => $gn,
+                'top3' => $gt,
+                'rate' => $gn > 0 ? $gt / $gn : 0.5,
+            ];
+            $venue[$course] = [
+                'n' => $vn,
+                'top3' => $vt,
+                'rate' => $vn > 0 ? $vt / $vn : 0.5,
+            ];
+        }
 
         $out = [];
         $sources = [];
@@ -344,107 +404,6 @@ class AiTrioRateLogic
             : 'mixed';
 
         return [$out, $sourceLabel];
-    }
-
-    private function queryCoursePrior(PDO $pdo, string $raceCode, string $targetDate, ?string $placeCode): array
-    {
-        $placeWhere = $placeCode !== null
-            ? "AND SUBSTRING(re.race_code, 9, 3) = ?"
-            : '';
-
-        $sql = <<<SQL
-            WITH course_rows AS (
-                SELECT
-                    re.race_code,
-                    re.lane_number,
-                    CASE
-                        WHEN rrd.rank::text ~ '^[1-6]$' THEN rrd.rank::int
-                        ELSE NULL
-                    END AS rank_num,
-                    COALESCE(
-                        CASE
-                            WHEN rrd.entry_course::text ~ '^[1-6]$' THEN rrd.entry_course::int
-                            ELSE NULL
-                        END,
-                        CASE
-                            WHEN el.entry_course::text ~ '^[1-6]$' THEN el.entry_course::int
-                            ELSE NULL
-                        END,
-                        CASE
-                            WHEN re.lane_number::text ~ '^[1-6]$' THEN re.lane_number::int
-                            ELSE NULL
-                        END
-                    ) AS actual_course
-                FROM boat_race.race_entry re
-                JOIN boat_race.race_master rm
-                  ON rm.race_code = re.race_code
-                LEFT JOIN boat_race.race_result_detail rrd
-                  ON rrd.race_code = re.race_code
-                 AND rrd.player_id = re.player_id
-                LEFT JOIN LATERAL (
-                    SELECT x.entry_course
-                    FROM boat_race.exhibition_live x
-                    WHERE x.race_code = re.race_code
-                      AND x.player_id = re.player_id
-                    LIMIT 1
-                ) el ON TRUE
-                WHERE (
-                        rm.race_date < ?::date
-                        OR (rm.race_date = ?::date AND re.race_code < ?)
-                      )
-                  {$placeWhere}
-            ),
-            valid_races AS (
-                SELECT race_code
-                FROM course_rows
-                GROUP BY race_code
-                HAVING COUNT(*) = 6
-                   AND COUNT(DISTINCT lane_number) = 6
-                   AND COUNT(*) FILTER (WHERE rank_num = 1) = 1
-                   AND COUNT(*) FILTER (WHERE rank_num = 2) = 1
-                   AND COUNT(*) FILTER (WHERE rank_num = 3) = 1
-                   AND COUNT(*) FILTER (WHERE actual_course BETWEEN 1 AND 6) = 6
-                   AND COUNT(DISTINCT actual_course) = 6
-            )
-            SELECT
-                cr.actual_course,
-                COUNT(*) AS n,
-                SUM(CASE WHEN cr.rank_num BETWEEN 1 AND 3 THEN 1 ELSE 0 END) AS top3
-            FROM course_rows cr
-            JOIN valid_races vr
-              ON vr.race_code = cr.race_code
-            GROUP BY cr.actual_course
-            ORDER BY cr.actual_course
-        SQL;
-
-        $params = [$targetDate, $targetDate, $raceCode];
-        if ($placeCode !== null) {
-            $params[] = $placeCode;
-        }
-
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-
-        $out = [];
-        for ($course = 1; $course <= 6; $course++) {
-            $out[$course] = ['n' => 0, 'top3' => 0, 'rate' => 0.5];
-        }
-
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $course = $this->validCourse($row['actual_course'] ?? null);
-            $n = (int)($row['n'] ?? 0);
-            $top3 = (int)($row['top3'] ?? 0);
-            if ($course === null || $n <= 0) {
-                continue;
-            }
-            $out[$course] = [
-                'n' => $n,
-                'top3' => $top3,
-                'rate' => $top3 / $n,
-            ];
-        }
-
-        return $out;
     }
 
     private function loadLast100(PDO $pdo, string $playerId, string $targetDate, string $targetRaceCode): array
