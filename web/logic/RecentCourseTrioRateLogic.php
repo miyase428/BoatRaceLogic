@@ -1,51 +1,48 @@
 <?php
 
 /**
- * 最終予想テーブル表示用の直近「枠番別」3連対率。
+ * 最終予想テーブル表示用の直近「進入コース別」3連対率。
  *
  * 予想ロジックに使っている従来の three_in_rate_6m / 3m には触れず、
- * 「その選手が今回と同じ枠番を走った時」に限定した値を表示用に計算する。
- *
- * 外部サイトの「枠別情報 / 枠別勝率」と同じ軸に合わせるため、
- * 展示進入コースではなく race_entry.lane_number（枠番）で集計する。
+ * 「その選手が今回の進入コースを走った時」に限定した値を表示用に計算する。
  *
  * - 基準日は対象レース日（CURRENT_DATEではない）
  * - 対象レース自身と、それ以降の結果は除外
- * - 6ヶ月 / 3ヶ月をそれぞれ集計
- * - 分子/分母（3連対数 / 対象走数）も返す
+ * - 今回コースは展示進入（仮想進入時は試算進入）
+ * - 過去実コースは result_detail を優先し、欠損時のみ exhibition_live で補完
+ * - result_detail / exhibition_live の両方で進入不明なら推測せず除外
+ * - winner行が存在する完了レースだけを分母にする
+ * - 本人result_detail行が欠けていても、完了レースかつ展示で実進入を確認できれば分母へ含める
+ * - 分子は本人の着順が1～3着のレース数
+ * - 6ヶ月 / 3ヶ月をそれぞれ集計し、分子/分母も返す
  */
 class RecentCourseTrioRateLogic
 {
-    /**
-     * 第2引数は旧呼び出しとの互換用。枠番別集計では使用しない。
-     */
     public function calculate(string $raceCode, array $courseByBoat = []): array
     {
         try {
             if ($raceCode === '') {
-                throw new RuntimeException('直近枠別3連対率: race_codeが空です');
+                throw new RuntimeException('直近コース別3連対率: race_codeが空です');
             }
 
             $pdo = getPDO();
             [$targetDate, $boats] = $this->loadTarget($pdo, $raceCode);
+            $courses = $this->normalizeCourses($courseByBoat);
 
             $result = [];
             foreach ($boats as $boat => $row) {
-                // 現在の艇番 = 今回の枠番。
-                $targetFrame = $boat;
+                $targetCourse = $courses[$boat] ?? $boat;
                 $stats = $this->loadPlayerStats(
                     $pdo,
                     (string)$row['player_id'],
-                    $targetFrame,
+                    $targetCourse,
                     $targetDate,
                     $raceCode
                 );
 
                 $result[$boat] = [
                     'boat' => $boat,
-                    'frame' => $targetFrame,
-                    // 既存JSとの互換用。表示上は「枠」として扱う。
-                    'course' => $targetFrame,
+                    'course' => $targetCourse,
                     'player_id' => (string)$row['player_id'],
                     'player_name' => (string)$row['player_name'],
                     'n6' => $stats['n6'],
@@ -63,14 +60,14 @@ class RecentCourseTrioRateLogic
                 'status' => 'ok',
                 'boats' => $result,
                 'target_date' => $targetDate,
-                'basis' => 'frame',
+                'basis' => 'entry_course_completed',
                 'error' => '',
             ];
         } catch (Throwable $e) {
             return [
                 'status' => 'error',
                 'boats' => [],
-                'basis' => 'frame',
+                'basis' => 'entry_course_completed',
                 'error' => $e->getMessage(),
             ];
         }
@@ -96,7 +93,7 @@ class RecentCourseTrioRateLogic
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (count($rows) !== 6) {
-            throw new RuntimeException('直近枠別3連対率: 対象レースが6艇ではありません');
+            throw new RuntimeException('直近コース別3連対率: 対象レースが6艇ではありません');
         }
 
         $targetDate = (string)$rows[0]['race_date'];
@@ -104,7 +101,7 @@ class RecentCourseTrioRateLogic
         foreach ($rows as $row) {
             $boat = (int)($row['lane_number'] ?? 0);
             if ($boat < 1 || $boat > 6) {
-                throw new RuntimeException('直近枠別3連対率: 艇番が不正です');
+                throw new RuntimeException('直近コース別3連対率: 艇番が不正です');
             }
             $boats[$boat] = [
                 'player_id' => (string)($row['player_id'] ?? ''),
@@ -115,10 +112,31 @@ class RecentCourseTrioRateLogic
         return [$targetDate, $boats];
     }
 
+    private function normalizeCourses(array $courseByBoat): array
+    {
+        $out = [];
+        $used = [];
+
+        for ($boat = 1; $boat <= 6; $boat++) {
+            $course = isset($courseByBoat[$boat]) && is_numeric($courseByBoat[$boat])
+                ? (int)$courseByBoat[$boat]
+                : $boat;
+
+            if ($course < 1 || $course > 6 || isset($used[$course])) {
+                return array_combine(range(1, 6), range(1, 6));
+            }
+
+            $out[$boat] = $course;
+            $used[$course] = true;
+        }
+
+        return $out;
+    }
+
     private function loadPlayerStats(
         PDO $pdo,
         string $playerId,
-        int $targetFrame,
+        int $targetCourse,
         string $targetDate,
         string $targetRaceCode
     ): array {
@@ -126,17 +144,44 @@ class RecentCourseTrioRateLogic
             WITH hist AS (
                 SELECT
                     rm.race_date,
-                    re.lane_number AS frame_number,
+                    EXISTS (
+                        SELECT 1
+                        FROM boat_race.race_result_detail w
+                        WHERE w.race_code = re.race_code
+                          AND TRIM(w.rank::text) = '1'
+                    ) AS completed,
+                    COALESCE(
+                        CASE
+                            WHEN rd.entry_course::text ~ '^[1-6]$' THEN rd.entry_course::int
+                            ELSE NULL
+                        END,
+                        CASE
+                            WHEN ex.entry_course::text ~ '^[1-6]$' THEN ex.entry_course::int
+                            ELSE NULL
+                        END
+                    ) AS actual_course,
                     CASE
-                        WHEN rrd.rank::text ~ '^[1-6]$' THEN rrd.rank::int
+                        WHEN rd.rank::text ~ '^[1-6]$' THEN rd.rank::int
                         ELSE NULL
                     END AS rank_num
                 FROM boat_race.race_entry re
                 JOIN boat_race.race_master rm
                   ON rm.race_code = re.race_code
-                LEFT JOIN boat_race.race_result_detail rrd
-                  ON rrd.race_code = re.race_code
-                 AND rrd.player_id = re.player_id
+                LEFT JOIN LATERAL (
+                    SELECT rrd.entry_course, rrd.rank
+                    FROM boat_race.race_result_detail rrd
+                    WHERE rrd.race_code = re.race_code
+                      AND rrd.player_id = re.player_id
+                    LIMIT 1
+                ) rd ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT el.entry_course
+                    FROM boat_race.exhibition_live el
+                    WHERE el.race_code = re.race_code
+                      AND el.player_id = re.player_id
+                      AND el.entry_course BETWEEN 1 AND 6
+                    LIMIT 1
+                ) ex ON TRUE
                 WHERE re.player_id::text = ?
                   AND (
                         rm.race_date < ?::date
@@ -146,20 +191,22 @@ class RecentCourseTrioRateLogic
             )
             SELECT
                 COUNT(*) FILTER (
-                    WHERE frame_number = ?
-                      AND rank_num BETWEEN 1 AND 6
+                    WHERE completed
+                      AND actual_course = ?
                 ) AS n6,
                 COUNT(*) FILTER (
-                    WHERE frame_number = ?
+                    WHERE completed
+                      AND actual_course = ?
                       AND rank_num BETWEEN 1 AND 3
                 ) AS top3_6,
                 COUNT(*) FILTER (
-                    WHERE frame_number = ?
-                      AND rank_num BETWEEN 1 AND 6
+                    WHERE completed
+                      AND actual_course = ?
                       AND race_date >= ?::date - INTERVAL '3 months'
                 ) AS n3,
                 COUNT(*) FILTER (
-                    WHERE frame_number = ?
+                    WHERE completed
+                      AND actual_course = ?
                       AND rank_num BETWEEN 1 AND 3
                       AND race_date >= ?::date - INTERVAL '3 months'
                 ) AS top3_3
@@ -173,11 +220,11 @@ class RecentCourseTrioRateLogic
             $targetDate,
             $targetRaceCode,
             $targetDate,
-            $targetFrame,
-            $targetFrame,
-            $targetFrame,
+            $targetCourse,
+            $targetCourse,
+            $targetCourse,
             $targetDate,
-            $targetFrame,
+            $targetCourse,
             $targetDate,
         ]);
 
