@@ -107,13 +107,16 @@ class BaseWinRateLogic
     {
         $sql = <<<SQL
             SELECT
-                rm.race_date,
+                COALESCE(
+                    rm.race_date,
+                    TO_DATE(SUBSTRING(re.race_code, 1, 8), 'YYYYMMDD')
+                ) AS race_date,
                 rm.stadium_name,
                 re.lane_number,
                 re.player_id::text AS player_id,
                 re.player_name
             FROM boat_race.race_entry re
-            JOIN boat_race.race_master rm
+            LEFT JOIN boat_race.race_master rm
               ON rm.race_code = re.race_code
             WHERE re.race_code = ?
             ORDER BY re.lane_number
