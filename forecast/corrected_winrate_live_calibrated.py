@@ -10,7 +10,7 @@ raw_total 連動の温度較正を適用する。
   tau = clamp(0.90 + 0.80 * ln(raw_total), 0.45, 1.60)
   p'_i = p_i ** tau / sum_j(p_j ** tau)
 
-- 通常22場: corrected_winrate_live_exact.py
+- 通常22場: corrected_winrate_live_exact_fact.py（SUM Fact優先・従来exact fallback）
 - AMG/TKY: corrected_winrate_live_exact_amg_tky.py
 - 仮想進入: corrected_winrate_live_virtual.py
 
@@ -63,7 +63,7 @@ def run_base_script(race_code: str, virtual_lane_to_course: str | None) -> dict:
         script = HERE / "corrected_winrate_live_exact_amg_tky.py"
         args = [sys.executable, str(script), race_code]
     else:
-        script = HERE / "corrected_winrate_live_exact.py"
+        script = HERE / "corrected_winrate_live_exact_fact.py"
         args = [sys.executable, str(script), race_code]
 
     proc = subprocess.run(
