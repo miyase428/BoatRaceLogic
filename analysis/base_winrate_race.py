@@ -51,10 +51,17 @@ def valid_course(v):
 
 def load_target(conn, race_code):
     sql = """
-        SELECT rm.race_date, rm.stadium_name, re.lane_number,
-               re.player_id::text, re.player_name
+        SELECT
+               COALESCE(
+                   rm.race_date,
+                   TO_DATE(SUBSTRING(re.race_code, 1, 8), 'YYYYMMDD')
+               ) AS race_date,
+               rm.stadium_name,
+               re.lane_number,
+               re.player_id::text,
+               re.player_name
         FROM boat_race.race_entry re
-        JOIN boat_race.race_master rm ON rm.race_code = re.race_code
+        LEFT JOIN boat_race.race_master rm ON rm.race_code = re.race_code
         WHERE re.race_code = %s
         ORDER BY re.lane_number
     """
