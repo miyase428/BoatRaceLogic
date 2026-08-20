@@ -22,7 +22,8 @@ php analysis/update_race_history_fact.php "$LOOKBACK_DAYS"
 
 echo
 echo "[2/2] sum_history_fact"
-python3 analysis/update_sum_history_fact.py "$LOOKBACK_DAYS"
+# 住之江(SME)を直線タイム欠損許可で扱う運用設定ラッパーを使用する。
+python3 analysis/update_sum_history_fact_configured.py "$LOOKBACK_DAYS"
 
 echo
 echo "================================================================================"
