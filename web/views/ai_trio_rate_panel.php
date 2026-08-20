@@ -257,3 +257,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<?php
+// AI3連対率まで計算済みの同一スコープを利用し、出目確率をその直後へ表示する。
+// 既存の最終予想・買い目ロジックには接続しない。
+include __DIR__ . '/trifecta_probability_panel.php';
+?>
