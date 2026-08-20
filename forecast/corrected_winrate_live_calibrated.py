@@ -10,8 +10,8 @@ raw_total 連動の温度較正を適用する。
   tau = clamp(0.90 + 0.80 * ln(raw_total), 0.45, 1.60)
   p'_i = p_i ** tau / sum_j(p_j ** tau)
 
-- 通常22場: corrected_winrate_live_exact_fact.py（SUM Fact優先・従来exact fallback）
-- AMG/TKY: corrected_winrate_live_exact_amg_tky.py
+- 通常場: corrected_winrate_live_exact_fact.py
+- 直線タイムなし場(AMG/TKY/SME): corrected_winrate_live_exact_no_straight_fact.py
 - 仮想進入: corrected_winrate_live_virtual.py
 
 元チェーンの出力は corrected_rate_before_raw_temp として残す。
@@ -31,7 +31,7 @@ GLOBAL_TAU = 0.90
 RAW_K = 0.80
 TAU_MIN = 0.45
 TAU_MAX = 1.60
-SPECIAL_PLACES = {"AMG", "TKY"}
+NO_STRAIGHT_PLACES = {"AMG", "TKY", "SME"}
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -59,8 +59,8 @@ def run_base_script(race_code: str, virtual_lane_to_course: str | None) -> dict:
     if virtual_lane_to_course is not None:
         script = HERE / "corrected_winrate_live_virtual.py"
         args = [sys.executable, str(script), race_code, virtual_lane_to_course]
-    elif place_code in SPECIAL_PLACES:
-        script = HERE / "corrected_winrate_live_exact_amg_tky.py"
+    elif place_code in NO_STRAIGHT_PLACES:
+        script = HERE / "corrected_winrate_live_exact_no_straight_fact.py"
         args = [sys.executable, str(script), race_code]
     else:
         script = HERE / "corrected_winrate_live_exact_fact.py"
