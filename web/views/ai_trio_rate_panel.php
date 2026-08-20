@@ -25,12 +25,15 @@ $aiTrioTotals = is_array($aiTrioData['totals'] ?? null) ? $aiTrioData['totals'] 
 $aiTrioMethod = is_array($aiTrioData['method'] ?? null) ? $aiTrioData['method'] : [];
 
 // 最終予想テーブルの6ヶ月/3ヶ月は表示専用。
-// 外部サイトの「枠別情報 / 枠別勝率」と同じく、
-// 「その選手 × 今回の枠番」で対象レース日時点から集計する。
-// 展示進入によるコース変更はAI3連対率には反映するが、枠別率には反映しない。
+// 「その選手 × 今回の進入コース」で対象レース日時点から集計する。
+// 過去実コースはresult_detail優先、欠損時のみ展示で補完し、完了レースだけを分母にする。
+// 展示進入変更・仮想進入時もAI3連対率と同じ今回コースへ追従する。
 // 既存の切る艇判定用 three_in_rate_6m / 3m は変更しない。
 $recentCourseTrioLogic = new RecentCourseTrioRateLogic();
-$recentCourseTrioData = $recentCourseTrioLogic->calculate((string)($race_code ?? ''));
+$recentCourseTrioData = $recentCourseTrioLogic->calculate(
+    (string)($race_code ?? ''),
+    $aiTrioCourseByBoat
+);
 $recentCourseTrioBoats = is_array($recentCourseTrioData['boats'] ?? null)
     ? $recentCourseTrioData['boats']
     : [];
@@ -177,7 +180,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const recentRates = <?= json_encode(array_map(
         static fn(array $row) => [
-            'frame' => (int)($row['frame'] ?? ($row['boat'] ?? 0)),
+            'course' => (int)($row['course'] ?? 0),
             'rate6' => isset($row['rate6_dec']) && $row['rate6_dec'] !== null ? (float)$row['rate6_dec'] * 100.0 : null,
             'top3_6' => (int)($row['top3_6'] ?? 0),
             'n6' => (int)($row['n6'] ?? 0),
@@ -208,10 +211,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (aiIndex < 0) aiIndex = labels.indexOf('AI3連対率');
 
     if (rate6Index >= 0) {
-        headerCells[rate6Index].textContent = '直近6ヶ月枠別3連対率';
+        headerCells[rate6Index].textContent = '直近6ヶ月3連対率';
     }
     if (rate3Index >= 0) {
-        headerCells[rate3Index].textContent = '直近3ヶ月枠別3連対率';
+        headerCells[rate3Index].textContent = '直近3ヶ月3連対率';
     }
     if (aiIndex >= 0) {
         headerCells[aiIndex].textContent = 'AI3連対率';
@@ -235,12 +238,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (recent && rate6Index >= 0 && row.cells[rate6Index]) {
             row.cells[rate6Index].innerHTML = rateCellHtml(recent.rate6, recent.top3_6, recent.n6);
-            row.cells[rate6Index].title = recent.frame + '枠 / 直近6ヶ月 ' + recent.top3_6 + '/' + recent.n6;
+            row.cells[rate6Index].title = recent.course + 'コース / 直近6ヶ月 ' + recent.top3_6 + '/' + recent.n6;
         }
 
         if (recent && rate3Index >= 0 && row.cells[rate3Index]) {
             row.cells[rate3Index].innerHTML = rateCellHtml(recent.rate3, recent.top3_3, recent.n3);
-            row.cells[rate3Index].title = recent.frame + '枠 / 直近3ヶ月 ' + recent.top3_3 + '/' + recent.n3;
+            row.cells[rate3Index].title = recent.course + 'コース / 直近3ヶ月 ' + recent.top3_3 + '/' + recent.n3;
         }
 
         if (aiIndex >= 0 && row.cells[aiIndex]) {
