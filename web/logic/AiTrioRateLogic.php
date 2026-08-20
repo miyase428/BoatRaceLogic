@@ -308,65 +308,53 @@ class AiTrioRateLogic
 
     private function loadCoursePrior(PDO $pdo, string $raceCode, string $targetDate, string $placeCode): array
     {
-        // 場別・全場を同じFact走査1回で取得する。
+        // 6コースへのCROSS JOINをやめ、Factを1回だけ走査して全コースを集計する。
+        // race_code固定形式のため旧日付条件と race_code < target は完全一致する。
         $sql = <<<SQL
-            WITH base AS (
-                SELECT c1, c2, c3, place_code
-                FROM boat_race.race_history_fact
-                WHERE course_valid
-                  AND (
-                        race_date < ?::date
-                        OR (race_date = ?::date AND race_code < ?)
-                      )
-            ),
-            courses AS (
-                SELECT generate_series(1, 6)::int AS course
-            )
             SELECT
-                c.course,
                 COUNT(*) AS global_n,
-                COUNT(*) FILTER (WHERE b.place_code = ?) AS venue_n,
-                COUNT(*) FILTER (WHERE c.course IN (b.c1, b.c2, b.c3)) AS global_top3,
-                COUNT(*) FILTER (
-                    WHERE b.place_code = ?
-                      AND c.course IN (b.c1, b.c2, b.c3)
-                ) AS venue_top3
-            FROM base b
-            CROSS JOIN courses c
-            GROUP BY c.course
-            ORDER BY c.course
+                COUNT(*) FILTER (WHERE place_code = ?) AS venue_n,
+                COUNT(*) FILTER (WHERE 1 IN (c1, c2, c3)) AS global_top3_1,
+                COUNT(*) FILTER (WHERE 2 IN (c1, c2, c3)) AS global_top3_2,
+                COUNT(*) FILTER (WHERE 3 IN (c1, c2, c3)) AS global_top3_3,
+                COUNT(*) FILTER (WHERE 4 IN (c1, c2, c3)) AS global_top3_4,
+                COUNT(*) FILTER (WHERE 5 IN (c1, c2, c3)) AS global_top3_5,
+                COUNT(*) FILTER (WHERE 6 IN (c1, c2, c3)) AS global_top3_6,
+                COUNT(*) FILTER (WHERE place_code = ? AND 1 IN (c1, c2, c3)) AS venue_top3_1,
+                COUNT(*) FILTER (WHERE place_code = ? AND 2 IN (c1, c2, c3)) AS venue_top3_2,
+                COUNT(*) FILTER (WHERE place_code = ? AND 3 IN (c1, c2, c3)) AS venue_top3_3,
+                COUNT(*) FILTER (WHERE place_code = ? AND 4 IN (c1, c2, c3)) AS venue_top3_4,
+                COUNT(*) FILTER (WHERE place_code = ? AND 5 IN (c1, c2, c3)) AS venue_top3_5,
+                COUNT(*) FILTER (WHERE place_code = ? AND 6 IN (c1, c2, c3)) AS venue_top3_6
+            FROM boat_race.race_history_fact
+            WHERE course_valid
+              AND race_code < ?
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$targetDate, $targetDate, $raceCode, $placeCode, $placeCode]);
+        $stmt->execute([
+            $placeCode,
+            $placeCode, $placeCode, $placeCode, $placeCode, $placeCode, $placeCode,
+            $raceCode,
+        ]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
+        $globalN = (int)($row['global_n'] ?? 0);
+        $venueN = (int)($row['venue_n'] ?? 0);
         $global = [];
         $venue = [];
         for ($course = 1; $course <= 6; $course++) {
-            $global[$course] = ['n' => 0, 'top3' => 0, 'rate' => 0.5];
-            $venue[$course] = ['n' => 0, 'top3' => 0, 'rate' => 0.5];
-        }
-
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $course = $this->validCourse($row['course'] ?? null);
-            if ($course === null) {
-                continue;
-            }
-
-            $gn = (int)($row['global_n'] ?? 0);
-            $gt = (int)($row['global_top3'] ?? 0);
-            $vn = (int)($row['venue_n'] ?? 0);
-            $vt = (int)($row['venue_top3'] ?? 0);
-
+            $gt = (int)($row['global_top3_' . $course] ?? 0);
+            $vt = (int)($row['venue_top3_' . $course] ?? 0);
             $global[$course] = [
-                'n' => $gn,
+                'n' => $globalN,
                 'top3' => $gt,
-                'rate' => $gn > 0 ? $gt / $gn : 0.5,
+                'rate' => $globalN > 0 ? $gt / $globalN : 0.5,
             ];
             $venue[$course] = [
-                'n' => $vn,
+                'n' => $venueN,
                 'top3' => $vt,
-                'rate' => $vn > 0 ? $vt / $vn : 0.5,
+                'rate' => $venueN > 0 ? $vt / $venueN : 0.5,
             ];
         }
 
@@ -408,6 +396,7 @@ class AiTrioRateLogic
 
     private function loadLast100(PDO $pdo, string $playerId, string $targetDate, string $targetRaceCode): array
     {
+        // player_id×race_code indexを直接使える形にし、旧条件・並び順を維持する。
         $sql = <<<SQL
             SELECT
                 re.race_code,
@@ -416,8 +405,6 @@ class AiTrioRateLogic
                 rrd.entry_course AS result_course,
                 el.entry_course AS exhibition_course
             FROM boat_race.race_entry re
-            JOIN boat_race.race_master rm
-              ON rm.race_code = re.race_code
             LEFT JOIN boat_race.race_result_detail rrd
               ON rrd.race_code = re.race_code
              AND rrd.player_id = re.player_id
@@ -429,16 +416,13 @@ class AiTrioRateLogic
                 LIMIT 1
             ) el ON TRUE
             WHERE re.player_id::text = ?
-              AND (
-                    rm.race_date < ?::date
-                    OR (rm.race_date = ?::date AND re.race_code < ?)
-                  )
-            ORDER BY rm.race_date DESC, re.race_code DESC
+              AND re.race_code < ?
+            ORDER BY re.race_code DESC
             LIMIT 100
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$playerId, $targetDate, $targetDate, $targetRaceCode]);
+        $stmt->execute([$playerId, $targetRaceCode]);
 
         $history = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
