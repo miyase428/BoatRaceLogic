@@ -21,7 +21,10 @@ class Head1SecondPlaceLogic
                 unset($boat);
             }
 
-            $historyStart = (new DateTimeImmutable($targetDate))->modify('-' . self::HISTORY_DAYS . ' days')->format('Y-m-d');
+            $historyStart = (new DateTimeImmutable($targetDate))
+                ->modify('-' . self::HISTORY_DAYS . ' days')
+                ->format('Y-m-d');
+
             [$globalPrior, $globalN, $venuePrior, $venueN] = $this->loadCoursePriors(
                 $pdo,
                 $historyStart,
@@ -58,7 +61,13 @@ class Head1SecondPlaceLogic
                 }
 
                 $p0 = (float)($globalPrior[$course] ?? 0.0);
-                $history = $this->loadLast100($pdo, $boat['player_id'], $historyStart, $targetDate, $raceCode);
+                $history = $this->loadLast100(
+                    $pdo,
+                    (string)$boat['player_id'],
+                    $historyStart,
+                    $targetDate,
+                    $raceCode
+                );
                 [$pcN, $pcW] = $this->playerCounts($history, $course);
                 $pcRaw = $pcN > 0 ? $pcW / $pcN : null;
                 $pPc = ($pcW + self::K_PC * $p0) / ($pcN + self::K_PC);
@@ -207,6 +216,11 @@ class Head1SecondPlaceLogic
         return $boats;
     }
 
+    /**
+     * 場/全場priorは race_history_fact へ事前集約済みの
+     * head1_prior_valid / c2 を使う。
+     * ベンチで旧巨大JOINと完全一致を確認済み。
+     */
     private function loadCoursePriors(
         PDO $pdo,
         string $historyStart,
@@ -215,83 +229,19 @@ class Head1SecondPlaceLogic
         string $placeCode
     ): array {
         $sql = <<<SQL
-            WITH race_rows AS (
-                SELECT
-                    re.race_code,
-                    SUBSTRING(re.race_code, 9, 3) AS place_code,
-                    re.lane_number::int AS lane,
-                    rrd.rank,
-                    COALESCE(
-                        CASE
-                            WHEN rrd.entry_course::text ~ '^[1-6]$' THEN rrd.entry_course::int
-                            ELSE NULL
-                        END,
-                        CASE
-                            WHEN el.entry_course::text ~ '^[1-6]$' THEN el.entry_course::int
-                            ELSE NULL
-                        END,
-                        CASE
-                            WHEN re.lane_number::text ~ '^[1-6]$' THEN re.lane_number::int
-                            ELSE NULL
-                        END
-                    ) AS actual_course
-                FROM boat_race.race_entry re
-                JOIN boat_race.race_master rm
-                  ON rm.race_code = re.race_code
-                LEFT JOIN boat_race.race_result_detail rrd
-                  ON rrd.race_code = re.race_code
-                 AND rrd.player_id = re.player_id
-                LEFT JOIN LATERAL (
-                    SELECT x.entry_course
-                    FROM boat_race.exhibition_live x
-                    WHERE x.race_code = re.race_code
-                      AND x.player_id = re.player_id
-                    LIMIT 1
-                ) el ON TRUE
-                WHERE rm.race_date >= ?::date
-                  AND (
-                        rm.race_date < ?::date
-                        OR (rm.race_date = ?::date AND re.race_code < ?)
-                      )
-            ),
-            eligible AS (
-                SELECT
-                    race_code,
-                    place_code,
-                    COUNT(*) AS row_n,
-                    COUNT(DISTINCT lane) AS lane_n,
-                    MIN(lane) AS min_lane,
-                    MAX(lane) AS max_lane,
-                    COUNT(*) FILTER (WHERE rank = '1') AS rank1_n,
-                    COUNT(*) FILTER (WHERE rank = '2') AS rank2_n,
-                    MIN(lane) FILTER (WHERE rank = '1') AS winner_lane,
-                    MIN(actual_course) FILTER (WHERE rank = '2') AS second_course,
-                    COUNT(actual_course) AS course_n,
-                    COUNT(DISTINCT actual_course) AS course_distinct_n,
-                    MIN(actual_course) AS min_course,
-                    MAX(actual_course) AS max_course
-                FROM race_rows
-                GROUP BY race_code, place_code
-            )
             SELECT
                 place_code,
-                second_course,
+                c2 AS second_course,
                 COUNT(*) AS race_n
-            FROM eligible
-            WHERE row_n = 6
-              AND lane_n = 6
-              AND min_lane = 1
-              AND max_lane = 6
-              AND rank1_n = 1
-              AND rank2_n = 1
-              AND winner_lane = 1
-              AND course_n = 6
-              AND course_distinct_n = 6
-              AND min_course = 1
-              AND max_course = 6
-              AND second_course BETWEEN 1 AND 6
-            GROUP BY place_code, second_course
-            ORDER BY place_code, second_course
+            FROM boat_race.race_history_fact
+            WHERE head1_prior_valid
+              AND race_date >= ?::date
+              AND (
+                    race_date < ?::date
+                    OR (race_date = ?::date AND race_code < ?)
+                  )
+            GROUP BY place_code, c2
+            ORDER BY place_code, c2
         SQL;
 
         $stmt = $pdo->prepare($sql);
@@ -326,6 +276,11 @@ class Head1SecondPlaceLogic
         return [$globalPrior, $globalN, $venuePrior, $venueN];
     }
 
+    /**
+     * 選手直近100走は本人行だけ取得し、各レースの「1号艇1着」判定は
+     * race_history_fact.head1_player_eligible を参照する。
+     * これにより各履歴レースで6艇を再集計するLATERALを除去する。
+     */
     private function loadLast100(
         PDO $pdo,
         string $playerId,
@@ -342,7 +297,6 @@ class Head1SecondPlaceLogic
                 SELECT
                     rm.race_date,
                     re.race_code,
-                    re.lane_number::int AS lane,
                     rrd.rank,
                     COALESCE(
                         CASE
@@ -357,7 +311,8 @@ class Head1SecondPlaceLogic
                             WHEN re.lane_number::text ~ '^[1-6]$' THEN re.lane_number::int
                             ELSE NULL
                         END
-                    ) AS actual_course
+                    ) AS actual_course,
+                    COALESCE(hf.head1_player_eligible, false) AS head1_player_eligible
                 FROM boat_race.race_entry re
                 JOIN boat_race.race_master rm
                   ON rm.race_code = re.race_code
@@ -371,6 +326,8 @@ class Head1SecondPlaceLogic
                       AND x.player_id = re.player_id
                     LIMIT 1
                 ) el ON TRUE
+                LEFT JOIN boat_race.race_history_fact hf
+                  ON hf.race_code = re.race_code
                 WHERE re.player_id::text = ?
                   AND rm.race_date >= ?::date
                   AND (
@@ -381,33 +338,12 @@ class Head1SecondPlaceLogic
                 LIMIT 100
             )
             SELECT
-                r.race_code,
-                r.rank,
-                r.actual_course,
-                stats.row_n,
-                stats.lane_n,
-                stats.min_lane,
-                stats.max_lane,
-                stats.rank1_n,
-                stats.rank2_n,
-                stats.winner_lane
-            FROM recent r
-            LEFT JOIN LATERAL (
-                SELECT
-                    COUNT(*) AS row_n,
-                    COUNT(DISTINCT re2.lane_number) AS lane_n,
-                    MIN(re2.lane_number::int) AS min_lane,
-                    MAX(re2.lane_number::int) AS max_lane,
-                    COUNT(*) FILTER (WHERE rrd2.rank = '1') AS rank1_n,
-                    COUNT(*) FILTER (WHERE rrd2.rank = '2') AS rank2_n,
-                    MIN(re2.lane_number::int) FILTER (WHERE rrd2.rank = '1') AS winner_lane
-                FROM boat_race.race_entry re2
-                LEFT JOIN boat_race.race_result_detail rrd2
-                  ON rrd2.race_code = re2.race_code
-                 AND rrd2.player_id = re2.player_id
-                WHERE re2.race_code = r.race_code
-            ) stats ON TRUE
-            ORDER BY r.race_date DESC, r.race_code DESC
+                race_code,
+                rank,
+                actual_course,
+                head1_player_eligible
+            FROM recent
+            ORDER BY race_date DESC, race_code DESC
         SQL;
 
         $stmt = $pdo->prepare($sql);
@@ -420,16 +356,7 @@ class Head1SecondPlaceLogic
                 continue;
             }
 
-            $eligible = (
-                (int)($row['row_n'] ?? 0) === 6
-                && (int)($row['lane_n'] ?? 0) === 6
-                && (int)($row['min_lane'] ?? 0) === 1
-                && (int)($row['max_lane'] ?? 0) === 6
-                && (int)($row['rank1_n'] ?? 0) === 1
-                && (int)($row['rank2_n'] ?? 0) === 1
-                && (int)($row['winner_lane'] ?? 0) === 1
-            );
-
+            $eligible = !empty($row['head1_player_eligible']);
             $history[] = [
                 'course' => $course,
                 'eligible_head1' => $eligible,
