@@ -1,26 +1,45 @@
 <?php
 require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
 
+$aiTrioCourseByBoat = [];
+if (!empty($simulation_active) && is_array($prediction_course_by_boat ?? null)) {
+    $aiTrioCourseByBoat = $prediction_course_by_boat;
+} elseif (!empty($entry_map_ready) && is_array($entry_course_by_boat ?? null)) {
+    $aiTrioCourseByBoat = $entry_course_by_boat;
+}
+
 $aiTrioLogic = new AiTrioRateLogic();
 $aiTrioData = $aiTrioLogic->calculate(
     (string)($race_code ?? ''),
     is_array($results ?? null) ? $results : [],
-    is_array($tenji_list ?? null) ? $tenji_list : []
+    is_array($tenji_list ?? null) ? $tenji_list : [],
+    $aiTrioCourseByBoat,
+    !empty($simulation_active)
 );
 
 $aiTrioStatus = (string)($aiTrioData['status'] ?? 'error');
 $aiTrioError = (string)($aiTrioData['error'] ?? '');
 $aiTrioBoats = is_array($aiTrioData['boats'] ?? null) ? $aiTrioData['boats'] : [];
 $aiTrioTotals = is_array($aiTrioData['totals'] ?? null) ? $aiTrioData['totals'] : [];
+$aiTrioMethod = is_array($aiTrioData['method'] ?? null) ? $aiTrioData['method'] : [];
 
-// 1着率・2着率と同じく、画面は予想進入のコース順（1C→6C）で並べる。
-// AI3連対率の計算自体は検証条件どおり艇番（枠番=今回コース）基準のまま変更しない。
+// 1着率・2着率と同じく、予想進入のコース順（1C→6C）で表示する。
 $aiTrioCourseToBoat = [];
-if (is_array($prediction_boat_by_course ?? null) && count($prediction_boat_by_course) === 6) {
-    for ($course = 1; $course <= 6; $course++) {
-        $boat = (int)($prediction_boat_by_course[$course] ?? 0);
-        if ($boat >= 1 && $boat <= 6) {
-            $aiTrioCourseToBoat[$course] = $boat;
+foreach ($aiTrioBoats as $boatKey => $row) {
+    $boat = (int)($row['lane'] ?? $boatKey);
+    $course = (int)($row['course'] ?? 0);
+    if ($boat >= 1 && $boat <= 6 && $course >= 1 && $course <= 6) {
+        $aiTrioCourseToBoat[$course] = $boat;
+    }
+}
+
+if (count($aiTrioCourseToBoat) !== 6) {
+    if (is_array($prediction_boat_by_course ?? null) && count($prediction_boat_by_course) === 6) {
+        for ($course = 1; $course <= 6; $course++) {
+            $boat = (int)($prediction_boat_by_course[$course] ?? 0);
+            if ($boat >= 1 && $boat <= 6) {
+                $aiTrioCourseToBoat[$course] = $boat;
+            }
         }
     }
 }
@@ -28,23 +47,28 @@ if (is_array($prediction_boat_by_course ?? null) && count($prediction_boat_by_co
 if (count($aiTrioCourseToBoat) !== 6) {
     $aiTrioCourseToBoat = array_combine(range(1, 6), range(1, 6));
 }
+ksort($aiTrioCourseToBoat);
 ?>
 
 <div style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
     <div style="margin-bottom:10px;">
         <div style="font-size:16px; font-weight:bold; color:#a78bfa;">🤖 AI3連対率</div>
         <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
-            基礎3連対率：場×コース → 選手×コース → 選手×場×コース / BB_MEDIUM RAW（K=20・10）
+            基礎3連対率：場×進入コース → 選手×進入コース → 選手×場×進入コース / BB_MEDIUM RAW（K=20・10）
         </div>
         <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
-            AI：基礎3連対率 + 一次評価Z + 二次評価Z / P1学習 → P2完全ホールドアウト検証済み
+            AI：基礎3連対率 + 一次評価Z + 二次評価Z / ENTRY_MODEをP1学習 → P2完全ホールドアウト検証済み
         </div>
         <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
             ※6艇300%への強制正規化なし / SUM・スリットは追加効果が小さいため未採用
         </div>
-        <?php if (!empty($prediction_entry_changed)): ?>
+        <?php if (!empty($simulation_active)): ?>
             <div style="font-size:12px; color:#aa741f; margin-top:3px;">
-                ※表示は予想進入のコース順。AI3連対率の計算は検証条件に合わせ「枠番=今回コース」のまま（進入補正は未適用）
+                ※仮想進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> をAI3連対率にも反映した試算値
+            </div>
+        <?php elseif (!empty($prediction_entry_changed)): ?>
+            <div style="font-size:12px; color:#2f789f; margin-top:3px;">
+                ※展示進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> をAI3連対率へ反映済み
             </div>
         <?php endif; ?>
     </div>
@@ -96,8 +120,9 @@ if (count($aiTrioCourseToBoat) !== 6) {
                                 $rate = $row['ai_rate'] ?? null;
                                 $rank = (int)($row['ai_rank'] ?? 0);
                                 $tip = sprintf(
-                                    '%d号艇 / 一次 %.3f (Z %+.3f) / 二次 %.3f (Z %+.3f)',
+                                    '%d号艇 / %dC / 一次 %.3f (Z %+.3f) / 二次 %.3f (Z %+.3f)',
                                     $boat,
+                                    (int)($row['course'] ?? $course),
                                     (float)($row['primary_score'] ?? 0),
                                     (float)($row['primary_z'] ?? 0),
                                     (float)($row['secondary_score'] ?? 0),
@@ -121,7 +146,8 @@ if (count($aiTrioCourseToBoat) !== 6) {
         <div style="margin-top:8px; font-size:12px; color:#94a3b8;">
             基礎6艇合計 <?= number_format((float)($aiTrioTotals['base'] ?? 0), 2) ?>%
             / AI6艇合計 <?= number_format((float)($aiTrioTotals['ai'] ?? 0), 2) ?>%
-            / 本番係数はP1学習値を固定
+            / ENTRY_MODE本番係数を固定
+            <?= (($aiTrioMethod['entry_source'] ?? '') === 'virtual') ? ' / 仮想進入試算' : '' ?>
         </div>
     <?php else: ?>
         <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
