@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import time
 from pathlib import Path
@@ -12,10 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FORECAST_DIR = REPO_ROOT / "forecast"
 sys.path.insert(0, str(FORECAST_DIR))
 
-import corrected_winrate_live_exact as exact  # noqa: E402
-
-live = exact.live
-SPECIAL = {"AMG", "TKY"}
+NO_STRAIGHT_PLACES = {"AMG", "TKY", "SME"}
 
 
 def timed(label, fn, rows):
@@ -25,6 +21,16 @@ def timed(label, fn, rows):
     rows.append((label, sec))
     print(f"{label:<34} {sec * 1000:10.1f} ms  ({sec:6.2f} sec)")
     return value
+
+
+def load_production_route(place_code: str):
+    """本番Webと同じ補正後1着率ルートを読み込む。"""
+    if place_code in NO_STRAIGHT_PLACES:
+        import corrected_winrate_live_exact_no_straight_fact as route  # noqa: E402
+        return route.live, "no_straight_fact"
+
+    import corrected_winrate_live_exact_fact as route  # noqa: E402
+    return route.live, "exact_fact"
 
 
 def main() -> int:
@@ -38,9 +44,7 @@ def main() -> int:
         return 1
 
     place_code = race_code[8:11]
-    if place_code in SPECIAL:
-        # import時にAMG/TKY専用の展示・SUM関数へ追加差し替えされる。
-        import corrected_winrate_live_exact_amg_tky  # noqa: F401,E402
+    live, route_name = load_production_route(place_code)
 
     rows = []
     all0 = time.perf_counter()
@@ -49,7 +53,8 @@ def main() -> int:
     print("補正後1着率 Python内部 段階計測")
     print("=" * 90)
     print(f"race_code : {race_code}")
-    print(f"place     : {place_code}\n")
+    print(f"place     : {place_code}")
+    print(f"route     : {route_name}\n")
 
     with live.connect_db() as conn:
         target = timed(
