@@ -178,7 +178,7 @@ def rebuild_place(conn, place_code: str, feature_cols: list[str]) -> dict:
         sql = """
             INSERT INTO boat_race.sum_history_fact (
                 race_code, race_date, place_code, course,
-                interval_label, win, feature_signature, rebuilt_at
+                interval_label, win, feature_signature
             ) VALUES %s
             ON CONFLICT (race_code, course) DO UPDATE SET
                 race_date = EXCLUDED.race_date,
