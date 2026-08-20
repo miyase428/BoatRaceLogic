@@ -83,16 +83,16 @@ def load_target(conn, race_code):
 
 
 def load_venue_course_prior(conn, race_code, target_date, place_code):
+    # race_code は YYYYMMDD+場3文字+R2桁の固定形式なので、
+    # 旧「過去日 OR 同日でrace_codeが小さい」と race_code < target は等価。
     sql = """
         WITH winner_rows AS (
             SELECT rrd.race_code, COUNT(*) AS winner_count,
                    MIN(rrd.entry_course) AS winner_course
             FROM boat_race.race_result_detail rrd
-            JOIN boat_race.race_master rm ON rm.race_code = rrd.race_code
             WHERE rrd.rank = '1'
               AND SUBSTRING(rrd.race_code, 9, 3) = %s
-              AND (rm.race_date < %s::date
-                   OR (rm.race_date = %s::date AND rrd.race_code < %s))
+              AND rrd.race_code < %s
             GROUP BY rrd.race_code
         )
         SELECT winner_course, COUNT(*)
@@ -104,7 +104,7 @@ def load_venue_course_prior(conn, race_code, target_date, place_code):
     """
     counts = {c: 0 for c in range(1, 7)}
     with conn.cursor() as cur:
-        cur.execute(sql, (place_code, target_date.isoformat(), target_date.isoformat(), race_code))
+        cur.execute(sql, (place_code, race_code))
         for course, wins in cur.fetchall():
             c = valid_course(course)
             if c is not None:
@@ -116,12 +116,13 @@ def load_venue_course_prior(conn, race_code, target_date, place_code):
 
 
 def load_last_100(conn, player_id, target_date, target_race_code):
+    # player_id×race_code indexを直接使えるよう、race_master JOINと日付ソートを外す。
+    # 固定race_code形式のため旧条件・並び順と完全一致する。
     sql = """
         SELECT re.race_code, re.lane_number, rrd.rank,
                rrd.entry_course AS result_course,
                el.entry_course AS exhibition_course
         FROM boat_race.race_entry re
-        JOIN boat_race.race_master rm ON rm.race_code = re.race_code
         LEFT JOIN boat_race.race_result_detail rrd
           ON rrd.race_code = re.race_code AND rrd.player_id = re.player_id
         LEFT JOIN LATERAL (
@@ -131,13 +132,12 @@ def load_last_100(conn, player_id, target_date, target_race_code):
             LIMIT 1
         ) el ON TRUE
         WHERE re.player_id::text = %s
-          AND (rm.race_date < %s::date
-               OR (rm.race_date = %s::date AND re.race_code < %s))
-        ORDER BY rm.race_date DESC, re.race_code DESC
+          AND re.race_code < %s
+        ORDER BY re.race_code DESC
         LIMIT 100
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (player_id, target_date.isoformat(), target_date.isoformat(), target_race_code))
+        cur.execute(sql, (player_id, target_race_code))
         rows = cur.fetchall()
     out = []
     for race_code, lane, rank, result_course, exhibition_course in rows:
