@@ -1,7 +1,10 @@
 <?php
 // STEP C2/C3で検証した「穴警戒HIGH + TRIO_OUTER」を表示専用で再現する。
-// STEP C6で固定した STRONG_A（TRIO1=CURRENT かつ TRIO1-TRIO2差>=10pt）のみ
-// 「穴頭信頼度：強」を先行表示する。中・弱はまだ付与しない。
+// STEP C5/C6の結果から穴頭信頼度を3段階で表示する。
+//   強: TRIO1=CURRENT かつ TRIO1-TRIO2差>=10pt
+//   弱: TRIO1-TRIO2差<2pt
+//   中: 上記以外のHIGH
+// C7以降はこの分類の未来検証として扱い、表示導入の前提にはしない。
 // 最終予想・本命/対抗・cut・買い目ロジックには接続しない。
 $upsetAlertStatus = 'waiting';
 $upsetAlertHigh = false;
@@ -16,7 +19,7 @@ $upsetHoleTrioRate = null;
 $upsetHoleSecondTrioRate = null;
 $upsetHoleTrioGap = null;
 $upsetHoleCourse = 0;
-$upsetHeadConfidenceStrong = false;
+$upsetHeadConfidence = '';
 
 $upsetCourseByBoat = [];
 foreach (is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [] as $boatKey => $row) {
@@ -95,14 +98,15 @@ if (
         && $upsetInWinRate < 50.0
     );
 
-    // C6のA_STRONG_BOTHをそのまま表示専用で適用する。
-    // HIGH内で「TRIO_TOP1=現行本命」かつ「TRIO_TOP1-TOP2差>=10pt」の場合だけ強。
-    $upsetHeadConfidenceStrong = (
-        $upsetAlertHigh
-        && $upsetHoleHead === $upsetCurrentHead
-        && $upsetHoleTrioGap !== null
-        && $upsetHoleTrioGap >= 10.0
-    );
+    if ($upsetAlertHigh && $upsetHoleTrioGap !== null) {
+        if ($upsetHoleHead === $upsetCurrentHead && $upsetHoleTrioGap >= 10.0) {
+            $upsetHeadConfidence = 'strong';
+        } elseif ($upsetHoleTrioGap < 2.0) {
+            $upsetHeadConfidence = 'weak';
+        } else {
+            $upsetHeadConfidence = 'middle';
+        }
+    }
 
     $upsetAlertStatus = 'ok';
 } else {
@@ -119,6 +123,22 @@ $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
         . htmlspecialchars((string)$c['border'], ENT_QUOTES, 'UTF-8')
         . ';display:inline-block;min-width:58px;width:auto;height:auto;line-height:1.4;padding:3px 8px;border-radius:5px;box-sizing:border-box;white-space:nowrap;text-align:center;font-weight:bold;">'
         . $boat . '号艇</span>';
+};
+
+$upsetConfidenceBadge = static function (string $level): string {
+    $styles = [
+        'strong' => ['label' => '強', 'bg' => '#e4efe0', 'border' => '#9bb795', 'color' => '#466545'],
+        'middle' => ['label' => '中', 'bg' => '#f3ead8', 'border' => '#cfb477', 'color' => '#7b6332'],
+        'weak' => ['label' => '弱', 'bg' => '#eeeeeb', 'border' => '#bebdb6', 'color' => '#66655f'],
+    ];
+    if (!isset($styles[$level])) {
+        return '';
+    }
+    $s = $styles[$level];
+    return '<span style="display:inline-block;padding:2px 7px;border-radius:999px;background:'
+        . $s['bg'] . ';border:1px solid ' . $s['border'] . ';color:' . $s['color']
+        . ';font-size:11px;font-weight:bold;white-space:nowrap;">穴頭信頼度：'
+        . $s['label'] . '</span>';
 };
 ?>
 
@@ -155,9 +175,7 @@ $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
             <div style="flex:1 1 210px; background:#f4ead7; border:1px solid #d9a74f; border-radius:6px; padding:9px 10px;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
                     <div style="font-size:11px; color:#7b6640;">穴頭候補（TRIO_OUTER）</div>
-                    <?php if ($upsetHeadConfidenceStrong): ?>
-                        <span style="display:inline-block; padding:2px 7px; border-radius:999px; background:#e4efe0; border:1px solid #9bb795; color:#466545; font-size:11px; font-weight:bold; white-space:nowrap;">穴頭信頼度：強</span>
-                    <?php endif; ?>
+                    <?= $upsetConfidenceBadge($upsetHeadConfidence) ?>
                 </div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <?= $upsetBoatBadge($upsetHoleHead) ?>
@@ -169,8 +187,8 @@ $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
                 <?php if ($upsetHoleHead === $upsetCurrentHead): ?>
                     <div style="font-size:11px; color:#7b6640; margin-top:4px;">現行本命と穴候補が一致</div>
                 <?php endif; ?>
-                <?php if ($upsetHeadConfidenceStrong && $upsetHoleTrioGap !== null): ?>
-                    <div style="font-size:11px; color:#466545; margin-top:4px;">
+                <?php if ($upsetHoleTrioGap !== null): ?>
+                    <div style="font-size:11px; color:#6b7785; margin-top:4px;">
                         AI3連対率 Top2差 <?= number_format($upsetHoleTrioGap, 1) ?>pt
                     </div>
                 <?php endif; ?>
@@ -179,7 +197,7 @@ $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
 
         <?php if (!empty($simulation_active)): ?>
             <div style="font-size:11px; color:#aa741f; margin-top:8px;">
-                ※仮想進入での試算表示。C2/C3/C6の検証は実展示進入基準です。
+                ※仮想進入での試算表示。C2/C3/C5/C6の検証は実展示進入基準です。
             </div>
         <?php endif; ?>
     <?php elseif ($upsetAlertStatus === 'ok'): ?>
