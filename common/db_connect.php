@@ -1,13 +1,23 @@
 <?php
 // db_connect.php
 
+require_once __DIR__ . '/db_env.php';
+
 function getPDO()
 {
+    $db = loadDbEnv();
+
+    $dsn = sprintf(
+        'pgsql:host=%s;port=%s;dbname=%s',
+        $db['host'],
+        $db['port'],
+        $db['dbname']
+    );
+
     return new PDO(
-        #"pgsql:host=192.168.0.205;dbname=devdb",
-        "pgsql:host=192.168.0.208;dbname=devdb",
-        "miyase428",
-        "herunia0113",
+        $dsn,
+        $db['user'],
+        $db['password'],
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
 }
