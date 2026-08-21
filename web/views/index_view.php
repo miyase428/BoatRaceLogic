@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BoatRace Analytics</title>
 
+    <!-- PWA / iPhoneホーム画面対応 -->
+    <link rel="manifest" href="/web/manifest.webmanifest">
+    <meta name="theme-color" content="#1683bd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="BoatRace">
+
     <!-- CSS 分離版 -->
     <link rel="stylesheet" href="/web/assets/css/style.css">
 </head>
@@ -781,6 +788,17 @@
     </div>
 
 </div> <!-- container -->
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/web/service-worker.js')
+            .catch(function (error) {
+                console.warn('Service Worker registration failed:', error);
+            });
+    });
+}
+</script>
 
 </body>
 </html>

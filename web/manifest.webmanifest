@@ -1,0 +1,10 @@
+{
+  "name": "BoatRace Analytics",
+  "short_name": "BoatRace",
+  "start_url": "/web/index.php",
+  "scope": "/web/",
+  "display": "standalone",
+  "background_color": "#f8f4ec",
+  "theme_color": "#1683bd",
+  "orientation": "portrait-primary"
+}
