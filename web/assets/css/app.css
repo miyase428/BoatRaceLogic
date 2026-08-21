@@ -76,8 +76,12 @@ body {
 
 .app-form-grid {
     display: grid;
-    grid-template-columns: 1.05fr 1.35fr 0.7fr;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr) minmax(0, 0.7fr);
     gap: 7px;
+}
+
+.app-form-field {
+    min-width: 0;
 }
 
 .app-form-field label {
@@ -92,6 +96,7 @@ body {
 .app-form-field select {
     width: 100%;
     min-width: 0;
+    max-width: 100%;
     height: 38px;
     padding: 5px 7px;
     border: 1px solid #cbbda9;
@@ -99,6 +104,11 @@ body {
     background: #fffdf9;
     color: #2b3440;
     font-size: 14px;
+}
+
+.app-form-field input[type="date"] {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .app-actions {
@@ -338,7 +348,7 @@ body {
     margin-bottom: 10px !important;
 }
 
-@media (max-width: 390px) {
+@media (max-width: 430px) {
     .app-shell {
         padding-left: 7px;
         padding-right: 7px;
@@ -349,7 +359,7 @@ body {
     }
 
     .app-form-grid {
-        grid-template-columns: 1fr 1.18fr 0.62fr;
+        grid-template-columns: minmax(0, 1.12fr) minmax(0, 1.18fr) minmax(62px, 0.65fr);
         gap: 5px;
     }
 
