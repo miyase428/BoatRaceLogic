@@ -359,18 +359,15 @@ body {
         font-size: 21px;
     }
 
-    /* iOSのdate入力は横幅を強く取りやすいため、
-       スマホでは日付を1段、開催場+Rを2段目に分けて確実に収める。 */
+    /* 日付・開催場・Rをスマホでも1行に収める。
+       date入力はiOSの固有幅があるため、日付側を固定しすぎず中央表示する。 */
     .app-form-grid {
-        grid-template-columns: minmax(0, 1fr) 82px;
-        grid-template-areas:
-            "date date"
-            "place race";
-        gap: 7px;
+        grid-template-columns: minmax(132px, 1.15fr) minmax(0, 1fr) 76px;
+        gap: 6px;
+        align-items: end;
     }
 
     .app-form-field:nth-child(1) {
-        grid-area: date;
         min-width: 0;
         overflow: hidden;
         position: relative;
@@ -391,20 +388,12 @@ body {
         pointer-events: none;
     }
 
-    .app-form-field:nth-child(2) {
-        grid-area: place;
-    }
-
-    .app-form-field:nth-child(3) {
-        grid-area: race;
-    }
-
     .app-form-field input,
     .app-form-field select {
         height: 40px;
-        font-size: 14px;
-        padding-left: 8px;
-        padding-right: 8px;
+        font-size: 13px;
+        padding-left: 7px;
+        padding-right: 7px;
     }
 
     .app-form-field input[type="date"] {
@@ -421,11 +410,13 @@ body {
         padding-top: 0;
         padding-bottom: 0;
         border-color: transparent;
+        text-align: center;
     }
 
     .app-form-field input[type="date"]::-webkit-date-and-time-value {
         min-height: 0;
         line-height: 38px;
+        text-align: center;
     }
 
     .app-compare {
