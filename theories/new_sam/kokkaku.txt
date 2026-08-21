@@ -7,9 +7,7 @@ sum 値の区間ごとに着順率を集計し、
 
 【前提】
 ・展示データは PostgreSQL に保存されている
-・接続情報：pgsql:host=192.168.0.208;port=5432;dbname=devdb;
-・ユーザ：miyase428
-・パスワード：herunia0113
+・DB接続情報はリポジトリ直下の .env から common/db_config.py 経由で読み込む
 ・スキーマ名：boat_race
 ・展示情報のテーブル名：exhibition_live
 ・使用するカラム：
