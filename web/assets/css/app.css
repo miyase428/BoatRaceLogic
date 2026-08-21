@@ -359,8 +359,7 @@ body {
         font-size: 21px;
     }
 
-    /* 日付・開催場・Rをスマホでも1行に収める。
-       date入力はiOSの固有幅があるため、日付側を固定しすぎず中央表示する。 */
+    /* 日付・開催場・Rをスマホでも1行に収める。 */
     .app-form-grid {
         grid-template-columns: minmax(132px, 1.15fr) minmax(0, 1fr) 76px;
         gap: 6px;
@@ -373,8 +372,8 @@ body {
         position: relative;
     }
 
-    /* iPhone Safariではnative date入力の右枠だけ描画領域の外へ出ることがある。
-       見える枠は親側で重ねて描画し、右端の欠けを防ぐ。 */
+    /* iPhone Safariのdate入力はnative表示が左右非対称になりやすい。
+       nativeの外観を外し、入力値そのものを入力欄の中央へ配置する。 */
     .app-form-field:nth-child(1)::after {
         content: "";
         position: absolute;
@@ -397,6 +396,8 @@ body {
     }
 
     .app-form-field input[type="date"] {
+        -webkit-appearance: none;
+        appearance: none;
         display: block;
         width: 100%;
         min-width: 0;
@@ -407,32 +408,39 @@ body {
         height: 40px;
         min-height: 40px;
         max-height: 40px;
-        padding-top: 0;
-        padding-bottom: 0;
+        margin: 0;
+        padding: 0;
         border-color: transparent;
+        border-radius: 7px;
+        background: #fffdf9;
+        color: #2b3440;
         text-align: center;
         position: relative;
     }
 
     .app-form-field input[type="date"]::-webkit-date-and-time-value {
+        width: 100%;
         min-height: 0;
+        margin: 0;
+        padding: 0;
         line-height: 38px;
         text-align: center;
-        transform: translateX(-14px);
     }
 
     .app-form-field input[type="date"]::-webkit-datetime-edit {
-        display: flex;
-        justify-content: center;
+        display: block;
         width: 100%;
+        margin: 0;
         padding: 0;
-        transform: translateX(-14px);
+        text-align: center;
     }
 
     .app-form-field input[type="date"]::-webkit-datetime-edit-fields-wrapper {
         display: flex;
         justify-content: center;
         width: 100%;
+        margin: 0;
+        padding: 0;
     }
 
     .app-form-field input[type="date"]::-webkit-calendar-picker-indicator {
