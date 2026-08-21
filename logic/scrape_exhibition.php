@@ -1,6 +1,8 @@
 <?php
 date_default_timezone_set('Asia/Tokyo');
 
+require_once __DIR__ . '/../common/db_connect.php';
+
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
 // ------------------------------------------------------------
@@ -85,13 +87,7 @@ $placeMap = require __DIR__ . '/../config/place_map.php';
 // ------------------------------------------------------------
 // PostgreSQL 接続
 // ------------------------------------------------------------
-$pdo = new PDO(
-    #"pgsql:host=192.168.0.205;dbname=devdb",
-    "pgsql:host=192.168.0.208;dbname=devdb",
-    "miyase428",
-    "herunia0113",
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$pdo = getPDO();
 
 // ------------------------------------------------------------
 // 日付ごとの処理開始
