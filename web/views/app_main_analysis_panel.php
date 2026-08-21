@@ -3,6 +3,12 @@
 ?>
 <section class="app-card app-basic-card app-analysis-card">
     <div class="app-basic-grid">
+        <div class="app-basic-section">🚤 艇番・進入</div>
+        <div class="app-basic-label app-basic-head-label">艇</div>
+        <?php for ($boat = 1; $boat <= 6; $boat++): ?>
+            <div class="app-basic-value app-basic-head-cell app-main-head-cell"><?= $appBasicBoatHeader($boat) ?></div>
+        <?php endfor; ?>
+
         <div class="app-basic-section">🎯 1着率</div>
         <?php $appBasicRenderRow('場1着率', static function (int $boat) use ($baseWinBoats, $appBasicPct): string {
             return $appBasicPct($baseWinBoats[$boat]['p0'] ?? null, 1, 100.0);
@@ -85,8 +91,8 @@
         <?php $appBasicRenderRow('展示総合スコア', static function (int $boat) use ($appBasicTenji, $appBasicEsc): string {
             return $appBasicEsc($appBasicTenji[$boat]['ex_sougou'] ?? '-');
         }, 'app-basic-small-label'); ?>
-        <?php $appBasicRenderRow('展示タイプ名', static function (int $boat) use ($appBasicTenji, $appBasicEsc): string {
-            return '<span class="app-basic-type">' . $appBasicEsc($appBasicTenji[$boat]['dtype'] ?? '-') . '</span>';
+        <?php $appBasicRenderRow('展示タイプ名', static function (int $boat) use ($appBasicTenji, $appBasicTypeBadge): string {
+            return $appBasicTypeBadge($appBasicTenji[$boat]['dtype'] ?? '');
         }, 'app-basic-compact'); ?>
         <?php $appBasicRenderRow('展開キー', static function (int $boat) use ($appBasicTenji, $appBasicEsc): string {
             return $appBasicEsc($appBasicTenji[$boat]['tenkai_key'] ?? '-');
