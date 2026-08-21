@@ -313,10 +313,58 @@ $tabsScript = <<<'HTML'
         activate(initial);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupTabs);
-    } else {
+    function setupLoading() {
+        if (document.querySelector('.app-loading-overlay')) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'app-loading-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = '<div class="app-loading-box" role="status" aria-live="polite">'
+            + '<div class="app-loading-spinner"></div>'
+            + '<div class="app-loading-message">読み込み中…</div>'
+            + '</div>';
+        document.body.appendChild(overlay);
+
+        const message = overlay.querySelector('.app-loading-message');
+
+        function showLoading(text, button) {
+            if (message) message.textContent = text;
+            overlay.classList.add('is-visible');
+            overlay.setAttribute('aria-hidden', 'false');
+            if (button) {
+                button.classList.add('is-loading');
+                button.disabled = true;
+            }
+        }
+
+        document.querySelectorAll('.app-shell form').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                const exhibition = !!form.querySelector('button[name="update_exhibition"]');
+                const submitter = event.submitter || form.querySelector('button[type="submit"]');
+                showLoading(
+                    exhibition ? '展示情報を取得・更新中…' : 'レース情報を取得中…',
+                    submitter
+                );
+            });
+        });
+
+        const reloadButton = document.querySelector('.app-actions .app-btn-secondary[type="button"]');
+        if (reloadButton) {
+            reloadButton.addEventListener('click', function () {
+                showLoading('再読み込み中…', reloadButton);
+            }, {capture: true});
+        }
+    }
+
+    function initAppEnhancements() {
         setupTabs();
+        setupLoading();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAppEnhancements);
+    } else {
+        initAppEnhancements();
     }
 })();
 </script>
