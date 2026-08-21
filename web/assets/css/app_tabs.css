@@ -1,4 +1,4 @@
-/* Excelモックをもとにしたアプリ用2タブ表示。
+/* Excelモックをもとにしたアプリ用タブ表示。
  * PC版には影響させない。
  */
 
@@ -7,7 +7,7 @@
     top: env(safe-area-inset-top);
     z-index: 20;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0;
     margin: 0 0 10px;
     padding: 0 2px;
@@ -98,6 +98,246 @@
     margin: 0 0 10px !important;
 }
 
+/* 3連単120通り専用タブ */
+.app-trifecta-card {
+    overflow: hidden;
+}
+
+.app-trifecta-heading {
+    padding-bottom: 8px;
+}
+
+.app-trifecta-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 0 11px 10px;
+}
+
+.app-trifecta-stat {
+    min-width: 0;
+    padding: 7px 5px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    background: var(--app-card-strong);
+    text-align: center;
+}
+
+.app-trifecta-stat span,
+.app-trifecta-stat strong {
+    display: block;
+    white-space: nowrap;
+}
+
+.app-trifecta-stat span {
+    margin-bottom: 2px;
+    color: var(--app-muted);
+    font-size: 9px;
+}
+
+.app-trifecta-stat strong {
+    color: #3f4b5a;
+    font-size: 11px;
+}
+
+.app-trifecta-controls {
+    padding-top: 0;
+}
+
+.app-trifecta-search-label {
+    display: block;
+    color: var(--app-muted);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.app-trifecta-search {
+    width: 100%;
+    height: 38px;
+    margin-top: 4px;
+    padding: 6px 9px;
+    border: 1px solid #cbbda9;
+    border-radius: 7px;
+    background: #fffdf9;
+    color: #2b3440;
+    font-size: 14px;
+}
+
+.app-trifecta-position-filters {
+    display: grid;
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.app-trifecta-filter-group {
+    display: grid;
+    grid-template-columns: 35px repeat(7, minmax(0, 1fr));
+    gap: 3px;
+    align-items: center;
+}
+
+.app-trifecta-filter-label {
+    color: var(--app-muted);
+    font-size: 10px;
+    font-weight: 900;
+    text-align: center;
+}
+
+.app-trifecta-filter,
+.app-trifecta-clear {
+    min-height: 31px;
+    padding: 3px 2px;
+    border: 1px solid #cbbda9;
+    border-radius: 5px;
+    background: #eee6da;
+    color: #4b5866;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.app-trifecta-filter.is-active {
+    border-color: var(--app-accent);
+    background: #fffaf2;
+    color: var(--app-accent);
+    box-shadow: inset 0 0 0 1px var(--app-accent);
+}
+
+.app-trifecta-control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.app-trifecta-count {
+    color: var(--app-muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.app-trifecta-clear {
+    min-width: 64px;
+    padding-inline: 8px;
+}
+
+.app-trifecta-table-wrap {
+    overflow-x: auto;
+    border-top: 1px solid var(--app-border);
+    -webkit-overflow-scrolling: touch;
+}
+
+.app-trifecta-table {
+    width: 100%;
+    min-width: 610px;
+    border-collapse: collapse;
+    background: var(--app-card);
+}
+
+.app-trifecta-table th,
+.app-trifecta-table td {
+    border-bottom: 1px solid var(--app-border);
+    padding: 7px 6px;
+    white-space: nowrap;
+    text-align: right;
+    font-size: 11px;
+}
+
+.app-trifecta-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #e8dfd2;
+}
+
+.app-trifecta-table th:nth-child(1),
+.app-trifecta-table td:nth-child(1) {
+    width: 48px;
+    text-align: center;
+}
+
+.app-trifecta-table th:nth-child(2),
+.app-trifecta-table td:nth-child(2) {
+    min-width: 124px;
+    text-align: left;
+}
+
+.app-trifecta-table th button {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #3f4b5a;
+    font: inherit;
+    font-weight: 900;
+    text-align: inherit;
+    white-space: nowrap;
+}
+
+.app-trifecta-table th button.is-active {
+    color: var(--app-accent);
+}
+
+.app-trifecta-rank {
+    color: var(--app-muted);
+    font-weight: 900;
+}
+
+.app-trifecta-final {
+    color: #aa741f;
+    font-size: 13px !important;
+    font-weight: 900;
+}
+
+.app-trifecta-delta-plus {
+    color: #2f789f;
+    font-weight: 800;
+}
+
+.app-trifecta-delta-minus {
+    color: #6b7785;
+    font-weight: 800;
+}
+
+.app-trifecta-combination {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.app-trifecta-separator {
+    color: #8a8176;
+    font-weight: 700;
+}
+
+.app-trifecta-boat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    height: 25px;
+    border: 1px solid rgba(0, 0, 0, 0.16);
+    border-radius: 5px;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.app-trifecta-boat-1 { background:#fff; color:#222; }
+.app-trifecta-boat-2 { background:#333; color:#fff; }
+.app-trifecta-boat-3 { background:#d84a46; color:#fff; }
+.app-trifecta-boat-4 { background:#4b7fd0; color:#fff; }
+.app-trifecta-boat-5 { background:#f2d44b; color:#222; }
+.app-trifecta-boat-6 { background:#55a868; color:#fff; }
+
+.app-trifecta-foot {
+    color: var(--app-muted);
+    font-size: 10px;
+}
+
+.app-trifecta-error {
+    color: #a33f32;
+}
+
 /* レース表示・展示更新の送信中に全画面で状態を見せる。 */
 .app-loading-overlay {
     position: fixed;
@@ -156,7 +396,7 @@
 @media (max-width: 390px) {
     .app-tab {
         min-height: 40px;
-        font-size: 13px;
+        font-size: 12px;
     }
 
     .app-exacta-grid {
@@ -165,5 +405,31 @@
 
     .app-exacta-grid > div {
         font-size: 9px;
+    }
+
+    .app-trifecta-stats {
+        gap: 4px;
+    }
+
+    .app-trifecta-stat {
+        padding-inline: 3px;
+    }
+
+    .app-trifecta-stat span {
+        font-size: 8px;
+    }
+
+    .app-trifecta-stat strong {
+        font-size: 10px;
+    }
+
+    .app-trifecta-filter-group {
+        grid-template-columns: 32px repeat(7, minmax(0, 1fr));
+        gap: 2px;
+    }
+
+    .app-trifecta-filter {
+        min-height: 30px;
+        font-size: 10px;
     }
 }
