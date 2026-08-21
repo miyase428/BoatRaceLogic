@@ -4,19 +4,20 @@
 
 import json
 import os
+import sys
+from pathlib import Path
+
 import psycopg2
 from classify_slit_pattern import classify_slit_pattern
 
-# ------------------------------------------------------------
-# PostgreSQL 接続情報
-# ------------------------------------------------------------
-DB_CONFIG = {
-    "host": "192.168.0.208",
-    "port": 5432,
-    "dbname": "devdb",
-    "user": "miyase428",
-    "password": "herunia0113",
-}
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from common.db_config import load_db_config
+
+DB_CONFIG = load_db_config()
+
 
 def connect_db():
     return psycopg2.connect(
@@ -173,35 +174,26 @@ def calc_pattern_rates(races):
 # ------------------------------------------------------------
 def calc_buff_debuff(stats, baseline, counts_total):
     buff = {}
-    
-    # ハイパーパラメータの設定
-    # Kが大きいほど、サンプル数が少ないときに差分が0（影響なし）に強く引き戻されます（例: 30〜50推奨）
-    K = 40 
-    
-    # 確率変動の物理的な上限・下限キャップ（例: 最大でも ±8% = 0.08 までに制限）
+
+    K = 40
     MAX_CAP = 0.08
 
     for pid in range(1, 13):
         buff[pid] = {}
         for lane in range(1, 7):
             n = counts_total[pid][lane]["total"]
-            
-            # ベイズ平滑化の重み係数 (0.0 〜 1.0)
             shrinkage_weight = n / (n + K)
 
-            # 各指標の生差分を計算し、シュリンク係数を掛ける
             raw_win = stats[pid][lane]["win"] - baseline[lane]["win"]
             raw_place2 = stats[pid][lane]["place2"] - baseline[lane]["place2"]
             raw_place3 = stats[pid][lane]["place3"] - baseline[lane]["place3"]
             raw_trio = stats[pid][lane]["trio"] - baseline[lane]["trio"]
 
-            # シュリンク適用後の値
             shrunk_win = raw_win * shrinkage_weight
             shrunk_place2 = raw_place2 * shrinkage_weight
             shrunk_place3 = raw_place3 * shrinkage_weight
             shrunk_trio = raw_trio * shrinkage_weight
 
-            # 上下限キャップ（クリップ）をかけて異常値を排除
             buff[pid][lane] = {
                 "win": max(-MAX_CAP, min(MAX_CAP, shrunk_win)),
                 "place2": max(-MAX_CAP, min(MAX_CAP, shrunk_place2)),
@@ -224,25 +216,17 @@ def main():
 
     settings = venue_settings["default"]
 
-    # レースデータ読み込み
     print("レースデータを読み込んでいます...")
     races = load_race_data()
 
-    # パターンID付与
     print("スリットパターンを分類しています...")
     for race in races:
         race["pattern_id"], _ = classify_slit_pattern(race["st"], settings)
 
-    # 基準着順率
     baseline = calc_baseline_rates(races)
-
-    # パターン別着順率（生カウントも同時に受け取る）
     stats, counts_total = calc_pattern_rates(races)
-
-    # バフデバフ（シュリンク ＆ キャップ適用）
     buff = calc_buff_debuff(stats, baseline, counts_total)
 
-    # JSON 出力
     out_stats = os.path.join(base_path, "stats_slit.json")
     out_base = os.path.join(base_path, "baseline_slit.json")
     out_buff = os.path.join(base_path, "buff_debuff_slit.json")
