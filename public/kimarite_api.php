@@ -67,22 +67,12 @@ function empty_kimarite() {
 }
 
 // ------------------------------------------------------------
-// 5. 期間ごとの決まり手集計
+// 5. 1年・6ヶ月を同じ履歴走査1回で集計
 // ------------------------------------------------------------
-// 固定2期間検証で採用した race_entry 母集団方式。
-// - 母集団: race_entry（完了レースのみ）
-// - 実進入: race_result_detail.entry_course を優先
-//           本人 result_detail 行が欠けた場合だけ exhibition_live.entry_course で補完
-// - 1コース敗戦系 / 2コース逃がし: 勝者側の決まり手・勝者コースから再構築
-// - 3～6コース勝利系: 勝者が本人かつ勝者の決まり手から集計
-// - 集計対象: 全場 / 選手×今回の展示進入コース
-//
-// 既存仕様を維持し、期間の基準日は CURRENT_DATE のまま。
-function load_kimarite($pdo, $race_code, $in_course, $months) {
-    if (!in_array((int)$months, [6, 12], true)) {
-        throw new InvalidArgumentException('months must be 6 or 12');
-    }
-
+// 固定2期間検証で採用した race_entry 母集団方式はそのまま維持する。
+// 旧実装は12ヶ月用と6ヶ月用で同じ重い履歴SQLを2回実行していた。
+// 12ヶ月履歴を1回だけ取得し、6ヶ月分は race_date 条件付き集計で同時に算出する。
+function load_kimarite_both($pdo, $race_code, $in_course) {
     $sql = "
 WITH tm AS (
     SELECT *
@@ -108,6 +98,7 @@ today_members AS (
 
 past AS (
     SELECT
+        rm.race_date,
         re.player_id,
         COALESCE(rd.entry_course, ex.entry_course)::integer AS entry_course,
         w.player_id AS winner_player_id,
@@ -146,67 +137,127 @@ past AS (
         LIMIT 1
     ) w ON TRUE
 
-    WHERE rm.race_date >= CURRENT_DATE - INTERVAL '{$months} months'
+    WHERE rm.race_date >= CURRENT_DATE - INTERVAL '12 months'
       AND re.player_id IN (SELECT player_id FROM today_members)
 ),
 
-agg AS (
+joined AS (
     SELECT
         tm.today_course AS course,
-        COUNT(p.player_id) AS total_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course = 1
-              AND p.winner_player_id = tm.player_id
-        ) AS nige_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course = 1
-              AND p.winner_player_id <> tm.player_id
-              AND p.winner_technique = '差し'
-        ) AS sasare_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course = 1
-              AND p.winner_player_id <> tm.player_id
-              AND p.winner_technique = 'まくり'
-        ) AS makurare_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course = 1
-              AND p.winner_player_id <> tm.player_id
-              AND p.winner_technique = 'まくり差し'
-        ) AS makurarezashi_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course = 2
-              AND p.winner_player_id <> tm.player_id
-              AND p.winner_course = 1
-        ) AS nogashi_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course <> 1
-              AND p.winner_player_id = tm.player_id
-              AND p.winner_technique = '差し'
-        ) AS sashi_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course <> 1
-              AND p.winner_player_id = tm.player_id
-              AND p.winner_technique = 'まくり'
-        ) AS makuri_cnt,
-
-        COUNT(*) FILTER (
-            WHERE tm.today_course <> 1
-              AND p.winner_player_id = tm.player_id
-              AND p.winner_technique = 'まくり差し'
-        ) AS makurizashi_cnt
-
+        tm.player_id AS target_player_id,
+        p.*
     FROM today_members tm
     LEFT JOIN past p
       ON p.player_id = tm.player_id
      AND p.entry_course = tm.today_course::integer
-    GROUP BY tm.today_course, tm.player_id
+),
+
+agg AS (
+    SELECT
+        course,
+        target_player_id AS player_id,
+
+        COUNT(player_id) AS total_12,
+        COUNT(player_id) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+        ) AS total_6,
+
+        COUNT(*) FILTER (
+            WHERE course = 1
+              AND winner_player_id = target_player_id
+        ) AS nige_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course = 1
+              AND winner_player_id = target_player_id
+        ) AS nige_6,
+
+        COUNT(*) FILTER (
+            WHERE course = 1
+              AND winner_player_id <> target_player_id
+              AND winner_technique = '差し'
+        ) AS sasare_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course = 1
+              AND winner_player_id <> target_player_id
+              AND winner_technique = '差し'
+        ) AS sasare_6,
+
+        COUNT(*) FILTER (
+            WHERE course = 1
+              AND winner_player_id <> target_player_id
+              AND winner_technique = 'まくり'
+        ) AS makurare_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course = 1
+              AND winner_player_id <> target_player_id
+              AND winner_technique = 'まくり'
+        ) AS makurare_6,
+
+        COUNT(*) FILTER (
+            WHERE course = 1
+              AND winner_player_id <> target_player_id
+              AND winner_technique = 'まくり差し'
+        ) AS makurarezashi_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course = 1
+              AND winner_player_id <> target_player_id
+              AND winner_technique = 'まくり差し'
+        ) AS makurarezashi_6,
+
+        COUNT(*) FILTER (
+            WHERE course = 2
+              AND winner_player_id <> target_player_id
+              AND winner_course = 1
+        ) AS nogashi_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course = 2
+              AND winner_player_id <> target_player_id
+              AND winner_course = 1
+        ) AS nogashi_6,
+
+        COUNT(*) FILTER (
+            WHERE course <> 1
+              AND winner_player_id = target_player_id
+              AND winner_technique = '差し'
+        ) AS sashi_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course <> 1
+              AND winner_player_id = target_player_id
+              AND winner_technique = '差し'
+        ) AS sashi_6,
+
+        COUNT(*) FILTER (
+            WHERE course <> 1
+              AND winner_player_id = target_player_id
+              AND winner_technique = 'まくり'
+        ) AS makuri_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course <> 1
+              AND winner_player_id = target_player_id
+              AND winner_technique = 'まくり'
+        ) AS makuri_6,
+
+        COUNT(*) FILTER (
+            WHERE course <> 1
+              AND winner_player_id = target_player_id
+              AND winner_technique = 'まくり差し'
+        ) AS makurizashi_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= CURRENT_DATE - INTERVAL '6 months'
+              AND course <> 1
+              AND winner_player_id = target_player_id
+              AND winner_technique = 'まくり差し'
+        ) AS makurizashi_6
+
+    FROM joined
+    GROUP BY course, target_player_id
 )
 
 SELECT *
@@ -227,20 +278,22 @@ ORDER BY course;
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $result = [];
+    $data_1year = [];
+    $data_6month = [];
     for ($c = 1; $c <= 6; $c++) {
-        $result[$c] = empty_kimarite();
+        $data_1year[$c] = empty_kimarite();
+        $data_6month[$c] = empty_kimarite();
     }
 
-    $countColumns = [
-        'nige'          => 'nige_cnt',
-        'sashi'         => 'sashi_cnt',
-        'makuri'        => 'makuri_cnt',
-        'makurizashi'   => 'makurizashi_cnt',
-        'nogashi'       => 'nogashi_cnt',
-        'sasare'        => 'sasare_cnt',
-        'makurare'      => 'makurare_cnt',
-        'makurarezashi' => 'makurarezashi_cnt',
+    $countKeys = [
+        'nige',
+        'sashi',
+        'makuri',
+        'makurizashi',
+        'nogashi',
+        'sasare',
+        'makurare',
+        'makurarezashi',
     ];
 
     foreach ($rows as $r) {
@@ -249,26 +302,34 @@ ORDER BY course;
             continue;
         }
 
-        $total = intval($r['total_cnt'] ?? 0);
-        $result[$course]['_sample_n'] = $total;
+        $total12 = intval($r['total_12'] ?? 0);
+        $total6 = intval($r['total_6'] ?? 0);
+        $data_1year[$course]['_sample_n'] = $total12;
+        $data_6month[$course]['_sample_n'] = $total6;
 
-        foreach ($countColumns as $key => $column) {
-            $cnt = intval($r[$column] ?? 0);
-            $result[$course]['_counts'][$key] = $cnt;
-            $result[$course][$key] = $total > 0
-                ? round(100.0 * $cnt / $total, 1)
+        foreach ($countKeys as $key) {
+            $cnt12 = intval($r[$key . '_12'] ?? 0);
+            $cnt6 = intval($r[$key . '_6'] ?? 0);
+
+            $data_1year[$course]['_counts'][$key] = $cnt12;
+            $data_6month[$course]['_counts'][$key] = $cnt6;
+
+            $data_1year[$course][$key] = $total12 > 0
+                ? round(100.0 * $cnt12 / $total12, 1)
+                : 0.0;
+            $data_6month[$course][$key] = $total6 > 0
+                ? round(100.0 * $cnt6 / $total6, 1)
                 : 0.0;
         }
     }
 
-    return $result;
+    return [$data_1year, $data_6month];
 }
 
 // ------------------------------------------------------------
-// 6. 1年・6ヶ月のデータを取得
+// 6. 1年・6ヶ月のデータを同時取得
 // ------------------------------------------------------------
-$data_1year  = load_kimarite($pdo, $race_code, $in_course, 12);
-$data_6month = load_kimarite($pdo, $race_code, $in_course, 6);
+[$data_1year, $data_6month] = load_kimarite_both($pdo, $race_code, $in_course);
 
 // ------------------------------------------------------------
 // 7. JSON 出力
