@@ -9,17 +9,13 @@ import psycopg2
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 THEORY_DIR = REPO_ROOT / "theories" / "course_correction"
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(THEORY_DIR))
 
+from common.db_config import load_db_config
 from classify_slit_pattern import classify_slit_pattern
 
-DB_CONFIG = {
-    "host": "192.168.0.208",
-    "port": 5432,
-    "dbname": "devdb",
-    "user": "miyase428",
-    "password": "herunia0113",
-}
+DB_CONFIG = load_db_config()
 
 PATTERN_NAMES = {
     1: "通常型",
@@ -250,8 +246,6 @@ def compute(start_date, end_date):
 
                 processed += 1
 
-        # Current race must not be included in its own correction.
-        # Update rolling player history only after evaluation.
         if complete_st:
             for c in range(1, 7):
                 boat = by_course[c]
