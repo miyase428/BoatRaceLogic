@@ -1,0 +1,375 @@
+:root {
+    color-scheme: light;
+    --app-bg: #efe7da;
+    --app-card: #f8f4ec;
+    --app-card-strong: #f2ece2;
+    --app-border: #d8cdbc;
+    --app-text: #334155;
+    --app-muted: #6b7785;
+    --app-accent: #1683bd;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--app-bg);
+    color: var(--app-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app-shell {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 10px 10px 26px;
+}
+
+.app-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.app-title {
+    margin: 0;
+    color: var(--app-accent);
+    font-size: 23px;
+    line-height: 1.2;
+}
+
+.app-race-label {
+    color: var(--app-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.app-card {
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.app-card-body {
+    padding: 11px;
+}
+
+.app-section-title {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #2b3440;
+}
+
+.app-form-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1.35fr 0.7fr;
+    gap: 7px;
+}
+
+.app-form-field label {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--app-muted);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.app-form-field input,
+.app-form-field select {
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    padding: 5px 7px;
+    border: 1px solid #cbbda9;
+    border-radius: 7px;
+    background: #fffdf9;
+    color: #2b3440;
+    font-size: 14px;
+}
+
+.app-actions {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 7px;
+    margin-top: 8px;
+}
+
+.app-btn {
+    min-height: 40px;
+    border: 0;
+    border-radius: 7px;
+    padding: 8px 12px;
+    background: var(--app-accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.app-btn-secondary {
+    border: 1px solid #b9ad9c;
+    background: #ede5d8;
+    color: #45515f;
+}
+
+.app-entry-details {
+    margin-top: 8px;
+    border-top: 1px solid #ded4c5;
+    padding-top: 7px;
+}
+
+.app-entry-details summary {
+    cursor: pointer;
+    color: var(--app-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.app-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding-top: 7px;
+    font-size: 12px;
+}
+
+.app-entry-row input[type="text"] {
+    width: 92px;
+    height: 34px;
+    padding: 4px 7px;
+}
+
+.app-code {
+    margin-top: 7px;
+    color: var(--app-muted);
+    font-size: 11px;
+    text-align: right;
+}
+
+.app-compare {
+    display: grid;
+    grid-template-columns: 62px repeat(6, minmax(0, 1fr));
+    border-top: 1px solid var(--app-border);
+    border-left: 1px solid var(--app-border);
+}
+
+.app-compare > div {
+    min-width: 0;
+    min-height: 45px;
+    padding: 5px 2px;
+    border-right: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--app-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.app-compare-label {
+    background: #e5dccf;
+    color: #596574;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.app-compare-head {
+    background: #e8dfd2;
+    font-size: 9px;
+    color: #596574;
+}
+
+.app-boat-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 31px;
+    min-height: 23px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.app-rate {
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.app-rate-sub {
+    margin-top: 2px;
+    color: var(--app-muted);
+    font-size: 8px;
+    line-height: 1;
+}
+
+.app-rate-win {
+    color: #a16b17;
+}
+
+.app-rate-ai {
+    color: #75659b;
+}
+
+.app-rate-score {
+    color: #2f789f;
+}
+
+.app-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+}
+
+.app-summary-item {
+    padding: 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 7px;
+    background: var(--app-card-strong);
+}
+
+.app-summary-label {
+    margin-bottom: 5px;
+    color: var(--app-muted);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.app-summary-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 12px;
+}
+
+.app-buy {
+    grid-column: 1 / -1;
+}
+
+.app-buy-line {
+    display: grid;
+    grid-template-columns: 42px 1fr;
+    gap: 6px;
+    align-items: center;
+    padding-top: 4px;
+    font-size: 12px;
+}
+
+.app-buy-line strong {
+    color: #2f789f;
+    overflow-wrap: anywhere;
+}
+
+.app-note {
+    margin-top: 7px;
+    color: var(--app-muted);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.app-details summary {
+    cursor: pointer;
+    padding: 11px;
+    font-size: 13px;
+    font-weight: 800;
+    background: #e8dfd2;
+}
+
+.app-details-body {
+    padding: 9px;
+}
+
+.app-boat-detail {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 7px;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid #e2d9cc;
+    font-size: 11px;
+}
+
+.app-boat-detail:last-child {
+    border-bottom: 0;
+}
+
+.app-boat-detail-name {
+    min-width: 0;
+    font-weight: 700;
+}
+
+.app-boat-detail-data {
+    color: var(--app-muted);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.app-pc-link {
+    display: block;
+    margin-top: 9px;
+    text-align: center;
+    color: var(--app-accent);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+#upset-alert-panel {
+    margin-bottom: 10px !important;
+}
+
+@media (max-width: 390px) {
+    .app-shell {
+        padding-left: 7px;
+        padding-right: 7px;
+    }
+
+    .app-title {
+        font-size: 21px;
+    }
+
+    .app-form-grid {
+        grid-template-columns: 1fr 1.18fr 0.62fr;
+        gap: 5px;
+    }
+
+    .app-form-field input,
+    .app-form-field select {
+        font-size: 13px;
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .app-compare {
+        grid-template-columns: 56px repeat(6, minmax(0, 1fr));
+    }
+
+    .app-rate {
+        font-size: 12px;
+    }
+
+    .app-boat-badge {
+        min-width: 28px;
+        font-size: 10px;
+    }
+}
