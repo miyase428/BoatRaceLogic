@@ -1,0 +1,114 @@
+/* Excelモックをもとにしたアプリ用2タブ表示。
+ * PC版には影響させない。
+ */
+
+.app-tabs {
+    position: sticky;
+    top: env(safe-area-inset-top);
+    z-index: 20;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    margin: 0 0 10px;
+    padding: 0 2px;
+    background: var(--app-bg);
+}
+
+.app-tab {
+    min-height: 42px;
+    border: 1px solid var(--app-border);
+    border-bottom: 3px solid transparent;
+    background: #e8dfd2;
+    color: #5b6570;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.app-tab:first-child {
+    border-radius: 8px 0 0 8px;
+}
+
+.app-tab:last-child {
+    border-radius: 0 8px 8px 0;
+}
+
+.app-tab.is-active {
+    background: #fffaf2;
+    color: var(--app-accent);
+    border-bottom-color: var(--app-accent);
+}
+
+.app-tab-panel[hidden] {
+    display: none !important;
+}
+
+.app-tab-panel > .app-card:last-child {
+    margin-bottom: 10px;
+}
+
+.app-main-exacta-title {
+    padding-bottom: 8px;
+}
+
+.app-exacta-grid {
+    display: grid;
+    grid-template-columns: 58px repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--app-border);
+    border-left: 1px solid var(--app-border);
+}
+
+.app-exacta-grid > div {
+    min-width: 0;
+    min-height: 39px;
+    padding: 5px 2px;
+    border-right: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--app-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.app-exacta-head,
+.app-exacta-label {
+    background: #e6ded2;
+    color: #566273;
+    font-weight: 900;
+}
+
+.app-exacta-ai {
+    color: #a16b17;
+    font-size: 12px !important;
+    font-weight: 900;
+}
+
+.app-delta-plus {
+    color: #2f789f;
+    font-weight: 800;
+}
+
+.app-delta-minus {
+    color: #6b7785;
+    font-weight: 800;
+}
+
+[data-panel="main"] #upset-alert-panel {
+    margin: 0 0 10px !important;
+}
+
+@media (max-width: 390px) {
+    .app-tab {
+        min-height: 40px;
+        font-size: 13px;
+    }
+
+    .app-exacta-grid {
+        grid-template-columns: 52px repeat(5, minmax(0, 1fr));
+    }
+
+    .app-exacta-grid > div {
+        font-size: 9px;
+    }
+}
