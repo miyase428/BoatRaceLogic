@@ -44,13 +44,19 @@ D:\BoatRaceLogic
 3. コマンド実行  
 4. ブラウザで `http://localhost:8080/test.php` を確認
 
-## 5. 注意点  
+## 5. DB接続設定
+
+DB接続情報はリポジトリ直下の `.env` に記載する。
+`.env` はGit管理対象外とし、項目名は `.env.example` を参照する。
+PHPは `common/db_connect.php`、Pythonは `common/db_config.py` を通して接続する。
+
+## 6. 注意点  
 - コンソールを閉じると API サーバも終了する  
 - 最小化しておけば常時稼働できる  
 - 将来はサービス化も可能
 
 
-##　スクレイピングについて
+## スクレイピングについて
 1/31
 対応表作成まで。
 実際にスクレイピングのプログラムはこれから。
@@ -59,10 +65,5 @@ Playwrightを使っていく。
 
 
 ## 以下メモ
-## $dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
-$dsn = "pgsql:host=192.168.0.208;port=5432;dbname=devdb;";
-$user = "miyase428";
-$pass = "herunia0113";
-
 cd C:\Apache24\bin
 ./httpd.exe
