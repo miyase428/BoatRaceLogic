@@ -411,12 +411,36 @@ body {
         padding-bottom: 0;
         border-color: transparent;
         text-align: center;
+        position: relative;
     }
 
     .app-form-field input[type="date"]::-webkit-date-and-time-value {
         min-height: 0;
         line-height: 38px;
         text-align: center;
+    }
+
+    .app-form-field input[type="date"]::-webkit-datetime-edit {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        padding: 0;
+    }
+
+    .app-form-field input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+    }
+
+    .app-form-field input[type="date"]::-webkit-calendar-picker-indicator {
+        position: absolute;
+        inset: 0;
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
     }
 
     .app-compare {
