@@ -236,11 +236,17 @@
 
 .app-trifecta-table th,
 .app-trifecta-table td {
+    border-right: 1px solid var(--app-border);
     border-bottom: 1px solid var(--app-border);
     padding: 7px 6px;
     white-space: nowrap;
     text-align: right;
     font-size: 11px;
+}
+
+.app-trifecta-table th:last-child,
+.app-trifecta-table td:last-child {
+    border-right: 0;
 }
 
 .app-trifecta-table th {
