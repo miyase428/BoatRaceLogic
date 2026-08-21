@@ -1,12 +1,22 @@
 <?php
-// STEP C2/C3で検証した「穴警戒HIGH + TRIO_OUTER」を表示専用で再現する。
-// STEP C5/C6の結果から穴頭信頼度を3段階で表示する。
+// STEP C2/C2-2/C3/E1で検証した「イン飛び警報 + 穴頭本命/対抗」を表示専用で再現する。
+// イン飛び警報（AI本命=1C かつ 現行本命!=1C のとき）
+//   非常に高: イン補正後1着率 < 40%
+//   高      : 40% <= イン補正後1着率 < 50%
+//   注意    : 50% <= イン補正後1着率 < 55%
+//   通常    : 上記以外
+// 45%はC2-2で明確な境界にならなかったため表示段階には使わない。
+// 穴頭本命/対抗はE1の検証母集団と同じ「<50%」のみ表示する。
+//   穴頭本命: イン以外のAI3連対率1位（TRIO1 / TRIO_OUTER）
+//   穴頭対抗: イン以外のAI3連対率2位（TRIO2）
+// 穴頭信頼度（C5/C6）
 //   強: TRIO1=CURRENT かつ TRIO1-TRIO2差>=10pt
 //   弱: TRIO1-TRIO2差<2pt
-//   中: 上記以外のHIGH
-// C7以降はこの分類の未来検証として扱い、表示導入の前提にはしない。
+//   中: 上記以外の<50%警報
+// C7以降は分類の未来追跡検証として扱う。
 // 最終予想・本命/対抗・cut・買い目ロジックには接続しない。
 $upsetAlertStatus = 'waiting';
+$upsetAlertLevel = 'normal';
 $upsetAlertHigh = false;
 $upsetAlertError = '';
 $upsetInBoat = 0;
@@ -19,7 +29,9 @@ $upsetHoleTrioRate = null;
 $upsetHoleSecondTrioRate = null;
 $upsetHoleTrioGap = null;
 $upsetHoleCourse = 0;
+$upsetHoleSecondCourse = 0;
 $upsetHeadConfidence = '';
+$upsetBaseDisagree = false;
 
 $upsetCourseByBoat = [];
 foreach (is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [] as $boatKey => $row) {
@@ -51,7 +63,7 @@ if (
     && $upsetCurrentHead >= 1
     && $upsetCurrentHead <= 6
 ) {
-    // C2/C3のPythonと同じく、同値時は艇番の小さい方を優先する。
+    // Python検証と同じく、同値時は艇番の小さい方を優先する。
     $winRankedBoats = range(1, 6);
     usort($winRankedBoats, static function (int $a, int $b) use ($upsetCorrectedRates): int {
         $cmp = ($upsetCorrectedRates[$b] <=> $upsetCorrectedRates[$a]);
@@ -85,18 +97,31 @@ if (
         $upsetHoleSecondTrioRate = isset($aiTrioBoats[$upsetHoleSecondHead]['ai_rate'])
             ? (float)$aiTrioBoats[$upsetHoleSecondHead]['ai_rate']
             : null;
+        $upsetHoleSecondCourse = (int)($upsetCourseByBoat[$upsetHoleSecondHead] ?? 0);
     }
 
     if ($upsetHoleTrioRate !== null && $upsetHoleSecondTrioRate !== null) {
         $upsetHoleTrioGap = $upsetHoleTrioRate - $upsetHoleSecondTrioRate;
     }
 
-    $upsetAlertHigh = (
+    $upsetBaseDisagree = (
         $upsetAiHead === $upsetInBoat
         && $upsetCurrentHead !== $upsetInBoat
         && $upsetInWinRate !== null
-        && $upsetInWinRate < 50.0
     );
+
+    if ($upsetBaseDisagree) {
+        if ($upsetInWinRate < 40.0) {
+            $upsetAlertLevel = 'very_high';
+        } elseif ($upsetInWinRate < 50.0) {
+            $upsetAlertLevel = 'high';
+        } elseif ($upsetInWinRate < 55.0) {
+            $upsetAlertLevel = 'attention';
+        }
+    }
+
+    // E1/C5/C6の検証対象は従来C2 HIGH（<50%）なので、穴頭表示もここに限定する。
+    $upsetAlertHigh = in_array($upsetAlertLevel, ['very_high', 'high'], true);
 
     if ($upsetAlertHigh && $upsetHoleTrioGap !== null) {
         if ($upsetHoleHead === $upsetCurrentHead && $upsetHoleTrioGap >= 10.0) {
@@ -140,22 +165,33 @@ $upsetConfidenceBadge = static function (string $level): string {
         . ';font-size:11px;font-weight:bold;white-space:nowrap;">穴頭信頼度：'
         . $s['label'] . '</span>';
 };
+
+$upsetAlertMeta = [
+    'very_high' => ['label' => '🚨 イン飛び警報：非常に高', 'color' => '#a74932', 'border' => '#c98670', 'bg' => '#f7e8e1'],
+    'high' => ['label' => '⚠ イン飛び警報：高', 'color' => '#aa741f', 'border' => '#d9a74f', 'bg' => '#f8f0df'],
+    'attention' => ['label' => '⚠ イン飛び警報：注意', 'color' => '#8a6d32', 'border' => '#cfb477', 'bg' => '#f6f0e3'],
+    'normal' => ['label' => '🛡 イン飛び警報：通常', 'color' => '#5f6f5d', 'border' => '#d8cdbc', 'bg' => '#f8f4ec'],
+];
+$upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
 ?>
 
-<div id="upset-alert-panel" style="margin:0 0 10px; background:#f8f4ec; border:1px solid <?= $upsetAlertHigh ? '#d9a74f' : '#d8cdbc' ?>; border-radius:8px; padding:<?= $upsetAlertHigh ? '14px' : '10px 14px' ?>; color:#3f4b5a;">
+<div id="upset-alert-panel" style="margin:0 0 10px; background:<?= htmlspecialchars($upsetMeta['bg'], ENT_QUOTES, 'UTF-8') ?>; border:1px solid <?= htmlspecialchars($upsetMeta['border'], ENT_QUOTES, 'UTF-8') ?>; border-radius:8px; padding:<?= $upsetAlertHigh ? '14px' : '10px 14px' ?>; color:#3f4b5a;">
     <?php if ($upsetAlertStatus === 'ok' && $upsetAlertHigh): ?>
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
             <div>
-                <div style="font-size:17px; font-weight:bold; color:#aa741f;">⚠ 穴警戒：高</div>
+                <div style="font-size:17px; font-weight:bold; color:<?= htmlspecialchars($upsetMeta['color'], ENT_QUOTES, 'UTF-8') ?>;">
+                    <?= htmlspecialchars($upsetMeta['label'], ENT_QUOTES, 'UTF-8') ?>
+                </div>
                 <div style="font-size:12px; color:#6b7785; margin-top:3px;">
-                    C2固定条件：AI本命=1C / 現行本命≠1C / イン補正後1着率&lt;50%
+                    AI本命=1C / 現行本命≠1C / イン補正後1着率 <?= number_format((float)$upsetInWinRate, 1) ?>%
+                    （<?= $upsetAlertLevel === 'very_high' ? '40%未満' : '40〜50%未満' ?>）
                 </div>
             </div>
             <div style="font-size:11px; color:#6b7785; white-space:nowrap;">表示専用 / 買い目へ未接続</div>
         </div>
 
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:11px;">
-            <div style="flex:1 1 180px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
+            <div style="flex:1 1 170px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
                 <div style="font-size:11px; color:#6b7785;">AI本命（補正後1着率）</div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <?= $upsetBoatBadge($upsetAiHead) ?>
@@ -164,7 +200,7 @@ $upsetConfidenceBadge = static function (string $level): string {
                 </div>
             </div>
 
-            <div style="flex:1 1 180px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
+            <div style="flex:1 1 150px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
                 <div style="font-size:11px; color:#6b7785;">現行本命</div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <?= $upsetBoatBadge($upsetCurrentHead) ?>
@@ -172,9 +208,9 @@ $upsetConfidenceBadge = static function (string $level): string {
                 </div>
             </div>
 
-            <div style="flex:1 1 210px; background:#f4ead7; border:1px solid #d9a74f; border-radius:6px; padding:9px 10px;">
+            <div style="flex:1 1 210px; background:#f4ead7; border:1px solid <?= htmlspecialchars($upsetMeta['border'], ENT_QUOTES, 'UTF-8') ?>; border-radius:6px; padding:9px 10px;">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
-                    <div style="font-size:11px; color:#7b6640;">穴頭候補（TRIO_OUTER）</div>
+                    <div style="font-size:11px; color:#7b6640;">穴頭本命</div>
                     <?= $upsetConfidenceBadge($upsetHeadConfidence) ?>
                 </div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
@@ -185,32 +221,61 @@ $upsetConfidenceBadge = static function (string $level): string {
                     <?php endif; ?>
                 </div>
                 <?php if ($upsetHoleHead === $upsetCurrentHead): ?>
-                    <div style="font-size:11px; color:#7b6640; margin-top:4px;">現行本命と穴候補が一致</div>
+                    <div style="font-size:11px; color:#7b6640; margin-top:4px;">現行本命と一致</div>
                 <?php endif; ?>
                 <?php if ($upsetHoleTrioGap !== null): ?>
                     <div style="font-size:11px; color:#6b7785; margin-top:4px;">
-                        AI3連対率 Top2差 <?= number_format($upsetHoleTrioGap, 1) ?>pt
+                        AI3連対率 対抗差 <?= number_format($upsetHoleTrioGap, 1) ?>pt
                     </div>
                 <?php endif; ?>
+            </div>
+
+            <div style="flex:1 1 185px; background:#f7f2e9; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
+                <div style="font-size:11px; color:#6b7785;">穴頭対抗</div>
+                <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <?= $upsetBoatBadge($upsetHoleSecondHead) ?>
+                    <strong><?= $upsetHoleSecondCourse ?>C</strong>
+                    <?php if ($upsetHoleSecondTrioRate !== null): ?>
+                        <strong style="color:#75659b;">AI3連対 <?= number_format($upsetHoleSecondTrioRate, 1) ?>%</strong>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
         <?php if (!empty($simulation_active)): ?>
             <div style="font-size:11px; color:#aa741f; margin-top:8px;">
-                ※仮想進入での試算表示。C2/C3/C5/C6の検証は実展示進入基準です。
+                ※仮想進入での試算表示。イン飛び警報・穴頭候補の検証は実展示進入基準です。
             </div>
         <?php endif; ?>
+    <?php elseif ($upsetAlertStatus === 'ok' && $upsetAlertLevel === 'attention'): ?>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div>
+                <span style="font-size:14px; font-weight:bold; color:<?= htmlspecialchars($upsetMeta['color'], ENT_QUOTES, 'UTF-8') ?>;">
+                    <?= htmlspecialchars($upsetMeta['label'], ENT_QUOTES, 'UTF-8') ?>
+                </span>
+                <span style="font-size:11px; color:#6b7785; margin-left:8px;">
+                    イン補正後1着率 <?= number_format((float)$upsetInWinRate, 1) ?>%（50〜55%未満）
+                </span>
+            </div>
+            <div style="font-size:11px; color:#6b7785;">穴頭本命・対抗は&lt;50%のみ表示</div>
+        </div>
     <?php elseif ($upsetAlertStatus === 'ok'): ?>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
             <div>
-                <span style="font-size:14px; font-weight:bold; color:#5f6f5d;">🛡 穴警戒：通常</span>
-                <span style="font-size:11px; color:#6b7785; margin-left:8px;">C2のHIGH条件には該当しません</span>
+                <span style="font-size:14px; font-weight:bold; color:<?= htmlspecialchars($upsetMeta['color'], ENT_QUOTES, 'UTF-8') ?>;">
+                    <?= htmlspecialchars($upsetMeta['label'], ENT_QUOTES, 'UTF-8') ?>
+                </span>
+                <span style="font-size:11px; color:#6b7785; margin-left:8px;">
+                    <?= $upsetBaseDisagree && $upsetInWinRate !== null
+                        ? 'イン補正後1着率 ' . number_format((float)$upsetInWinRate, 1) . '%（55%以上）'
+                        : '警報条件には該当しません' ?>
+                </span>
             </div>
             <div style="font-size:11px; color:#6b7785;">表示専用</div>
         </div>
     <?php else: ?>
         <div style="font-size:13px; color:#6b7785;">
-            🛡 穴警戒：判定待ち
+            🛡 イン飛び警報：判定待ち
             <span style="font-size:11px; margin-left:6px;"><?= htmlspecialchars($upsetAlertError, ENT_QUOTES, 'UTF-8') ?></span>
         </div>
     <?php endif; ?>
@@ -224,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // 最終予想の買い目表の直後へ表示だけ移動する。
     // trifecta_probability_panel.php の移動処理より後に登録されるため、
-    // 最終表示順は「買い目 → 穴警戒 → 2連単 → 3連単参考情報」となる。
+    // 最終表示順は「買い目 → イン飛び警報 → 2連単 → 3連単参考情報」となる。
     summaryBox.insertAdjacentElement('afterend', panel);
     panel.style.marginTop = '14px';
 });
