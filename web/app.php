@@ -132,15 +132,21 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
     }
 }
 
-// 既存アプリViewは維持し、DOM上で「基本情報 / メイン情報」の2タブへ整理する。
-// 今回はレイアウト確認用の第一段階。計算・予想ロジックは変更しない。
+// Excelで作ってもらった基本情報部分は専用Viewとして描画する。
+// 計算値は既存ロジックを共用し、アプリ表示だけ差し替える。
+ob_start();
+include __DIR__ . '/views/app_basic_info_panel.php';
+$appBasicInfoHtml = ob_get_clean();
+
+// 既存アプリViewは土台として維持し、DOM上で「基本情報 / メイン情報」の2タブへ整理する。
 ob_start();
 include __DIR__ . '/views/app_view.php';
 $html = ob_get_clean();
 
 $html = str_replace(
     '</head>',
-    '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css">' . "\n</head>",
+    '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css">' . "\n"
+        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css">' . "\n</head>",
     $html
 );
 
@@ -152,10 +158,19 @@ if (!is_string($exactaJson)) {
     $exactaJson = '[]';
 }
 
+$basicInfoJson = json_encode(
+    $appBasicInfoHtml,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if (!is_string($basicInfoJson)) {
+    $basicInfoJson = '""';
+}
+
 $tabsScript = <<<'HTML'
 <script>
 (function () {
     const exactaRows = __EXACTA_JSON__;
+    const basicInfoHtml = __BASIC_INFO_JSON__;
 
     function buildExactaCard() {
         const section = document.createElement('section');
@@ -244,8 +259,10 @@ $tabsScript = <<<'HTML'
         tabs.insertAdjacentElement('afterend', basicPanel);
         basicPanel.insertAdjacentElement('afterend', mainPanel);
 
-        basicPanel.appendChild(quickCard);
-        if (detailCard) basicPanel.appendChild(detailCard);
+        // 旧クイック比較/詳細は、Excelモックに合わせた基本情報Viewへ置き換える。
+        basicPanel.innerHTML = basicInfoHtml || '';
+        quickCard.remove();
+        if (detailCard) detailCard.remove();
 
         mainPanel.appendChild(finalCard);
         mainPanel.appendChild(buildExactaCard());
@@ -290,6 +307,7 @@ $tabsScript = <<<'HTML'
 HTML;
 
 $tabsScript = str_replace('__EXACTA_JSON__', $exactaJson, $tabsScript);
+$tabsScript = str_replace('__BASIC_INFO_JSON__', $basicInfoJson, $tabsScript);
 $html = str_replace('</body>', $tabsScript . "\n</body>", $html);
 
 echo $html;
