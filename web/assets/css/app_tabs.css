@@ -98,28 +98,6 @@
     margin: 0 0 10px !important;
 }
 
-/* iPhone Safari/PWAではdate入力がGrid幅より広くなりやすいため、
- * 日付・開催場・Rが互いに重ならないように強制的に枠内へ収める。 */
-.app-form-grid {
-    grid-template-columns: minmax(0, 1.02fr) minmax(0, 1.18fr) minmax(66px, 0.62fr) !important;
-}
-
-.app-form-field {
-    min-width: 0 !important;
-    overflow: hidden;
-}
-
-.app-form-field input,
-.app-form-field select {
-    display: block;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    inline-size: 100% !important;
-    min-inline-size: 0 !important;
-    max-inline-size: 100% !important;
-}
-
 /* レース表示・展示更新の送信中に全画面で状態を見せる。 */
 .app-loading-overlay {
     position: fixed;
@@ -173,13 +151,6 @@
 
 @keyframes app-spin {
     to { transform: rotate(360deg); }
-}
-
-@media (max-width: 430px) {
-    .app-form-grid {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.16fr) minmax(66px, 0.58fr) !important;
-        gap: 7px !important;
-    }
 }
 
 @media (max-width: 390px) {
