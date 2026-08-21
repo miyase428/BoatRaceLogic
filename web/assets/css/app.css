@@ -373,6 +373,22 @@ body {
         grid-area: date;
         min-width: 0;
         overflow: hidden;
+        position: relative;
+    }
+
+    /* iPhone Safariではnative date入力の右枠だけ描画領域の外へ出ることがある。
+       見える枠は親側で重ねて描画し、右端の欠けを防ぐ。 */
+    .app-form-field:nth-child(1)::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 40px;
+        border: 1px solid #cbbda9;
+        border-radius: 7px;
+        box-sizing: border-box;
+        pointer-events: none;
     }
 
     .app-form-field:nth-child(2) {
@@ -404,6 +420,7 @@ body {
         max-height: 40px;
         padding-top: 0;
         padding-bottom: 0;
+        border-color: transparent;
     }
 
     .app-form-field input[type="date"]::-webkit-date-and-time-value {
