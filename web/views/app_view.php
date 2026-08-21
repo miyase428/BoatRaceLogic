@@ -47,6 +47,27 @@ $appCurrentQuery = http_build_query([
 ]);
 $appPcUrl = '/web/index.php?' . $appCurrentQuery;
 $appPostUrl = '/web/app.php?' . $appCurrentQuery;
+
+// PC版の3連単120通りと同じ計算結果を、アプリ専用タブへ渡す。
+$appTrifectaPayload = [
+    'status' => (string)($trifectaStatus ?? 'error'),
+    'error' => (string)($trifectaError ?? ''),
+    'rows' => is_array($trifectaRows ?? null) ? array_values($trifectaRows) : [],
+    'history' => is_array($trifectaData['history'] ?? null) ? $trifectaData['history'] : [],
+    'totals' => is_array($trifectaData['totals'] ?? null) ? $trifectaData['totals'] : [],
+];
+$appTrifectaJson = json_encode(
+    $appTrifectaPayload,
+    JSON_UNESCAPED_UNICODE
+        | JSON_UNESCAPED_SLASHES
+        | JSON_HEX_TAG
+        | JSON_HEX_AMP
+        | JSON_HEX_APOS
+        | JSON_HEX_QUOT
+);
+if (!is_string($appTrifectaJson)) {
+    $appTrifectaJson = '{"status":"error","error":"JSON生成失敗","rows":[],"history":{},"totals":{}}';
+}
 ?>
 <!DOCTYPE html>
 <html lang="ja">
@@ -273,6 +294,8 @@ $appPostUrl = '/web/app.php?' . $appCurrentQuery;
     </details>
 </div>
 
+<script id="app-trifecta-data" type="application/json"><?= $appTrifectaJson ?></script>
+<script src="/web/assets/js/app_trifecta_tab.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
