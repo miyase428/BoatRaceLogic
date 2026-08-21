@@ -229,8 +229,11 @@
                             </td>
                             <?php for ($i = 1; $i <= 6; $i++): ?>
                                 <?php
-                                    $val = $map_tenji[$i][$row['key']] ?? '-';
-                                    if ($row['src'] === 'custom') $val = $row['fn']($i);
+                                    if ($row['src'] === 'custom') {
+                                        $val = $row['fn']($i);
+                                    } else {
+                                        $val = $map_tenji[$i][$row['key']] ?? '-';
+                                    }
                                     $td_style = $row['style'] ?? '';
                                     if (!empty($row['color']) && $row['src'] !== 'custom') $td_style .= " color: {$row['color']};";
                                     $td_class = !empty($row['highlight']) ? 'score-highlight' : '';
