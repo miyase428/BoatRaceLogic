@@ -132,11 +132,15 @@ if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
     }
 }
 
-// Excelで作ってもらった基本情報部分は専用Viewとして描画する。
-// 計算値は既存ロジックを共用し、アプリ表示だけ差し替える。
+// 基本情報は取得値だけに限定する。
+// 加工・評価結果はメイン情報へ集約し、計算ロジック自体は共用する。
 ob_start();
 include __DIR__ . '/views/app_basic_info_panel.php';
 $appBasicInfoHtml = ob_get_clean();
+
+ob_start();
+include __DIR__ . '/views/app_main_analysis_panel.php';
+$appMainAnalysisHtml = ob_get_clean();
 
 // 既存アプリViewは土台として維持し、DOM上で「基本情報 / メイン情報」の2タブへ整理する。
 ob_start();
@@ -166,11 +170,20 @@ if (!is_string($basicInfoJson)) {
     $basicInfoJson = '""';
 }
 
+$mainAnalysisJson = json_encode(
+    $appMainAnalysisHtml,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if (!is_string($mainAnalysisJson)) {
+    $mainAnalysisJson = '""';
+}
+
 $tabsScript = <<<'HTML'
 <script>
 (function () {
     const exactaRows = __EXACTA_JSON__;
     const basicInfoHtml = __BASIC_INFO_JSON__;
+    const mainAnalysisHtml = __MAIN_ANALYSIS_JSON__;
 
     function buildExactaCard() {
         const section = document.createElement('section');
@@ -259,11 +272,14 @@ $tabsScript = <<<'HTML'
         tabs.insertAdjacentElement('afterend', basicPanel);
         basicPanel.insertAdjacentElement('afterend', mainPanel);
 
-        // 旧クイック比較/詳細は、Excelモックに合わせた基本情報Viewへ置き換える。
+        // 基本情報は直接取得した出走表・展示値だけ。
         basicPanel.innerHTML = basicInfoHtml || '';
         quickCard.remove();
         if (detailCard) detailCard.remove();
 
+        // メイン情報は1着率・AI・評価などの加工結果から始め、
+        // その下に最終予想・2連単・イン飛び警報をまとめる。
+        mainPanel.innerHTML = mainAnalysisHtml || '';
         mainPanel.appendChild(finalCard);
         mainPanel.appendChild(buildExactaCard());
         if (alertPanel) mainPanel.appendChild(alertPanel);
@@ -308,6 +324,7 @@ HTML;
 
 $tabsScript = str_replace('__EXACTA_JSON__', $exactaJson, $tabsScript);
 $tabsScript = str_replace('__BASIC_INFO_JSON__', $basicInfoJson, $tabsScript);
+$tabsScript = str_replace('__MAIN_ANALYSIS_JSON__', $mainAnalysisJson, $tabsScript);
 $html = str_replace('</body>', $tabsScript . "\n</body>", $html);
 
 echo $html;
