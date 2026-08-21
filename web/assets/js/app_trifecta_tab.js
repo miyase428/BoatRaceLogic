@@ -185,7 +185,8 @@
         });
 
         const positionFilters = card.querySelector('.app-trifecta-position-filters');
-        const selected = [0, 0, 0];
+        // 各着順で複数艇を同時に選べる。空集合は「全」と同じ意味。
+        const selected = [new Set(), new Set(), new Set()];
         ['1着', '2着', '3着'].forEach(function (label, index) {
             const group = document.createElement('div');
             group.className = 'app-trifecta-filter-group';
@@ -201,6 +202,7 @@
             all.dataset.position = String(index);
             all.dataset.boat = '0';
             all.textContent = '全';
+            all.setAttribute('aria-pressed', 'true');
             group.appendChild(all);
 
             for (let boat = 1; boat <= 6; boat++) {
@@ -210,6 +212,7 @@
                 filter.dataset.position = String(index);
                 filter.dataset.boat = String(boat);
                 filter.textContent = String(boat);
+                filter.setAttribute('aria-pressed', 'false');
                 group.appendChild(filter);
             }
             positionFilters.appendChild(group);
@@ -256,7 +259,7 @@
                 const boats = Array.isArray(row.boats) ? row.boats.map(Number) : [];
                 if (boats.length !== 3) return false;
                 for (let i = 0; i < 3; i++) {
-                    if (selected[i] > 0 && boats[i] !== selected[i]) return false;
+                    if (selected[i].size > 0 && !selected[i].has(boats[i])) return false;
                 }
                 if (!query) return true;
                 const key = boatKey(row);
@@ -272,6 +275,16 @@
                 if (sortButton.dataset.sort === sortKey) {
                     sortButton.textContent = base + (sortDirection > 0 ? ' ▲' : ' ▼');
                 }
+            });
+        }
+
+        function updateFilterGroup(group, position) {
+            const selectedBoats = selected[position];
+            group.querySelectorAll('.app-trifecta-filter').forEach(function (filter) {
+                const boat = Number(filter.dataset.boat);
+                const active = boat === 0 ? selectedBoats.size === 0 : selectedBoats.has(boat);
+                filter.classList.toggle('is-active', active);
+                filter.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
         }
 
@@ -324,12 +337,25 @@
         positionFilters.addEventListener('click', function (event) {
             const target = event.target.closest('.app-trifecta-filter');
             if (!target) return;
+
             const position = Number(target.dataset.position);
             const boat = Number(target.dataset.boat);
-            selected[position] = boat;
-            target.parentElement.querySelectorAll('.app-trifecta-filter').forEach(function (filter) {
-                filter.classList.toggle('is-active', filter === target);
-            });
+            const group = target.parentElement;
+            const selectedBoats = selected[position];
+
+            if (boat === 0) {
+                selectedBoats.clear();
+            } else if (selectedBoats.has(boat)) {
+                selectedBoats.delete(boat);
+            } else {
+                selectedBoats.add(boat);
+                // 1〜6を全部選んだ状態は「全」と同じなので簡略化する。
+                if (selectedBoats.size === 6) {
+                    selectedBoats.clear();
+                }
+            }
+
+            updateFilterGroup(group, position);
             render();
         });
 
@@ -338,11 +364,9 @@
         if (clear) {
             clear.addEventListener('click', function () {
                 if (search) search.value = '';
-                selected[0] = selected[1] = selected[2] = 0;
-                card.querySelectorAll('.app-trifecta-filter-group').forEach(function (group) {
-                    group.querySelectorAll('.app-trifecta-filter').forEach(function (filter) {
-                        filter.classList.toggle('is-active', filter.dataset.boat === '0');
-                    });
+                selected.forEach(function (set) { set.clear(); });
+                card.querySelectorAll('.app-trifecta-filter-group').forEach(function (group, position) {
+                    updateFilterGroup(group, position);
                 });
                 sortKey = 'rank';
                 sortDirection = 1;
