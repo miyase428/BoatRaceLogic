@@ -9,6 +9,7 @@ error_reporting(E_ALL);
 ob_start();
 
 require_once __DIR__ . '/../logic/race_url.php';
+require_once __DIR__ . '/../common/db_connect.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -66,12 +67,7 @@ function toNullOrFloat($v)
 
 try {
     // PostgreSQL 接続
-    $pdo = new PDO(
-        "pgsql:host=192.168.0.208;dbname=devdb",
-        "miyase428",
-        "herunia0113",
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = getPDO();
 
     $race_code = $_POST["race_code"]
             ?? $_GET["race_code"]
