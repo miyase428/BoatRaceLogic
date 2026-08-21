@@ -418,6 +418,7 @@ body {
         min-height: 0;
         line-height: 38px;
         text-align: center;
+        transform: translateX(-14px);
     }
 
     .app-form-field input[type="date"]::-webkit-datetime-edit {
@@ -425,6 +426,7 @@ body {
         justify-content: center;
         width: 100%;
         padding: 0;
+        transform: translateX(-14px);
     }
 
     .app-form-field input[type="date"]::-webkit-datetime-edit-fields-wrapper {
