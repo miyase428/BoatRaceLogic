@@ -229,8 +229,9 @@
 
 .app-trifecta-table {
     width: 100%;
-    min-width: 570px;
+    min-width: 500px;
     border-collapse: collapse;
+    table-layout: fixed;
     background: var(--app-card);
 }
 
@@ -238,10 +239,10 @@
 .app-trifecta-table td {
     border-right: 1px solid var(--app-border);
     border-bottom: 1px solid var(--app-border);
-    padding: 7px 6px;
+    padding: 6px 4px;
     white-space: nowrap;
     text-align: right;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .app-trifecta-table th:last-child,
@@ -258,18 +259,50 @@
 
 .app-trifecta-table th:nth-child(1),
 .app-trifecta-table td:nth-child(1) {
-    width: 48px;
+    width: 46px;
+    min-width: 46px;
+    max-width: 46px;
+    padding-left: 2px;
+    padding-right: 2px;
     text-align: center;
 }
 
 .app-trifecta-table th:nth-child(2),
 .app-trifecta-table td:nth-child(2) {
-    width: 108px;
-    min-width: 108px;
-    max-width: 108px;
-    padding-left: 4px;
-    padding-right: 4px;
+    width: 94px;
+    min-width: 94px;
+    max-width: 94px;
+    padding-left: 3px;
+    padding-right: 3px;
     text-align: left;
+}
+
+.app-trifecta-table th:nth-child(3),
+.app-trifecta-table td:nth-child(3) {
+    width: 86px;
+    min-width: 86px;
+    max-width: 86px;
+}
+
+.app-trifecta-table th:nth-child(4),
+.app-trifecta-table td:nth-child(4) {
+    width: 104px;
+    min-width: 104px;
+    max-width: 104px;
+}
+
+.app-trifecta-table th:nth-child(5),
+.app-trifecta-table td:nth-child(5) {
+    width: 88px;
+    min-width: 88px;
+    max-width: 88px;
+}
+
+.app-trifecta-table th:nth-child(6),
+.app-trifecta-table td:nth-child(6) {
+    width: 82px;
+    min-width: 82px;
+    max-width: 82px;
 }
 
 .app-trifecta-table th button {
@@ -295,7 +328,7 @@
 
 .app-trifecta-final {
     color: #aa741f;
-    font-size: 13px !important;
+    font-size: 12px !important;
     font-weight: 900;
 }
 
@@ -312,7 +345,7 @@
 .app-trifecta-combination {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
 }
 
 .app-trifecta-separator {
@@ -324,8 +357,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 23px;
-    height: 23px;
+    width: 22px;
+    height: 22px;
     border: 1px solid rgba(0, 0, 0, 0.16);
     border-radius: 5px;
     font-size: 10px;
