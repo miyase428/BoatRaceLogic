@@ -5,19 +5,19 @@ import json
 import math
 import sys
 from datetime import datetime
+from pathlib import Path
 from statistics import pstdev
 
 import psycopg2
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from common.db_config import load_db_config
 from classify_slit_pattern import classify_slit_pattern
 
-DB_CONFIG = {
-    "host": "192.168.0.208",
-    "port": 5432,
-    "dbname": "devdb",
-    "user": "miyase428",
-    "password": "herunia0113",
-}
+DB_CONFIG = load_db_config()
 
 PREDICTION_METHOD = "C_ST_RANK"
 FALLBACK_METHOD = "A_EX_FALLBACK"
@@ -295,8 +295,6 @@ def predict_pattern(race_code):
     player_ids = [entry["player_id"] for entry in entries]
     entry_courses = [entry["course"] for entry in entries]
 
-    # 旧 predict_detail の correction は参照互換用に残す。
-    # C_ST_RANK時は合計補正秒、A_EXフォールバック時は0秒。
     correction = {
         player_ids[i]: predicted["total_adjustment"][i]
         for i in range(6)
