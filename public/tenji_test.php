@@ -1,6 +1,8 @@
 <?php
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/../common/db_connect.php';
+
 // パラメータ取得
 $race_code = $_GET['race_code'] ?? null;
 $tenji = [];
@@ -8,15 +10,10 @@ for ($i = 1; $i <= 6; $i++) {
     $tenji[$i] = $_GET["tenji$i"] ?? null;
 }
 
-// --- DB接続（宮崎さんの環境） ---
-#$dsn = "pgsql:host=192.168.0.205;port=5432;dbname=devdb;";
-$dsn = "pgsql:host=192.168.0.208;port=5432;dbname=devdb;";
-$user = "miyase428";
-$pass = "herunia0113";
-
+// --- DB接続 ---
 try {
-    $pdo = new PDO($dsn, $user, $pass);
-} catch (PDOException $e) {
+    $pdo = getPDO();
+} catch (Throwable $e) {
     echo json_encode(['error' => $e->getMessage()]);
     exit;
 }
