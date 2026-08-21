@@ -1,0 +1,226 @@
+/* Excelモックの基本情報タブをアプリ用6艇横並びにする。 */
+
+.app-basic-card {
+    overflow: hidden;
+}
+
+.app-basic-grid {
+    display: grid;
+    grid-template-columns: 72px repeat(6, minmax(0, 1fr));
+    border-top: 1px solid var(--app-border);
+    border-left: 1px solid var(--app-border);
+}
+
+.app-basic-grid > div {
+    min-width: 0;
+    min-height: 34px;
+    padding: 5px 2px;
+    border-right: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--app-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.app-basic-section {
+    grid-column: 1 / -1;
+    min-height: 34px !important;
+    align-items: flex-start !important;
+    padding: 7px 9px !important;
+    background: #e8dfd2;
+    color: #2f789f;
+    font-size: 13px;
+    font-weight: 900;
+    text-align: left !important;
+}
+
+.app-basic-period {
+    grid-column: 1 / -1;
+    min-height: 30px !important;
+    align-items: flex-start !important;
+    padding: 6px 9px !important;
+    background: #f0e9df;
+    color: #5c6774;
+    font-size: 11px;
+    font-weight: 900;
+    text-align: left !important;
+}
+
+.app-basic-label {
+    background: #e5dccf;
+    color: #596574;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1.15;
+    white-space: pre-line;
+}
+
+.app-basic-value {
+    background: #fbf8f2;
+    color: #344154;
+    font-size: 10px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.app-basic-value strong {
+    font-size: 11px;
+}
+
+.app-basic-head-label,
+.app-basic-head-cell {
+    background: #e8dfd2;
+}
+
+.app-basic-head-cell {
+    min-height: 58px !important;
+    gap: 2px;
+}
+
+.app-basic-boat-title {
+    color: #344154;
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.app-basic-boat-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 31px;
+    min-height: 23px;
+    padding: 2px 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.app-basic-course {
+    color: #7a8692;
+    font-size: 8px;
+    font-weight: 700;
+}
+
+.app-basic-player-name {
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.app-basic-compact {
+    min-height: 30px !important;
+    font-size: 9px !important;
+}
+
+.app-basic-rate-blue strong {
+    color: #2f789f;
+}
+
+.app-basic-rate-gold strong {
+    color: #a16b17;
+}
+
+.app-basic-rate-purple strong {
+    color: #75659b;
+}
+
+.app-basic-rank {
+    display: block;
+    margin-top: 2px;
+    color: #7b8490;
+    font-size: 7px;
+    line-height: 1;
+}
+
+.app-basic-eval strong {
+    color: #2f789f;
+    font-size: 12px;
+}
+
+.app-basic-type {
+    display: inline-block;
+    max-width: 100%;
+    padding: 2px 3px;
+    border-radius: 4px;
+    background: #e7e1d7;
+    color: #536171;
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1.1;
+}
+
+.app-basic-score strong {
+    color: #2f789f;
+    font-size: 12px;
+}
+
+.app-basic-small-label {
+    font-size: 8px !important;
+}
+
+.app-basic-kimarite {
+    min-height: 39px !important;
+    font-size: 8px !important;
+    line-height: 1.15;
+}
+
+.app-basic-kimarite.app-basic-label {
+    font-size: 8px !important;
+}
+
+.app-basic-sample {
+    display: block;
+    margin-top: 2px;
+    color: #7a8692;
+    font-size: 7px;
+    white-space: nowrap;
+}
+
+.app-basic-status {
+    padding: 8px 10px;
+    color: #a16b17;
+    font-size: 10px;
+}
+
+@media (max-width: 390px) {
+    .app-basic-grid {
+        grid-template-columns: 64px repeat(6, minmax(0, 1fr));
+    }
+
+    .app-basic-grid > div {
+        padding-left: 1px;
+        padding-right: 1px;
+    }
+
+    .app-basic-label {
+        font-size: 8px;
+    }
+
+    .app-basic-value {
+        font-size: 9px;
+    }
+
+    .app-basic-value strong {
+        font-size: 10px;
+    }
+
+    .app-basic-boat-badge {
+        min-width: 28px;
+        font-size: 9px;
+    }
+
+    .app-basic-player-name {
+        font-size: 8px;
+    }
+
+    .app-basic-kimarite,
+    .app-basic-kimarite.app-basic-label {
+        font-size: 7px !important;
+    }
+}
