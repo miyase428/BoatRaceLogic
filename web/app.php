@@ -147,10 +147,11 @@ ob_start();
 include __DIR__ . '/views/app_view.php';
 $html = ob_get_clean();
 
+// iPhoneのホーム画面アプリではCSSが残りやすいため、アプリ用CSSだけ版番号を付ける。
 $html = str_replace(
     '</head>',
-    '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css">' . "\n"
-        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css">' . "\n</head>",
+    '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css?v=20260822-0835">' . "\n"
+        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css?v=20260822-0835">' . "\n</head>",
     $html
 );
 
@@ -256,6 +257,10 @@ $tabsScript = <<<'HTML'
 
         const tabs = document.createElement('nav');
         tabs.className = 'app-tabs';
+        // 3つ目の「120通り」は後から追加されるため、CSSキャッシュ時でも3列を強制する。
+        tabs.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+        tabs.style.width = '100%';
+        tabs.style.maxWidth = '100%';
         tabs.innerHTML = '<button type="button" class="app-tab is-active" data-tab="basic">基本情報</button>'
             + '<button type="button" class="app-tab" data-tab="main">メイン情報</button>';
 
