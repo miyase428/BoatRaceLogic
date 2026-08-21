@@ -79,6 +79,10 @@
     gap: 2px;
 }
 
+.app-main-head-cell {
+    min-height: 54px !important;
+}
+
 .app-basic-boat-title {
     color: #344154;
     font-size: 9px;
@@ -143,16 +147,29 @@
     font-size: 12px;
 }
 
+/* PC版の展示タイプ色をアプリでも踏襲する。 */
 .app-basic-type {
     display: inline-block;
     max-width: 100%;
-    padding: 2px 3px;
+    padding: 2px 4px;
     border-radius: 4px;
-    background: #e7e1d7;
-    color: #536171;
+    background: #64748b;
+    color: #fff;
     font-size: 8px;
-    font-weight: 800;
+    font-weight: 900;
     line-height: 1.1;
+}
+
+.app-basic-type.type-super {
+    background: #dc2626;
+}
+
+.app-basic-type.type-attack {
+    background: #d97706;
+}
+
+.app-basic-type.type-sashi {
+    background: #2563eb;
 }
 
 .app-basic-score strong {
@@ -168,10 +185,31 @@
     min-height: 39px !important;
     font-size: 8px !important;
     line-height: 1.15;
+    padding: 2px !important;
 }
 
 .app-basic-kimarite.app-basic-label {
     font-size: 8px !important;
+    padding: 5px 2px !important;
+}
+
+/* PC版biyori_colorと同じ色をセル内いっぱいに見せる。 */
+.app-kimarite-heat {
+    width: calc(100% + 4px);
+    min-height: 35px;
+    margin: -2px;
+    padding: 4px 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #0f172a;
+    font-weight: 900;
+    line-height: 1.05;
+}
+
+.app-kimarite-heat .app-basic-sample {
+    color: rgba(15, 23, 42, 0.72);
 }
 
 .app-basic-sample {
@@ -222,5 +260,9 @@
     .app-basic-kimarite,
     .app-basic-kimarite.app-basic-label {
         font-size: 7px !important;
+    }
+
+    .app-kimarite-heat {
+        min-height: 34px;
     }
 }
