@@ -12,17 +12,18 @@ C2で固定したイン飛び警報HIGHの条件
     CURRENT本命 != 1C
     イン補正後1着率 < 50%
 
-について、最後の閾値だけを 45% / 40% まで厳しくした場合に、
-1C敗退率がどの程度上がるか、対象レース数がどの程度減るかを確認する。
+について、最後の閾値だけを 55% / 50% / 45% / 40% で比較し、
+1C敗退率と対象レース数のバランスを確認する。
 
 比較する累積条件
 ----------------
+- <55%（現行より緩い）
 - <50%（現行）
 - <45%
 - <40%
 
 あわせて、閾値差の理由を見るために
-<40% / 40-45% / 45-50% の独立帯も表示する。
+<40% / 40-45% / 45-50% / 50-55% の独立帯も表示する。
 
 重要
 ----
@@ -52,11 +53,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import upset_alert_rule_validate as c2
 
 
-THRESHOLDS = (0.50, 0.45, 0.40)
+THRESHOLDS = (0.55, 0.50, 0.45, 0.40)
 BANDS = (
     (None, 0.40, "<40%"),
     (0.40, 0.45, "40-45%"),
     (0.45, 0.50, "45-50%"),
+    (0.50, 0.55, "50-55%"),
 )
 
 
@@ -149,22 +151,24 @@ def print_cumulative(train_rows, p3_rows):
     train_target, tr = cumulative_results(train_rows)
     p3_target, te = cumulative_results(p3_rows)
 
+    tr55 = tr[0.55]
+    te55 = te[0.55]
     tr50 = tr[0.50]
     te50 = te[0.50]
 
     print("\n【累積閾値比較：AI本命=1C × CURRENT本命!=1C】")
     print(f"対象母集団: TRAIN={len(train_target)}R / P3={len(p3_target)}R")
     print(
-        "条件      TRAIN_R  対<50%残存  TRAIN敗退率  95%CI             "
-        "P3_R  対<50%残存  P3敗退率  95%CI             TRAIN→P3差"
+        "条件      TRAIN_R  対<55%残存  TRAIN敗退率  95%CI             "
+        "P3_R  対<55%残存  P3敗退率  95%CI             TRAIN→P3差"
     )
     print("-" * 142)
 
     for th in THRESHOLDS:
         a = tr[th]
         b = te[th]
-        tr_keep = a["n"] / tr50["n"] if tr50["n"] else 0.0
-        te_keep = b["n"] / te50["n"] if te50["n"] else 0.0
+        tr_keep = a["n"] / tr55["n"] if tr55["n"] else 0.0
+        te_keep = b["n"] / te55["n"] if te55["n"] else 0.0
         print(
             f"<{int(th*100):>2d}%     {a['n']:>7d}    {tr_keep*100:>7.2f}%      "
             f"{a['loss_rate']*100:>7.2f}%  [{a['ci_lo']*100:>5.1f},{a['ci_hi']*100:>5.1f}]%    "
@@ -173,26 +177,26 @@ def print_cumulative(train_rows, p3_rows):
             f"{(b['loss_rate']-a['loss_rate'])*100:+7.2f}pt"
         )
 
-    print("\n【<50%から厳しくした時の変化】")
-    print("条件      TRAIN敗退率差  TRAIN対象減   P3敗退率差  P3対象減")
-    print("-" * 74)
-    for th in (0.45, 0.40):
+    print("\n【現行<50%から閾値を動かした時の変化】")
+    print("条件      TRAIN敗退率差  TRAIN対象差   P3敗退率差  P3対象差")
+    print("-" * 76)
+    for th in (0.55, 0.45, 0.40):
         a = tr[th]
         b = te[th]
         print(
             f"<{int(th*100):>2d}%       {(a['loss_rate']-tr50['loss_rate'])*100:+7.2f}pt    "
-            f"{tr50['n']-a['n']:>6d}R      {(b['loss_rate']-te50['loss_rate'])*100:+7.2f}pt    "
-            f"{te50['n']-b['n']:>5d}R"
+            f"{a['n']-tr50['n']:>+7d}R      {(b['loss_rate']-te50['loss_rate'])*100:+7.2f}pt    "
+            f"{b['n']-te50['n']:>+6d}R"
         )
 
-    print("\n【1C敗退レースの拾い残し】")
-    print("条件      TRAIN敗退数  <50%比   P3敗退数  <50%比")
+    print("\n【1C敗退レースの拾い率：<55%を100%とした比較】")
+    print("条件      TRAIN敗退数  <55%比   P3敗退数  <55%比")
     print("-" * 62)
     for th in THRESHOLDS:
         a = tr[th]
         b = te[th]
-        tr_cov = a["loss"] / tr50["loss"] if tr50["loss"] else 0.0
-        te_cov = b["loss"] / te50["loss"] if te50["loss"] else 0.0
+        tr_cov = a["loss"] / tr55["loss"] if tr55["loss"] else 0.0
+        te_cov = b["loss"] / te55["loss"] if te55["loss"] else 0.0
         print(
             f"<{int(th*100):>2d}%       {a['loss']:>7d}    {tr_cov*100:>6.2f}%    "
             f"{b['loss']:>7d}    {te_cov*100:>6.2f}%"
@@ -237,22 +241,23 @@ def main():
     )
 
     print("=" * 144)
-    print("STEP C2-2：イン飛び警報 50% / 45% / 40% 閾値比較")
+    print("STEP C2-2：イン飛び警報 55% / 50% / 45% / 40% 閾値比較")
     print("=" * 144)
     print(f"TRAIN : {data['train_start']} ～ {data['train_end']}")
     print(f"P3    : {data['p3_start']} ～ {data['p3_end']}（既参照データのため診断扱い）")
     print("固定条件: AI本命=1C & CURRENT本命!=1C")
-    print("比較条件: イン補正後1着率 <50% / <45% / <40%")
+    print("比較条件: イン補正後1着率 <55% / <50% / <45% / <40%")
     print("35%以下は比較しない / 本番Web・PredictionLogic・買い目変更なし")
 
     stage("閾値別集計", lambda: print_cumulative(data["train"], data["p3"]))
     print_bands(data["train"], data["p3"])
 
     print("\n【判断ポイント】")
-    print("1. 45%/40%で1C敗退率がTRAINとP3の両方で明確に上がるか")
-    print("2. 敗退率上昇に対して対象レース数・1C敗退レースの拾い数を失いすぎないか")
-    print("3. <40 / 40-45 / 45-50 の独立帯が、おおむね低1着率ほど高敗退率になっているか")
-    print("4. 45%/40%を新しい警報段階に使う場合は、今後の未使用未来データで再確認する")
+    print("1. 55%まで広げても1C敗退率が大きく落ちず、対象レースを有効に増やせるか")
+    print("2. 45%/40%で1C敗退率がTRAINとP3の両方で明確に上がるか")
+    print("3. 敗退率上昇に対して対象レース数・1C敗退レースの拾い数を失いすぎないか")
+    print("4. <40 / 40-45 / 45-50 / 50-55 の独立帯が、おおむね低1着率ほど高敗退率になっているか")
+    print("5. 55%/45%/40%を新しい警報段階に使う場合は、今後の未使用未来データで再確認する")
     print("=" * 144)
 
     total_dt = time.perf_counter() - total_t0
