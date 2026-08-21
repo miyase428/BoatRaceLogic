@@ -46,9 +46,18 @@ $appBasicPct = static function ($value, int $digits = 1, float $scale = 1.0): st
         : '-';
 };
 
+$appBasicKimariteColor = static function (float $value): string {
+    if ($value >= 40.0) return '#f87171';
+    if ($value >= 25.0) return '#fb923c';
+    if ($value >= 10.0) return '#facc15';
+    if ($value > 0.0) return '#60a5fa';
+    return '#475569';
+};
+
 $appBasicKimarite = static function (int $boat, string $period, string $rowLabel) use (
     $kimarite_data,
-    $appBasicCourseByBoat
+    $appBasicCourseByBoat,
+    $appBasicKimariteColor
 ): string {
     $course = (int)($appBasicCourseByBoat[$boat] ?? $boat);
     $map = [
@@ -70,11 +79,30 @@ $appBasicKimarite = static function (int $boat, string $period, string $rowLabel
     $rate = (float)$data[$key];
     $n = (int)($data['_sample_n'] ?? 0);
     $count = (int)(($data['_counts'] ?? [])[$key] ?? 0);
+    $bg = $appBasicKimariteColor($rate);
 
+    $html = '<span class="app-kimarite-heat" style="background:'
+        . htmlspecialchars($bg, ENT_QUOTES, 'UTF-8') . ';">'
+        . number_format($rate, 1) . '%';
     if ($n > 0) {
-        return number_format($rate, 1) . '%<span class="app-basic-sample">(' . $count . '/' . $n . ')</span>';
+        $html .= '<span class="app-basic-sample">(' . $count . '/' . $n . ')</span>';
     }
-    return number_format($rate, 1) . '%';
+    $html .= '</span>';
+    return $html;
+};
+
+$appBasicTypeBadge = static function ($value): string {
+    $dtype = trim((string)$value);
+    if ($dtype === '') return '-';
+
+    $class = 'app-basic-type';
+    if ($dtype === '超伸び型') $class .= ' type-super';
+    elseif ($dtype === '攻め型') $class .= ' type-attack';
+    elseif ($dtype === '差し型') $class .= ' type-sashi';
+
+    return '<span class="' . $class . '">'
+        . htmlspecialchars($dtype, ENT_QUOTES, 'UTF-8')
+        . '</span>';
 };
 
 $appBasicBoatHeader = static function (int $boat) use ($lane_colors, $appBasicCourseByBoat): string {
