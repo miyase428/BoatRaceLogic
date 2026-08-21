@@ -1,5 +1,7 @@
 <?php
 // STEP C2/C3で検証した「穴警戒HIGH + TRIO_OUTER」を表示専用で再現する。
+// STEP C6で固定した STRONG_A（TRIO1=CURRENT かつ TRIO1-TRIO2差>=10pt）のみ
+// 「穴頭信頼度：強」を先行表示する。中・弱はまだ付与しない。
 // 最終予想・本命/対抗・cut・買い目ロジックには接続しない。
 $upsetAlertStatus = 'waiting';
 $upsetAlertHigh = false;
@@ -8,9 +10,13 @@ $upsetInBoat = 0;
 $upsetAiHead = 0;
 $upsetCurrentHead = (int)($honmei_head ?? 0);
 $upsetHoleHead = 0;
+$upsetHoleSecondHead = 0;
 $upsetInWinRate = null;
 $upsetHoleTrioRate = null;
+$upsetHoleSecondTrioRate = null;
+$upsetHoleTrioGap = null;
 $upsetHoleCourse = 0;
+$upsetHeadConfidenceStrong = false;
 
 $upsetCourseByBoat = [];
 foreach (is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [] as $boatKey => $row) {
@@ -63,11 +69,23 @@ if (
     });
 
     $upsetHoleHead = (int)($outerBoats[0] ?? 0);
+    $upsetHoleSecondHead = (int)($outerBoats[1] ?? 0);
+
     if ($upsetHoleHead >= 1 && $upsetHoleHead <= 6) {
         $upsetHoleTrioRate = isset($aiTrioBoats[$upsetHoleHead]['ai_rate'])
             ? (float)$aiTrioBoats[$upsetHoleHead]['ai_rate']
             : null;
         $upsetHoleCourse = (int)($upsetCourseByBoat[$upsetHoleHead] ?? 0);
+    }
+
+    if ($upsetHoleSecondHead >= 1 && $upsetHoleSecondHead <= 6) {
+        $upsetHoleSecondTrioRate = isset($aiTrioBoats[$upsetHoleSecondHead]['ai_rate'])
+            ? (float)$aiTrioBoats[$upsetHoleSecondHead]['ai_rate']
+            : null;
+    }
+
+    if ($upsetHoleTrioRate !== null && $upsetHoleSecondTrioRate !== null) {
+        $upsetHoleTrioGap = $upsetHoleTrioRate - $upsetHoleSecondTrioRate;
     }
 
     $upsetAlertHigh = (
@@ -76,6 +94,16 @@ if (
         && $upsetInWinRate !== null
         && $upsetInWinRate < 50.0
     );
+
+    // C6のA_STRONG_BOTHをそのまま表示専用で適用する。
+    // HIGH内で「TRIO_TOP1=現行本命」かつ「TRIO_TOP1-TOP2差>=10pt」の場合だけ強。
+    $upsetHeadConfidenceStrong = (
+        $upsetAlertHigh
+        && $upsetHoleHead === $upsetCurrentHead
+        && $upsetHoleTrioGap !== null
+        && $upsetHoleTrioGap >= 10.0
+    );
+
     $upsetAlertStatus = 'ok';
 } else {
     $upsetAlertError = '補正後1着率・AI3連対率・進入・最終予想がそろうと判定します';
@@ -125,7 +153,12 @@ $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
             </div>
 
             <div style="flex:1 1 210px; background:#f4ead7; border:1px solid #d9a74f; border-radius:6px; padding:9px 10px;">
-                <div style="font-size:11px; color:#7b6640;">穴頭候補（TRIO_OUTER）</div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                    <div style="font-size:11px; color:#7b6640;">穴頭候補（TRIO_OUTER）</div>
+                    <?php if ($upsetHeadConfidenceStrong): ?>
+                        <span style="display:inline-block; padding:2px 7px; border-radius:999px; background:#e4efe0; border:1px solid #9bb795; color:#466545; font-size:11px; font-weight:bold; white-space:nowrap;">穴頭信頼度：強</span>
+                    <?php endif; ?>
+                </div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <?= $upsetBoatBadge($upsetHoleHead) ?>
                     <strong><?= $upsetHoleCourse ?>C</strong>
@@ -136,12 +169,17 @@ $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
                 <?php if ($upsetHoleHead === $upsetCurrentHead): ?>
                     <div style="font-size:11px; color:#7b6640; margin-top:4px;">現行本命と穴候補が一致</div>
                 <?php endif; ?>
+                <?php if ($upsetHeadConfidenceStrong && $upsetHoleTrioGap !== null): ?>
+                    <div style="font-size:11px; color:#466545; margin-top:4px;">
+                        AI3連対率 Top2差 <?= number_format($upsetHoleTrioGap, 1) ?>pt
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
 
         <?php if (!empty($simulation_active)): ?>
             <div style="font-size:11px; color:#aa741f; margin-top:8px;">
-                ※仮想進入での試算表示。C2/C3の検証は実展示進入基準です。
+                ※仮想進入での試算表示。C2/C3/C6の検証は実展示進入基準です。
             </div>
         <?php endif; ?>
     <?php elseif ($upsetAlertStatus === 'ok'): ?>
