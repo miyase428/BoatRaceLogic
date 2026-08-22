@@ -495,10 +495,13 @@ class PredictionLogicProduction extends PredictionLogic
         return self::$kimariteHeadModel;
     }
 
+    /**
+     * kimarite_api.php は率を 0～100 のパーセント値で返す。
+     * 分析CSVも同じ値をそのまま使っているため、本番側でも変換せず揃える。
+     */
     private function rateToPercent($value): float
     {
-        $rate = (float)$value;
-        return abs($rate) <= 1.0 ? $rate * 100.0 : $rate;
+        return (float)$value;
     }
 
     private function kimariteHeadBand(float $value): string
