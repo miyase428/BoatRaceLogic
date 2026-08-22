@@ -1,0 +1,37 @@
+{
+  "meta": {
+    "label": "暫定2か月",
+    "start_date": "2026-06-15",
+    "end_date": "2026-08-14",
+    "total_races": 9122,
+    "overall_honmei_first_rate": 41.96,
+    "affinity_rule": "本命1着率を全体平均と比較（◎:+3pt以上 / ○:-1pt以上 / △:-5pt以上 / ×:それ未満）",
+    "stability_rule": "2期間の本命1着率差（◎:2pt以内 / ○:5pt以内 / △:8pt以内 / ×:8pt超）"
+  },
+  "stadiums": {
+    "AMG": {"name":"尼崎","races":448,"honmei_first_rate":48.44,"rank":2,"period1_rate":44.92,"period2_rate":52.36,"stability_gap":7.44,"affinity":"◎","stability":"△"},
+    "ASY": {"name":"芦屋","races":418,"honmei_first_rate":48.80,"rank":1,"period1_rate":49.74,"period2_rate":47.98,"stability_gap":1.76,"affinity":"◎","stability":"◎"},
+    "BWK": {"name":"びわこ","races":318,"honmei_first_rate":36.48,"rank":22,"period1_rate":34.55,"period2_rate":39.37,"stability_gap":4.82,"affinity":"×","stability":"○"},
+    "EDG": {"name":"江戸川","races":285,"honmei_first_rate":31.58,"rank":24,"period1_rate":32.62,"period2_rate":30.56,"stability_gap":2.06,"affinity":"×","stability":"○"},
+    "FKO": {"name":"福岡","races":394,"honmei_first_rate":46.19,"rank":6,"period1_rate":47.08,"period2_rate":44.81,"stability_gap":2.27,"affinity":"◎","stability":"○"},
+    "GMG": {"name":"蒲郡","races":311,"honmei_first_rate":43.09,"rank":9,"period1_rate":44.19,"period2_rate":40.63,"stability_gap":3.56,"affinity":"○","stability":"○"},
+    "HMN": {"name":"浜名湖","races":390,"honmei_first_rate":43.85,"rank":8,"period1_rate":44.74,"period2_rate":42.59,"stability_gap":2.15,"affinity":"○","stability":"○"},
+    "HWJ": {"name":"平和島","races":432,"honmei_first_rate":35.19,"rank":23,"period1_rate":34.26,"period2_rate":36.11,"stability_gap":1.85,"affinity":"×","stability":"◎"},
+    "KJM": {"name":"児島","races":413,"honmei_first_rate":41.65,"rank":12,"period1_rate":47.51,"period2_rate":34.90,"stability_gap":12.61,"affinity":"○","stability":"×"},
+    "KRT": {"name":"唐津","races":396,"honmei_first_rate":40.40,"rank":16,"period1_rate":41.18,"period2_rate":39.58,"stability_gap":1.60,"affinity":"△","stability":"◎"},
+    "KRY": {"name":"桐生","races":419,"honmei_first_rate":41.05,"rank":15,"period1_rate":39.39,"period2_rate":42.53,"stability_gap":3.14,"affinity":"○","stability":"○"},
+    "MKN": {"name":"三国","races":367,"honmei_first_rate":41.69,"rank":11,"period1_rate":42.86,"period2_rate":40.63,"stability_gap":2.23,"affinity":"○","stability":"○"},
+    "MRG": {"name":"丸亀","races":312,"honmei_first_rate":37.82,"rank":20,"period1_rate":44.44,"period2_rate":32.14,"stability_gap":12.30,"affinity":"△","stability":"×"},
+    "MYJ": {"name":"宮島","races":360,"honmei_first_rate":39.44,"rank":17,"period1_rate":43.75,"period2_rate":36.57,"stability_gap":7.18,"affinity":"△","stability":"△"},
+    "NRT": {"name":"鳴門","races":241,"honmei_first_rate":42.32,"rank":10,"period1_rate":46.21,"period2_rate":37.61,"stability_gap":8.60,"affinity":"○","stability":"×"},
+    "OMR": {"name":"大村","races":429,"honmei_first_rate":41.49,"rank":13,"period1_rate":43.42,"period2_rate":39.30,"stability_gap":4.12,"affinity":"○","stability":"○"},
+    "SME": {"name":"住之江","races":384,"honmei_first_rate":38.28,"rank":19,"period1_rate":37.06,"period2_rate":39.25,"stability_gap":2.19,"affinity":"△","stability":"○"},
+    "SMS": {"name":"下関","races":398,"honmei_first_rate":45.23,"rank":7,"period1_rate":45.83,"period2_rate":44.66,"stability_gap":1.17,"affinity":"◎","stability":"◎"},
+    "TDA": {"name":"戸田","races":370,"honmei_first_rate":38.38,"rank":18,"period1_rate":43.98,"period2_rate":32.40,"stability_gap":11.58,"affinity":"△","stability":"×"},
+    "TKN": {"name":"常滑","races":476,"honmei_first_rate":46.85,"rank":4,"period1_rate":50.00,"period2_rate":43.42,"stability_gap":6.58,"affinity":"◎","stability":"△"},
+    "TKY": {"name":"徳山","races":384,"honmei_first_rate":47.40,"rank":3,"period1_rate":44.12,"period2_rate":51.11,"stability_gap":6.99,"affinity":"◎","stability":"△"},
+    "TMG": {"name":"多摩川","races":391,"honmei_first_rate":46.29,"rank":5,"period1_rate":46.64,"period2_rate":45.83,"stability_gap":0.81,"affinity":"◎","stability":"◎"},
+    "TSU": {"name":"津","races":381,"honmei_first_rate":37.53,"rank":21,"period1_rate":38.49,"period2_rate":35.66,"stability_gap":2.83,"affinity":"△","stability":"○"},
+    "WKM": {"name":"若松","races":405,"honmei_first_rate":41.23,"rank":14,"period1_rate":38.19,"period2_rate":44.17,"stability_gap":5.98,"affinity":"○","stability":"△"}
+  }
+}
