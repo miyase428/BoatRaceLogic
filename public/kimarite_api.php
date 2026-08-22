@@ -44,6 +44,7 @@ $pdo = getPDO();
 // ------------------------------------------------------------
 function empty_kimarite() {
     return [
+        "win"           => 0,
         "nige"          => 0,
         "sashi"         => 0,
         "makuri"        => 0,
@@ -54,6 +55,7 @@ function empty_kimarite() {
         "makurarezashi" => 0,
         "_sample_n"     => 0,
         "_counts"       => [
+            "win"           => 0,
             "nige"          => 0,
             "sashi"         => 0,
             "makuri"        => 0,
@@ -179,14 +181,26 @@ agg AS (
             WHERE race_date >= target_date - INTERVAL '6 months'
         ) AS total_6,
 
+        -- 決まり手とは別に、各コースでの純粋な1着率を持つ。
+        COUNT(*) FILTER (
+            WHERE winner_player_id = target_player_id
+        ) AS win_12,
+        COUNT(*) FILTER (
+            WHERE race_date >= target_date - INTERVAL '6 months'
+              AND winner_player_id = target_player_id
+        ) AS win_6,
+
+        -- nige は「1コース1着率」ではなく、本当に決まり手が逃げだった割合。
         COUNT(*) FILTER (
             WHERE course = 1
               AND winner_player_id = target_player_id
+              AND winner_technique = '逃げ'
         ) AS nige_12,
         COUNT(*) FILTER (
             WHERE race_date >= target_date - INTERVAL '6 months'
               AND course = 1
               AND winner_player_id = target_player_id
+              AND winner_technique = '逃げ'
         ) AS nige_6,
 
         COUNT(*) FILTER (
@@ -304,6 +318,7 @@ ORDER BY course;
     }
 
     $countKeys = [
+        'win',
         'nige',
         'sashi',
         'makuri',
