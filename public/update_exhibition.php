@@ -1,9 +1,9 @@
 <?php
 date_default_timezone_set('Asia/Tokyo');
 
-// 一時的なエラー表示設定（原因特定用）
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+// API応答をJSONに保つため、PHPエラーは画面へ直接出さずcatch側のmessageで返す。
+ini_set('display_errors', 0);
+ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 ob_start();
@@ -93,7 +93,6 @@ try {
     // ------------------------------------------------------------
     // HOME環境変数を明示して、cron等で動作実績のあるユーザーのパスを参照させる
     $cmd = "HOME=/home/miyazaki PLAYWRIGHT_BROWSERS_PATH=/home/miyazaki/.cache/ms-playwright /usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url) . " 2>&1";
-    // $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
 
     $output = [];
     exec($cmd, $output, $return_var);
@@ -106,8 +105,27 @@ try {
     $json = implode("\n", $output);
     $data = json_decode($json, true);
 
-    if ($data === null || empty($data)) {
+    if (!is_array($data) || empty($data)) {
         throw new Exception("展示データの取得に失敗したか、データが空でした");
+    }
+
+    if (count($data) !== 6) {
+        throw new Exception("展示データが6艇分そろっていません（取得件数: " . count($data) . "）");
+    }
+
+    // スクレイパーは展示未公開時に6艇分のnullを返すため、成功扱いで保存しない。
+    $hasExhibitionData = false;
+    foreach ($data as $row) {
+        if (
+            toNullOrFloat($row['exhibition_time'] ?? null) !== null
+            || convertStartTiming($row['start_timing'] ?? '') !== null
+        ) {
+            $hasExhibitionData = true;
+            break;
+        }
+    }
+    if (!$hasExhibitionData) {
+        throw new Exception("展示情報がまだ公開されていないか、取得できませんでした");
     }
 
     // ------------------------------------------------------------
@@ -218,28 +236,28 @@ try {
             ':exhibition_type'  => $type
         ]);
     }
+
     log_message("{$race_code} 更新完了");
 
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8");
-//    echo json_encode([
-//        "success" => true,
-//        "race_code" => $race_code,
-//        "count" => count($data),
-//        "message" => "展示情報を更新しました"
-//    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        "success" => true,
+        "race_code" => $race_code,
+        "count" => count($data),
+        "message" => "展示情報を更新しました"
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 } catch (Throwable $e) {
 
     log_message("エラー発生: " . $e->getMessage());
 
     ob_end_clean();
-//    header("Content-Type: application/json; charset=UTF-8", true, 500);
-//    echo json_encode([
-//        "success" => false,
-//        "message" => "エラーが発生しました: " . $e->getMessage()
-//    ], JSON_UNESCAPED_UNICODE);
-
+    header("Content-Type: application/json; charset=UTF-8", true, 500);
+    echo json_encode([
+        "success" => false,
+        "message" => $e->getMessage()
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
 exit;
