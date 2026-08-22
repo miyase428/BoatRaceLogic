@@ -11,10 +11,10 @@ class FinalPredictionExporter
     private ApiClientProduction $apiClient;
     private PredictionLogicProduction $predictionLogic;
 
-    public function __construct()
+    public function __construct(?ApiClientProduction $apiClient = null)
     {
         $this->pdo = getPDO();
-        $this->apiClient = new ApiClientProduction();
+        $this->apiClient = $apiClient ?? new ApiClientProduction();
         $this->predictionLogic = new PredictionLogicProduction();
     }
 
@@ -53,7 +53,6 @@ class FinalPredictionExporter
             );
         }
 
-
         // ----------------------------------------------------
         // race_result_detail
         // ----------------------------------------------------
@@ -84,13 +83,11 @@ class FinalPredictionExporter
 
         $resultDetails = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-
         if (!$resultDetails) {
             throw new RuntimeException(
                 "race_result_detailに結果がありません: {$raceCode}"
             );
         }
-
 
         // ----------------------------------------------------
         // 実結果を艇番別に整理
@@ -99,7 +96,6 @@ class FinalPredictionExporter
         $actualByLane = [];
 
         foreach ($resultDetails as $row) {
-
             $lane = (int)$row['lane_number'];
 
             if ($lane < 1 || $lane > 6) {
@@ -121,7 +117,6 @@ class FinalPredictionExporter
             ];
         }
 
-
         // ----------------------------------------------------
         // 実着順 → 艇番
         // ----------------------------------------------------
@@ -129,7 +124,6 @@ class FinalPredictionExporter
         $actualByRank = [];
 
         foreach ($actualByLane as $lane => $data) {
-
             $rank = $data['rank'];
 
             if (
@@ -156,7 +150,6 @@ class FinalPredictionExporter
                 "{$actual1st}-{$actual2nd}-{$actual3rd}";
         }
 
-
         // ----------------------------------------------------
         // 一次評価
         // ----------------------------------------------------
@@ -179,13 +172,11 @@ class FinalPredictionExporter
             );
         }
 
-
         // ----------------------------------------------------
         // 場コード
         // ----------------------------------------------------
 
         $placeCode = substr($raceCode, 8, 3);
-
 
         // ----------------------------------------------------
         // 決まり手
@@ -200,7 +191,6 @@ class FinalPredictionExporter
         if ($kimariteError !== '') {
             $kimariteData = [];
         }
-
 
         // ----------------------------------------------------
         // 展示情報
@@ -222,7 +212,6 @@ class FinalPredictionExporter
             );
         }
 
-
         // ----------------------------------------------------
         // 3連対率
         // ----------------------------------------------------
@@ -236,7 +225,6 @@ class FinalPredictionExporter
         if (!is_array($tenjiTestData)) {
             $tenjiTestData = [];
         }
-
 
         // ----------------------------------------------------
         // 最終予想
@@ -255,7 +243,6 @@ class FinalPredictionExporter
                 $finalPredictions
             );
 
-
         // ----------------------------------------------------
         // 艇別データ
         // ----------------------------------------------------
@@ -263,7 +250,6 @@ class FinalPredictionExporter
         $boatRows = [];
 
         for ($lane = 1; $lane <= 6; $lane++) {
-
             $result =
                 $results[$lane - 1] ?? [];
 
@@ -282,9 +268,7 @@ class FinalPredictionExporter
             $actual =
                 $actualByLane[$lane] ?? [];
 
-
             $boatRows[$lane] = [
-
                 'lane_number' =>
                     $lane,
 
@@ -300,7 +284,6 @@ class FinalPredictionExporter
                     $entry['player_name']
                     ?? '',
 
-
                 // 一次評価
                 'first_total_score' =>
                     $result['total_score'] ?? 0,
@@ -311,7 +294,6 @@ class FinalPredictionExporter
                 'first_eval' =>
                     $result['ichiji_eval'] ?? '',
 
-
                 // 3連対率
                 'three_in_rate_6m' =>
                     $final['rate6_dec']
@@ -321,11 +303,9 @@ class FinalPredictionExporter
                     $final['rate3_dec']
                     ?? ($test['three_in_rate_3m'] ?? 0),
 
-
                 // 二次評価
                 'second_score' =>
                     $tenji['final_2nd_score'] ?? 0,
-
 
                 // 最終評価
                 'kitai' =>
@@ -346,13 +326,11 @@ class FinalPredictionExporter
                 'kiru' =>
                     $final['kiru'] ?? 0,
 
-
                 // 実結果
                 'actual_rank' =>
                     $actual['rank'] ?? '',
             ];
         }
-
 
         // ----------------------------------------------------
         // 順位
@@ -383,7 +361,6 @@ class FinalPredictionExporter
             $summary['rank_boats'] ?? [];
 
         foreach ($effectiveRankBoats as $index => $lane) {
-
             $finalRank[(int)$lane] =
                 $index + 1;
         }
@@ -393,14 +370,12 @@ class FinalPredictionExporter
         * 従来のfinal3順位へフォールバック
         */
         if (count($finalRank) < 6) {
-
             $finalRank =
                 $this->makeRankMap(
                     $boatRows,
                     'final3'
                 );
         }
-
 
         // ----------------------------------------------------
         // 結果を返す
@@ -443,7 +418,6 @@ class FinalPredictionExporter
         ];
     }
 
-
     /**
      * スコアから順位を作成
      */
@@ -451,15 +425,12 @@ class FinalPredictionExporter
         array $rows,
         string $scoreKey
     ): array {
-
         $scores = [];
 
         foreach ($rows as $lane => $row) {
-
             $scores[$lane] =
                 (float)($row[$scoreKey] ?? 0);
         }
-
 
         uksort(
             $scores,
@@ -467,7 +438,6 @@ class FinalPredictionExporter
                 string $laneA,
                 string $laneB
             ) use ($scores): int {
-
                 $scoreA = $scores[$laneA];
                 $scoreB = $scores[$laneB];
 
@@ -482,12 +452,10 @@ class FinalPredictionExporter
             }
         );
 
-
         $rankMap = [];
         $rank = 1;
 
         foreach ($scores as $lane => $score) {
-
             $rankMap[(int)$lane] =
                 $rank;
 
