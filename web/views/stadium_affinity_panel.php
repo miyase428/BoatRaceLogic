@@ -63,11 +63,11 @@ if (!empty($stadiumAffinity)):
         </div>
     </div>
 <?php else: ?>
-    <div style="margin:14px 0; padding:12px 14px; background:#111827; border:1px solid #334155; border-radius:8px; color:#e2e8f0;">
+    <div style="margin:14px 0; padding:12px 14px; background:var(--surface-soft); border:1px solid var(--border); border-radius:8px; color:var(--text);">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
             <div>
-                <div style="font-size:16px; font-weight:bold; color:#38bdf8;">📊 現行Webとの場相性</div>
-                <div style="margin-top:3px; font-size:12px; color:#94a3b8;">
+                <div style="font-size:16px; font-weight:bold; color:var(--accent);">📊 現行Webとの場相性</div>
+                <div style="margin-top:3px; font-size:12px; color:var(--text-muted);">
                     <?= $affinityEsc($venueName) ?> / <?= $affinityEsc($periodLabel) ?>（<?= $affinityEsc($startDate) ?>〜<?= $affinityEsc($endDate) ?>）
                 </div>
             </div>
@@ -77,13 +77,13 @@ if (!empty($stadiumAffinity)):
             </div>
         </div>
         <div style="display:flex; gap:18px; flex-wrap:wrap; margin-top:10px; font-size:13px;">
-            <div>本命1着率 <strong style="color:#f8fafc; font-size:17px;"><?= number_format($rate, 2) ?>%</strong></div>
-            <div>24場順位 <strong style="color:#f8fafc;"><?= $rank ?>位</strong></div>
-            <div>対象 <strong style="color:#f8fafc;"><?= number_format($races) ?>R</strong></div>
-            <div>期間別 <strong style="color:#f8fafc;"><?= number_format($period1, 2) ?>% → <?= number_format($period2, 2) ?>%</strong></div>
-            <div>差 <strong style="color:#f8fafc;"><?= number_format($gap, 2) ?>pt</strong></div>
+            <div>本命1着率 <strong style="color:var(--text-strong); font-size:17px;"><?= number_format($rate, 2) ?>%</strong></div>
+            <div>24場順位 <strong style="color:var(--text-strong);"><?= $rank ?>位</strong></div>
+            <div>対象 <strong style="color:var(--text-strong);"><?= number_format($races) ?>R</strong></div>
+            <div>期間別 <strong style="color:var(--text-strong);"><?= number_format($period1, 2) ?>% → <?= number_format($period2, 2) ?>%</strong></div>
+            <div>差 <strong style="color:var(--text-strong);"><?= number_format($gap, 2) ?>pt</strong></div>
         </div>
-        <details style="margin-top:8px; font-size:11px; color:#94a3b8;">
+        <details style="margin-top:8px; font-size:11px; color:var(--text-muted);">
             <summary style="cursor:pointer;">相性度・安定度の暫定基準</summary>
             <div style="margin-top:5px; line-height:1.6;">
                 <?= $affinityEsc($stadiumAffinityMeta['affinity_rule'] ?? '') ?><br>
