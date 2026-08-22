@@ -74,7 +74,9 @@ function empty_kimarite() {
 // 固定2期間検証で採用した race_entry 母集団方式はそのまま維持する。
 //
 // 重要:
-//   集計基準日は CURRENT_DATE ではなく「対象 race_code の race_date」。
+//   集計基準日は CURRENT_DATE ではなく「対象 race_code の日付」。
+//   race_master に対象レースがあれば race_date を使い、当日レースなど
+//   race_master 未登録時は race_code 先頭8桁（YYYYMMDD）を日付として補完する。
 //   過去レースの再計算時に、そのレースより後の成績が混入しないようにする。
 //
 // race_master は日付粒度なので、同日開催分は前後関係を安全に判定できない。
@@ -84,10 +86,15 @@ function load_kimarite_both($pdo, $race_code, $in_course) {
     $sql = "
 WITH target_race AS (
     SELECT
-        race_date AS target_date
-    FROM boat_race.race_master
-    WHERE race_code = :target_race_code
-    LIMIT 1
+        COALESCE(
+            (
+                SELECT race_date
+                FROM boat_race.race_master
+                WHERE race_code = :target_master_race_code
+                LIMIT 1
+            ),
+            TO_DATE(SUBSTRING(:target_fallback_race_code FROM 1 FOR 8), 'YYYYMMDD')
+        ) AS target_date
 ),
 
 tm AS (
@@ -298,7 +305,8 @@ ORDER BY course;
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
-        ":target_race_code" => $race_code,
+        ":target_master_race_code" => $race_code,
+        ":target_fallback_race_code" => $race_code,
         ":member_race_code" => $race_code,
         ":in1" => $in_course[1],
         ":in2" => $in_course[2],
