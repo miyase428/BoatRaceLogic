@@ -338,7 +338,8 @@ $tabsScript = <<<'HTML'
             overlay.setAttribute('aria-hidden', 'false');
             if (button) {
                 button.classList.add('is-loading');
-                button.disabled = true;
+                // submitイベント中にdisabledへすると、submitterのname/valueがPOST対象から外れる。
+                // 展示更新判定の update_exhibition=1 を確実に送るため、ここでは無効化しない。
             }
         }
 
