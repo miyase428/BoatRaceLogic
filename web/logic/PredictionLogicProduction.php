@@ -12,12 +12,19 @@ require_once __DIR__ . '/PredictionLogic.php';
  * 過去検証で有効だったR3_ONLYルールとして本命買い目だけ切りを解除する。
  * 対抗買い目はR3_ONLY適用前のkiruを使用する。
  *
+ * 現行本命が5号艇または6号艇になった場合だけ、凍結済みkimariteモデルで
+ * 2～4号艇から新しい本命頭を選ぶ。モデルは
+ * config/kimarite_head_model.php が存在する時だけ有効になる。
+ *
  * 進入変更時は、親ロジックが前提としている「1..6 = コース順」に
  * tenji / 一次評価 / 3連対率を並べ替えて計算し、最後に艇番へ戻す。
  * 通常進入123456では並べ替え結果が元配列と同一になる。
  */
 class PredictionLogicProduction extends PredictionLogic
 {
+    private static bool $kimariteHeadModelLoaded = false;
+    private static array $kimariteHeadModel = [];
+
     public function buildFinalPredictions(
         array $tenji_list,
         array $kimarite_data,
@@ -120,17 +127,23 @@ class PredictionLogicProduction extends PredictionLogic
         ksort($final_predictions);
 
         // final_predictions上のkiruは「本命買い目用」の切り判定とする。
-        return $this->applyPrimaryRank3CutProtection($final_predictions);
+        $final_predictions = $this->applyPrimaryRank3CutProtection($final_predictions);
+
+        // 凍結モデルの入力は検証時と同じく「艇番2/3/4に対応するkimarite値」。
+        // 展示進入変更の有無にかかわらず、検証済み定義をそのまま維持する。
+        return $this->attachKimariteHeadScores($final_predictions, $kimarite_data);
     }
 
     /**
      * HONMEI_ONLY:
      * 親buildSummary()ではR3_ONLY適用後のkiruを使って本命・対抗を作る。
-     * その後、対抗買い目だけR3_ONLY適用前のkiru_originalで作り直す。
+     * その後、⑤⑥本命kimarite補正を適用し、
+     * 対抗買い目だけR3_ONLY適用前のkiru_originalで作り直す。
      */
     public function buildSummary(array $final_predictions): array
     {
         $summary = parent::buildSummary($final_predictions);
+        $summary = $this->applyKimariteHeadOverride($summary, $final_predictions);
 
         $rankBoats = $summary['rank_boats'] ?? [];
         $taikouHead = (int)($summary['taikou_head'] ?? 0);
@@ -148,29 +161,12 @@ class PredictionLogicProduction extends PredictionLogic
             }
         }
 
-        $taikouAite = [];
-        $taikouThird = [];
+        [$taikouAite, $taikouThird] = $this->buildBetCandidates(
+            $rankBoats,
+            $taikouKiruBoats,
+            $taikouHead
+        );
 
-        foreach ($rankBoats as $boat) {
-            $boat = (int)$boat;
-
-            if ($boat === $taikouHead) {
-                continue;
-            }
-
-            if (in_array($boat, $taikouKiruBoats, true)) {
-                continue;
-            }
-
-            $taikouThird[] = $boat;
-
-            if (count($taikouAite) < 3) {
-                $taikouAite[] = $boat;
-            }
-        }
-
-        sort($taikouAite);
-        sort($taikouThird);
         sort($taikouKiruBoats);
 
         $taikouAiteKako = implode('', $taikouAite);
@@ -215,7 +211,9 @@ class PredictionLogicProduction extends PredictionLogic
         }
         unset($fp);
 
-        return $this->applyPrimaryRank3CutProtection($final_predictions);
+        $final_predictions = $this->applyPrimaryRank3CutProtection($final_predictions);
+
+        return $this->attachKimariteHeadScores($final_predictions, $kimarite_data);
     }
 
     /**
@@ -265,5 +263,261 @@ class PredictionLogicProduction extends PredictionLogic
         }
 
         return $final_predictions;
+    }
+
+    /**
+     * 凍結済み⑤⑥本命補正モデルの2～4号艇スコアを付与する。
+     */
+    private function attachKimariteHeadScores(
+        array $final_predictions,
+        array $kimarite_data
+    ): array {
+        $model = $this->getKimariteHeadModel();
+        if (empty($model['courses']) || !is_array($model['courses'])) {
+            return $final_predictions;
+        }
+
+        foreach ([2, 3, 4] as $boat) {
+            if (!isset($final_predictions[$boat])) {
+                continue;
+            }
+
+            $courseModel = $model['courses'][$boat] ?? null;
+            if (!is_array($courseModel)) {
+                continue;
+            }
+
+            $raw = $kimarite_data[(string)$boat] ?? $kimarite_data[$boat] ?? [];
+            $k = is_array($raw)
+                ? ($raw['6month'] ?? $raw)
+                : [];
+
+            if (!is_array($k)) {
+                $k = [];
+            }
+
+            $sampleN = (int)($k['_sample_n'] ?? 0);
+            if ($boat === 2) {
+                $featurePct = $this->rateToPercent($k['sashi'] ?? 0);
+            } else {
+                $featurePct =
+                    $this->rateToPercent($k['makuri'] ?? 0)
+                    + $this->rateToPercent($k['makurizashi'] ?? 0);
+            }
+
+            $band = $this->kimariteHeadBand($featurePct);
+            $baseP = (float)($courseModel['base_p'] ?? 0.0);
+            $minSample = (int)($model['min_sample'] ?? 10);
+            $score = $baseP;
+
+            if ($sampleN >= $minSample) {
+                $bandRow = $courseModel['bands'][$band] ?? null;
+                if (is_array($bandRow) && array_key_exists('p', $bandRow)) {
+                    $score = (float)$bandRow['p'];
+                }
+            }
+
+            $final_predictions[$boat]['kimarite_head_score'] = $score;
+            $final_predictions[$boat]['kimarite_head_feature_pct'] = $featurePct;
+            $final_predictions[$boat]['kimarite_head_sample_n'] = $sampleN;
+            $final_predictions[$boat]['kimarite_head_band'] = $band;
+            $final_predictions[$boat]['kimarite_head_model_version'] = (string)($model['version'] ?? '');
+        }
+
+        return $final_predictions;
+    }
+
+    /**
+     * STEP4まで済んだ現行本命が⑤/⑥の時だけ、2～4号艇の凍結kimariteスコアで頭を差し替える。
+     * 2～4号艇同士の通常順位は触らず、⑤⑥本命時だけ発動する。
+     */
+    private function applyKimariteHeadOverride(
+        array $summary,
+        array $final_predictions
+    ): array {
+        $rankBoats = array_values($summary['rank_boats'] ?? []);
+        if (count($rankBoats) !== 6) {
+            return $summary;
+        }
+
+        $currentHead = (int)($rankBoats[0] ?? 0);
+        $summary['kimarite_head_override_condition'] = in_array($currentHead, [5, 6], true);
+        $summary['kimarite_head_override_applied'] = false;
+        $summary['kimarite_head_override_from'] = null;
+        $summary['kimarite_head_override_to'] = null;
+        $summary['kimarite_head_override_score'] = null;
+        $summary['kimarite_head_model_version'] = '';
+
+        if (!in_array($currentHead, [5, 6], true)) {
+            return $summary;
+        }
+
+        $model = $this->getKimariteHeadModel();
+        if (empty($model['courses']) || !is_array($model['courses'])) {
+            return $summary;
+        }
+
+        $bestBoat = null;
+        $bestScore = null;
+
+        foreach ([2, 3, 4] as $boat) {
+            if (!isset($final_predictions[$boat])) {
+                continue;
+            }
+
+            if (!array_key_exists('kimarite_head_score', $final_predictions[$boat])) {
+                continue;
+            }
+
+            $score = (float)$final_predictions[$boat]['kimarite_head_score'];
+
+            if (
+                $bestBoat === null
+                || $score > (float)$bestScore
+                || ($score == (float)$bestScore && $boat < $bestBoat)
+            ) {
+                $bestBoat = $boat;
+                $bestScore = $score;
+            }
+        }
+
+        if ($bestBoat === null) {
+            return $summary;
+        }
+
+        // 検証時のmove_head()と同じく、選択頭だけ先頭へ移し、残りの順位は維持する。
+        $rankBoats = array_values(array_filter(
+            $rankBoats,
+            static fn($boat): bool => (int)$boat !== $bestBoat
+        ));
+        array_unshift($rankBoats, $bestBoat);
+
+        $honmeiKiruBoats = [];
+        foreach ($final_predictions as $boat => $fp) {
+            if ((int)($fp['kiru'] ?? 0) === 1) {
+                $honmeiKiruBoats[] = (int)$boat;
+            }
+        }
+        sort($honmeiKiruBoats);
+
+        $honmeiHead = (int)$rankBoats[0];
+        $taikouHead = (int)$rankBoats[1];
+
+        [$honmeiAite, $honmeiThird] = $this->buildBetCandidates(
+            $rankBoats,
+            $honmeiKiruBoats,
+            $honmeiHead
+        );
+        [$taikouAite, $taikouThird] = $this->buildBetCandidates(
+            $rankBoats,
+            $honmeiKiruBoats,
+            $taikouHead
+        );
+
+        $honmeiAiteKako = implode('', $honmeiAite);
+        $honmeiThirdKako = implode('', $honmeiThird);
+        $taikouAiteKako = implode('', $taikouAite);
+        $taikouThirdKako = implode('', $taikouThird);
+
+        $summary['rank_boats'] = $rankBoats;
+        $summary['honmei_head'] = $honmeiHead;
+        $summary['taikou_head'] = $taikouHead;
+        $summary['honmei_aite_str'] = implode('・', $honmeiAite);
+        $summary['taikou_aite_str'] = implode('・', $taikouAite);
+        $summary['honmei_aite_kako'] = $honmeiAiteKako;
+        $summary['honmei_third_kako'] = $honmeiThirdKako;
+        $summary['taikou_aite_kako'] = $taikouAiteKako;
+        $summary['taikou_third_kako'] = $taikouThirdKako;
+        $summary['honmei_kai'] = $honmeiHead . '-' . $honmeiAiteKako . '-' . $honmeiThirdKako;
+        $summary['taikou_kai'] = $taikouHead . '-' . $taikouAiteKako . '-' . $taikouThirdKako;
+        $summary['kimarite_head_override_applied'] = true;
+        $summary['kimarite_head_override_from'] = $currentHead;
+        $summary['kimarite_head_override_to'] = $bestBoat;
+        $summary['kimarite_head_override_score'] = $bestScore;
+        $summary['kimarite_head_model_version'] = (string)($model['version'] ?? '');
+
+        return $summary;
+    }
+
+    /**
+     * 現行Webと同じ買い目候補作成。
+     * 2着=切る艇を除く上位最大3艇、3着=切る艇を除く全艇。
+     */
+    private function buildBetCandidates(
+        array $rankBoats,
+        array $kiruBoats,
+        int $head
+    ): array {
+        $aite = [];
+        $third = [];
+
+        foreach ($rankBoats as $boat) {
+            $boat = (int)$boat;
+
+            if ($boat === $head) {
+                continue;
+            }
+
+            if (in_array($boat, $kiruBoats, true)) {
+                continue;
+            }
+
+            $third[] = $boat;
+
+            if (count($aite) < 3) {
+                $aite[] = $boat;
+            }
+        }
+
+        sort($aite);
+        sort($third);
+
+        return [$aite, $third];
+    }
+
+    private function getKimariteHeadModel(): array
+    {
+        if (self::$kimariteHeadModelLoaded) {
+            return self::$kimariteHeadModel;
+        }
+
+        self::$kimariteHeadModelLoaded = true;
+        $path = __DIR__ . '/../../config/kimarite_head_model.php';
+
+        if (!is_file($path)) {
+            self::$kimariteHeadModel = [];
+            return self::$kimariteHeadModel;
+        }
+
+        $model = require $path;
+        self::$kimariteHeadModel = is_array($model) ? $model : [];
+
+        return self::$kimariteHeadModel;
+    }
+
+    private function rateToPercent($value): float
+    {
+        $rate = (float)$value;
+        return abs($rate) <= 1.0 ? $rate * 100.0 : $rate;
+    }
+
+    private function kimariteHeadBand(float $value): string
+    {
+        if ($value < 5.0) {
+            return '0-5';
+        }
+        if ($value < 10.0) {
+            return '5-10';
+        }
+        if ($value < 15.0) {
+            return '10-15';
+        }
+        if ($value < 20.0) {
+            return '15-20';
+        }
+        if ($value < 25.0) {
+            return '20-25';
+        }
+        return '25+';
     }
 }
