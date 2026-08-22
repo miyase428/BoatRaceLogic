@@ -165,4 +165,64 @@ class ApiClientProduction extends ApiClient
 
         return [$slitData, $pattern];
     }
+
+    /**
+     * 展示更新は同一Ubuntuサーバ内の処理なので、LAN IPではなくlocalhost経由で呼ぶ。
+     * Playwright側のページ待機より短い30秒タイムアウトで先に諦めないよう90秒まで待つ。
+     * update_exhibition.php が返すJSONの成功/失敗内容を画面メッセージへ反映する。
+     */
+    public function updateExhibition(string $race_code): array
+    {
+        if ($race_code === '') {
+            return ['展示情報の更新に失敗しました: race_codeがありません。', 'race_code is empty'];
+        }
+
+        $targetUrl = 'http://127.0.0.1:80/update_exhibition.php';
+        $ch = curl_init($targetUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+            'race_code' => $race_code,
+        ]));
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+
+        $response = curl_exec($ch);
+        $curlErrno = curl_errno($ch);
+        $curlError = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($curlErrno !== 0) {
+            $debug = "cURL error {$curlErrno}: {$curlError}";
+            return [
+                "展示情報の更新に失敗しました: {$curlError}",
+                $debug,
+            ];
+        }
+
+        $json = is_string($response) ? json_decode($response, true) : null;
+        $debug = "HTTP STATUS: {$httpCode}\nRACE_CODE: {$race_code}\nRAW RESPONSE: " . (string)$response;
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            $message = is_array($json) && !empty($json['message'])
+                ? (string)$json['message']
+                : "HTTP {$httpCode}";
+            return ["展示情報の更新に失敗しました: {$message}", $debug];
+        }
+
+        if (!is_array($json)) {
+            return ['展示情報の更新に失敗しました: 更新APIから正しい応答がありません。', $debug];
+        }
+
+        if (($json['success'] ?? false) !== true) {
+            $message = (string)($json['message'] ?? '原因不明のエラー');
+            return ["展示情報の更新に失敗しました: {$message}", $debug];
+        }
+
+        return [
+            (string)($json['message'] ?? '展示情報を更新しました。'),
+            $debug,
+        ];
+    }
 }
