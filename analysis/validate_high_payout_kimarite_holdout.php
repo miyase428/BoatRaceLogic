@@ -238,7 +238,7 @@ foreach ($periods as $label => $rows) {
 }
 
 echo PHP_EOL;
-printf("%-27s %-10s %6s %8s %8s %8s %9s %8s %10s %16s\n",
+printf("%-27s %-10s %6s %8s %8s %8s %9s %8s %16s\n",
     '候補','期間','N','万舟率','Lift','3万率','Lift30','10万率','万舟内訳 相/頭/全');
 echo str_repeat('-', 164) . PHP_EOL;
 
