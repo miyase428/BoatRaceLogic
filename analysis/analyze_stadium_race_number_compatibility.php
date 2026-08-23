@@ -3,20 +3,17 @@
 declare(strict_types=1);
 
 /**
- * 場 × レース番号 Web予想相性分析
+ * 場 × レース番号 Web予想相性分析 v2
  *
- * 目的:
- * - 「この場は何RがWeb予想と実戦で噛み合いやすいか」を確認する。
- * - 本命1着率だけでなく、最終順位TOP3の捕捉・本命買い目的中率・回収率も見る。
- * - 直近約6か月でも傾向が残っているかを簡易確認する。
+ * v1でCSVの race_number / 着順列に「1R」「1着」などの文字が含まれると
+ * is_numeric() 判定で0扱いになり、N=0になるケースがあったため、数値抽出を柔軟化。
+ * race_number は race_code 末尾2桁からも補完し、実着順は艇別CSV actual_rank からも補完する。
  *
  * Usage:
  * php analysis/analyze_stadium_race_number_compatibility.php \
  *   analysis/output/final_prediction_races_fast_cached_20250815_20260814.csv \
  *   analysis/output/final_prediction_boats_fast_cached_20250815_20260814.csv \
  *   大村
- *
- * 第3引数の場名を省略すると全場を表示する。
  */
 
 if ($argc < 3 || $argc > 4) {
@@ -76,10 +73,53 @@ function readCsvAssoc(string $path): array
     return $rows;
 }
 
-function inum(array $row, string $key, int $default = 0): int
+/**
+ * 「1」「1R」「1着」「第1レース」などから整数を取り出す。
+ */
+function looseInt(mixed $value, int $default = 0): int
 {
-    $value = $row[$key] ?? null;
-    return is_numeric($value) ? (int)$value : $default;
+    if (is_int($value)) {
+        return $value;
+    }
+    if (is_float($value)) {
+        return (int)$value;
+    }
+
+    $text = trim((string)$value);
+    if ($text === '') {
+        return $default;
+    }
+    if (is_numeric($text)) {
+        return (int)$text;
+    }
+    if (preg_match('/-?\d+/u', $text, $m) === 1) {
+        return (int)$m[0];
+    }
+
+    return $default;
+}
+
+function rowInt(array $row, string $key, int $default = 0): int
+{
+    return looseInt($row[$key] ?? null, $default);
+}
+
+function raceNoFromRow(array $race): int
+{
+    $raceNo = rowInt($race, 'race_number');
+    if ($raceNo >= 1 && $raceNo <= 12) {
+        return $raceNo;
+    }
+
+    $raceCode = trim((string)($race['race_code'] ?? ''));
+    if ($raceCode !== '' && preg_match('/(\d{1,2})$/', $raceCode, $m) === 1) {
+        $raceNo = (int)$m[1];
+        if ($raceNo >= 1 && $raceNo <= 12) {
+            return $raceNo;
+        }
+    }
+
+    return 0;
 }
 
 function pct(int $num, int $den): float
@@ -141,7 +181,6 @@ function emptyStat(): array
         'bet_hit' => 0,
         'investment' => 0,
         'payout' => 0,
-        'roi_n' => 0,
     ];
 }
 
@@ -158,7 +197,7 @@ function addRaceToStat(
 
     if ($honmei >= 1 && $honmei <= 6) {
         $stat['honmei_n']++;
-        if ($actualTop3[0] === $honmei) {
+        if (($actualTop3[0] ?? 0) === $honmei) {
             $stat['honmei_first']++;
         }
         if (in_array($honmei, $actualTop3, true)) {
@@ -185,7 +224,6 @@ function addRaceToStat(
         }
 
         if ($payout !== null) {
-            $stat['roi_n']++;
             $stat['investment'] += count($honmeiBets) * 100;
             if ($isHit) {
                 $stat['payout'] += $payout;
@@ -247,23 +285,46 @@ $boats = readCsvAssoc($boatsPath);
 if ($races === []) {
     throw new RuntimeException('レース別CSVにデータがありません。');
 }
+if ($boats === []) {
+    throw new RuntimeException('艇別CSVにデータがありません。');
+}
 
-$predictedTop3ByRace = [];
+$predictedTop3Ranked = [];
+$actualTop3Ranked = [];
 foreach ($boats as $boat) {
     $raceCode = trim((string)($boat['race_code'] ?? ''));
-    $lane = inum($boat, 'lane_number');
-    $rank = inum($boat, 'final_rank', 99);
-
-    if ($raceCode === '' || $lane < 1 || $lane > 6 || $rank < 1 || $rank > 3) {
+    $lane = rowInt($boat, 'lane_number');
+    if ($raceCode === '' || $lane < 1 || $lane > 6) {
         continue;
     }
 
-    $predictedTop3ByRace[$raceCode][$rank] = $lane;
+    $finalRank = rowInt($boat, 'final_rank', 99);
+    if ($finalRank >= 1 && $finalRank <= 3) {
+        $predictedTop3Ranked[$raceCode][$finalRank] = $lane;
+    }
+
+    $actualRank = rowInt($boat, 'actual_rank', 99);
+    if ($actualRank >= 1 && $actualRank <= 3) {
+        $actualTop3Ranked[$raceCode][$actualRank] = $lane;
+    }
 }
 
-foreach ($predictedTop3ByRace as $raceCode => $ranked) {
+$predictedTop3ByRace = [];
+foreach ($predictedTop3Ranked as $raceCode => $ranked) {
     ksort($ranked, SORT_NUMERIC);
-    $predictedTop3ByRace[$raceCode] = array_values(array_unique(array_map('intval', $ranked)));
+    $values = array_values(array_map('intval', $ranked));
+    if (count($values) === 3 && count(array_unique($values)) === 3) {
+        $predictedTop3ByRace[$raceCode] = $values;
+    }
+}
+
+$actualTop3ByRaceFromBoats = [];
+foreach ($actualTop3Ranked as $raceCode => $ranked) {
+    ksort($ranked, SORT_NUMERIC);
+    $values = array_values(array_map('intval', $ranked));
+    if (count($values) === 3 && count(array_unique($values)) === 3) {
+        $actualTop3ByRaceFromBoats[$raceCode] = $values;
+    }
 }
 
 $filteredRaces = [];
@@ -314,31 +375,45 @@ $all = [];
 $recent = [];
 $placeAll = [];
 $placeRecent = [];
+$skip = [
+    'race_no' => 0,
+    'actual' => 0,
+];
 
 foreach ($filteredRaces as $race) {
     $raceCode = trim((string)($race['race_code'] ?? ''));
     $stadium = trim((string)($race['stadium_name'] ?? ''));
-    $raceNo = inum($race, 'race_number');
+    $raceNo = raceNoFromRow($race);
     $date = trim((string)($race['race_date'] ?? ''));
 
-    $actual1 = inum($race, 'actual_1st');
-    $actual2 = inum($race, 'actual_2nd');
-    $actual3 = inum($race, 'actual_3rd');
-
     if ($raceCode === '' || $raceNo < 1 || $raceNo > 12) {
-        continue;
-    }
-    if ($actual1 < 1 || $actual1 > 6 || $actual2 < 1 || $actual2 > 6 || $actual3 < 1 || $actual3 > 6) {
+        $skip['race_no']++;
         continue;
     }
 
+    $actual1 = rowInt($race, 'actual_1st');
+    $actual2 = rowInt($race, 'actual_2nd');
+    $actual3 = rowInt($race, 'actual_3rd');
     $actualTop3 = [$actual1, $actual2, $actual3];
-    $actualTrifecta = trim((string)($race['actual_trifecta'] ?? ''));
-    if ($actualTrifecta === '') {
-        $actualTrifecta = "{$actual1}-{$actual2}-{$actual3}";
+
+    if (
+        $actual1 < 1 || $actual1 > 6 ||
+        $actual2 < 1 || $actual2 > 6 ||
+        $actual3 < 1 || $actual3 > 6 ||
+        count(array_unique($actualTop3)) !== 3
+    ) {
+        $actualTop3 = $actualTop3ByRaceFromBoats[$raceCode] ?? [];
     }
 
-    $honmei = inum($race, 'honmei_head');
+    if (count($actualTop3) !== 3) {
+        $skip['actual']++;
+        continue;
+    }
+
+    [$actual1, $actual2, $actual3] = $actualTop3;
+    $actualTrifecta = "{$actual1}-{$actual2}-{$actual3}";
+
+    $honmei = rowInt($race, 'honmei_head');
     $honmeiBets = expandTrifecta((string)($race['honmei_kai'] ?? ''));
     $predictedTop3 = $predictedTop3ByRace[$raceCode] ?? [];
 
@@ -346,64 +421,27 @@ foreach ($filteredRaces as $race) {
     if ($honmeiBets !== []) {
         $payoutStmt->execute([':race_code' => $raceCode]);
         $value = $payoutStmt->fetchColumn();
-        if ($value !== false && $value !== null && is_numeric($value)) {
-            $payout = (int)$value;
+        if ($value !== false && $value !== null) {
+            $normalized = str_replace(',', '', trim((string)$value));
+            if (is_numeric($normalized)) {
+                $payout = (int)$normalized;
+            }
         }
     }
 
-    if (!isset($all[$stadium][$raceNo])) {
-        $all[$stadium][$raceNo] = emptyStat();
-    }
-    if (!isset($placeAll[$stadium])) {
-        $placeAll[$stadium] = emptyStat();
-    }
+    $all[$stadium][$raceNo] ??= emptyStat();
+    $placeAll[$stadium] ??= emptyStat();
 
-    addRaceToStat(
-        $all[$stadium][$raceNo],
-        $honmei,
-        $actualTop3,
-        $predictedTop3,
-        $honmeiBets,
-        $actualTrifecta,
-        $payout
-    );
-    addRaceToStat(
-        $placeAll[$stadium],
-        $honmei,
-        $actualTop3,
-        $predictedTop3,
-        $honmeiBets,
-        $actualTrifecta,
-        $payout
-    );
+    addRaceToStat($all[$stadium][$raceNo], $honmei, $actualTop3, $predictedTop3, $honmeiBets, $actualTrifecta, $payout);
+    addRaceToStat($placeAll[$stadium], $honmei, $actualTop3, $predictedTop3, $honmeiBets, $actualTrifecta, $payout);
 
     $recentStart = $recentStartByStadium[$stadium] ?? '';
     if ($recentStart !== '' && $date >= $recentStart) {
-        if (!isset($recent[$stadium][$raceNo])) {
-            $recent[$stadium][$raceNo] = emptyStat();
-        }
-        if (!isset($placeRecent[$stadium])) {
-            $placeRecent[$stadium] = emptyStat();
-        }
+        $recent[$stadium][$raceNo] ??= emptyStat();
+        $placeRecent[$stadium] ??= emptyStat();
 
-        addRaceToStat(
-            $recent[$stadium][$raceNo],
-            $honmei,
-            $actualTop3,
-            $predictedTop3,
-            $honmeiBets,
-            $actualTrifecta,
-            $payout
-        );
-        addRaceToStat(
-            $placeRecent[$stadium],
-            $honmei,
-            $actualTop3,
-            $predictedTop3,
-            $honmeiBets,
-            $actualTrifecta,
-            $payout
-        );
+        addRaceToStat($recent[$stadium][$raceNo], $honmei, $actualTop3, $predictedTop3, $honmeiBets, $actualTrifecta, $payout);
+        addRaceToStat($placeRecent[$stadium], $honmei, $actualTop3, $predictedTop3, $honmeiBets, $actualTrifecta, $payout);
     }
 }
 
@@ -411,20 +449,20 @@ $stadiumNames = array_keys($stadiums);
 sort($stadiumNames, SORT_STRING);
 
 echo str_repeat('=', 150) . PHP_EOL;
-echo "場 × レース番号 Web予想相性分析" . PHP_EOL;
+echo "場 × レース番号 Web予想相性分析 v2" . PHP_EOL;
 echo str_repeat('=', 150) . PHP_EOL;
 echo "RACES : {$racesPath}" . PHP_EOL;
 echo "BOATS : {$boatsPath}" . PHP_EOL;
 if ($stadiumFilter !== '') {
     echo "場    : {$stadiumFilter}" . PHP_EOL;
 }
+echo "入力対象: " . count($filteredRaces) . "R / 除外 race_number={$skip['race_no']} / 実着順={$skip['actual']}" . PHP_EOL;
 echo "判定A～Dは『場平均より良いか＋回収率100%以上＋直近6か月でも良いか』の参考スコア。予測確率ではありません。" . PHP_EOL;
 
 foreach ($stadiumNames as $stadium) {
     $allPlace = $placeAll[$stadium] ?? emptyStat();
     $recentPlace = $placeRecent[$stadium] ?? emptyStat();
     $allPlaceRates = statRates($allPlace);
-    $recentPlaceRates = statRates($recentPlace);
     $recentStart = $recentStartByStadium[$stadium] ?? '-';
 
     echo PHP_EOL . str_repeat('=', 150) . PHP_EOL;
@@ -472,12 +510,14 @@ foreach ($stadiumNames as $stadium) {
             'recent_hit' => $recentRates['bet_hit'],
             'all_hit' => $rates['bet_hit'],
             'roi' => $rates['roi'],
+            'honmei_first' => $rates['honmei_first'],
+            'top3_2plus' => $rates['top3_2plus'],
         ];
     }
 
     usort($ranking, static function (array $x, array $y): int {
-        return [$y['score'], $y['recent_hit'], $y['all_hit'], $y['roi']]
-            <=> [$x['score'], $x['recent_hit'], $x['all_hit'], $x['roi']];
+        return [$y['score'], $y['recent_hit'], $y['all_hit'], $y['honmei_first'], $y['top3_2plus'], $y['roi']]
+            <=> [$x['score'], $x['recent_hit'], $x['all_hit'], $x['honmei_first'], $x['top3_2plus'], $x['roi']];
     });
 
     echo PHP_EOL . "参考ランキング（相性スコア → 直近的中率 → 全期間的中率の順）" . PHP_EOL;
@@ -487,12 +527,14 @@ foreach ($stadiumNames as $stadium) {
             continue;
         }
         printf(
-            "  %2d位: %2dR  %s(%d/6)  N=%d  的中=%.1f%%  直近=%.1f%%  回収率=%.1f%%\n",
+            "  %2d位: %2dR  %s(%d/6)  N=%d  本命1着=%.1f%%  TOP3≧2=%.1f%%  的中=%.1f%%  直近=%.1f%%  回収率=%.1f%%\n",
             $rankNo,
             $item['race_no'],
             $item['grade'],
             $item['score'],
             $item['n'],
+            $item['honmei_first'],
+            $item['top3_2plus'],
             $item['all_hit'],
             $item['recent_hit'],
             $item['roi']
