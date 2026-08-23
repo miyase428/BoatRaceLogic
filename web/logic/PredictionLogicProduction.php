@@ -16,6 +16,12 @@ require_once __DIR__ . '/PredictionLogic.php';
  * 2～4号艇から新しい本命頭を選ぶ。モデルは
  * config/kimarite_head_model.php が存在する時だけ有効になる。
  *
+ * STEP9の検証済み相手補正として、本命買い目だけ次を適用する。
+ * - 事前本命1 × 3C攻め率>=15% → 3を2着候補側へ昇格
+ * - 事前本命1 × 4C攻め率>=20% → 4を2着候補側へ昇格
+ * - 事前本命3 × 3C攻め率>=15% → 1を2着候補側へ昇格
+ * 相手補正ではrank_boatsと対抗買い目は変更しない。
+ *
  * 進入変更時は、親ロジックが前提としている「1..6 = コース順」に
  * tenji / 一次評価 / 3連対率を並べ替えて計算し、最後に艇番へ戻す。
  * 通常進入123456では並べ替え結果が元配列と同一になる。
@@ -137,13 +143,21 @@ class PredictionLogicProduction extends PredictionLogic
     /**
      * HONMEI_ONLY:
      * 親buildSummary()ではR3_ONLY適用後のkiruを使って本命・対抗を作る。
-     * その後、⑤⑥本命kimarite補正を適用し、
+     * その後、⑤⑥本命kimarite補正を適用し、さらに検証済みの相手補正を
+     * 本命買い目だけへ適用する。
      * 対抗買い目だけR3_ONLY適用前のkiru_originalで作り直す。
      */
     public function buildSummary(array $final_predictions): array
     {
         $summary = parent::buildSummary($final_predictions);
+        $originalHonmeiHead = (int)($summary['honmei_head'] ?? 0);
+
         $summary = $this->applyKimariteHeadOverride($summary, $final_predictions);
+        $summary = $this->applyKimariteOpponentOverride(
+            $summary,
+            $final_predictions,
+            $originalHonmeiHead
+        );
 
         $rankBoats = $summary['rank_boats'] ?? [];
         $taikouHead = (int)($summary['taikou_head'] ?? 0);
@@ -437,6 +451,138 @@ class PredictionLogicProduction extends PredictionLogic
         $summary['kimarite_head_model_version'] = (string)($model['version'] ?? '');
 
         return $summary;
+    }
+
+    /**
+     * STEP9の検証済み相手補正を、本命買い目だけへ適用する。
+     * トリガーは⑤⑥頭補正前の事前本命で判定し、rank_boatsや対抗は変更しない。
+     */
+    private function applyKimariteOpponentOverride(
+        array $summary,
+        array $final_predictions,
+        int $originalHonmeiHead
+    ): array {
+        $summary['kimarite_opponent_override_applied'] = false;
+        $summary['kimarite_opponent_original_head'] = $originalHonmeiHead;
+        $summary['kimarite_opponent_a3'] = false;
+        $summary['kimarite_opponent_a4'] = false;
+        $summary['kimarite_opponent_h3'] = false;
+
+        $rankBoats = array_values($summary['rank_boats'] ?? []);
+        $currentHead = (int)($summary['honmei_head'] ?? 0);
+
+        if (count($rankBoats) !== 6 || $currentHead < 1 || $currentHead > 6) {
+            return $summary;
+        }
+
+        $candidateRank = $rankBoats;
+        $a3 = false;
+        $a4 = false;
+        $h3 = false;
+
+        if ($originalHonmeiHead === 1 && $currentHead === 1) {
+            $a3 = $this->kimariteOpponentCondition($final_predictions, 3, 15.0);
+            $a4 = $this->kimariteOpponentCondition($final_predictions, 4, 20.0);
+
+            // 統合検証と同じくA4→A3の順に適用し、A3を優先する。
+            if ($a4) {
+                $candidateRank = $this->promoteKimariteOpponentToSecond(
+                    $candidateRank,
+                    $currentHead,
+                    4
+                );
+            }
+            if ($a3) {
+                $candidateRank = $this->promoteKimariteOpponentToSecond(
+                    $candidateRank,
+                    $currentHead,
+                    3
+                );
+            }
+        } elseif ($originalHonmeiHead === 3 && $currentHead === 3) {
+            $h3 = $this->kimariteOpponentCondition($final_predictions, 3, 15.0);
+            if ($h3) {
+                $candidateRank = $this->promoteKimariteOpponentToSecond(
+                    $candidateRank,
+                    $currentHead,
+                    1
+                );
+            }
+        }
+
+        $summary['kimarite_opponent_a3'] = $a3;
+        $summary['kimarite_opponent_a4'] = $a4;
+        $summary['kimarite_opponent_h3'] = $h3;
+
+        if (!$a3 && !$a4 && !$h3) {
+            return $summary;
+        }
+
+        $honmeiKiruBoats = [];
+        foreach ($final_predictions as $boat => $fp) {
+            if ((int)($fp['kiru'] ?? 0) === 1) {
+                $honmeiKiruBoats[] = (int)$boat;
+            }
+        }
+        sort($honmeiKiruBoats);
+
+        [$honmeiAite, $honmeiThird] = $this->buildBetCandidates(
+            $candidateRank,
+            $honmeiKiruBoats,
+            $currentHead
+        );
+
+        $honmeiAiteKako = implode('', $honmeiAite);
+        $honmeiThirdKako = implode('', $honmeiThird);
+        $oldHonmeiAiteKako = (string)($summary['honmei_aite_kako'] ?? '');
+
+        $summary['honmei_aite_str'] = implode('・', $honmeiAite);
+        $summary['honmei_aite_kako'] = $honmeiAiteKako;
+        $summary['honmei_third_kako'] = $honmeiThirdKako;
+        $summary['honmei_kai'] = $currentHead . '-' . $honmeiAiteKako . '-' . $honmeiThirdKako;
+        $summary['kimarite_opponent_override_applied'] = $honmeiAiteKako !== $oldHonmeiAiteKako;
+
+        return $summary;
+    }
+
+    private function kimariteOpponentCondition(
+        array $final_predictions,
+        int $boat,
+        float $threshold
+    ): bool {
+        if (!isset($final_predictions[$boat])) {
+            return false;
+        }
+
+        $fp = $final_predictions[$boat];
+        $sampleN = (int)($fp['kimarite_head_sample_n'] ?? 0);
+        $featurePct = (float)($fp['kimarite_head_feature_pct'] ?? 0.0);
+
+        return $sampleN >= 10 && $featurePct >= $threshold;
+    }
+
+    private function promoteKimariteOpponentToSecond(
+        array $rankBoats,
+        int $head,
+        int $target
+    ): array {
+        if ($head === $target) {
+            return $rankBoats;
+        }
+
+        $targetPos = array_search($target, $rankBoats, true);
+        if ($targetPos === false) {
+            return $rankBoats;
+        }
+
+        array_splice($rankBoats, (int)$targetPos, 1);
+        $headPos = array_search($head, $rankBoats, true);
+        if ($headPos === false) {
+            return $rankBoats;
+        }
+
+        array_splice($rankBoats, (int)$headPos + 1, 0, [$target]);
+        return array_values($rankBoats);
     }
 
     /**
