@@ -20,6 +20,7 @@ declare(strict_types=1);
  * - A3/A4も「事前Web本命1」でのみ発動する。
  * - ⑤⑥頭補正は config/kimarite_head_model.php の凍結モデルをそのまま使用する。
  * - kiruはCSVの現行判定を維持する。
+ * - 買い目は艇番で構成するため、的中判定もactual_1st/2nd/3rd（艇番）で行う。
  * - actual_* は評価ラベルとしてのみ使用する。
  *
  * Usage:
@@ -209,9 +210,9 @@ function buildBet(array $rank, array $kiru, int $head): array
 
 function betHit(array $row, array $bet, int $head): bool
 {
-    return inum($row, 'actual_1st_course') === $head
-        && in_array(inum($row, 'actual_2nd_course'), $bet['aite'], true)
-        && in_array(inum($row, 'actual_3rd_course'), $bet['third'], true);
+    return inum($row, 'actual_1st') === $head
+        && in_array(inum($row, 'actual_2nd'), $bet['aite'], true)
+        && in_array(inum($row, 'actual_3rd'), $bet['third'], true);
 }
 
 function emptyStat(): array
