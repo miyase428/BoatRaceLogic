@@ -6,7 +6,8 @@ declare(strict_types=1);
  * 場×R予想相性の画面表示用JSONを生成する。
  *
  * analyze_stadium_race_number_compatibility.php を全場モードで1回だけ実行し、
- * その集計結果を config/stadium_race_number_compatibility.json に保存する。
+ * その集計結果を config/stadium_race_number_compatibility.local.json に保存する。
+ * local.json はGit管理外で、画面側は存在すればこちらを優先して読む。
  *
  * Usage:
  * php analysis/export_stadium_race_number_compatibility_json.php \
@@ -220,7 +221,7 @@ $output = [
     'stadiums' => $stadiums,
 ];
 
-$outputPath = __DIR__ . '/../config/stadium_race_number_compatibility.json';
+$outputPath = __DIR__ . '/../config/stadium_race_number_compatibility.local.json';
 $json = json_encode(
     $output,
     JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
