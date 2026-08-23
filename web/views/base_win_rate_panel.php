@@ -1,5 +1,7 @@
 <?php
-// 場別相性パネルを先頭に追加し、既存の1着率パネル本体はcoreへ分離してそのまま利用する。
+// 場別相性 → R別予想相性 → 既存1着率パネルの順で表示する。
 $stadiumAffinityMode = 'pc';
 include __DIR__ . '/stadium_affinity_panel.php';
+$raceNumberCompatibilityMode = 'pc';
+include __DIR__ . '/race_number_compatibility_panel.php';
 include __DIR__ . '/base_win_rate_panel_core.php';
