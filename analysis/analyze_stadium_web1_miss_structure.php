@@ -151,11 +151,17 @@ foreach ($dataset as $row) {
     if ($date !== '') $dates[] = $date;
 
     // 現行Web本命①。
-    if (inum($row, 'honmei_head') !== 1) continue;
+    if (inum($row, 'honmei_head') !== 1) {
+        unset($s);
+        continue;
+    }
     $s['web1']++;
 
     // ①艇が勝てば敗戦分析対象外。
-    if (inum($row, 'actual_1st') === 1) continue;
+    if (inum($row, 'actual_1st') === 1) {
+        unset($s);
+        continue;
+    }
     $s['miss']++;
 
     $winnerBoat = inum($row, 'actual_1st');
@@ -190,6 +196,8 @@ foreach ($dataset as $row) {
 
     unset($s);
 }
+// $s を参照変数のまま残すと、後続 foreach の値代入で最後に参照していた場を上書きする。
+unset($s);
 
 uasort($stats, static function(array $a, array $b): int {
     $ra = pct($a['miss'], $a['web1']);
