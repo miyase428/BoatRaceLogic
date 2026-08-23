@@ -346,10 +346,12 @@ foreach ($datasetRows as $row) {
     $newHit = betHit($row, $newBet, $newHead);
 
     $date = trim((string)($row['race_date'] ?? ''));
-    $target =& ($date < '2026-02-15' ? $front : $back);
     addStat($all, $baseHit, $currentHit, $newHit, $oppChanged, $headOverride, $a3, $a4, $h3);
-    addStat($target, $baseHit, $currentHit, $newHit, $oppChanged, $headOverride, $a3, $a4, $h3);
-    unset($target);
+    if ($date < '2026-02-15') {
+        addStat($front, $baseHit, $currentHit, $newHit, $oppChanged, $headOverride, $a3, $a4, $h3);
+    } else {
+        addStat($back, $baseHit, $currentHit, $newHit, $oppChanged, $headOverride, $a3, $a4, $h3);
+    }
 
     $month = substr($date, 0, 7);
     if ($month !== '') {
