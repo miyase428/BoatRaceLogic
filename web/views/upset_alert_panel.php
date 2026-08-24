@@ -1,20 +1,32 @@
 <?php
-// STEP C2/C2-2/C3/E1で検証した「イン飛び警報 + 穴頭本命/対抗」を表示専用で再現する。
+// STEP C2/C2-2/C3/E1 + 穴目追加検証で採用した表示専用レイヤー。
+// 最終予想・本命/対抗・cut・買い目ロジックには接続しない。
+//
 // イン飛び警報（AI本命=1C かつ 現行本命!=1C のとき）
 //   非常に高: イン補正後1着率 < 40%
 //   高      : 40% <= イン補正後1着率 < 50%
 //   注意    : 50% <= イン補正後1着率 < 55%
 //   通常    : 上記以外
-// 45%はC2-2で明確な境界にならなかったため表示段階には使わない。
-// 穴頭本命/対抗はE1の検証母集団と同じ「<50%」のみ表示する。
+//
+// 穴頭本命/対抗（<50%のみ）
 //   穴頭本命: イン以外のAI3連対率1位（TRIO1 / TRIO_OUTER）
 //   穴頭対抗: イン以外のAI3連対率2位（TRIO2）
+//
 // 穴頭信頼度（C5/C6）
 //   強: TRIO1=CURRENT かつ TRIO1-TRIO2差>=10pt
 //   弱: TRIO1-TRIO2差<2pt
-//   中: 上記以外の<50%警報
-// C7以降は分類の未来追跡検証として扱う。
-// 最終予想・本命/対抗・cut・買い目ロジックには接続しない。
+//   中: 上記以外
+//
+// ①残り（TRAIN + 2026-08-15～08-22完全未来で再現）
+//   低: インAI3連対率 < 60%
+//   中: 60% <= インAI3連対率 < 70%
+//   高: 70%以上
+// ※「インが1着を逃した時に2・3着へ残るか」の表示用分類。
+//
+// 展開候補（TRAIN + 完全未来で再現）
+//   3～5Cの6month point-in-time「まくり+まくり差し」が最大のコース。
+//   sample_n>=10のみ。技は同コース内で率の高い方を表示する。
+
 $upsetAlertStatus = 'waiting';
 $upsetAlertLevel = 'normal';
 $upsetAlertHigh = false;
@@ -25,6 +37,8 @@ $upsetCurrentHead = (int)($honmei_head ?? 0);
 $upsetHoleHead = 0;
 $upsetHoleSecondHead = 0;
 $upsetInWinRate = null;
+$upsetInTrioRate = null;
+$upsetInRemainLevel = '';
 $upsetHoleTrioRate = null;
 $upsetHoleSecondTrioRate = null;
 $upsetHoleTrioGap = null;
@@ -33,12 +47,21 @@ $upsetHoleSecondCourse = 0;
 $upsetHeadConfidence = '';
 $upsetBaseDisagree = false;
 
+$upsetAttackBoat = 0;
+$upsetAttackCourse = 0;
+$upsetAttackRate = null;
+$upsetAttackTechnique = '';
+$upsetAttackTechniqueRate = null;
+$upsetAttackSampleN = 0;
+
 $upsetCourseByBoat = [];
+$upsetBoatByCourse = [];
 foreach (is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [] as $boatKey => $row) {
     $boat = (int)($row['lane'] ?? $boatKey);
     $course = (int)($row['course'] ?? 0);
     if ($boat >= 1 && $boat <= 6 && $course >= 1 && $course <= 6) {
         $upsetCourseByBoat[$boat] = $course;
+        $upsetBoatByCourse[$course] = $boat;
         if ($course === 1) {
             $upsetInBoat = $boat;
         }
@@ -71,6 +94,9 @@ if (
     });
     $upsetAiHead = (int)($winRankedBoats[0] ?? 0);
     $upsetInWinRate = $upsetCorrectedRates[$upsetInBoat] ?? null;
+    $upsetInTrioRate = isset($aiTrioBoats[$upsetInBoat]['ai_rate'])
+        ? (float)$aiTrioBoats[$upsetInBoat]['ai_rate']
+        : null;
 
     $outerBoats = array_values(array_filter(
         range(1, 6),
@@ -120,7 +146,7 @@ if (
         }
     }
 
-    // E1/C5/C6の検証対象は従来C2 HIGH（<50%）なので、穴頭表示もここに限定する。
+    // E1/C5/C6および今回の追加検証は従来C2 HIGH（<50%）を母集団にしている。
     $upsetAlertHigh = in_array($upsetAlertLevel, ['very_high', 'high'], true);
 
     if ($upsetAlertHigh && $upsetHoleTrioGap !== null) {
@@ -130,6 +156,68 @@ if (
             $upsetHeadConfidence = 'weak';
         } else {
             $upsetHeadConfidence = 'middle';
+        }
+    }
+
+    // ①残り：イン敗戦時の2・3着残りやすさ。AI3連対率だけで固定分類する。
+    if ($upsetAlertHigh && $upsetInTrioRate !== null) {
+        if ($upsetInTrioRate < 60.0) {
+            $upsetInRemainLevel = 'low';
+        } elseif ($upsetInTrioRate < 70.0) {
+            $upsetInRemainLevel = 'middle';
+        } else {
+            $upsetInRemainLevel = 'high';
+        }
+    }
+
+    // 展開候補：Python検証と同じ定義。
+    // 3～5C、6month sample_n>=10、攻め率=まくり+まくり差し最大。
+    if ($upsetAlertHigh && is_array($kimarite_data ?? null)) {
+        $attackCandidates = [];
+        foreach ([3, 4, 5] as $course) {
+            $sixMonth = $kimarite_data[$course]['6month']
+                ?? $kimarite_data[(string)$course]['6month']
+                ?? null;
+            if (!is_array($sixMonth)) {
+                continue;
+            }
+
+            $sampleN = (int)($sixMonth['_sample_n'] ?? 0);
+            if ($sampleN < 10) {
+                continue;
+            }
+
+            $makuri = is_numeric($sixMonth['makuri'] ?? null) ? (float)$sixMonth['makuri'] : 0.0;
+            $makurizashi = is_numeric($sixMonth['makurizashi'] ?? null) ? (float)$sixMonth['makurizashi'] : 0.0;
+            $attackRate = $makuri + $makurizashi;
+            $technique = $makuri >= $makurizashi ? 'まくり' : 'まくり差し';
+            $techniqueRate = max($makuri, $makurizashi);
+
+            $attackCandidates[] = [
+                'course' => $course,
+                'attack_rate' => $attackRate,
+                'technique' => $technique,
+                'technique_rate' => $techniqueRate,
+                'sample_n' => $sampleN,
+            ];
+        }
+
+        if ($attackCandidates) {
+            usort($attackCandidates, static function (array $a, array $b): int {
+                $cmp = ($b['attack_rate'] <=> $a['attack_rate']);
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+                return $a['course'] <=> $b['course'];
+            });
+
+            $bestAttack = $attackCandidates[0];
+            $upsetAttackCourse = (int)$bestAttack['course'];
+            $upsetAttackBoat = (int)($upsetBoatByCourse[$upsetAttackCourse] ?? 0);
+            $upsetAttackRate = (float)$bestAttack['attack_rate'];
+            $upsetAttackTechnique = (string)$bestAttack['technique'];
+            $upsetAttackTechniqueRate = (float)$bestAttack['technique_rate'];
+            $upsetAttackSampleN = (int)$bestAttack['sample_n'];
         }
     }
 
@@ -165,6 +253,13 @@ $upsetConfidenceBadge = static function (string $level): string {
         . ';font-size:11px;font-weight:bold;white-space:nowrap;">穴頭信頼度：'
         . $s['label'] . '</span>';
 };
+
+$upsetRemainMeta = [
+    'high' => ['label' => '高', 'bg' => '#e4efe0', 'border' => '#9bb795', 'color' => '#466545'],
+    'middle' => ['label' => '中', 'bg' => '#f3ead8', 'border' => '#cfb477', 'color' => '#7b6332'],
+    'low' => ['label' => '低', 'bg' => '#f4e5e1', 'border' => '#cfa49b', 'color' => '#8b5147'],
+];
+$upsetRemain = $upsetRemainMeta[$upsetInRemainLevel] ?? null;
 
 $upsetAlertMeta = [
     'very_high' => ['label' => '🚨 イン飛び警報：非常に高', 'color' => '#a74932', 'border' => '#c98670', 'bg' => '#f7e8e1'],
@@ -242,9 +337,43 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
             </div>
         </div>
 
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+            <div style="flex:1 1 240px; background:#f7f2e9; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
+                <div style="font-size:11px; color:#6b7785;">展開候補</div>
+                <?php if ($upsetAttackCourse >= 3 && $upsetAttackCourse <= 5 && $upsetAttackBoat >= 1): ?>
+                    <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <?= $upsetBoatBadge($upsetAttackBoat) ?>
+                        <strong><?= $upsetAttackCourse ?>C <?= htmlspecialchars($upsetAttackTechnique, ENT_QUOTES, 'UTF-8') ?></strong>
+                        <?php if ($upsetAttackRate !== null): ?>
+                            <strong style="color:#aa741f;">攻め率 <?= number_format($upsetAttackRate, 1) ?>%</strong>
+                        <?php endif; ?>
+                    </div>
+                    <div style="font-size:11px; color:#6b7785; margin-top:4px;">
+                        3〜5Cの6ヶ月攻め率最大
+                        <?php if ($upsetAttackSampleN > 0): ?> / sample <?= $upsetAttackSampleN ?>走<?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <div style="font-size:12px; color:#6b7785; margin-top:5px;">決まり手サンプル不足のため候補なし</div>
+                <?php endif; ?>
+            </div>
+
+            <div style="flex:1 1 220px; background:#f7f2e9; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
+                <div style="font-size:11px; color:#6b7785;">①残り（イン敗戦時）</div>
+                <?php if ($upsetRemain !== null && $upsetInTrioRate !== null): ?>
+                    <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span style="display:inline-block;padding:3px 9px;border-radius:999px;background:<?= htmlspecialchars($upsetRemain['bg'], ENT_QUOTES, 'UTF-8') ?>;border:1px solid <?= htmlspecialchars($upsetRemain['border'], ENT_QUOTES, 'UTF-8') ?>;color:<?= htmlspecialchars($upsetRemain['color'], ENT_QUOTES, 'UTF-8') ?>;font-weight:bold;">①残り：<?= htmlspecialchars($upsetRemain['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <strong style="color:#75659b;">AI3連対 <?= number_format($upsetInTrioRate, 1) ?>%</strong>
+                    </div>
+                    <div style="font-size:11px; color:#6b7785; margin-top:4px;">1着を逃した場合の2・3着残りやすさ</div>
+                <?php else: ?>
+                    <div style="font-size:12px; color:#6b7785; margin-top:5px;">判定データ不足</div>
+                <?php endif; ?>
+            </div>
+        </div>
+
         <?php if (!empty($simulation_active)): ?>
             <div style="font-size:11px; color:#aa741f; margin-top:8px;">
-                ※仮想進入での試算表示。イン飛び警報・穴頭候補の検証は実展示進入基準です。
+                ※仮想進入での試算表示。穴目各指標の検証は実展示進入基準です。
             </div>
         <?php endif; ?>
     <?php elseif ($upsetAlertStatus === 'ok' && $upsetAlertLevel === 'attention'): ?>
@@ -257,7 +386,7 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                     イン補正後1着率 <?= number_format((float)$upsetInWinRate, 1) ?>%（50〜55%未満）
                 </span>
             </div>
-            <div style="font-size:11px; color:#6b7785;">穴頭本命・対抗は&lt;50%のみ表示</div>
+            <div style="font-size:11px; color:#6b7785;">穴頭・展開候補・①残りは&lt;50%のみ表示</div>
         </div>
     <?php elseif ($upsetAlertStatus === 'ok'): ?>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
