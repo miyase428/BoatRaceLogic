@@ -215,6 +215,25 @@ SQL);
         ]);
     }
 
+    public function delete(string $raceCode): bool
+    {
+        if (!$this->isReady()) {
+            throw new RuntimeException('前向き検証テーブルが未作成です。');
+        }
+
+        $raceCode = strtoupper(trim($raceCode));
+        if (!preg_match('/^\d{8}[A-Z]{3}\d{2}$/', $raceCode)) {
+            throw new InvalidArgumentException('race_code が不正です。');
+        }
+
+        $stmt = $this->pdo->prepare(<<<SQL
+DELETE FROM boat_race.stadium_forward_validation
+WHERE race_code = :race_code
+SQL);
+        $stmt->execute([':race_code' => $raceCode]);
+        return $stmt->rowCount() > 0;
+    }
+
     public function getPlaceStats(string $placeCode): array
     {
         $empty = [
