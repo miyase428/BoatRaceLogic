@@ -5,6 +5,7 @@
 場特性の実戦表示用JSONを生成する。
 
 対象:
+- 場×コース別 1着率 / 2連対率 / 3連対率（全場平均との差つき）
 - 1C勝率 / 1逃げ率
 - 決まり手傾向
 - 1逃げ時の2着・3着コース分布
@@ -69,6 +70,9 @@ def summarize(rows: list[dict[str, str]]) -> dict:
     second = Counter()
     third = Counter()
     patterns = Counter()
+    course_first = Counter()
+    course_second = Counter()
+    course_third = Counter()
 
     for row in rows:
         tech = (row.get("winner_technique") or "").strip()
@@ -78,6 +82,13 @@ def summarize(rows: list[dict[str, str]]) -> dict:
         c1 = as_int(row, "actual_1st_course")
         c2 = as_int(row, "actual_2nd_course")
         c3 = as_int(row, "actual_3rd_course")
+
+        if 1 <= c1 <= 6:
+            course_first[c1] += 1
+        if 1 <= c2 <= 6:
+            course_second[c2] += 1
+        if 1 <= c3 <= 6:
+            course_third[c3] += 1
 
         if c1 == 1:
             lane1_win += 1
@@ -91,6 +102,7 @@ def summarize(rows: list[dict[str, str]]) -> dict:
             if 2 <= c2 <= 6 and 2 <= c3 <= 6 and c2 != c3:
                 patterns[f"1-{c2}-{c3}"] += 1
 
+    n = len(rows)
     known_tech = sum(technique.values())
     technique_rates = {t: pct(technique[t], known_tech) for t in TECHNIQUES}
     non_escape_top = max(
@@ -98,12 +110,29 @@ def summarize(rows: list[dict[str, str]]) -> dict:
         key=lambda t: (technique_rates.get(t, 0.0), -NON_ESCAPE_TECHNIQUES.index(t)),
     )
 
+    course_results = {}
+    for course in range(1, 7):
+        first_n = course_first[course]
+        second_n = course_second[course]
+        third_n = course_third[course]
+        top2_n = first_n + second_n
+        top3_n = top2_n + third_n
+        course_results[str(course)] = {
+            "first_count": first_n,
+            "first_rate": pct(first_n, n),
+            "top2_count": top2_n,
+            "top2_rate": pct(top2_n, n),
+            "top3_count": top3_n,
+            "top3_rate": pct(top3_n, n),
+        }
+
     return {
-        "n": len(rows),
+        "n": n,
         "lane1_win_count": lane1_win,
-        "lane1_win_rate": pct(lane1_win, len(rows)),
+        "lane1_win_rate": pct(lane1_win, n),
         "escape_count": escape_n,
-        "escape_rate": pct(escape_n, len(rows)),
+        "escape_rate": pct(escape_n, n),
+        "course_results": course_results,
         "technique_known_n": known_tech,
         "technique_rates": technique_rates,
         "non_escape_top": {
@@ -123,6 +152,36 @@ def summarize(rows: list[dict[str, str]]) -> dict:
             for pattern, count in patterns.most_common(5)
         ],
     }
+
+
+def add_course_vs_all(stat: dict, overall: dict) -> None:
+    venue_courses = stat.get("course_results") or {}
+    all_courses = overall.get("course_results") or {}
+
+    for course in range(1, 7):
+        key = str(course)
+        venue = venue_courses.get(key)
+        base = all_courses.get(key)
+        if not isinstance(venue, dict) or not isinstance(base, dict):
+            continue
+
+        venue["vs_all"] = {
+            "first": round(
+                float(venue.get("first_rate", 0.0))
+                - float(base.get("first_rate", 0.0)),
+                2,
+            ),
+            "top2": round(
+                float(venue.get("top2_rate", 0.0))
+                - float(base.get("top2_rate", 0.0)),
+                2,
+            ),
+            "top3": round(
+                float(venue.get("top3_rate", 0.0))
+                - float(base.get("top3_rate", 0.0)),
+                2,
+            ),
+        }
 
 
 def strength_label(diff: float) -> str:
@@ -189,6 +248,7 @@ def main() -> None:
         stat["name"] = name
         stat["lane1_vs_all_diff"] = diff
         stat["lane1_strength"] = strength_label(diff)
+        add_course_vs_all(stat, overall)
         stadiums[code] = stat
 
     output = {
@@ -202,6 +262,7 @@ def main() -> None:
             "stadium_count": len(stadiums),
             "overall_lane1_win_rate": overall["lane1_win_rate"],
             "overall_escape_rate": overall["escape_rate"],
+            "overall_course_results": overall["course_results"],
             "note": "表示専用。PredictionLogic補正には未接続。",
         },
         "stadiums": stadiums,
@@ -218,6 +279,7 @@ def main() -> None:
     print(f"正式対象 : {len(rows)}R")
     print(f"場数     : {len(stadiums)}")
     print(f"全場1C勝 : {overall['lane1_win_rate']:.2f}%")
+    print("コース成績: 1着率 / 2連対率 / 3連対率 を追加")
     print(f"出力     : {output_path}")
     if len(stadiums) < 24:
         print("注意     : 24場未満です。元CSVの開催場を確認してください。")
