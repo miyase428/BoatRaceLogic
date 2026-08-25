@@ -26,6 +26,11 @@
 // 展開候補（TRAIN + 完全未来で再現）
 //   3～5Cの6month point-in-time「まくり+まくり差し」が最大のコース。
 //   sample_n>=10のみ。技は同コース内で率の高い方を表示する。
+//
+// 穴ヒモ候補（P1/P2/P3でOUTCOME_SECOND_AITEが現行順位方式を改善）
+//   穴頭本命を1着に固定し、STEP3 120通りから P(2着|穴頭) を集計。
+//   現行cutは維持し、非cut艇の上位最大3艇を表示する。
+//   cut救済はP1/P2/P3でROI悪化のため採用しない。
 
 $upsetAlertStatus = 'waiting';
 $upsetAlertLevel = 'normal';
@@ -53,6 +58,9 @@ $upsetAttackRate = null;
 $upsetAttackTechnique = '';
 $upsetAttackTechniqueRate = null;
 $upsetAttackSampleN = 0;
+
+$upsetHimoCandidates = [];
+$upsetCutBoats = [];
 
 $upsetCourseByBoat = [];
 $upsetBoatByCourse = [];
@@ -221,6 +229,61 @@ if (
         }
     }
 
+    // 穴ヒモ候補：検証済みOUTCOME_SECOND_AITEと同じく、穴頭本命を頭固定した
+    // STEP3のP(2着|頭)上位最大3艇。現行cutはそのまま維持する。
+    if (
+        $upsetAlertHigh
+        && $upsetHoleHead >= 1
+        && $upsetHoleHead <= 6
+        && ($trifectaStatus ?? '') === 'ok'
+        && is_array($trifectaRows ?? null)
+        && count($trifectaRows) === 120
+    ) {
+        foreach (is_array($final_predictions ?? null) ? $final_predictions : [] as $boatKey => $row) {
+            $boat = (int)($row['lane_number'] ?? $row['teiban'] ?? $boatKey);
+            if ($boat >= 1 && $boat <= 6 && (int)($row['kiru'] ?? 0) === 1) {
+                $upsetCutBoats[$boat] = true;
+            }
+        }
+        unset($upsetCutBoats[$upsetHoleHead]);
+
+        $secondMass = array_fill(1, 6, 0.0);
+        $headMass = 0.0;
+        foreach ($trifectaRows as $row) {
+            $boats = is_array($row['boats'] ?? null) ? $row['boats'] : [];
+            if (count($boats) !== 3 || (int)$boats[0] !== $upsetHoleHead) {
+                continue;
+            }
+            $second = (int)$boats[1];
+            $p = (float)($row['probability'] ?? 0.0);
+            if ($second < 1 || $second > 6 || $second === $upsetHoleHead || $p < 0.0) {
+                continue;
+            }
+            $headMass += $p;
+            $secondMass[$second] += $p;
+        }
+
+        if ($headMass > 0.0) {
+            $eligibleHimo = array_values(array_filter(
+                range(1, 6),
+                static fn(int $boat): bool => $boat !== $upsetHoleHead && !isset($upsetCutBoats[$boat])
+            ));
+            usort($eligibleHimo, static function (int $a, int $b) use ($secondMass): int {
+                $cmp = ($secondMass[$b] <=> $secondMass[$a]);
+                return $cmp !== 0 ? $cmp : ($a <=> $b);
+            });
+
+            foreach (array_slice($eligibleHimo, 0, min(3, count($eligibleHimo))) as $rank => $boat) {
+                $upsetHimoCandidates[] = [
+                    'boat' => $boat,
+                    'course' => (int)($upsetCourseByBoat[$boat] ?? 0),
+                    'rate' => 100.0 * $secondMass[$boat] / $headMass,
+                    'rank' => $rank + 1,
+                ];
+            }
+        }
+    }
+
     $upsetAlertStatus = 'ok';
 } else {
     $upsetAlertError = '補正後1着率・AI3連対率・進入・最終予想がそろうと判定します';
@@ -369,6 +432,26 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                     <div style="font-size:12px; color:#6b7785; margin-top:5px;">判定データ不足</div>
                 <?php endif; ?>
             </div>
+
+            <div style="flex:1 1 300px; background:#f7f2e9; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
+                <div style="font-size:11px; color:#6b7785;">穴ヒモ候補（2着側）</div>
+                <?php if (!empty($upsetHimoCandidates)): ?>
+                    <div style="margin-top:5px; display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+                        <?php foreach ($upsetHimoCandidates as $candidate): ?>
+                            <span style="display:inline-flex; align-items:center; gap:5px; white-space:nowrap;">
+                                <?= $upsetBoatBadge((int)$candidate['boat']) ?>
+                                <strong><?= (int)$candidate['course'] ?>C</strong>
+                                <span style="font-size:11px; color:#75659b;">2着 <?= number_format((float)$candidate['rate'], 1) ?>%</span>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                    <div style="font-size:11px; color:#6b7785; margin-top:4px;">
+                        穴頭本命を1着固定 / 120通り P(2着|頭) 上位3艇 / 現行cut維持
+                    </div>
+                <?php else: ?>
+                    <div style="font-size:12px; color:#6b7785; margin-top:5px;">120通り確率または相手候補が未計算</div>
+                <?php endif; ?>
+            </div>
         </div>
 
         <?php if (!empty($simulation_active)): ?>
@@ -386,7 +469,7 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                     イン補正後1着率 <?= number_format((float)$upsetInWinRate, 1) ?>%（50〜55%未満）
                 </span>
             </div>
-            <div style="font-size:11px; color:#6b7785;">穴頭・展開候補・①残りは&lt;50%のみ表示</div>
+            <div style="font-size:11px; color:#6b7785;">穴頭・展開候補・①残り・穴ヒモ候補は&lt;50%のみ表示</div>
         </div>
     <?php elseif ($upsetAlertStatus === 'ok'): ?>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
