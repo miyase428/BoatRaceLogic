@@ -5,3 +5,5 @@ include __DIR__ . '/stadium_characteristics_tabs.php';
 $forwardValidationMode = 'pc';
 include __DIR__ . '/forward_validation_panel.php';
 include __DIR__ . '/base_win_rate_panel_core.php';
+?>
+<script src="/web/assets/js/pc_trifecta_tools.js?v=20260826"></script>
