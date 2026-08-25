@@ -1,144 +1,85 @@
-/* PC版 3連単120通り 操作UI。
- * アプリ版のチップ型フィルタをPC幅へ合わせる。
+/* PC版 3連単120通りの既存操作UIをアプリ風にコンパクト化。
+ * 検索・絞り込み・ソート処理は trifecta_probability_panel.php の既存実装をそのまま使う。
  * 予想計算・確率値には影響しない。
  */
-.pc-trifecta-tools {
-    margin: 10px 0;
-    padding: 10px 12px;
-    border: 1px solid #d8cdbc;
-    border-radius: 7px;
-    background: #fffaf2;
-    color: #3f4b5a;
-}
 
-.pc-trifecta-tools-row {
-    display: grid !important;
-    grid-template-columns: minmax(280px, 1fr) auto auto;
-    align-items: end !important;
-    gap: 10px !important;
-}
-
-.pc-trifecta-tools-search {
-    display: flex !important;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0 !important;
-}
-
-.pc-trifecta-tools-label,
-.pc-trifecta-filter-title {
-    font-size: 11px;
-    font-weight: 800;
-    color: #6b7785;
-}
-
-.pc-trifecta-tools input {
+#web-trifecta-search {
     width: 100% !important;
-    height: 34px;
-    box-sizing: border-box;
-    padding: 6px 9px;
-    border: 1px solid #cbbda9;
-    border-radius: 6px;
-    background: #fffdf9;
-    color: #334155;
-    font-size: 12px;
+    height: 34px !important;
+    box-sizing: border-box !important;
+    margin-top: 4px !important;
+    padding: 6px 9px !important;
+    border: 1px solid #cbbda9 !important;
+    border-radius: 6px !important;
+    background: #fffdf9 !important;
+    color: #334155 !important;
+    font-size: 12px !important;
 }
 
-.pc-trifecta-filter-area {
+#web-trifecta-filters {
     display: grid !important;
     gap: 5px !important;
     margin-top: 8px !important;
 }
 
-.pc-trifecta-filter-group {
+#web-trifecta-filters .web-trifecta-filter-group {
     display: grid !important;
-    grid-template-columns: 42px repeat(7, 46px) !important;
+    grid-template-columns: 40px repeat(7, 42px) !important;
     gap: 4px !important;
     align-items: center !important;
     justify-content: start !important;
     width: max-content !important;
-    max-width: 100%;
+    max-width: 100% !important;
 }
 
-.pc-trifecta-filter-title {
+#web-trifecta-filters .web-trifecta-filter-group > span {
     width: auto !important;
-    text-align: center;
-    white-space: nowrap;
-}
-
-.pc-trifecta-tools .pc-trifecta-filter,
-.pc-trifecta-tools .pc-trifecta-clear {
-    width: auto !important;
-    min-width: 0 !important;
-    min-height: 30px !important;
     margin: 0 !important;
-    padding: 3px 8px !important;
-    border: 1px solid #cbbda9 !important;
-    border-radius: 5px !important;
-    background: #eee6da !important;
-    color: #4b5866 !important;
+    color: #6b7785 !important;
     font-size: 11px !important;
     font-weight: 800 !important;
     line-height: 1.2 !important;
-    cursor: pointer;
-    box-sizing: border-box;
+    text-align: center !important;
+    white-space: nowrap !important;
 }
 
-.pc-trifecta-tools .pc-trifecta-filter {
-    width: 46px !important;
+#web-trifecta-filters .web-trifecta-filter {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    min-height: 30px !important;
+    margin: 0 !important;
+    padding: 3px 2px !important;
+    border-radius: 5px !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    line-height: 1.2 !important;
+    box-sizing: border-box !important;
+    cursor: pointer !important;
 }
 
-.pc-trifecta-tools .pc-trifecta-filter.is-active {
-    border-color: #1683bd !important;
-    background: #fffaf2 !important;
-    color: #1683bd !important;
-    box-shadow: inset 0 0 0 1px #1683bd;
-}
-
-.pc-trifecta-tools .pc-trifecta-clear {
-    min-width: 70px !important;
-    background: #fff !important;
-}
-
-.pc-trifecta-count {
-    align-self: center;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 800;
-    color: #6b7785;
-}
-
-.pc-trifecta-sort {
-    appearance: none;
+#web-trifecta-clear {
     width: auto !important;
-    min-width: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-    color: inherit !important;
-    font: inherit !important;
-    font-weight: 700 !important;
-    cursor: pointer;
-    padding: 0 !important;
-    white-space: nowrap;
+    min-width: 70px !important;
+    max-width: none !important;
+    min-height: 30px !important;
+    margin: 0 !important;
+    padding: 4px 12px !important;
+    box-sizing: border-box !important;
 }
 
-.pc-trifecta-sort.is-active {
-    color: #8a5f18 !important;
-    text-decoration: underline;
-    text-underline-offset: 3px;
+#web-trifecta-count {
+    white-space: nowrap !important;
 }
 
-@media (max-width: 760px) {
-    .pc-trifecta-tools-row {
-        grid-template-columns: 1fr auto !important;
-    }
+/* 120通り表の見出しは既存JSでクリックソート可能。 */
+#web-trifecta-all-table thead th {
+    white-space: nowrap !important;
+}
 
-    .pc-trifecta-tools-search {
-        grid-column: 1 / -1;
-    }
-
-    .pc-trifecta-filter-area {
-        overflow-x: auto;
-        padding-bottom: 2px;
+@media (max-width: 620px) {
+    #web-trifecta-filters {
+        overflow-x: auto !important;
+        padding-bottom: 2px !important;
     }
 }
