@@ -58,6 +58,13 @@ def pct(n, d):
 
 
 def build_slit_map(start_date, end_date):
+    # step3.build_common_records() は datetime.date を返すため、
+    # 既存 slit.prepare_races() が要求する YYYY-MM-DD 文字列へ揃える。
+    if hasattr(start_date, "isoformat"):
+        start_date = start_date.isoformat()
+    if hasattr(end_date, "isoformat"):
+        end_date = end_date.isoformat()
+
     prepared, skip, terms = slit.prepare_races(start_date, end_date)
     out = {}
     for race_code, predicted_st, _finish in prepared:
