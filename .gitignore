@@ -6,3 +6,4 @@ log/
 /config/stadium_practical_characteristics.local.json
 /config/stadium_non_lane1_practical.local.json
 /config/stadium_outer_reach.local.json
+/config/stadium_exhibition_effectiveness.local.json
