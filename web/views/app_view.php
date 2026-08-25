@@ -263,6 +263,7 @@ if (!is_string($appTrifectaJson)) {
     </section>
 
     <?php include __DIR__ . '/upset_alert_panel.php'; ?>
+    <?php include __DIR__ . '/upset_reference_bet_panel.php'; ?>
 
     <details class="app-card app-details">
         <summary>展示・選手の詳細</summary>
