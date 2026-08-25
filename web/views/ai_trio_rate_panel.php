@@ -266,4 +266,8 @@ include __DIR__ . '/trifecta_probability_panel.php';
 // C2/C3で検証した穴警戒HIGH + TRIO_OUTERを表示専用で追加する。
 // DOM読込後に最終予想の買い目直下へ移動し、買い目計算には接続しない。
 include __DIR__ . '/upset_alert_panel.php';
+
+// 最終前方検証で採用したTRIO1_OUTCOMEを、参考買い目候補としてのみ表示する。
+// 既存穴目パネルの計算済み変数を使い、本番買い目には接続しない。
+include __DIR__ . '/upset_reference_bet_panel.php';
 ?>
