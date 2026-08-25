@@ -31,7 +31,9 @@ require_once __DIR__ . '/../common/db_connect.php';
 $from = $argv[1] ?? '2025-08-15';
 $to   = $argv[2] ?? '2026-08-14';
 
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) || $from > $to) {
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
+    || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)
+    || $from > $to) {
     fwrite(STDERR, "使用方法: php {$argv[0]} YYYY-MM-DD YYYY-MM-DD\n");
     exit(1);
 }
@@ -60,7 +62,9 @@ $items = [
 
 function numOrNull(mixed $value): ?float
 {
-    return ($value !== null && $value !== '' && is_numeric($value)) ? (float)$value : null;
+    return ($value !== null && $value !== '' && is_numeric($value))
+        ? (float)$value
+        : null;
 }
 
 function calcExhibitionScore(float $diff): int
@@ -72,13 +76,16 @@ function calcExhibitionScore(float $diff): int
     return 1;
 }
 
+/**
+ * 現行 public/tenji_api.php の ST_BAND と同じ。
+ * 0.00〜0.12を良好帯域として5点にする。
+ */
 function calcStScore(float $st): int
 {
-    if ($st <= -0.05) return 1;
-    if ($st < 0)      return 2;
-    if ($st <= 0.05)  return 5;
-    if ($st <= 0.12)  return 4;
-    if ($st <= 0.20)  return 2;
+    if ($st <= 0.00) return 3;
+    if ($st <= 0.12) return 5;
+    if ($st <= 0.20) return 3;
+    if ($st <= 0.30) return 2;
     return 1;
 }
 
@@ -116,27 +123,48 @@ function emptyBucket(): array
 
 function emptyItemStat(): array
 {
-    return ['valid_n' => 0, 'good' => emptyBucket(), 'bad' => emptyBucket()];
+    return [
+        'valid_n' => 0,
+        'good' => emptyBucket(),
+        'bad' => emptyBucket(),
+    ];
 }
 
 function ensurePlace(array &$stats, string $placeCode, array $items): void
 {
-    if (isset($stats[$placeCode])) return;
+    if (isset($stats[$placeCode])) {
+        return;
+    }
+
     $stats[$placeCode] = [];
     foreach ($items as $key => $_name) {
         $stats[$placeCode][$key] = emptyItemStat();
     }
 }
 
-function addScore(array &$stats, string $placeCode, string $item, int $score, int $rank, array $items): void
-{
+function addScore(
+    array &$stats,
+    string $placeCode,
+    string $item,
+    int $score,
+    int $rank,
+    array $items
+): void {
     ensurePlace($stats, $placeCode, $items);
     $stats[$placeCode][$item]['valid_n']++;
+
     $bucket = $score >= 4 ? 'good' : ($score <= 2 ? 'bad' : null);
-    if ($bucket === null) return;
+    if ($bucket === null) {
+        return;
+    }
+
     $stats[$placeCode][$item][$bucket]['n']++;
-    if ($rank === 1) $stats[$placeCode][$item][$bucket]['first']++;
-    if ($rank >= 1 && $rank <= 3) $stats[$placeCode][$item][$bucket]['top3']++;
+    if ($rank === 1) {
+        $stats[$placeCode][$item][$bucket]['first']++;
+    }
+    if ($rank >= 1 && $rank <= 3) {
+        $stats[$placeCode][$item][$bucket]['top3']++;
+    }
 }
 
 function rate(int $n, int $d): ?float
@@ -147,13 +175,19 @@ function rate(int $n, int $d): ?float
 function finalizeItem(array $raw, ?array $overall = null): array
 {
     $good = $raw['good'] ?? emptyBucket();
-    $bad = $raw['bad'] ?? emptyBucket();
+    $bad  = $raw['bad'] ?? emptyBucket();
+
     $goodFirst = rate((int)$good['first'], (int)$good['n']);
-    $badFirst = rate((int)$bad['first'], (int)$bad['n']);
-    $goodTop3 = rate((int)$good['top3'], (int)$good['n']);
-    $badTop3 = rate((int)$bad['top3'], (int)$bad['n']);
-    $firstGap = ($goodFirst !== null && $badFirst !== null) ? round($goodFirst - $badFirst, 2) : null;
-    $top3Gap = ($goodTop3 !== null && $badTop3 !== null) ? round($goodTop3 - $badTop3, 2) : null;
+    $badFirst  = rate((int)$bad['first'], (int)$bad['n']);
+    $goodTop3  = rate((int)$good['top3'], (int)$good['n']);
+    $badTop3   = rate((int)$bad['top3'], (int)$bad['n']);
+
+    $firstGap = ($goodFirst !== null && $badFirst !== null)
+        ? round($goodFirst - $badFirst, 2)
+        : null;
+    $top3Gap = ($goodTop3 !== null && $badTop3 !== null)
+        ? round($goodTop3 - $badTop3, 2)
+        : null;
 
     $out = [
         'valid_n' => (int)($raw['valid_n'] ?? 0),
@@ -169,12 +203,15 @@ function finalizeItem(array $raw, ?array $overall = null): array
 
     if ($overall !== null) {
         $out['vs_all'] = [
-            'first_gap' => ($firstGap !== null && isset($overall['first_gap']) && $overall['first_gap'] !== null)
-                ? round($firstGap - (float)$overall['first_gap'], 2) : null,
-            'top3_gap' => ($top3Gap !== null && isset($overall['top3_gap']) && $overall['top3_gap'] !== null)
-                ? round($top3Gap - (float)$overall['top3_gap'], 2) : null,
+            'first_gap' => ($firstGap !== null && ($overall['first_gap'] ?? null) !== null)
+                ? round($firstGap - (float)$overall['first_gap'], 2)
+                : null,
+            'top3_gap' => ($top3Gap !== null && ($overall['top3_gap'] ?? null) !== null)
+                ? round($top3Gap - (float)$overall['top3_gap'], 2)
+                : null,
         ];
     }
+
     return $out;
 }
 
@@ -183,13 +220,26 @@ function avgOfSix(array $rows, string $key): ?float
     $values = [];
     foreach ($rows as $row) {
         $v = numOrNull($row[$key] ?? null);
-        if ($v === null) return null;
+        if ($v === null) {
+            return null;
+        }
         $values[] = $v;
     }
-    return count($values) === 6 ? array_sum($values) / 6.0 : null;
+
+    return count($values) === 6
+        ? array_sum($values) / 6.0
+        : null;
 }
 
 $pdo = getPDO();
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+/**
+ * exhibition_avg_6m は場名だけでは複数行になる場合があるため、
+ * 直接JOINすると1艇が複製されて1レース6行を超える。
+ * LATERAL + LIMIT 1 で、現行 tenji_api.php の fetchColumn() と同様に
+ * 1場につき1つの6か月平均だけを参照する。
+ */
 $sql = <<<SQL
 SELECT
     re.race_code,
@@ -211,28 +261,46 @@ LEFT JOIN boat_race.race_result_detail rrd
  AND rrd.player_id = re.player_id
 LEFT JOIN boat_race.stadium_master sm
   ON sm.stadium_code = SUBSTRING(re.race_code, 9, 3)
-LEFT JOIN boat_race.exhibition_avg_6m ea
-  ON ea.stadium_name = sm.stadium_name
+LEFT JOIN LATERAL (
+    SELECT x.avg_exhibition_time_6m
+    FROM boat_race.exhibition_avg_6m x
+    WHERE x.stadium_name = sm.stadium_name
+      AND x.avg_exhibition_time_6m IS NOT NULL
+    LIMIT 1
+) ea ON TRUE
 WHERE re.race_date BETWEEN :from_date AND :to_date
 ORDER BY re.race_code, re.lane_number
 SQL;
+
 $stmt = $pdo->prepare($sql);
-$stmt->execute([':from_date' => $from, ':to_date' => $to]);
+$stmt->execute([
+    ':from_date' => $from,
+    ':to_date' => $to,
+]);
 
 $stats = [];
 $overallRaw = [];
 ensurePlace($overallRaw, 'ALL', $items);
+
 $venueRaces = [];
 $processedRaces = 0;
 $skippedRaces = 0;
 $currentCode = null;
 $raceRows = [];
 
-$processRace = static function (array $rows) use (&$stats, &$overallRaw, &$venueRaces, &$processedRaces, &$skippedRaces, $items): void {
+$processRace = static function (array $rows) use (
+    &$stats,
+    &$overallRaw,
+    &$venueRaces,
+    &$processedRaces,
+    &$skippedRaces,
+    $items
+): void {
     if (count($rows) !== 6) {
         $skippedRaces++;
         return;
     }
+
     $raceCode = (string)$rows[0]['race_code'];
     $placeCode = substr($raceCode, 8, 3);
     if ($placeCode === '') {
@@ -240,15 +308,31 @@ $processRace = static function (array $rows) use (&$stats, &$overallRaw, &$venue
         return;
     }
 
+    $lanes = [];
     $ranks = [];
     foreach ($rows as $row) {
-        $rank = (isset($row['rank']) && is_numeric($row['rank'])) ? (int)$row['rank'] : 0;
-        if ($rank < 1 || $rank > 6) {
+        $lane = (isset($row['lane_number']) && is_numeric($row['lane_number']))
+            ? (int)$row['lane_number']
+            : 0;
+        $rank = (isset($row['rank']) && is_numeric($row['rank']))
+            ? (int)$row['rank']
+            : 0;
+
+        if ($lane < 1 || $lane > 6 || $rank < 1 || $rank > 6) {
             $skippedRaces++;
             return;
         }
+
+        $lanes[] = $lane;
         $ranks[] = $rank;
     }
+
+    if (count(array_unique($lanes)) !== 6) {
+        $skippedRaces++;
+        return;
+    }
+
+    ensurePlace($stats, $placeCode, $items);
 
     $avgLap = avgOfSix($rows, 'lap_time');
     $avgMawari = avgOfSix($rows, 'around_time');
@@ -265,7 +349,9 @@ $processRace = static function (array $rows) use (&$stats, &$overallRaw, &$venue
         $scores = [];
 
         if ($allExhibition && $venueAvg !== null && $venueAvg > 0) {
-            $scores['exhibition'] = calcExhibitionScore((float)$row['exhibition_time'] - $venueAvg);
+            $scores['exhibition'] = calcExhibitionScore(
+                (float)$row['exhibition_time'] - $venueAvg
+            );
         }
         if ($allSt) {
             $scores['st'] = calcStScore((float)$row['start_timing']);
@@ -277,7 +363,9 @@ $processRace = static function (array $rows) use (&$stats, &$overallRaw, &$venue
             $scores['mawari'] = calcMawariScore((float)$row['around_time'] - $avgMawari);
         }
         if ($avgStraight !== null) {
-            $scores['straight'] = calcStraightScore((float)$row['straight_time'] - $avgStraight);
+            $scores['straight'] = calcStraightScore(
+                (float)$row['straight_time'] - $avgStraight
+            );
         }
 
         foreach ($scores as $item => $score) {
@@ -289,13 +377,16 @@ $processRace = static function (array $rows) use (&$stats, &$overallRaw, &$venue
 
 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
     $code = (string)$row['race_code'];
+
     if ($currentCode !== null && $code !== $currentCode) {
         $processRace($raceRows);
         $raceRows = [];
     }
+
     $currentCode = $code;
     $raceRows[] = $row;
 }
+
 if ($raceRows !== []) {
     $processRace($raceRows);
 }
@@ -309,8 +400,12 @@ foreach ($items as $key => $name) {
 $stadiums = [];
 foreach ($stats as $code => $rawItems) {
     $finalItems = [];
+
     foreach ($items as $key => $name) {
-        $finalItems[$key] = finalizeItem($rawItems[$key] ?? emptyItemStat(), $overallItems[$key]);
+        $finalItems[$key] = finalizeItem(
+            $rawItems[$key] ?? emptyItemStat(),
+            $overallItems[$key]
+        );
         $finalItems[$key]['name'] = $name;
     }
 
@@ -318,9 +413,11 @@ foreach ($stats as $code => $rawItems) {
     usort($ranking, static function (string $a, string $b) use ($finalItems): int {
         $ga = $finalItems[$a]['top3_gap'];
         $gb = $finalItems[$b]['top3_gap'];
+
         if ($ga === null && $gb === null) return 0;
         if ($ga === null) return 1;
         if ($gb === null) return -1;
+
         return (float)$gb <=> (float)$ga;
     });
 
@@ -346,13 +443,17 @@ $output = [
         'skipped_races' => $skippedRaces,
         'stadium_count' => count($stadiums),
         'overall_items' => $overallItems,
-        'note' => '展示タイムは現行の場6か月平均との差基準。周回/周り足/直線はレース6艇平均との差。表示専用。',
+        'note' => '展示タイムは現行の場6か月平均との差基準。周回/周り足/直線はレース6艇平均との差。STは現行ST_BAND。直線欠損場は他項目だけ集計。表示専用。',
     ],
     'stadiums' => $stadiums,
 ];
 
 $outputPath = __DIR__ . '/../config/stadium_exhibition_effectiveness.local.json';
-$json = json_encode($output, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+$json = json_encode(
+    $output,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+);
+
 if (!is_string($json) || file_put_contents($outputPath, $json . PHP_EOL) === false) {
     throw new RuntimeException('JSON出力に失敗しました。');
 }
@@ -362,7 +463,13 @@ echo '場別 展示・ST効き方 JSON出力完了' . PHP_EOL;
 echo str_repeat('=', 60) . PHP_EOL;
 echo "対象期間   : {$from} ～ {$to}" . PHP_EOL;
 echo "処理レース : {$processedRaces}R" . PHP_EOL;
-echo "場数       : " . count($stadiums) . PHP_EOL;
+echo "スキップ   : {$skippedRaces}R" . PHP_EOL;
+echo '場数       : ' . count($stadiums) . PHP_EOL;
 echo '基準       : 良評価4〜5点 vs 悪評価1〜2点' . PHP_EOL;
+echo 'ST基準     : 現行ST_BAND（0.00〜0.12=5点）' . PHP_EOL;
 echo '順位       : 3連対率差（良 - 悪）' . PHP_EOL;
 echo "出力       : {$outputPath}" . PHP_EOL;
+
+if (count($stadiums) < 24) {
+    echo '注意       : 24場未満です。診断スクリプトでカバレッジを確認してください。' . PHP_EOL;
+}
