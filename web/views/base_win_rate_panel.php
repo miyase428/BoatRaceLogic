@@ -6,5 +6,4 @@ $forwardValidationMode = 'pc';
 include __DIR__ . '/forward_validation_panel.php';
 include __DIR__ . '/base_win_rate_panel_core.php';
 ?>
-<link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826b">
-<script src="/web/assets/js/pc_trifecta_tools.js?v=20260826b"></script>
+<link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
