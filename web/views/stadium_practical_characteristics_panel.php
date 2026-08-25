@@ -32,6 +32,9 @@ if (!empty($stadiumPractical)):
     $lane1Diff = (float)($stadiumPractical['lane1_vs_all_diff'] ?? 0.0);
     $lane1Strength = (string)($stadiumPractical['lane1_strength'] ?? '-');
     $escapeRate = (float)($stadiumPractical['escape_rate'] ?? 0.0);
+    $courseResults = is_array($stadiumPractical['course_results'] ?? null)
+        ? $stadiumPractical['course_results']
+        : [];
     $nonEscapeTop = is_array($stadiumPractical['non_escape_top'] ?? null)
         ? $stadiumPractical['non_escape_top']
         : [];
@@ -100,6 +103,28 @@ if (!empty($stadiumPractical)):
         return implode(' → ', $parts);
     };
 
+    $courseMetric = static function (array $courseResults, int $course, string $metric): array {
+        $row = is_array($courseResults[(string)$course] ?? null)
+            ? $courseResults[(string)$course]
+            : [];
+        $vsAll = is_array($row['vs_all'] ?? null) ? $row['vs_all'] : [];
+        $rateKey = $metric . '_rate';
+        $diffKey = match ($metric) {
+            'first' => 'first',
+            'top2' => 'top2',
+            'top3' => 'top3',
+            default => '',
+        };
+        return [
+            'rate' => (float)($row[$rateKey] ?? 0.0),
+            'diff' => $diffKey !== '' ? (float)($vsAll[$diffKey] ?? 0.0) : 0.0,
+        ];
+    };
+
+    $diffText = static function (float $diff): string {
+        return ($diff >= 0 ? '+' : '') . number_format($diff, 1) . 'pt';
+    };
+
     $topPatternText = [];
     foreach (array_slice($patterns, 0, 5) as $pattern) {
         if (!is_array($pattern)) {
@@ -121,6 +146,35 @@ if (!empty($stadiumPractical)):
             <strong style="font-size:12px;">1C勝 <?= number_format($lane1Rate, 1) ?>%</strong>
             <span style="font-size:10px; color:#6b7785;">全場比 <?= $lane1Diff >= 0 ? '+' : '' ?><?= number_format($lane1Diff, 1) ?>pt</span>
         </div>
+
+        <?php if ($courseResults !== []): ?>
+            <div style="margin-top:8px; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+                <table style="width:100%; min-width:520px; border-collapse:collapse; font-size:10px; text-align:center;">
+                    <thead>
+                    <tr>
+                        <th style="padding:4px 5px; border:1px solid #ded6c9; background:#f4ede3; text-align:left;">コース成績</th>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <th style="padding:4px 5px; border:1px solid #ded6c9; background:#f4ede3;"><?= $course ?>C</th>
+                        <?php endfor; ?>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach (['first' => '1着率', 'top2' => '2連対率', 'top3' => '3連対率'] as $metric => $label): ?>
+                        <tr>
+                            <th style="padding:4px 5px; border:1px solid #ded6c9; background:#faf6ef; text-align:left; white-space:nowrap;"><?= $spEsc($label) ?></th>
+                            <?php for ($course = 1; $course <= 6; $course++): ?>
+                                <?php $m = $courseMetric($courseResults, $course, $metric); ?>
+                                <td style="padding:4px 5px; border:1px solid #ded6c9; white-space:nowrap;">
+                                    <strong><?= number_format($m['rate'], 1) ?>%</strong><br>
+                                    <span style="font-size:9px; color:#6b7785;"><?= $spEsc($diffText($m['diff'])) ?></span>
+                                </td>
+                            <?php endfor; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
 
         <div style="margin-top:7px; font-size:11px; line-height:1.6;">
             <div>非逃げ主力 <strong><?= $spEsc($nonEscapeName) ?> <?= number_format($nonEscapeRate, 1) ?>%</strong></div>
@@ -161,6 +215,35 @@ if (!empty($stadiumPractical)):
             <div>非逃げ主力 <strong style="color:var(--text-strong);"><?= $spEsc($nonEscapeName) ?> <?= number_format($nonEscapeRate, 2) ?>%</strong></div>
         </div>
 
+        <?php if ($courseResults !== []): ?>
+            <div style="margin-top:10px; overflow-x:auto;">
+                <table style="width:100%; min-width:680px; border-collapse:collapse; font-size:11px; text-align:center;">
+                    <thead>
+                    <tr>
+                        <th style="padding:6px 7px; border:1px solid var(--border); background:var(--surface); text-align:left;">場×コース成績</th>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <th style="padding:6px 7px; border:1px solid var(--border); background:var(--surface);"><?= $course ?>C</th>
+                        <?php endfor; ?>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach (['first' => '1着率', 'top2' => '2連対率', 'top3' => '3連対率'] as $metric => $label): ?>
+                        <tr>
+                            <th style="padding:6px 7px; border:1px solid var(--border); background:var(--surface); text-align:left; white-space:nowrap;"><?= $spEsc($label) ?></th>
+                            <?php for ($course = 1; $course <= 6; $course++): ?>
+                                <?php $m = $courseMetric($courseResults, $course, $metric); ?>
+                                <td style="padding:6px 7px; border:1px solid var(--border); white-space:nowrap;">
+                                    <strong style="color:var(--text-strong);"><?= number_format($m['rate'], 2) ?>%</strong>
+                                    <div style="margin-top:2px; font-size:9px; color:var(--text-muted);">全場比 <?= $spEsc($diffText($m['diff'])) ?></div>
+                                </td>
+                            <?php endfor; ?>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+
         <div style="margin-top:10px; padding:9px 10px; border:1px solid var(--border); border-radius:7px; background:var(--surface); font-size:12px; line-height:1.7;">
             <div><strong>1逃げ時 2着:</strong> <?= $spEsc($formatDist($second)) ?></div>
             <div><strong>1逃げ時 3着:</strong> <?= $spEsc($formatDist($third)) ?></div>
@@ -177,7 +260,7 @@ if (!empty($stadiumPractical)):
                 まくり <?= number_format((float)($techniqueRates['まくり'] ?? 0.0), 2) ?>% /
                 まくり差し <?= number_format((float)($techniqueRates['まくり差し'] ?? 0.0), 2) ?>%<br>
                 1逃げ出目TOP: <?= $topPatternText !== [] ? $spEsc(implode(' / ', $topPatternText)) : '-' ?><br>
-                ※表示専用。最終予想・買い目補正にはまだ接続していません。
+                ※コース成績の小さい数値は全場平均との差。表示専用で、最終予想・買い目補正にはまだ接続していません。
             </div>
         </details>
     </div>
