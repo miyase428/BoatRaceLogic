@@ -4,3 +4,4 @@ log/
 /config/kimarite_head_model.php
 /config/stadium_race_number_compatibility.local.json
 /config/stadium_practical_characteristics.local.json
+/config/stadium_non_lane1_practical.local.json
