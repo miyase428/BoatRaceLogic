@@ -3,3 +3,4 @@ log/
 .env.local
 /config/kimarite_head_model.php
 /config/stadium_race_number_compatibility.local.json
+/config/stadium_practical_characteristics.local.json
