@@ -17,6 +17,17 @@
                 if (wrap) wrap.style.display = 'none';
             }
         });
+
+        // 外側の「参考情報：3連単120通り 出目確率」自体が折りたためるため、
+        // 内側の「120通りすべて表示」は二重折りたたみになる。
+        // 内側は常時展開し、summaryだけ削除して検索・絞り込み・120通り表を直接表示する。
+        const allDetails = document.getElementById('trifecta-all-details');
+        if (allDetails) {
+            allDetails.open = true;
+            const summary = allDetails.querySelector(':scope > summary');
+            if (summary) summary.remove();
+            allDetails.style.marginTop = '10px';
+        }
     }
 
     if (document.readyState === 'loading') {
