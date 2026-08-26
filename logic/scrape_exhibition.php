@@ -74,7 +74,7 @@ $period = new DatePeriod(
 );
 
 // ------------------------------------------------------------
-// 朝5時の制限時刻
+// 6時を過ぎたら次の日付には進まない
 // ------------------------------------------------------------
 $limit_time = strtotime('tomorrow 06:00');
 //$limit_time = strtotime('today 09:30');
@@ -98,19 +98,19 @@ foreach ($period as $dateObj) {
     $race_date_db = $dateObj->format('Y-m-d');
 
     // ------------------------------------------------------------
-    // 5時を過ぎていたら「次の日付には進まない」
+    // 6時を過ぎていたら「次の日付には進まない」
     // ただし、今の日付はまだ処理していないので前日までを保存して終了
     // ------------------------------------------------------------
     if (time() >= $limit_time) {
 
-        //次回取得するの日付を保存
+        // 次回取得する日付を保存
         $last_done = $dateObj->format('Ymd');
         file_put_contents(
             __DIR__ . '/../config/last_date.php',
             "<?php\nreturn ['last_date' => '{$last_done}'];"
         );
 
-        //実行した日付をログに出力して終了
+        // 実行した日付をログに出力して終了
         $yesterday = (clone $dateObj)->modify('-1 day')->format('Ymd');
         log_message("時間切れのため {$yesterday} までで終了");
         exit;
@@ -120,6 +120,9 @@ foreach ($period as $dateObj) {
     // この日付の処理は最後までやり切る
     // ------------------------------------------------------------
     log_message("=== 日付 {$race_date} の処理開始 ===");
+
+    // この日付で取得エラーが1件でも発生したら last_date を進めない
+    $date_has_error = false;
 
     // ------------------------------------------------------------
     // 開催場の抽出
@@ -155,6 +158,26 @@ foreach ($period as $dateObj) {
 
         for ($race_no = 1; $race_no <= 12; $race_no++) {
 
+            $race_no2  = str_pad($race_no, 2, '0', STR_PAD_LEFT);
+            $race_code = $race_date . $place_code . $race_no2;
+
+            // ------------------------------------------------------------
+            // 再試行時、すでに6艇分そろっているレースは再取得しない
+            // ------------------------------------------------------------
+            $check_sql = "
+                SELECT COUNT(DISTINCT entry_course)
+                FROM boat_race.exhibition_live
+                WHERE race_code = :race_code
+            ";
+            $check_stmt = $pdo->prepare($check_sql);
+            $check_stmt->execute([':race_code' => $race_code]);
+            $registered_count = (int)$check_stmt->fetchColumn();
+
+            if ($registered_count >= 6) {
+                log_message("{$race_code} は6艇分登録済みのためスキップ");
+                continue;
+            }
+
             log_message("=== {$place_code} {$race_no}R 開始 ===");
 
             $url = "https://kyoteibiyori.com/race_shusso.php"
@@ -175,6 +198,9 @@ foreach ($period as $dateObj) {
             if ($return_var !== 0) {
                 log_message("Playwright error: {$return_var}（{$place_code} {$race_no}R）");
 
+                // この日付を未完了として、翌日同じ日付から再試行する
+                $date_has_error = true;
+
                 // エラーURLを保存
                 $error_file = __DIR__ . '/../logs/error_urls.txt';
                 file_put_contents($error_file, $url . PHP_EOL, FILE_APPEND);
@@ -186,10 +212,16 @@ foreach ($period as $dateObj) {
             $json = implode("\n", $output);
             $data = json_decode($json, true);
 
-            $race_no2  = str_pad($race_no, 2, '0', STR_PAD_LEFT);
-            $race_code = $race_date . $place_code . $race_no2;
+            if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
+                log_message("JSON解析エラー（{$race_code}）: " . json_last_error_msg());
+                $date_has_error = true;
 
-            if ($data === null || empty($data)) {
+                $error_file = __DIR__ . '/../logs/error_urls.txt';
+                file_put_contents($error_file, $url . PHP_EOL, FILE_APPEND);
+                continue;
+            }
+
+            if (empty($data)) {
                 log_message("展示データなし（{$race_code}）");
                 continue;
             }
@@ -307,20 +339,31 @@ foreach ($period as $dateObj) {
 
             // ------------------------------------------------------------
             // 待ち時間（10〜13秒）
+            // 競艇日和さんへの負荷軽減のため維持する
             // ------------------------------------------------------------
             $wait = rand(1000, 1300) / 100;
             usleep((int)($wait * 1000000));
         }
 
-        // 一場終了後の待ち時間（10〜50秒）
+        // 一場終了後の待ち時間
         $wait_place = rand(1000, 1500) / 100;
         log_message("一場終了待ち: {$wait_place} 秒");
         usleep((int)($wait_place * 1000000));
     }
 
+    // ------------------------------------------------------------
+    // 取得失敗があった場合は、この日付を完了扱いにしない
+    // 翌日同じ日付から再試行する。成功済みレースはDB確認でスキップされる。
+    // ------------------------------------------------------------
+    if ($date_has_error) {
+        log_message("=== 日付 {$race_date} は取得失敗レースがあるため未完了 ===");
+        log_message("last_date は更新せず、次回この日付から再試行します");
+        exit;
+    }
+
     log_message("=== 日付 {$race_date} の処理完了 ===");
 
-   // ------------------------------------------------------------
+    // ------------------------------------------------------------
     // この日付は完走したので last_date を更新
     // ------------------------------------------------------------
     $next_date = (new DateTime($race_date))->modify('+1 day')->format('Ymd');
