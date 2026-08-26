@@ -207,10 +207,13 @@
             const s = data.summary || {};
             const dates = Array.isArray(data.dates) ? data.dates : [];
             const cache = data.cache || {};
+            const cacheLabel = cache.auto_invalidated
+                ? ' / 開催日更新で自動再計算'
+                : (cache.used ? ' / キャッシュ表示' : ' / 今回再計算');
             meta.textContent = venue + ' / 対象 ' + dates.map(fullDateLabel).join('・')
                 + ' / 評価 ' + Number(s.evaluated_races || 0) + 'R'
                 + (Number(s.error_races || 0) > 0 ? ' / 再計算エラー ' + Number(s.error_races || 0) + 'R' : '')
-                + (cache.used ? ' / キャッシュ表示' : ' / 今回再計算');
+                + cacheLabel;
 
             status.hidden = true;
             content.hidden = false;
@@ -257,7 +260,6 @@
             load(true);
         });
 
-        // 大タブを開いた時だけ重い60R再計算を開始する。
         document.addEventListener('click', function (event) {
             const button = event.target && event.target.closest
                 ? event.target.closest('.pc-main-tab[data-pc-main-tab="recent"]')
@@ -265,11 +267,16 @@
             if (button) load(false);
         });
 
-        // sessionStorageで「直近60R」が復元された場合にも自動読込する。
         setTimeout(function () {
             const active = document.querySelector('.pc-main-tab[data-pc-main-tab="recent"].is-active');
             if (active) load(false);
         }, 120);
+
+        // レース表示時にもバックグラウンドで最新開催日だけ確認する。
+        // 対象日が同じならキャッシュ即返却、新しい結果確定日が増えた時だけ再計算する。
+        setTimeout(function () {
+            load(false);
+        }, 350);
     }
 
     if (document.readyState === 'loading') {
