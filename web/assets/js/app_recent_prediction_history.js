@@ -239,10 +239,13 @@
                 const s = data.summary || {};
                 const dates = Array.isArray(data.dates) ? data.dates : [];
                 const cache = data.cache || {};
+                const cacheLabel = cache.auto_invalidated
+                    ? ' / 開催日更新で自動再計算'
+                    : (cache.used ? ' / キャッシュ' : ' / 今回再計算');
                 meta.textContent = String(config.venue || config.place || '')
                     + ' / ' + dates.map(function (d) { return dateLabel(d, false); }).join('・')
                     + ' / 評価 ' + Number(s.evaluated_races || 0) + 'R'
-                    + (cache.used ? ' / キャッシュ' : ' / 今回再計算');
+                    + cacheLabel;
 
                 status.hidden = true;
                 content.hidden = false;
@@ -304,6 +307,13 @@
             if (saved === 'recent') {
                 activateRecent();
             }
+
+            // レース表示時にバックグラウンドで最新開催日だけ確認する。
+            // キャッシュ対象日が変わっていなければ即キャッシュ返却、
+            // 朝の結果取得などで新しい開催日が揃った時だけ60Rを自動再計算する。
+            window.setTimeout(function () {
+                load(false);
+            }, 350);
         }, 50);
     }
 
