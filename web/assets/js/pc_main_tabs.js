@@ -23,8 +23,10 @@
         const codeBox = container ? container.querySelector('.code-box') : null;
         if (!container || !codeBox || container.querySelector('.pc-main-tabs')) return;
 
-        // タブを挿入する前に、現在の表示順を固定しておく。
-        // 既存の各パネル用DOMContentLoaded処理が先に走っていても、この時点の順序を尊重する。
+        // 既存パネル側のDOMContentLoadedによる表示移動がすべて終わった後の
+        // DOM順を基準に大タブへ振り分ける。
+        // 特に3連単120通りは、最終予想直下へ移動する既存処理と競合するため、
+        // PC大タブ側を最後に実行して専用タブへ確実に回収する。
         const children = Array.from(container.children);
         const codeIndex = children.indexOf(codeBox);
         if (codeIndex < 0) return;
@@ -117,6 +119,11 @@
             mainPanel.appendChild(node);
         });
 
+        // 120通りパネルが既存処理で別ノード配下へ入っていても、最後に専用タブへ回収する。
+        if (trifectaReference && trifectaReference.parentElement !== trifectaPanel) {
+            trifectaPanel.appendChild(trifectaReference);
+        }
+
         if (!trifectaReference) {
             const note = document.createElement('div');
             note.style.cssText = 'margin:12px 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-soft);color:var(--text-muted);font-size:13px;';
@@ -164,9 +171,15 @@
         activate(initial);
     }
 
+    function scheduleSetup() {
+        // DOMContentLoaded内で直接実行すると、後から登録された既存パネルの
+        // 移動処理より先に走る。0ms後へ送って、全DOMContentLoaded処理完了後に振り分ける。
+        window.setTimeout(setupPcMainTabs, 0);
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupPcMainTabs);
+        document.addEventListener('DOMContentLoaded', scheduleSetup);
     } else {
-        setupPcMainTabs();
+        scheduleSetup();
     }
 })();
