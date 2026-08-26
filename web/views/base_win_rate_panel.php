@@ -11,6 +11,7 @@ include __DIR__ . '/base_win_rate_panel_core.php';
 $playerSamMode = 'pc';
 include __DIR__ . '/player_sam_panel.php';
 include __DIR__ . '/player_sam_cross_panel.php';
+include __DIR__ . '/player_sam_ui_enhancements.php';
 ?>
 <link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
 <script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260826b"></script>
