@@ -1,0 +1,228 @@
+/* 選択場の直近5開催日（最大60R）をざっと確認するPC表示。 */
+
+.recent-history-panel {
+    margin: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.recent-history-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.recent-history-heading h2 {
+    margin: 0 0 5px;
+    font-size: 18px;
+    color: var(--text-strong);
+}
+
+.recent-history-note,
+.recent-history-meta,
+.recent-history-status,
+.recent-history-errors {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+.recent-history-reload {
+    flex: 0 0 auto;
+    min-width: 84px;
+    padding: 7px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--surface-muted);
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.recent-history-reload:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+
+.recent-history-status {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-soft);
+}
+
+.recent-history-status.is-loading {
+    color: var(--accent);
+    font-weight: 800;
+}
+
+.recent-history-status.is-error {
+    color: #a33f32;
+    border-color: #e0aaa1;
+    background: #fff5f2;
+}
+
+.recent-history-meta {
+    margin: 0 0 9px;
+}
+
+.recent-history-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.recent-history-summary-card {
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #fffaf2;
+}
+
+.recent-history-summary-card h3 {
+    margin: 0 0 6px;
+    color: var(--text-strong);
+    font-size: 13px;
+}
+
+.recent-history-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+}
+
+.recent-history-summary-grid div {
+    padding: 5px;
+    border-radius: 5px;
+    background: var(--surface-soft);
+    text-align: center;
+}
+
+.recent-history-summary-grid span,
+.recent-history-summary-grid strong {
+    display: block;
+    white-space: nowrap;
+}
+
+.recent-history-summary-grid span {
+    margin-bottom: 2px;
+    color: var(--text-muted);
+    font-size: 9px;
+}
+
+.recent-history-summary-grid strong {
+    color: var(--text-strong);
+    font-size: 12px;
+}
+
+.recent-history-daily {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.recent-history-day {
+    padding: 7px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-soft);
+    font-size: 10px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.recent-history-day strong {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--text-strong);
+    font-size: 11px;
+}
+
+.recent-history-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.recent-history-table {
+    width: 100%;
+    min-width: 850px;
+    border-collapse: collapse;
+    background: #fffaf2;
+    font-size: 11px;
+}
+
+.recent-history-table th,
+.recent-history-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.recent-history-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface-muted);
+    color: var(--text-strong);
+    font-weight: 800;
+}
+
+.recent-history-table td:nth-child(3),
+.recent-history-table td:nth-child(4) {
+    text-align: left;
+    font-weight: 700;
+}
+
+.recent-history-table tr.is-hit {
+    background: #f2fbf5;
+}
+
+.recent-history-race-link {
+    color: var(--accent);
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.recent-history-race-link:hover {
+    text-decoration: underline;
+}
+
+.recent-history-hit {
+    color: #247a4b;
+    font-weight: 900;
+}
+
+.recent-history-miss {
+    color: #9a5b50;
+    font-weight: 800;
+}
+
+.recent-history-payout {
+    color: #aa741f;
+    font-weight: 800;
+}
+
+.recent-history-errors {
+    margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+    .recent-history-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .recent-history-daily {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
