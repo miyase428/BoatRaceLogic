@@ -236,7 +236,7 @@ WITH completed_races AS (
       AND rm.race_number::int BETWEEN 1 AND 12
     GROUP BY rm.race_code, rm.race_date, rm.race_number
     HAVING COUNT(DISTINCT CASE
-        WHEN rrd.rank BETWEEN 1 AND 3 THEN rrd.rank
+        WHEN rrd.rank IN ('1', '2', '3') THEN rrd.rank
         ELSE NULL
     END) = 3
 ), recent_days AS (
