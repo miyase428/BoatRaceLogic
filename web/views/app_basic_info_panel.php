@@ -10,3 +10,4 @@ include __DIR__ . '/app_basic_info_panel_core.php';
 $playerSamMode = 'app';
 include __DIR__ . '/player_sam_panel.php';
 include __DIR__ . '/player_sam_cross_panel.php';
+include __DIR__ . '/player_sam_ui_enhancements.php';
