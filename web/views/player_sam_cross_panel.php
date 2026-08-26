@@ -114,8 +114,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return false;
     });
 
-    // PCでは元パネルがSUM表直下へ移動した後、そのさらに直下へ比較表を置く。
-    playerPanel.insertAdjacentElement('afterend', crossPanel);
+    // まず場SUM×選手SUM比較で気づきを得て、その下で選手SUM特性の詳細を見る順にする。
+    playerPanel.insertAdjacentElement('beforebegin', crossPanel);
 });
 </script>
 <?php endif; ?>
