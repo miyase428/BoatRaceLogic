@@ -295,6 +295,9 @@
             }
 
             button.addEventListener('click', activateRecent);
+            reload.addEventListener('click', function () {
+                load(true);
+            });
 
             let saved = '';
             try { saved = sessionStorage.getItem(STORAGE_KEY) || ''; } catch (e) {}
