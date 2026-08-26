@@ -5,3 +5,7 @@ include __DIR__ . '/stadium_characteristics_tabs.php';
 $forwardValidationMode = 'app';
 include __DIR__ . '/forward_validation_panel.php';
 include __DIR__ . '/app_basic_info_panel_core.php';
+
+// 選手SUMチェッカー。表示専用で予想ロジックには未接続。
+$playerSamMode = 'app';
+include __DIR__ . '/player_sam_panel.php';
