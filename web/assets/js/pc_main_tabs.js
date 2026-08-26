@@ -25,8 +25,6 @@
 
         // 既存パネル側のDOMContentLoadedによる表示移動がすべて終わった後の
         // DOM順を基準に大タブへ振り分ける。
-        // 特に3連単120通りは、最終予想直下へ移動する既存処理と競合するため、
-        // PC大タブ側を最後に実行して専用タブへ確実に回収する。
         const children = Array.from(container.children);
         const codeIndex = children.indexOf(codeBox);
         if (codeIndex < 0) return;
@@ -38,7 +36,8 @@
         tabs.innerHTML = ''
             + '<button type="button" class="pc-main-tab is-active" data-pc-main-tab="basic">基本情報</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="main">メイン情報</button>'
-            + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">120通り</button>';
+            + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">120通り</button>'
+            + '<button type="button" class="pc-main-tab" data-pc-main-tab="recent">直近60R</button>';
 
         const basicPanel = document.createElement('div');
         basicPanel.className = 'pc-main-tab-panel is-active';
@@ -54,10 +53,16 @@
         trifectaPanel.dataset.pcMainPanel = 'trifecta';
         trifectaPanel.hidden = true;
 
+        const recentPanel = document.createElement('div');
+        recentPanel.className = 'pc-main-tab-panel';
+        recentPanel.dataset.pcMainPanel = 'recent';
+        recentPanel.hidden = true;
+
         codeBox.insertAdjacentElement('afterend', tabs);
         tabs.insertAdjacentElement('afterend', basicPanel);
         basicPanel.insertAdjacentElement('afterend', mainPanel);
         mainPanel.insertAdjacentElement('afterend', trifectaPanel);
+        trifectaPanel.insertAdjacentElement('afterend', recentPanel);
 
         const basicNodes = new Set();
 
@@ -95,6 +100,8 @@
         }
 
         const trifectaReference = document.getElementById('trifecta-reference-panel');
+        const recentHistory = document.getElementById('recent-prediction-history-panel');
+
         if (trifectaReference) {
             // 専用大タブで表示するため、内側detailsは常時開いた状態にする。
             trifectaReference.open = true;
@@ -105,6 +112,11 @@
         // SCRIPT / STYLE / LINKは元位置に残し、既存イベント登録を壊さない。
         sourceNodes.forEach(function (node) {
             if (!node || isAssetNode(node)) return;
+
+            if (node === recentHistory) {
+                recentPanel.appendChild(node);
+                return;
+            }
 
             if (node === trifectaReference) {
                 trifectaPanel.appendChild(node);
@@ -119,9 +131,12 @@
             mainPanel.appendChild(node);
         });
 
-        // 120通りパネルが既存処理で別ノード配下へ入っていても、最後に専用タブへ回収する。
+        // 既存の各表示移動処理と競合した場合でも最後に専用タブへ回収する。
         if (trifectaReference && trifectaReference.parentElement !== trifectaPanel) {
             trifectaPanel.appendChild(trifectaReference);
+        }
+        if (recentHistory && recentHistory.parentElement !== recentPanel) {
+            recentPanel.appendChild(recentHistory);
         }
 
         if (!trifectaReference) {
@@ -131,11 +146,19 @@
             trifectaPanel.appendChild(note);
         }
 
+        if (!recentHistory) {
+            const note = document.createElement('div');
+            note.style.cssText = 'margin:12px 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-soft);color:var(--text-muted);font-size:13px;';
+            note.textContent = '直近60Rパネルを読み込めませんでした。';
+            recentPanel.appendChild(note);
+        }
+
         const buttons = Array.from(tabs.querySelectorAll('.pc-main-tab'));
-        const panels = [basicPanel, mainPanel, trifectaPanel];
+        const panels = [basicPanel, mainPanel, trifectaPanel, recentPanel];
+        const validTabs = ['basic', 'main', 'trifecta', 'recent'];
 
         function activate(name) {
-            if (!['basic', 'main', 'trifecta'].includes(name)) name = 'basic';
+            if (!validTabs.includes(name)) name = 'basic';
 
             buttons.forEach(function (button) {
                 const active = button.dataset.pcMainTab === name;
@@ -163,7 +186,7 @@
         let initial = 'basic';
         try {
             const saved = sessionStorage.getItem(STORAGE_KEY);
-            if (saved === 'basic' || saved === 'main' || saved === 'trifecta') {
+            if (validTabs.includes(saved)) {
                 initial = saved;
             }
         } catch (e) {}
@@ -173,7 +196,7 @@
 
     function scheduleSetup() {
         // DOMContentLoaded内で直接実行すると、後から登録された既存パネルの
-        // 移動処理より先に走る。0ms後へ送って、全DOMContentLoaded処理完了後に振り分ける。
+        // 移動処理より先に走るため、0ms後へ送り最後に振り分ける。
         window.setTimeout(setupPcMainTabs, 0);
     }
 
