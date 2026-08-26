@@ -18,4 +18,4 @@ include __DIR__ . '/player_sam_ui_enhancements.php';
 
 <!-- PC Webもアプリ版と同じ大分類「基本情報 / メイン情報 / 120通り」で切り替える。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260826a">
-<script src="/web/assets/js/pc_main_tabs.js?v=20260826a"></script>
+<script src="/web/assets/js/pc_main_tabs.js?v=20260826b"></script>
