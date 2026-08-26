@@ -19,10 +19,10 @@ if (!function_exists('getPDO')) {
 class PlayerSamLogic
 {
     public const BANDS = [
-        'plus_04'       => '+0.4以上',
-        'zero_plus_04'  => '0〜+0.4',
-        'minus_04_zero' => '-0.4〜0',
-        'under_minus_04'=> '-0.4未満',
+        'plus_04'        => '+0.4以上',
+        'zero_plus_04'   => '0〜+0.4',
+        'minus_04_zero'  => '-0.4〜0',
+        'under_minus_04' => '-0.4未満',
     ];
 
     public function calculate(
@@ -36,12 +36,21 @@ class PlayerSamLogic
                 throw new RuntimeException('選手SUM: race_codeが空です');
             }
 
-            $targets = $this->buildTargets($entries, $courseByBoat, $samAppliedList);
+            $pdo = getPDO();
+
+            // calc_scores.php の表示用 entries は時期によってキー形式が変わるため、
+            // 選手SUMでは race_code を基準に race_entry から対象6艇を直接確定する。
+            $targetEntries = $this->loadTargetEntries($pdo, $raceCode);
+            if (count($targetEntries) !== 6) {
+                // 念のため旧 entries もフォールバックとして残す。
+                $targetEntries = $this->normalizeFallbackEntries($entries);
+            }
+
+            $targets = $this->buildTargets($targetEntries, $courseByBoat, $samAppliedList);
             if (count($targets) !== 6) {
                 throw new RuntimeException('選手SUM: 対象6艇を特定できません');
             }
 
-            $pdo = getPDO();
             $raw = $this->loadStats($pdo, $raceCode, $targets);
 
             foreach ($targets as $boat => &$target) {
@@ -166,6 +175,62 @@ class PlayerSamLogic
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    private function loadTargetEntries(PDO $pdo, string $raceCode): array
+    {
+        $sql = <<<SQL
+            SELECT
+                lane_number,
+                player_id::text AS player_id,
+                player_name
+            FROM boat_race.race_entry
+            WHERE race_code = ?
+            ORDER BY lane_number
+        SQL;
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$raceCode]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (count($rows) !== 6) {
+            return [];
+        }
+
+        $out = [];
+        $used = [];
+        foreach ($rows as $row) {
+            $boat = (int)($row['lane_number'] ?? 0);
+            $playerId = trim((string)($row['player_id'] ?? ''));
+            if ($boat < 1 || $boat > 6 || isset($used[$boat]) || $playerId === '') {
+                return [];
+            }
+            $used[$boat] = true;
+            $out[] = [
+                'lane_number' => $boat,
+                'player_id' => $playerId,
+                'player_name' => (string)($row['player_name'] ?? ''),
+            ];
+        }
+
+        return count($used) === 6 ? $out : [];
+    }
+
+    private function normalizeFallbackEntries(array $entries): array
+    {
+        $out = [];
+        foreach ($entries as $idx => $entry) {
+            $boat = (int)($entry['lane_number'] ?? $entry['boat'] ?? $entry['teiban'] ?? ($idx + 1));
+            $playerId = trim((string)($entry['player_id'] ?? $entry['registration_number'] ?? ''));
+            if ($boat < 1 || $boat > 6 || $playerId === '') {
+                continue;
+            }
+            $out[] = [
+                'lane_number' => $boat,
+                'player_id' => $playerId,
+                'player_name' => (string)($entry['player_name'] ?? $entry['name'] ?? ''),
+            ];
+        }
+        return $out;
     }
 
     private function buildTargets(array $entries, array $courseByBoat, array $samAppliedList): array
