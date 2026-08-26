@@ -12,10 +12,14 @@ $playerSamMode = 'pc';
 include __DIR__ . '/player_sam_panel.php';
 include __DIR__ . '/player_sam_cross_panel.php';
 include __DIR__ . '/player_sam_ui_enhancements.php';
+
+// 選択場の直近5開催日（最大60R）の現行Web予想×実結果。
+// 重い過去再計算は大タブを開いた時だけAPI経由で実行する。
+include __DIR__ . '/recent_prediction_history_panel.php';
 ?>
 <link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
 <script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260826b"></script>
 
-<!-- PC Webもアプリ版と同じ大分類「基本情報 / メイン情報 / 120通り」で切り替える。 -->
-<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260826a">
-<script src="/web/assets/js/pc_main_tabs.js?v=20260826b"></script>
+<!-- PC Webは大分類「基本情報 / メイン情報 / 120通り / 直近60R」で切り替える。 -->
+<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260826b">
+<script src="/web/assets/js/pc_main_tabs.js?v=20260826c"></script>
