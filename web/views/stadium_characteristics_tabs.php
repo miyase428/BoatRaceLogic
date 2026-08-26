@@ -3,6 +3,41 @@ $stadiumCharacteristicsMode = (string)($stadiumCharacteristicsMode ?? 'pc');
 $stadiumCharacteristicsPlace = preg_replace('/[^A-Za-z0-9_-]/', '', (string)($selected_place ?? 'unknown'));
 $stadiumCharacteristicsRootId = 'stadium-characteristics-tabs-' . $stadiumCharacteristicsMode . '-' . $stadiumCharacteristicsPlace;
 $isApp = $stadiumCharacteristicsMode === 'app';
+$stadiumCharacteristicsStorageKey = 'br_stadium_characteristics_tab_' . $stadiumCharacteristicsMode;
+
+// APP版ではこのHTMLをinnerHTMLで後から差し込むため、内部の<script>は実行されない。
+// ボタン自身にも切替処理を持たせ、iPhone/PWAでもタップだけで確実に切り替えられるようにする。
+$stadiumCharacteristicsInlineHandler = <<<'JS'
+(function(button){
+    var root = button.parentElement ? button.parentElement.parentElement : null;
+    if (!root) return;
+
+    var target = button.getAttribute('data-stadium-char-tab') || 'basic';
+    var buttons = root.querySelectorAll('[data-stadium-char-tab]');
+    var panels = root.querySelectorAll('[data-stadium-char-panel]');
+    var normalBg = button.getAttribute('data-normal-bg') || '#fffaf2';
+    var normalColor = button.getAttribute('data-normal-color') || '#475569';
+    var storageKey = button.getAttribute('data-storage-key') || '';
+
+    Array.prototype.forEach.call(buttons, function(item) {
+        var active = item.getAttribute('data-stadium-char-tab') === target;
+        item.setAttribute('aria-selected', active ? 'true' : 'false');
+        item.style.background = active ? '#334155' : normalBg;
+        item.style.color = active ? '#ffffff' : normalColor;
+        item.style.borderColor = active ? '#334155' : '';
+    });
+
+    Array.prototype.forEach.call(panels, function(panel) {
+        panel.style.display = panel.getAttribute('data-stadium-char-panel') === target ? 'block' : 'none';
+    });
+
+    if (storageKey) {
+        try {
+            localStorage.setItem(storageKey, target);
+        } catch (e) {}
+    }
+})(this);
+JS;
 ?>
 
 <div id="<?= htmlspecialchars($stadiumCharacteristicsRootId, ENT_QUOTES, 'UTF-8') ?>" style="<?= $isApp ? 'margin:0 0 8px;' : 'margin:14px 0 0;' ?>">
@@ -16,12 +51,22 @@ $isApp = $stadiumCharacteristicsMode === 'app';
             'web' => 'Web相性',
         ];
         foreach ($tabs as $key => $label):
+            $isDefaultActive = $key === 'basic';
+            $normalBg = $isApp ? '#fffaf2' : 'var(--surface-soft)';
+            $normalColor = $isApp ? '#475569' : 'var(--text-muted)';
+            $buttonBg = $isDefaultActive ? '#334155' : $normalBg;
+            $buttonColor = $isDefaultActive ? '#ffffff' : $normalColor;
+            $buttonBorder = $isDefaultActive ? '#334155' : ($isApp ? '#d8cdbc' : 'var(--border)');
         ?>
             <button
                 type="button"
                 data-stadium-char-tab="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>"
-                aria-selected="false"
-                style="<?= $isApp ? 'flex:0 0 auto;' : 'flex:1 1 120px;' ?> min-height:34px; padding:7px 10px; border:1px solid <?= $isApp ? '#d8cdbc' : 'var(--border)' ?>; border-radius:8px; background:<?= $isApp ? '#fffaf2' : 'var(--surface-soft)' ?>; color:<?= $isApp ? '#475569' : 'var(--text-muted)' ?>; font-size:<?= $isApp ? '11px' : '12px' ?>; font-weight:700; cursor:pointer; white-space:nowrap;"
+                data-normal-bg="<?= htmlspecialchars($normalBg, ENT_QUOTES, 'UTF-8') ?>"
+                data-normal-color="<?= htmlspecialchars($normalColor, ENT_QUOTES, 'UTF-8') ?>"
+                data-storage-key="<?= htmlspecialchars($stadiumCharacteristicsStorageKey, ENT_QUOTES, 'UTF-8') ?>"
+                aria-selected="<?= $isDefaultActive ? 'true' : 'false' ?>"
+                onclick="<?= htmlspecialchars($stadiumCharacteristicsInlineHandler, ENT_QUOTES, 'UTF-8') ?>"
+                style="<?= $isApp ? 'flex:0 0 auto;' : 'flex:1 1 120px;' ?> min-height:34px; padding:7px 10px; border:1px solid <?= htmlspecialchars($buttonBorder, ENT_QUOTES, 'UTF-8') ?>; border-radius:8px; background:<?= htmlspecialchars($buttonBg, ENT_QUOTES, 'UTF-8') ?>; color:<?= htmlspecialchars($buttonColor, ENT_QUOTES, 'UTF-8') ?>; font-size:<?= $isApp ? '11px' : '12px' ?>; font-weight:700; cursor:pointer; white-space:nowrap;"
             ><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></button>
         <?php endforeach; ?>
     </div>
@@ -67,7 +112,7 @@ $isApp = $stadiumCharacteristicsMode === 'app';
 
     const buttons = Array.from(root.querySelectorAll('[data-stadium-char-tab]'));
     const panels = Array.from(root.querySelectorAll('[data-stadium-char-panel]'));
-    const storageKey = <?= json_encode('br_stadium_characteristics_tab_' . $stadiumCharacteristicsMode, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const storageKey = <?= json_encode($stadiumCharacteristicsStorageKey, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const normalBg = <?= json_encode($isApp ? '#fffaf2' : 'var(--surface-soft)') ?>;
     const normalColor = <?= json_encode($isApp ? '#475569' : 'var(--text-muted)') ?>;
     const activeBg = '#334155';
