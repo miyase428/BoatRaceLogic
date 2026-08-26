@@ -1,0 +1,232 @@
+.app-recent-history-panel {
+    min-width: 0;
+}
+
+.app-recent-card {
+    overflow: hidden;
+}
+
+.app-recent-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.app-recent-head .app-section-title {
+    margin-bottom: 4px;
+}
+
+.app-recent-reload {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 5px 9px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    background: #eee6da;
+    color: #4b5866;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.app-recent-reload:disabled {
+    opacity: 0.55;
+}
+
+.app-recent-status {
+    color: var(--app-muted);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.app-recent-status.is-error {
+    color: #a33f32;
+}
+
+.app-recent-meta {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    color: var(--app-muted);
+    font-size: 10px;
+}
+
+.app-recent-summary {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    padding: 0 11px 10px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.app-recent-summary-card {
+    flex: 0 0 245px;
+    padding: 9px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-card-strong);
+}
+
+.app-recent-summary-title {
+    display: block;
+    margin-bottom: 7px;
+    color: #3f4b5a;
+    font-size: 11px;
+}
+
+.app-recent-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.app-recent-summary-grid > div {
+    min-width: 0;
+    padding: 5px 3px;
+    border: 1px solid var(--app-border);
+    border-radius: 5px;
+    background: #fffaf2;
+    text-align: center;
+}
+
+.app-recent-summary-grid span,
+.app-recent-summary-grid strong {
+    display: block;
+    white-space: nowrap;
+}
+
+.app-recent-summary-grid span {
+    margin-bottom: 2px;
+    color: var(--app-muted);
+    font-size: 8px;
+}
+
+.app-recent-summary-grid strong {
+    color: #3f4b5a;
+    font-size: 10px;
+}
+
+.app-recent-money {
+    margin-top: 6px;
+    color: var(--app-muted);
+    font-size: 8px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.app-recent-subtitle {
+    padding-top: 7px;
+    padding-bottom: 6px;
+    color: #566273;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.app-recent-days {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 11px 10px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.app-recent-day {
+    flex: 0 0 125px;
+    padding: 7px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 7px;
+    background: #fffaf2;
+}
+
+.app-recent-day strong,
+.app-recent-day span {
+    display: block;
+    white-space: nowrap;
+}
+
+.app-recent-day strong {
+    margin-bottom: 3px;
+    color: #3f4b5a;
+    font-size: 10px;
+}
+
+.app-recent-day span {
+    color: var(--app-muted);
+    font-size: 9px;
+    line-height: 1.45;
+}
+
+.app-recent-table-wrap {
+    overflow-x: auto;
+    border-top: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--app-border);
+    -webkit-overflow-scrolling: touch;
+}
+
+.app-recent-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    background: var(--app-card);
+}
+
+.app-recent-table th,
+.app-recent-table td {
+    padding: 6px 5px;
+    border-right: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--app-border);
+    white-space: nowrap;
+    font-size: 9px;
+    text-align: center;
+}
+
+.app-recent-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #e8dfd2;
+    color: #4b5866;
+    font-weight: 900;
+}
+
+.app-recent-table th:nth-child(3),
+.app-recent-table th:nth-child(4),
+.app-recent-table td:nth-child(3),
+.app-recent-table td:nth-child(4) {
+    min-width: 135px;
+    text-align: left;
+}
+
+.app-recent-table tr.is-hit td {
+    background: #f3fbf5;
+}
+
+.app-recent-race-link {
+    color: var(--app-accent);
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.app-recent-actual {
+    font-weight: 900;
+    color: #3f4b5a;
+}
+
+.app-recent-hit,
+.app-recent-miss {
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.app-recent-hit {
+    color: #2f789f;
+}
+
+.app-recent-miss {
+    color: #b65b4a;
+}
+
+.app-recent-errors {
+    color: #a06f30;
+    font-size: 9px;
+    line-height: 1.5;
+}
