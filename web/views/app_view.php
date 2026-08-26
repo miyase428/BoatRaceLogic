@@ -81,6 +81,7 @@ if (!is_string($appTrifectaJson)) {
     <title>BoatRace</title>
     <link rel="manifest" href="/web/manifest.webmanifest">
     <link rel="stylesheet" href="/web/assets/css/app.css">
+    <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20260826a">
 </head>
 <body>
 <div class="app-shell">
@@ -297,6 +298,12 @@ if (!is_string($appTrifectaJson)) {
 
 <script id="app-trifecta-data" type="application/json"><?= $appTrifectaJson ?></script>
 <script src="/web/assets/js/app_trifecta_tab.js"></script>
+<script id="app-recent-history-config" type="application/json"><?= json_encode([
+    'place' => (string)$selected_place,
+    'date' => (string)$selected_date,
+    'venue' => (string)($place_names[$selected_place] ?? $selected_place),
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script src="/web/assets/js/app_recent_prediction_history.js?v=20260826a"></script>
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
