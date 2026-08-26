@@ -227,13 +227,13 @@ WITH completed_races AS (
     SELECT
         rm.race_code,
         rm.race_date,
-        rm.race_number::int AS race_number
+        NULLIF(regexp_replace(rm.race_number, '[^0-9]', '', 'g'), '')::int AS race_number
     FROM boat_race.race_master rm
     JOIN boat_race.race_result_detail rrd
       ON rrd.race_code = rm.race_code
     WHERE SUBSTRING(rm.race_code, 9, 3) = :place_code
       AND rm.race_date <= :end_date::date
-      AND rm.race_number::int BETWEEN 1 AND 12
+      AND NULLIF(regexp_replace(rm.race_number, '[^0-9]', '', 'g'), '')::int BETWEEN 1 AND 12
     GROUP BY rm.race_code, rm.race_date, rm.race_number
     HAVING COUNT(DISTINCT CASE
         WHEN rrd.rank IN ('1', '2', '3') THEN rrd.rank
