@@ -15,3 +15,7 @@ include __DIR__ . '/player_sam_ui_enhancements.php';
 ?>
 <link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
 <script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260826b"></script>
+
+<!-- PC Webもアプリ版と同じ大分類「基本情報 / メイン情報 / 120通り」で切り替える。 -->
+<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260826a">
+<script src="/web/assets/js/pc_main_tabs.js?v=20260826a"></script>
