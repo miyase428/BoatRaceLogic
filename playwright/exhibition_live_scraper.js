@@ -3,8 +3,21 @@ const { chromium } = require('playwright');
 (async () => {
   try {
     const browser = await chromium.launch({ headless: true });
-    const context = await browser.newContext();
+    const context = await browser.newContext({
+      serviceWorkers: 'block'
+    });
     const page = await context.newPage();
+
+    // 展示表の取得に不要な重いリソースは読み込まない。
+    // HTML / CSS / JavaScript / XHR は残し、サイトへの総リクエスト量を抑える。
+    await page.route('**/*', async (route) => {
+      const resourceType = route.request().resourceType();
+      if (['image', 'font', 'media'].includes(resourceType)) {
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
 
     const url = process.argv[2];
     if (!url) {
@@ -12,21 +25,35 @@ const { chromium } = require('playwright');
       process.exit(1);
     }
 
+    async function gotoOnce(targetUrl) {
+      const response = await page.goto(targetUrl, {
+        timeout: 60000,
+        waitUntil: "load"
+      });
+
+      // 明確なアクセス制限・サーバ障害は通常ページとして処理しない。
+      if (response) {
+        const status = response.status();
+        if (status === 403 || status === 429 || status >= 500) {
+          throw new Error(`HTTP ${status}`);
+        }
+      }
+    }
+
     async function safeGoto(targetUrl) {
       try {
-        await page.goto(targetUrl, {
-          timeout: 60000,
-          waitUntil: "load"
-        });
+        await gotoOnce(targetUrl);
       } catch (e) {
-        console.log("retry");
+        // stdout は最終JSON専用。リトライ通知は stderr へ出す。
+        console.error(`retry: ${e.message}`);
+
+        // 接続不調時に即時再アクセスしない。
+        await page.waitForTimeout(5000);
+
         try {
-          await page.goto(targetUrl, {
-            timeout: 60000,
-            waitUntil: "load"
-          });
+          await gotoOnce(targetUrl);
         } catch (e2) {
-          console.error("goto failed twice");
+          console.error(`goto failed twice: ${e2.message}`);
           process.exit(1);
         }
       }
