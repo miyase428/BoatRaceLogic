@@ -15,17 +15,15 @@ const { chromium } = require('playwright');
     async function safeGoto(targetUrl) {
       try {
         await page.goto(targetUrl, {
-          timeout: 30000,
-          waitUntil: "domcontentloaded"
+          timeout: 60000,
+          waitUntil: "load"
         });
       } catch (e) {
-        // stdout は最終JSON専用にする。PHP側の json_decode を壊さないよう
-        // リトライ通知は stderr へ出す。
-        console.error("retry");
+        console.log("retry");
         try {
           await page.goto(targetUrl, {
-            timeout: 30000,
-            waitUntil: "domcontentloaded"
+            timeout: 60000,
+            waitUntil: "load"
           });
         } catch (e2) {
           console.error("goto failed twice");
@@ -37,54 +35,8 @@ const { chromium } = require('playwright');
     await safeGoto(url);
     await page.waitForTimeout(1500); // DOM安定のため
 
-    // ------------------------------------------------------------
-    // 直前情報を開く
-    // ------------------------------------------------------------
-    // 競艇日和側で直前情報が動的読み込みになったため、
-    // 初期DOMに「展示情報」が無いだけでは未公開と判断しない。
-    // まず従来のタブセレクタを試し、見つからない場合は表示テキストでフォールバックする。
-    let openedBeforeInfo = false;
-
-    try {
-      const legacyTab = page.locator('.tab__button.tab_button_color5').first();
-      if (await legacyTab.count()) {
-        await legacyTab.click({ timeout: 10000 });
-        openedBeforeInfo = true;
-      }
-    } catch (_) {
-      // 次のフォールバックへ
-    }
-
-    if (!openedBeforeInfo) {
-      try {
-        const textTab = page.getByText('直前情報', { exact: true }).first();
-        if (await textTab.count()) {
-          await textTab.click({ timeout: 10000 });
-          openedBeforeInfo = true;
-        }
-      } catch (_) {
-        // 後続の展示情報待機で最終判定する
-      }
-    }
-
-    if (openedBeforeInfo) {
-      await page.waitForTimeout(1200);
-    }
-
-    // ------------------------------------------------------------
-    // 展示情報の動的読み込み待ち
-    // ------------------------------------------------------------
-    const baseTenjiSelector = "//td[normalize-space(text())='展示情報']";
-    let baseTenjiExists = false;
-
-    try {
-      await page.waitForSelector(baseTenjiSelector, { timeout: 10000 });
-      baseTenjiExists = true;
-    } catch (_) {
-      baseTenjiExists = false;
-    }
-
-    // 展示未公開・中止・取得失敗時は従来どおり6艇分nullを返す。
+    // ★ 中止レース判定（展示情報が無い＝中止）
+    const baseTenjiExists = await page.$("//td[normalize-space(text())='展示情報']");
     if (!baseTenjiExists) {
       const results = [];
       for (let course = 1; course <= 6; course++) {
@@ -100,15 +52,15 @@ const { chromium } = require('playwright');
       }
 
       console.log(JSON.stringify(results));
-      await page.close();
-      await context.close();
       await browser.close();
       process.exit(0);
     }
 
-    // ------------------------------------------------------------
-    // 通常レース処理
-    // ------------------------------------------------------------
+    // ★ 通常レース処理
+    await page.waitForSelector('.tab__button.tab_button_color5', { timeout: 10000 });
+    await page.click('.tab__button.tab_button_color5');
+    await page.waitForTimeout(2000);
+
     const playerTable = "(//table[contains(@class,'table_fixed')])[1]";
     const baseTenji = "//td[normalize-space(text())='展示情報']/parent::tr";
 
