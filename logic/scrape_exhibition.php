@@ -60,6 +60,22 @@ function toNullOrFloat($v)
 }
 
 // ------------------------------------------------------------
+// 競艇日和への連続アクセスを抑える待機
+// ------------------------------------------------------------
+function waitNormalInterval(): void
+{
+    $wait = rand(1000, 1300) / 100;
+    usleep((int)($wait * 1000000));
+}
+
+function waitErrorBackoff(): void
+{
+    $wait = rand(6000, 9000) / 100;
+    log_message("取得エラー後の保護待機: {$wait} 秒");
+    usleep((int)($wait * 1000000));
+}
+
+// ------------------------------------------------------------
 // 日付ループ設定（last_date → 今日まで）
 // ------------------------------------------------------------
 $config = require __DIR__ . '/../config/last_date.php';
@@ -88,6 +104,10 @@ $placeMap = require __DIR__ . '/../config/place_map.php';
 // PostgreSQL 接続
 // ------------------------------------------------------------
 $pdo = getPDO();
+
+// 接続不調・アクセス制限の疑いがある状態で連打しないための安全弁。
+$consecutive_access_errors = 0;
+$max_consecutive_access_errors = 3;
 
 // ------------------------------------------------------------
 // 日付ごとの処理開始
@@ -200,10 +220,20 @@ foreach ($period as $dateObj) {
 
                 // この日付を未完了として、翌日同じ日付から再試行する
                 $date_has_error = true;
+                $consecutive_access_errors++;
 
                 // エラーURLを保存
                 $error_file = __DIR__ . '/../logs/error_urls.txt';
                 file_put_contents($error_file, $url . PHP_EOL, FILE_APPEND);
+
+                // 接続不調時に即座に次レースへ進まない。
+                waitErrorBackoff();
+
+                if ($consecutive_access_errors >= $max_consecutive_access_errors) {
+                    log_message("アクセス系エラーが {$consecutive_access_errors} 回連続したため取得を停止します");
+                    log_message("last_date は更新せず、次回cronで同じ日付から再試行します");
+                    exit;
+                }
 
                 continue;
             }
@@ -215,16 +245,31 @@ foreach ($period as $dateObj) {
             if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
                 log_message("JSON解析エラー（{$race_code}）: " . json_last_error_msg());
                 $date_has_error = true;
+                $consecutive_access_errors++;
 
                 $error_file = __DIR__ . '/../logs/error_urls.txt';
                 file_put_contents($error_file, $url . PHP_EOL, FILE_APPEND);
+
+                waitErrorBackoff();
+
+                if ($consecutive_access_errors >= $max_consecutive_access_errors) {
+                    log_message("アクセス系エラーが {$consecutive_access_errors} 回連続したため取得を停止します");
+                    log_message("last_date は更新せず、次回cronで同じ日付から再試行します");
+                    exit;
+                }
+
                 continue;
             }
 
             if (empty($data)) {
                 log_message("展示データなし（{$race_code}）");
+                $consecutive_access_errors = 0;
+                waitNormalInterval();
                 continue;
             }
+
+            // 通信・JSON取得までは正常だったので連続エラーをリセット。
+            $consecutive_access_errors = 0;
 
             // ------------------------------------------------------------
             // 過去の場平均
@@ -341,8 +386,7 @@ foreach ($period as $dateObj) {
             // 待ち時間（10〜13秒）
             // 競艇日和さんへの負荷軽減のため維持する
             // ------------------------------------------------------------
-            $wait = rand(1000, 1300) / 100;
-            usleep((int)($wait * 1000000));
+            waitNormalInterval();
         }
 
         // 一場終了後の待ち時間
