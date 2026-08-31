@@ -160,11 +160,39 @@ class PredictionLogicProduction extends PredictionLogic
         );
 
         $rankBoats = $summary['rank_boats'] ?? [];
+        $honmeiHead = (int)($summary['honmei_head'] ?? 0);
         $taikouHead = (int)($summary['taikou_head'] ?? 0);
 
-        if (count($rankBoats) !== 6 || $taikouHead < 1 || $taikouHead > 6) {
+        if (
+            count($rankBoats) !== 6
+            || $honmeiHead < 1 || $honmeiHead > 6
+            || $taikouHead < 1 || $taikouHead > 6
+        ) {
             $summary['r3_only_scope'] = 'HONMEI_ONLY';
             return $summary;
+        }
+
+        // 表示上の「相手」だけは最終評価の優先順を残す。
+        // 買い目用 *_aite_kako / *_kai は従来どおり艇番順のまま維持する。
+        // STEP9相手補正が発動条件を満たした場合は、補正側で作った優先順を優先する。
+        $opponentPriorityActive = !empty($summary['kimarite_opponent_a3'])
+            || !empty($summary['kimarite_opponent_a4'])
+            || !empty($summary['kimarite_opponent_h3']);
+
+        if (!$opponentPriorityActive) {
+            $honmeiKiruBoats = [];
+            foreach ($final_predictions as $boat => $fp) {
+                if ((int)($fp['kiru'] ?? 0) === 1) {
+                    $honmeiKiruBoats[] = (int)$boat;
+                }
+            }
+
+            [, , $honmeiAitePriority] = $this->buildBetCandidates(
+                $rankBoats,
+                $honmeiKiruBoats,
+                $honmeiHead
+            );
+            $summary['honmei_aite_str'] = implode('・', $honmeiAitePriority);
         }
 
         $taikouKiruBoats = [];
@@ -175,7 +203,7 @@ class PredictionLogicProduction extends PredictionLogic
             }
         }
 
-        [$taikouAite, $taikouThird] = $this->buildBetCandidates(
+        [$taikouAite, $taikouThird, $taikouAitePriority] = $this->buildBetCandidates(
             $rankBoats,
             $taikouKiruBoats,
             $taikouHead
@@ -186,7 +214,7 @@ class PredictionLogicProduction extends PredictionLogic
         $taikouAiteKako = implode('', $taikouAite);
         $taikouThirdKako = implode('', $taikouThird);
 
-        $summary['taikou_aite_str'] = implode('・', $taikouAite);
+        $summary['taikou_aite_str'] = implode('・', $taikouAitePriority);
         $summary['taikou_aite_kako'] = $taikouAiteKako;
         $summary['taikou_third_kako'] = $taikouThirdKako;
         $summary['taikou_kiru_str'] = implode('・', $taikouKiruBoats);
@@ -417,12 +445,12 @@ class PredictionLogicProduction extends PredictionLogic
         $honmeiHead = (int)$rankBoats[0];
         $taikouHead = (int)$rankBoats[1];
 
-        [$honmeiAite, $honmeiThird] = $this->buildBetCandidates(
+        [$honmeiAite, $honmeiThird, $honmeiAitePriority] = $this->buildBetCandidates(
             $rankBoats,
             $honmeiKiruBoats,
             $honmeiHead
         );
-        [$taikouAite, $taikouThird] = $this->buildBetCandidates(
+        [$taikouAite, $taikouThird, $taikouAitePriority] = $this->buildBetCandidates(
             $rankBoats,
             $honmeiKiruBoats,
             $taikouHead
@@ -436,8 +464,8 @@ class PredictionLogicProduction extends PredictionLogic
         $summary['rank_boats'] = $rankBoats;
         $summary['honmei_head'] = $honmeiHead;
         $summary['taikou_head'] = $taikouHead;
-        $summary['honmei_aite_str'] = implode('・', $honmeiAite);
-        $summary['taikou_aite_str'] = implode('・', $taikouAite);
+        $summary['honmei_aite_str'] = implode('・', $honmeiAitePriority);
+        $summary['taikou_aite_str'] = implode('・', $taikouAitePriority);
         $summary['honmei_aite_kako'] = $honmeiAiteKako;
         $summary['honmei_third_kako'] = $honmeiThirdKako;
         $summary['taikou_aite_kako'] = $taikouAiteKako;
@@ -526,7 +554,7 @@ class PredictionLogicProduction extends PredictionLogic
         }
         sort($honmeiKiruBoats);
 
-        [$honmeiAite, $honmeiThird] = $this->buildBetCandidates(
+        [$honmeiAite, $honmeiThird, $honmeiAitePriority] = $this->buildBetCandidates(
             $candidateRank,
             $honmeiKiruBoats,
             $currentHead
@@ -536,7 +564,7 @@ class PredictionLogicProduction extends PredictionLogic
         $honmeiThirdKako = implode('', $honmeiThird);
         $oldHonmeiAiteKako = (string)($summary['honmei_aite_kako'] ?? '');
 
-        $summary['honmei_aite_str'] = implode('・', $honmeiAite);
+        $summary['honmei_aite_str'] = implode('・', $honmeiAitePriority);
         $summary['honmei_aite_kako'] = $honmeiAiteKako;
         $summary['honmei_third_kako'] = $honmeiThirdKako;
         $summary['honmei_kai'] = $currentHead . '-' . $honmeiAiteKako . '-' . $honmeiThirdKako;
@@ -588,6 +616,7 @@ class PredictionLogicProduction extends PredictionLogic
     /**
      * 現行Webと同じ買い目候補作成。
      * 2着=切る艇を除く上位最大3艇、3着=切る艇を除く全艇。
+     * 戻り値3つ目は表示専用の2着優先順。買い目用は従来どおり艇番順にする。
      */
     private function buildBetCandidates(
         array $rankBoats,
@@ -615,10 +644,11 @@ class PredictionLogicProduction extends PredictionLogic
             }
         }
 
+        $aitePriority = $aite;
         sort($aite);
         sort($third);
 
-        return [$aite, $third];
+        return [$aite, $third, $aitePriority];
     }
 
     private function getKimariteHeadModel(): array
