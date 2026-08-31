@@ -5,7 +5,6 @@ require_once __DIR__ . '/../../config/place_map.php';
 require_once __DIR__ . '/../api/ApiClientProduction.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
 require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
-require_once __DIR__ . '/../logic/Lane1EscapeFollowerLogic.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/SlitLogic.php';
 require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
@@ -67,7 +66,6 @@ class IndexController
         $apiClient             = new ApiClientProduction();
         $exhibitionLogic       = new ExhibitionLogic();
         $predictionLogic       = new PredictionLogicProduction();
-        $lane1FollowerLogic    = new Lane1EscapeFollowerLogic();
         $samLogic              = new SamLogic();
         $slitLogic             = new SlitLogic();
         $baseWinRateLogic      = new BaseWinRateLogic();
@@ -209,16 +207,6 @@ class IndexController
         );
         $summary = $predictionLogic->buildSummary($final_predictions);
 
-        // 検証済みの「1逃げ時 場別相手傾向」を、本命①の本命買い目だけへ反映する。
-        // 実展示進入6艇完備かつ1号艇が1Cの時だけ適用し、仮想進入では使用しない。
-        $summary = $lane1FollowerLogic->apply(
-            $summary,
-            $final_predictions,
-            $place_names[$selected_place] ?? '',
-            $entry_course_by_boat,
-            $entry_map_ready && !$simulation_active
-        );
-
         // 最終予想の計算後だけ表示用に「枠 / 予想進入」を併記する。
         if ($prediction_entry_changed) {
             foreach ($final_predictions as $boat => &$fp) {
@@ -317,55 +305,78 @@ class IndexController
 
         // 8. lane colors（枠番カラー）
         $lane_colors = [
-            1 => ['bg' => '#FFFFFF', 'text' => '#000000'],
-            2 => ['bg' => '#444444', 'text' => '#FFFFFF'],
-            3 => ['bg' => '#E53935', 'text' => '#FFFFFF'],
-            4 => ['bg' => '#1E88E5', 'text' => '#FFFFFF'],
-            5 => ['bg' => '#FDD835', 'text' => '#000000'],
-            6 => ['bg' => '#43A047', 'text' => '#FFFFFF'],
+            1 => ['bg' => '#f8fafc', 'text' => '#0f172a', 'border' => '#e2e8f0'],
+            2 => ['bg' => '#1e293b', 'text' => '#f8fafc', 'border' => '#475569'],
+            3 => ['bg' => '#ef4444', 'text' => '#ffffff', 'border' => '#dc2626'],
+            4 => ['bg' => '#3b82f6', 'text' => '#ffffff', 'border' => '#2563eb'],
+            5 => ['bg' => '#eab308', 'text' => '#0f172a', 'border' => '#ca8a04'],
+            6 => ['bg' => '#22c55e', 'text' => '#ffffff', 'border' => '#16a34a'],
         ];
 
-        return compact(
-            'place_map',
-            'selected_date',
-            'selected_place',
-            'selected_race',
-            'place_names',
-            'race_code',
-            'entries',
-            'results',
-            'api_error',
-            'base_win_rate_data',
-            'update_message',
-            'debug_msg',
-            'tenji_list',
-            'tenji_error',
-            'entry_course_by_boat',
-            'boat_by_entry_course',
-            'entry_map_ready',
-            'exhibition_entry_order',
-            'prediction_course_by_boat',
-            'prediction_boat_by_course',
-            'prediction_entry_order',
-            'entry_changed',
-            'prediction_entry_changed',
-            'simulate_entry',
-            'virtual_entry',
-            'virtual_entry_error',
-            'simulation_active',
-            'kimarite_data',
-            'kimarite_error',
-            'final_predictions',
-            'summary',
-            'sam_master_data',
-            'sam_error',
-            'sam_applied_list',
-            'overall_avg',
-            'slit_data',
-            'slit_pattern',
-            'feature_name',
-            'corrected_win_rate_data',
-            'lane_colors'
-        );
+        // SUMは計算に使ったコースを「4C（5号艇）」形式へ整える。
+        if ($prediction_entry_changed) {
+            foreach ($sam_applied_list as &$s) {
+                $boat = (int)($s['teiban'] ?? 0);
+                $course = (int)($s['course'] ?? 0);
+                if ($boat < 1 || $boat > 6 || $course < 1 || $course > 6) {
+                    continue;
+                }
+
+                $courseLabel = $course . 'C（' . $boat . '号艇）';
+                $lane_colors[$courseLabel] = $lane_colors[$boat] ?? $lane_colors[$course];
+                $s['course'] = $courseLabel;
+            }
+            unset($s);
+        }
+
+        $viewData = [
+            'selected_date'   => $selected_date,
+            'selected_place'  => $selected_place,
+            'selected_race'   => $selected_race,
+            'race_code'       => $race_code,
+            'place_map'       => $place_map,
+            'place_names'     => $place_names,
+            // 旧ビューが初期HTMLを作るための互換値。DOMContentLoaded後に新UIへ置換する。
+            'in_course'       => '123456',
+            'simulate_entry'  => $simulate_entry,
+            'simulation_active' => $simulation_active,
+            'virtual_entry'   => $virtual_entry,
+            'virtual_entry_error' => $virtual_entry_error,
+            'exhibition_entry_order' => $exhibition_entry_order,
+            'prediction_entry_order' => $prediction_entry_order,
+            'effective_in_course' => $effective_in_course,
+            'entry_map_ready' => $entry_map_ready,
+            'entry_changed' => $entry_changed,
+            'prediction_entry_changed' => $prediction_entry_changed,
+            // 最終予想・SUM・スリット表示は、仮想時だけ試算mapを見る。
+            'entry_course_by_boat' => $simulation_active ? $prediction_course_by_boat : $entry_course_by_boat,
+            'boat_by_entry_course' => $simulation_active ? $prediction_boat_by_course : $boat_by_entry_course,
+            'prediction_course_by_boat' => $prediction_course_by_boat,
+            'prediction_boat_by_course' => $prediction_boat_by_course,
+            'entries'         => $entries,
+            'results'         => $results,
+            'api_error'       => $api_error,
+            'base_win_rate_data' => $base_win_rate_data,
+            'corrected_win_rate_data' => $corrected_win_rate_data,
+            'kimarite_data'   => $kimarite_data,
+            'kimarite_error'  => $kimarite_error,
+            'tenji_list'      => $tenji_list,
+            'tenji_error'     => $tenji_error,
+            'update_message'  => $update_message,
+            'debug_msg'       => $debug_msg,
+            'final_predictions' => $final_predictions,
+            'sam_applied_list'  => $sam_applied_list,
+            'overall_avg'       => $overall_avg,
+            'sam_master_data'   => $sam_master_data,
+            'sam_error'         => $sam_error,
+            'sam_intervals'     => SamLogic::INTERVALS,
+            'sam_metrics'       => SamLogic::METRICS,
+            'slit_data'       => $slit_data,
+            'slit_pattern'    => $slit_pattern,
+            'feature_name'    => $feature_name,
+            'lane_colors'     => $lane_colors,
+        ];
+
+        return array_merge($viewData, $summary);
     }
 }
