@@ -10,7 +10,8 @@ declare(strict_types=1);
  * - 前方期間は Web本命① の正式対象レースを評価する。
  * - 現行final_rank順位 + 場別フォロワー順位を1:1の順位和で合成する。
  * - 場別順位を艇へ割り当てるときは艇番ではなく exhibition_live.entry_course を使う。
- * - 1号艇が展示1コースのときだけ補正を適用し、それ以外は現行買い目を維持する。
+ * - 1号艇が展示1コースかつ展示進入6艇完備のときだけ補正を適用する。
+ * - 展示進入が不完備、または1号艇が展示1コースでない場合は現行買い目を維持して評価対象に残す。
  * - 現行honmei_kaiの2着/3着候補数を維持し、点数予算を増やさない。
  * - この結果を見て重み・閾値・場除外を後付けしない。
  *
@@ -293,7 +294,7 @@ $byStadium = [];
 $skipFormal = 0;
 $skipTrain = 0;
 $skipStructure = 0;
-$skipExhibition = 0;
+$incompleteExhibition = 0;
 $skipPayout = 0;
 
 foreach ($races as $row) {
@@ -313,6 +314,7 @@ foreach ($races as $row) {
     if (!$curBets) { $skipStructure++; continue; }
 
     // 展示進入: exhibition_live の player_id と race_entry の player_id を突合して艇番へ戻す。
+    // 6艇分揃わない場合でもレース自体は捨てず、現行買い目のまま評価する。
     $exStmt->execute([':race_code'=>$rc]);
     $exRows = $exStmt->fetchAll(PDO::FETCH_ASSOC);
     $entryStmt->execute([':race_code'=>$rc]);
@@ -330,9 +332,14 @@ foreach ($races as $row) {
         $lane = $laneByPlayer[$pid] ?? 0;
         if ($course >= 1 && $course <= 6 && $lane >= 1 && $lane <= 6) $entryCourseByLane[$lane] = $course;
     }
-    if (count($entryCourseByLane) < 6 || count(array_unique($entryCourseByLane)) < 6) { $skipExhibition++; continue; }
 
-    $eligible = (($entryCourseByLane[1] ?? 0) === 1);
+    $exhibitionComplete = count($entryCourseByLane) === 6
+        && count(array_unique($entryCourseByLane)) === 6;
+    if (!$exhibitionComplete) {
+        $incompleteExhibition++;
+    }
+
+    $eligible = $exhibitionComplete && (($entryCourseByLane[1] ?? 0) === 1);
     $newBets = $curBets;
     if ($eligible) {
         [$newSecond, $newThird] = adjustedCandidates2(
@@ -372,16 +379,19 @@ echo "前方期間 : " . ($forwardStart ?? '-') . " ～ " . ($forwardEnd ?? '-')
 echo "学習1逃げ: {$totalTrainEscape}R / " . count($trainN) . "場\n";
 echo "固定方式 : final_rank順位 + 場別1逃げフォロワー順位（1:1順位和）\n";
 echo "進入対応 : exhibition_live.entry_course を player_id で race_entry の艇番へ対応\n";
-echo "適用条件 : Web本命①かつ1号艇の展示進入が1コース。その他は現行買い目維持\n";
+echo "適用条件 : Web本命①かつ展示進入6艇完備かつ1号艇の展示進入が1コース\n";
+echo "不完備時 : 展示進入が揃わないレースはスキップせず現行買い目のまま評価\n";
 echo "点数構造 : 現行honmei_kaiの2着/3着候補数を維持\n";
 echo "禁止     : この結果を見て重み・閾値・場除外を後付けしない\n\n";
 printStat2('全24場', $overall);
 echo "\n【場別参考】\n";
 foreach ($byStadium as $stadium => $s) printStat2($stadium, $s);
-echo "\nスキップ: 正式対象外={$skipFormal} / 学習分布なし={$skipTrain} / 構造不備={$skipStructure} / 展示進入6艇不完備={$skipExhibition} / 払戻なし={$skipPayout}\n\n";
+echo "\n集計補足: 展示進入6艇不完備（現行維持）={$incompleteExhibition}\n";
+echo "スキップ: 正式対象外={$skipFormal} / 学習分布なし={$skipTrain} / 構造不備={$skipStructure} / 払戻なし={$skipPayout}\n\n";
 echo "判断ポイント:\n";
-echo "1. 枠なり仮定版と比べ、展示進入対応でも的中率改善が維持されるか。\n";
-echo "2. 平均点数が増えず、拾い > 落ちが維持されるか。\n";
-echo "3. 回収率の方向も確認する。\n";
-echo "4. 場別は参考のみ。全24場共通ルールとして判断する。\n";
+echo "1. Web本命①の正式対象全体で、展示進入対応後も的中率改善が維持されるか。\n";
+echo "2. 展示進入6艇不完備レースは現行維持として母集団に残っているか。\n";
+echo "3. 平均点数が増えず、拾い > 落ちが維持されるか。\n";
+echo "4. 回収率の方向も確認する。\n";
+echo "5. 場別は参考のみ。全24場共通ルールとして判断する。\n";
 echo str_repeat('=', 174) . "\n";
