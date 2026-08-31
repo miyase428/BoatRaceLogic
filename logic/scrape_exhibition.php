@@ -87,6 +87,19 @@ function appendErrorUrl(string $errorFile, string $url): void
     file_put_contents($errorFile, $url . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
+function getErrorUrlRaceDate(string $url): string
+{
+    $query = parse_url($url, PHP_URL_QUERY);
+    if (!is_string($query) || $query === '') {
+        return '';
+    }
+
+    parse_str($query, $params);
+    $raceDate = isset($params['hiduke']) ? (string)$params['hiduke'] : '';
+
+    return preg_match('/^\d{8}$/', $raceDate) ? $raceDate : '';
+}
+
 function loadUniqueErrorUrls(string $errorFile): array
 {
     if (!is_file($errorFile)) {
@@ -104,7 +117,21 @@ function loadUniqueErrorUrls(string $errorFile): array
         $unique[$url] = true;
     }
 
-    return array_keys($unique);
+    $urls = array_keys($unique);
+
+    // 最新の取りこぼしを最優先で回収するため、hiduke の降順に並べる。
+    usort($urls, static function (string $a, string $b): int {
+        $dateA = getErrorUrlRaceDate($a);
+        $dateB = getErrorUrlRaceDate($b);
+
+        if ($dateA === $dateB) {
+            return 0;
+        }
+
+        return strcmp($dateB, $dateA);
+    });
+
+    return $urls;
 }
 
 function writeErrorUrls(string $errorFile, array $urls): void
@@ -328,7 +355,7 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
     $consecutiveErrors = 0;
     $maxConsecutiveErrors = 3;
 
-    log_message("=== error_urls.txt 再試行開始: {$total}件 ===");
+    log_message("=== error_urls.txt 再試行開始: {$total}件（新しい日付優先） ===");
 
     for ($i = 0; $i < $total; $i++) {
         if (time() >= $limitTime) {
