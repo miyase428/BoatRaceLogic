@@ -1,9 +1,19 @@
 <?php
 require_once __DIR__ . '/controllers/IndexController.php';
 require_once __DIR__ . '/logic/Lane1EscapeFollowerLogic.php';
+require_once __DIR__ . '/logic/Lane1DecisionSignalLogic.php';
 
 $controller = new IndexController();
 $viewData   = $controller->handle();
+
+// 前方2期間で固定条件の再現を確認した1号艇判断シグナル。
+// PredictionLogicや既存買い目は変更せず、表示専用で評価する。
+$lane1DecisionSignalLogic = new Lane1DecisionSignalLogic();
+$lane1DecisionSignal = $lane1DecisionSignalLogic->evaluate(
+    $viewData['final_predictions'] ?? [],
+    (int)($viewData['honmei_head'] ?? 0)
+);
+$lane1DecisionSignalPanel = $lane1DecisionSignalLogic->render($lane1DecisionSignal, false);
 
 // 検証済みの「1逃げ時 場別相手傾向」は、Controllerの既存返却形式を変えず
 // index.php側で本命買い目だけへ適用する。
@@ -140,7 +150,7 @@ $followerDiagnostic = '<div style="margin:8px 0 14px; padding:8px 12px; border:1
 if (strpos($html, $finalEndMarker) !== false) {
     $html = str_replace(
         $finalEndMarker,
-        $followerDiagnostic . "\n" . $finalEndMarker,
+        $lane1DecisionSignalPanel . "\n" . $followerDiagnostic . "\n" . $finalEndMarker,
         $html
     );
 }
