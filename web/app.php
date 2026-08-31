@@ -4,9 +4,19 @@ require_once __DIR__ . '/logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/logic/Head1SecondPlaceLogic.php';
 require_once __DIR__ . '/logic/TrifectaProbabilityLogic.php';
 require_once __DIR__ . '/logic/Lane1EscapeFollowerLogic.php';
+require_once __DIR__ . '/logic/Lane1DecisionSignalLogic.php';
 
 $controller = new IndexController();
 $viewData = $controller->handle();
+
+// 前方2期間で固定条件の再現を確認した1号艇判断シグナル。
+// PredictionLogicや既存買い目は変更せず、表示専用で評価する。
+$lane1DecisionSignalLogic = new Lane1DecisionSignalLogic();
+$lane1DecisionSignal = $lane1DecisionSignalLogic->evaluate(
+    $viewData['final_predictions'] ?? [],
+    (int)($viewData['honmei_head'] ?? 0)
+);
+$lane1DecisionSignalPanel = $lane1DecisionSignalLogic->render($lane1DecisionSignal, true);
 
 // Web版と同じ「1逃げ時 場別相手傾向」をアプリにも適用する。
 // 実展示進入6艇完備かつ1号艇が1Cの時だけ有効。仮想進入では適用しない。
@@ -192,12 +202,21 @@ if (!is_string($mainAnalysisJson)) {
     $mainAnalysisJson = '""';
 }
 
+$lane1DecisionSignalJson = json_encode(
+    $lane1DecisionSignalPanel,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if (!is_string($lane1DecisionSignalJson)) {
+    $lane1DecisionSignalJson = '""';
+}
+
 $tabsScript = <<<'HTML'
 <script>
 (function () {
     const exactaRows = __EXACTA_JSON__;
     const basicInfoHtml = __BASIC_INFO_JSON__;
     const mainAnalysisHtml = __MAIN_ANALYSIS_JSON__;
+    const lane1DecisionSignalHtml = __LANE1_DECISION_SIGNAL_JSON__;
 
     function buildExactaCard() {
         const section = document.createElement('section');
@@ -251,6 +270,13 @@ $tabsScript = <<<'HTML'
         return section;
     }
 
+    function buildLane1DecisionSignalCard() {
+        if (!lane1DecisionSignalHtml) return null;
+        const template = document.createElement('template');
+        template.innerHTML = String(lane1DecisionSignalHtml).trim();
+        return template.content.firstElementChild;
+    }
+
     function setupTabs() {
         const shell = document.querySelector('.app-shell');
         if (!shell || shell.querySelector('.app-tabs')) return;
@@ -296,9 +322,11 @@ $tabsScript = <<<'HTML'
         if (detailCard) detailCard.remove();
 
         // メイン情報は1着率・AI・評価などの加工結果から始め、
-        // その下に最終予想・2連単・イン飛び警報をまとめる。
+        // その下に最終予想・1号艇判断シグナル・2連単・イン飛び警報をまとめる。
         mainPanel.innerHTML = mainAnalysisHtml || '';
         mainPanel.appendChild(finalCard);
+        const lane1SignalCard = buildLane1DecisionSignalCard();
+        if (lane1SignalCard) mainPanel.appendChild(lane1SignalCard);
         mainPanel.appendChild(buildExactaCard());
         if (alertPanel) mainPanel.appendChild(alertPanel);
 
@@ -392,6 +420,7 @@ HTML;
 $tabsScript = str_replace('__EXACTA_JSON__', $exactaJson, $tabsScript);
 $tabsScript = str_replace('__BASIC_INFO_JSON__', $basicInfoJson, $tabsScript);
 $tabsScript = str_replace('__MAIN_ANALYSIS_JSON__', $mainAnalysisJson, $tabsScript);
+$tabsScript = str_replace('__LANE1_DECISION_SIGNAL_JSON__', $lane1DecisionSignalJson, $tabsScript);
 $html = str_replace('</body>', $tabsScript . "\n</body>", $html);
 
 echo $html;
