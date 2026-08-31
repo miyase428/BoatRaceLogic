@@ -110,6 +110,41 @@ if ($finalPos !== false && $finalEndPos !== false) {
     $html = $beforeFinal . $finalHtml . $afterFinal;
 }
 
+// 場別1逃げ相手補正の適用状況を最終予想の直後に表示する。
+// 判定値を表示するだけで、予想内容には影響させない。
+$followerApplied = !empty($lane1_escape_follower_applied);
+$followerReason = (string)($lane1_escape_follower_reason ?? '');
+$followerLabel = $followerApplied ? '適用' : '未適用';
+$followerExtra = '';
+
+if ($followerApplied) {
+    $stadiumLabel = trim((string)($lane1_escape_follower_stadium ?? ''));
+    $sampleN = (int)($lane1_escape_follower_sample_n ?? 0);
+    if ($stadiumLabel !== '') {
+        $followerExtra .= ' / ' . $stadiumLabel;
+    }
+    if ($sampleN > 0) {
+        $followerExtra .= ' N=' . number_format($sampleN);
+    }
+} elseif ($followerReason !== '') {
+    $followerExtra = '（' . $followerReason . '）';
+}
+
+$followerDiagnostic = '<div style="margin:8px 0 14px; padding:8px 12px; border:1px solid #d6d3d1; border-radius:8px; background:#fafaf9; font-size:12px; color:#57534e;">'
+    . '場別1逃げ相手補正：<strong>'
+    . htmlspecialchars($followerLabel, ENT_QUOTES, 'UTF-8')
+    . '</strong>'
+    . htmlspecialchars($followerExtra, ENT_QUOTES, 'UTF-8')
+    . '</div>';
+
+if (strpos($html, $finalEndMarker) !== false) {
+    $html = str_replace(
+        $finalEndMarker,
+        $followerDiagnostic . "\n" . $finalEndMarker,
+        $html
+    );
+}
+
 // 最終予想テーブルは表示だけ展示コース順（1→6C）に並べる。
 // 本命・対抗・買い目などの計算順や値は変更しない。
 $finalCourseSortScript = <<<'HTML'
