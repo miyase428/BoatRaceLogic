@@ -1,8 +1,21 @@
 <?php
 require_once __DIR__ . '/controllers/IndexController.php';
+require_once __DIR__ . '/logic/Lane1EscapeFollowerLogic.php';
 
 $controller = new IndexController();
 $viewData   = $controller->handle();
+
+// 検証済みの「1逃げ時 場別相手傾向」は、Controllerの既存返却形式を変えず
+// index.php側で本命買い目だけへ適用する。
+// 実展示進入6艇完備かつ1号艇が1Cの時だけ有効。仮想進入では適用しない。
+$lane1FollowerLogic = new Lane1EscapeFollowerLogic();
+$viewData = $lane1FollowerLogic->apply(
+    $viewData,
+    $viewData['final_predictions'] ?? [],
+    $viewData['place_names'][$viewData['selected_place'] ?? ''] ?? '',
+    $viewData['entry_course_by_boat'] ?? [],
+    !empty($viewData['entry_map_ready']) && empty($viewData['simulation_active'])
+);
 
 extract($viewData); // $selected_date, $selected_place, $race_code などを展開
 
