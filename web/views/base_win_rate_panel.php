@@ -21,6 +21,6 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260901a"></script>
 
 <!-- PC Webは大分類「基本情報 / メイン情報 / 2連単 / 120通り / 直近60R」で切り替える。 -->
-<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260826b">
+<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260901a">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260826c"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
