@@ -308,9 +308,6 @@
                 activateRecent();
             }
 
-            // レース表示時にバックグラウンドで最新開催日だけ確認する。
-            // キャッシュ対象日が変わっていなければ即キャッシュ返却、
-            // 朝の結果取得などで新しい開催日が揃った時だけ60Rを自動再計算する。
             window.setTimeout(function () {
                 load(false);
             }, 350);
@@ -329,6 +326,15 @@
     const script = document.createElement('script');
     script.src = '/web/assets/js/app_exacta_tab.js?v=20260901a';
     script.dataset.appExactaLoader = '1';
+    script.async = false;
+    document.head.appendChild(script);
+})();
+
+(function loadBetSimulatorScript() {
+    if (document.querySelector('script[data-app-bet-simulator-loader="1"]')) return;
+    const script = document.createElement('script');
+    script.src = '/web/assets/js/app_bet_simulator_v3.js?v=20260901a';
+    script.dataset.appBetSimulatorLoader = '1';
     script.async = false;
     document.head.appendChild(script);
 })();
