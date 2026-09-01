@@ -67,6 +67,16 @@
     display: none !important;
 }
 
+/* style.css の全button width:100% を、2連単タブ内の操作ボタンだけ解除する。
+ * フィルタは3連単120通りと同じく横一列へ並べ、クリアも右端の小ボタンに戻す。
+ */
+.pc-main-exacta-panel .pc-exacta-filter,
+.pc-main-exacta-panel .pc-exacta-refresh,
+.pc-main-exacta-panel .pc-exacta-clear {
+    width: auto;
+    flex: 0 0 auto;
+}
+
 /* 120通りは大タブ自体が開閉役になるため、従来のdetails見出しは重ねない。 */
 .pc-main-tab-panel[data-pc-main-panel="trifecta"] #trifecta-reference-panel {
     margin-top: 0 !important;
