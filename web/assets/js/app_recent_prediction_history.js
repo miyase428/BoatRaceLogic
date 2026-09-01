@@ -323,3 +323,12 @@
         setup();
     }
 })();
+
+(function loadExactaTabScript() {
+    if (document.querySelector('script[data-app-exacta-loader="1"]')) return;
+    const script = document.createElement('script');
+    script.src = '/web/assets/js/app_exacta_tab.js?v=20260901a';
+    script.dataset.appExactaLoader = '1';
+    script.async = false;
+    document.head.appendChild(script);
+})();
