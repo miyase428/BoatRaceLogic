@@ -24,4 +24,4 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260901a">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260826c"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
-<script src="/web/assets/js/pc_bet_simulator_v2.js?v=20260901b"></script>
+<script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
