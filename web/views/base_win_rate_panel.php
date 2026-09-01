@@ -18,7 +18,7 @@ include __DIR__ . '/player_sam_ui_enhancements.php';
 include __DIR__ . '/recent_prediction_history_panel.php';
 ?>
 <link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
-<script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260826b"></script>
+<script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260901a"></script>
 
 <!-- PC Webは大分類「基本情報 / メイン情報 / 120通り / 直近60R」で切り替える。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260826b">
