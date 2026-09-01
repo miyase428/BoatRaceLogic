@@ -59,6 +59,29 @@
 
         const statusNode = box.querySelector('.web-official-odds-status');
         const refreshButton = box.querySelector('.web-official-odds-refresh');
+        const tbody = table.tBodies && table.tBodies[0];
+        const countNode = document.getElementById('web-trifecta-count');
+        const filters = document.getElementById('web-trifecta-filters');
+        const search = document.getElementById('web-trifecta-search');
+        const clear = document.getElementById('web-trifecta-clear');
+
+        const selectionSummary = document.createElement('div');
+        selectionSummary.id = 'web-trifecta-selection-summary';
+        selectionSummary.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 0;padding:8px 10px;border:1px solid #d8cdbc;border-radius:6px;background:#fffdf9;color:#4b5866;font-size:12px;';
+        selectionSummary.innerHTML = '<span>最終出目確率合計：<strong class="web-trifecta-probability-sum">--</strong></span>'
+            + '<span>合成オッズ：<strong class="web-trifecta-combined-odds">--</strong></span>';
+        selectionSummary.title = '合成オッズ = 1 ÷ Σ(1 ÷ 各買い目オッズ)';
+
+        const controls = document.getElementById('web-trifecta-filters')?.parentElement;
+        if (controls) {
+            controls.appendChild(selectionSummary);
+        } else {
+            box.insertAdjacentElement('afterend', selectionSummary);
+        }
+
+        const probabilitySumNode = selectionSummary.querySelector('.web-trifecta-probability-sum');
+        const combinedOddsNode = selectionSummary.querySelector('.web-trifecta-combined-odds');
+        let summaryTimer = null;
 
         function oddsText(value) {
             const n = Number(value);
@@ -77,8 +100,8 @@
 
         function ensureOddsColumn(targetTable) {
             const headRow = targetTable.tHead && targetTable.tHead.rows[0];
-            const tbody = targetTable.tBodies && targetTable.tBodies[0];
-            if (!headRow || !tbody || headRow.querySelector('[data-official-odds-column="1"]')) return;
+            const body = targetTable.tBodies && targetTable.tBodies[0];
+            if (!headRow || !body || headRow.querySelector('[data-official-odds-column="1"]')) return;
 
             const th = document.createElement('th');
             th.dataset.officialOddsColumn = '1';
@@ -88,7 +111,7 @@
             const beforeHeader = headRow.cells[4] || null;
             headRow.insertBefore(th, beforeHeader);
 
-            Array.from(tbody.rows).forEach(function (row) {
+            Array.from(body.rows).forEach(function (row) {
                 const td = document.createElement('td');
                 td.className = 'web-official-odds-cell';
                 td.textContent = '-';
@@ -99,21 +122,21 @@
 
             let direction = 1;
             th.addEventListener('click', function () {
-                const rows = Array.from(tbody.rows);
+                const rows = Array.from(body.rows);
                 rows.sort(function (a, b) {
                     const av = Number(a.querySelector('.web-official-odds-cell')?.dataset.odds || Number.POSITIVE_INFINITY);
                     const bv = Number(b.querySelector('.web-official-odds-cell')?.dataset.odds || Number.POSITIVE_INFINITY);
                     if (av === bv) return 0;
                     return (av < bv ? -1 : 1) * direction;
                 });
-                rows.forEach(function (row) { tbody.appendChild(row); });
+                rows.forEach(function (row) { body.appendChild(row); });
                 th.textContent = 'オッズ' + (direction > 0 ? ' ▲' : ' ▼');
                 direction *= -1;
+                scheduleSelectionSummary();
             });
         }
 
         function applyOdds(odds) {
-            const tbody = table.tBodies && table.tBodies[0];
             if (!tbody) return;
 
             Array.from(tbody.rows).forEach(function (row) {
@@ -130,6 +153,56 @@
                     delete cell.dataset.odds;
                 }
             });
+            scheduleSelectionSummary();
+        }
+
+        function parsePercent(cell) {
+            const value = parseFloat(String(cell ? cell.textContent : '').replace(/,/g, '').replace('%', ''));
+            return Number.isFinite(value) ? value : 0;
+        }
+
+        function updateSelectionSummary() {
+            if (!tbody) return;
+
+            const visibleRows = Array.from(tbody.rows).filter(function (row) {
+                return row.style.display !== 'none';
+            });
+
+            const probabilitySum = visibleRows.reduce(function (sum, row) {
+                return sum + parsePercent(row.cells[3]);
+            }, 0);
+
+            let inverseOddsSum = 0;
+            let oddsReady = visibleRows.length > 0;
+            visibleRows.forEach(function (row) {
+                const cell = row.querySelector('.web-official-odds-cell');
+                const odds = Number(cell?.dataset.odds || 0);
+                if (!Number.isFinite(odds) || odds <= 0) {
+                    oddsReady = false;
+                    return;
+                }
+                inverseOddsSum += 1 / odds;
+            });
+
+            const combinedOdds = oddsReady && inverseOddsSum > 0 ? 1 / inverseOddsSum : null;
+
+            if (countNode) {
+                countNode.textContent = '表示中：' + visibleRows.length + ' / 120通り';
+            }
+            if (probabilitySumNode) {
+                probabilitySumNode.textContent = probabilitySum.toFixed(2) + '%';
+            }
+            if (combinedOddsNode) {
+                combinedOddsNode.textContent = combinedOdds === null ? '取得待ち' : combinedOdds.toFixed(2) + '倍';
+            }
+        }
+
+        function scheduleSelectionSummary() {
+            if (summaryTimer !== null) window.clearTimeout(summaryTimer);
+            summaryTimer = window.setTimeout(function () {
+                summaryTimer = null;
+                updateSelectionSummary();
+            }, 0);
         }
 
         function formatTime(iso) {
@@ -156,6 +229,7 @@
 
             const error = data && data.error ? String(data.error) : '公式オッズを取得できませんでした。';
             statusNode.textContent = '公式3連単オッズ：' + error;
+            scheduleSelectionSummary();
         }
 
         async function loadOdds(force) {
@@ -179,6 +253,7 @@
                 showResult(data);
             } catch (e) {
                 if (statusNode) statusNode.textContent = '公式3連単オッズ：取得エラー';
+                scheduleSelectionSummary();
             } finally {
                 if (refreshButton) refreshButton.disabled = false;
             }
@@ -190,6 +265,22 @@
             });
         }
 
+        // 既存の絞り込み処理がイベント内で行表示を更新した後に再集計する。
+        if (filters) filters.addEventListener('click', scheduleSelectionSummary);
+        if (search) search.addEventListener('input', scheduleSelectionSummary);
+        if (clear) clear.addEventListener('click', scheduleSelectionSummary);
+
+        if (tbody && typeof MutationObserver !== 'undefined') {
+            const observer = new MutationObserver(scheduleSelectionSummary);
+            observer.observe(tbody, {
+                childList: true,
+                subtree: false,
+                attributes: true,
+                attributeFilter: ['style']
+            });
+        }
+
+        scheduleSelectionSummary();
         loadOdds(false);
     }
 
