@@ -154,6 +154,10 @@
             + '    <span class="app-trifecta-count"></span>'
             + '    <button type="button" class="app-trifecta-clear">クリア</button>'
             + '  </div>'
+            + '  <div class="app-trifecta-selection-summary" title="合成オッズ = 1 ÷ Σ(1 ÷ 各買い目オッズ)" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;padding:8px;border:1px solid #d6d3cd;border-radius:6px;background:#fffdf9;font-size:11px;color:#5f6873;">'
+            + '    <span>最終出目確率合計：<strong class="app-trifecta-probability-sum">--</strong></span>'
+            + '    <span>合成オッズ：<strong class="app-trifecta-combined-odds">--</strong></span>'
+            + '  </div>'
             + '</div>'
             + '<div class="app-trifecta-table-wrap">'
             + '  <table class="app-trifecta-table">'
@@ -173,13 +177,12 @@
         panel.appendChild(card);
 
         const stats = card.querySelector('.app-trifecta-stats');
-        const statValues = [
+        [
             ['Top5累計', (sumTop(rows, 5) * 100).toFixed(2) + '%'],
             ['Top10累計', (sumTop(rows, 10) * 100).toFixed(2) + '%'],
             ['Top20累計', (sumTop(rows, 20) * 100).toFixed(2) + '%'],
             ['場履歴', Math.round(number(history.venue_n)).toLocaleString('ja-JP') + 'R']
-        ];
-        statValues.forEach(function (item) {
+        ].forEach(function (item) {
             const div = document.createElement('div');
             div.className = 'app-trifecta-stat';
             const label = document.createElement('span');
@@ -192,8 +195,8 @@
         });
 
         const positionFilters = card.querySelector('.app-trifecta-position-filters');
-        // 各着順で複数艇を同時に選べる。空集合は「全」と同じ意味。
         const selected = [new Set(), new Set(), new Set()];
+
         ['1着', '2着', '3着'].forEach(function (label, index) {
             const group = document.createElement('div');
             group.className = 'app-trifecta-filter-group';
@@ -233,6 +236,8 @@
         const foot = card.querySelector('.app-trifecta-foot');
         const oddsStatus = card.querySelector('.app-trifecta-odds-status');
         const oddsRefresh = card.querySelector('.app-trifecta-odds-refresh');
+        const probabilitySumNode = card.querySelector('.app-trifecta-probability-sum');
+        const combinedOddsNode = card.querySelector('.app-trifecta-combined-odds');
         let sortKey = 'rank';
         let sortDirection = 1;
 
@@ -316,6 +321,29 @@
             });
         }
 
+        function updateSelectionSummary(current) {
+            const probabilitySum = current.reduce(function (sum, row) {
+                return sum + number(row.probability);
+            }, 0);
+
+            let inverseOddsSum = 0;
+            let oddsReady = current.length > 0;
+            current.forEach(function (row) {
+                const odds = officialOdds(row);
+                if (odds === null) {
+                    oddsReady = false;
+                    return;
+                }
+                inverseOddsSum += 1 / odds;
+            });
+
+            const combinedOdds = oddsReady && inverseOddsSum > 0 ? 1 / inverseOddsSum : null;
+
+            if (count) count.textContent = '表示中：' + current.length + ' / 120通り';
+            if (probabilitySumNode) probabilitySumNode.textContent = (probabilitySum * 100).toFixed(2) + '%';
+            if (combinedOddsNode) combinedOddsNode.textContent = combinedOdds === null ? '取得待ち' : combinedOdds.toFixed(2) + '倍';
+        }
+
         function render() {
             const current = filteredRows();
             tbody.textContent = '';
@@ -364,7 +392,7 @@
                 tbody.appendChild(tr);
             });
 
-            if (count) count.textContent = current.length + ' / 120件';
+            updateSelectionSummary(current);
             updateSortLabels();
         }
 
@@ -443,10 +471,7 @@
                 selectedBoats.delete(boat);
             } else {
                 selectedBoats.add(boat);
-                // 1〜6を全部選んだ状態は「全」と同じなので簡略化する。
-                if (selectedBoats.size === 6) {
-                    selectedBoats.clear();
-                }
+                if (selectedBoats.size === 6) selectedBoats.clear();
             }
 
             updateFilterGroup(group, position);
