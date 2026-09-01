@@ -338,3 +338,12 @@
     script.async = false;
     document.head.appendChild(script);
 })();
+
+(function loadLiveTrifectaTop2StrategyScript() {
+    if (document.querySelector('script[data-app-live-t3-top2-loader="1"]')) return;
+    const script = document.createElement('script');
+    script.src = '/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b';
+    script.dataset.appLiveT3Top2Loader = '1';
+    script.async = false;
+    document.head.appendChild(script);
+})();
