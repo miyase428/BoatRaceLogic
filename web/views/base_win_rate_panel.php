@@ -25,3 +25,4 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <script src="/web/assets/js/pc_main_tabs.js?v=20260826c"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
+<script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
