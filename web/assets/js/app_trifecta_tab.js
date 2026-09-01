@@ -78,6 +78,8 @@
         const error = String(payload.error || '');
         const history = payload.history && typeof payload.history === 'object' ? payload.history : {};
         const totals = payload.totals && typeof payload.totals === 'object' ? payload.totals : {};
+        const raceCodeNode = document.querySelector('.app-code');
+        const raceCode = String(raceCodeNode ? raceCodeNode.textContent : '').trim();
 
         const button = document.createElement('button');
         button.type = 'button';
@@ -121,7 +123,7 @@
             if (note) note.textContent = error || '出目確率は計算待ちです。';
             panel.appendChild(card);
         } else {
-            buildPanel(panel, rows, history, totals);
+            buildPanel(panel, rows, history, totals, raceCode);
         }
 
         let saved = '';
@@ -131,12 +133,16 @@
         }
     }
 
-    function buildPanel(panel, rows, history, totals) {
+    function buildPanel(panel, rows, history, totals, raceCode) {
         const card = document.createElement('section');
         card.className = 'app-card app-trifecta-card';
         card.innerHTML = '<div class="app-card-body app-trifecta-heading">'
             + '<h2 class="app-section-title">🎲 3連単120通り 出目確率</h2>'
-            + '<div class="app-note">PC版と同じ「順位・3連単・基礎出目・最終出目確率・基礎差・累計」を表示します。</div>'
+            + '<div class="app-note">順位・3連単・基礎出目・最終出目確率・公式オッズ・基礎差・累計を表示します。</div>'
+            + '<div class="app-trifecta-odds-bar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;padding:7px 8px;border:1px solid #d6d3cd;border-radius:6px;background:#fffaf2;">'
+            + '  <span class="app-trifecta-odds-status" style="font-size:11px;color:#6b7785;">公式3連単オッズ：取得中…</span>'
+            + '  <button type="button" class="app-trifecta-odds-refresh" style="padding:5px 9px;border:1px solid #1683bd;border-radius:5px;background:#fff;color:#1683bd;font-weight:bold;">更新</button>'
+            + '</div>'
             + '</div>'
             + '<div class="app-trifecta-stats"></div>'
             + '<div class="app-card-body app-trifecta-controls">'
@@ -156,6 +162,7 @@
             + '      <th><button type="button" data-sort="combination">3連単</button></th>'
             + '      <th><button type="button" data-sort="base">基礎出目</button></th>'
             + '      <th><button type="button" data-sort="final">最終出目確率</button></th>'
+            + '      <th><button type="button" data-sort="odds">オッズ</button></th>'
             + '      <th><button type="button" data-sort="delta">基礎差</button></th>'
             + '      <th><button type="button" data-sort="cumulative">累計</button></th>'
             + '    </tr></thead>'
@@ -224,8 +231,23 @@
         const tbody = card.querySelector('tbody');
         const sortButtons = Array.from(card.querySelectorAll('th button[data-sort]'));
         const foot = card.querySelector('.app-trifecta-foot');
+        const oddsStatus = card.querySelector('.app-trifecta-odds-status');
+        const oddsRefresh = card.querySelector('.app-trifecta-odds-refresh');
         let sortKey = 'rank';
         let sortDirection = 1;
+
+        function officialOdds(row) {
+            const value = Number(row.official_odds);
+            return Number.isFinite(value) && value > 0 ? value : null;
+        }
+
+        function oddsText(value) {
+            if (value === null) return '-';
+            return value.toLocaleString('ja-JP', {
+                minimumFractionDigits: Number.isInteger(value) ? 0 : 1,
+                maximumFractionDigits: 1
+            });
+        }
 
         function compareRows(a, b) {
             let av;
@@ -239,6 +261,12 @@
                     av = number(a.base_probability); bv = number(b.base_probability); break;
                 case 'final':
                     av = number(a.probability); bv = number(b.probability); break;
+                case 'odds':
+                    av = officialOdds(a); bv = officialOdds(b);
+                    if (av === null && bv === null) return number(a.rank) - number(b.rank);
+                    if (av === null) return 1;
+                    if (bv === null) return -1;
+                    break;
                 case 'delta':
                     av = number(a.probability) - number(a.base_probability);
                     bv = number(b.probability) - number(b.base_probability);
@@ -296,6 +324,7 @@
                 const tr = document.createElement('tr');
                 const base = number(row.base_probability);
                 const final = number(row.probability);
+                const odds = officialOdds(row);
                 const delta = final - base;
                 const cumulative = number(row.cumulative_probability);
 
@@ -318,6 +347,11 @@
                 finalCell.textContent = (final * 100).toFixed(3) + '%';
                 tr.appendChild(finalCell);
 
+                const oddsCell = document.createElement('td');
+                oddsCell.className = 'app-trifecta-odds';
+                oddsCell.textContent = oddsText(odds);
+                tr.appendChild(oddsCell);
+
                 const deltaCell = document.createElement('td');
                 deltaCell.className = delta >= 0 ? 'app-trifecta-delta-plus' : 'app-trifecta-delta-minus';
                 deltaCell.textContent = (delta >= 0 ? '+' : '') + (delta * 100).toFixed(3) + 'pt';
@@ -332,6 +366,66 @@
 
             if (count) count.textContent = current.length + ' / 120件';
             updateSortLabels();
+        }
+
+        function formatTime(iso) {
+            if (!iso) return '';
+            const date = new Date(iso);
+            if (Number.isNaN(date.getTime())) return '';
+            return new Intl.DateTimeFormat('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).format(date);
+        }
+
+        function applyOddsData(data) {
+            const oddsMap = data && data.odds && typeof data.odds === 'object' ? data.odds : {};
+            rows.forEach(function (row) {
+                const key = boatKey(row);
+                const value = Object.prototype.hasOwnProperty.call(oddsMap, key) ? Number(oddsMap[key]) : NaN;
+                row.official_odds = Number.isFinite(value) && value > 0 ? value : null;
+            });
+            render();
+        }
+
+        async function loadOdds(force) {
+            if (!/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/.test(raceCode || '')) {
+                if (oddsStatus) oddsStatus.textContent = '公式3連単オッズ：race_codeを確認できません';
+                return;
+            }
+
+            if (oddsRefresh) oddsRefresh.disabled = true;
+            if (oddsStatus) oddsStatus.textContent = force ? '公式3連単オッズ：更新中…' : '公式3連単オッズ：取得中…';
+
+            try {
+                const body = new URLSearchParams();
+                body.set('race_code', raceCode);
+                body.set('refresh', force ? '1' : '0');
+
+                const response = await fetch('/web/official_odds_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                    },
+                    body: body.toString(),
+                    cache: 'no-store'
+                });
+                const data = await response.json();
+                const fetchedCount = Number(data && data.count ? data.count : 0);
+                const time = formatTime(data && data.fetched_at ? data.fetched_at : '');
+
+                if (data && data.status === 'ok' && fetchedCount === 120) {
+                    applyOddsData(data);
+                    if (oddsStatus) oddsStatus.textContent = 'オッズ取得 ' + (time || '--:--') + ' / 120通り';
+                } else if (oddsStatus) {
+                    oddsStatus.textContent = '公式3連単オッズ：' + (data && data.error ? String(data.error) : '取得できませんでした');
+                }
+            } catch (e) {
+                if (oddsStatus) oddsStatus.textContent = '公式3連単オッズ：取得エラー';
+            } finally {
+                if (oddsRefresh) oddsRefresh.disabled = false;
+            }
         }
 
         positionFilters.addEventListener('click', function (event) {
@@ -381,17 +475,24 @@
                     sortDirection *= -1;
                 } else {
                     sortKey = nextKey;
-                    sortDirection = (nextKey === 'rank' || nextKey === 'combination') ? 1 : -1;
+                    sortDirection = (nextKey === 'rank' || nextKey === 'combination' || nextKey === 'odds') ? 1 : -1;
                 }
                 render();
             });
         });
+
+        if (oddsRefresh) {
+            oddsRefresh.addEventListener('click', function () {
+                loadOdds(true);
+            });
+        }
 
         if (foot) {
             foot.textContent = '120通り合計 ' + (number(totals.final) * 100).toFixed(6) + '% / P1選択 → P2完全ホールドアウト検証済み';
         }
 
         render();
+        loadOdds(false);
     }
 
     function boot() {
