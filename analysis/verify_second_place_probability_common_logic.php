@@ -33,8 +33,11 @@ $view = $controller->handle();
 $raceCode = (string)($view['race_code'] ?? '');
 $results = is_array($view['results'] ?? null) ? $view['results'] : [];
 $tenjiList = is_array($view['tenji_list'] ?? null) ? $view['tenji_list'] : [];
-$correctedWinBoats = is_array($view['corrected_win_rate_data']['boats'] ?? null)
-    ? $view['corrected_win_rate_data']['boats']
+$correctedData = is_array($view['corrected_win_rate_data'] ?? null)
+    ? $view['corrected_win_rate_data']
+    : [];
+$correctedWinBoats = is_array($correctedData['boats'] ?? null)
+    ? $correctedData['boats']
     : [];
 
 $courseByBoat = [];
@@ -75,6 +78,29 @@ $trifectaData = $trifectaLogic->calculate(
     $aiTrioBoats,
     $outcomeCourseByBoat
 );
+
+$trifectaStatus = (string)($trifectaData['status'] ?? 'error');
+if ($trifectaStatus !== 'ok') {
+    printf("%s\n", str_repeat('=', 96));
+    printf("共通2着確率ロジック 入力診断\n");
+    printf("%s\n", str_repeat('=', 96));
+    printf("race_code            : %s\n", $raceCode);
+    printf("entries/results      : %d / %d\n", count($view['entries'] ?? []), count($results));
+    printf("tenji                : %d\n", count($tenjiList));
+    printf("entry_map_ready      : %s\n", !empty($view['entry_map_ready']) ? 'yes' : 'no');
+    printf("course map           : %s\n", $courseByBoat ? json_encode($courseByBoat, JSON_UNESCAPED_UNICODE) : '[]');
+    printf("corrected status     : %s\n", (string)($correctedData['status'] ?? 'unknown'));
+    printf("corrected boats      : %d\n", count($correctedWinBoats));
+    printf("corrected error      : %s\n", (string)($correctedData['error'] ?? ''));
+    printf("AI3 status           : %s\n", (string)($aiTrioData['status'] ?? 'unknown'));
+    printf("AI3 boats            : %d\n", count($aiTrioBoats));
+    printf("AI3 error            : %s\n", (string)($aiTrioData['error'] ?? ''));
+    printf("trifecta error       : %s\n", (string)($trifectaData['error'] ?? ''));
+    printf("%s\n", str_repeat('-', 96));
+    printf("この確認は、Web上で『イン1着時 2連単』が表示できるだけの入力が揃ったレースで実行してください。\n");
+    printf("%s\n", str_repeat('=', 96));
+    exit(2);
+}
 
 $commonLogic = new SecondPlaceProbabilityLogic();
 $common = $commonLogic->calculate($trifectaData, 1);
