@@ -90,8 +90,9 @@ $head1SecondBoats = is_array($head1SecondData['boats'] ?? null)
     ? $head1SecondData['boats']
     : [];
 
-// Excelモックのメイン情報にある「イン1着時 2連単」を、
-// PC版と同じTrifectaProbabilityLogicからアプリ用に取り出す。
+// 120通り出目確率を1度だけ計算する。
+// 2着分布の集計はここでは行わず、app_main_analysis_panel.php 内の
+// CommonSecondRuntimeBridge → SecondPlaceProbabilityLogic（③ AI_FINAL）に一本化する。
 $outcomeCourseByBoat = [];
 if (count($aiTrioCourseByBoat) === 6) {
     $outcomeCourseByBoat = $aiTrioCourseByBoat;
@@ -108,52 +109,9 @@ $trifectaData = $trifectaLogic->calculate(
 );
 $trifectaStatus = (string)($trifectaData['status'] ?? 'error');
 $trifectaRows = is_array($trifectaData['rows'] ?? null) ? $trifectaData['rows'] : [];
-$trifectaBoatByCourse = is_array($trifectaData['boat_by_course'] ?? null)
-    ? $trifectaData['boat_by_course']
-    : [];
 
+// app_main_analysis_panel.php の共通ブリッジで5通りへ上書きされる。
 $appHead1ExactaRows = [];
-if ($trifectaStatus === 'ok' && count($trifectaRows) === 120) {
-    $baseBySecondCourse = array_fill(2, 5, 0.0);
-    $aiBySecondCourse = array_fill(2, 5, 0.0);
-    $baseMass = 0.0;
-    $aiMass = 0.0;
-
-    foreach ($trifectaRows as $row) {
-        $courses = is_array($row['courses'] ?? null) ? $row['courses'] : [];
-        if (count($courses) !== 3 || (int)$courses[0] !== 1) {
-            continue;
-        }
-
-        $secondCourse = (int)$courses[1];
-        if ($secondCourse < 2 || $secondCourse > 6) {
-            continue;
-        }
-
-        $baseP = (float)($row['base_probability'] ?? 0.0);
-        $aiP = (float)($row['probability'] ?? 0.0);
-        $baseBySecondCourse[$secondCourse] += $baseP;
-        $aiBySecondCourse[$secondCourse] += $aiP;
-        $baseMass += $baseP;
-        $aiMass += $aiP;
-    }
-
-    $headBoat = (int)($trifectaBoatByCourse[1] ?? 1);
-    for ($secondCourse = 2; $secondCourse <= 6; $secondCourse++) {
-        $secondBoat = (int)($trifectaBoatByCourse[$secondCourse] ?? $secondCourse);
-        $base = $baseMass > 0.0 ? $baseBySecondCourse[$secondCourse] / $baseMass : 0.0;
-        $ai = $aiMass > 0.0 ? $aiBySecondCourse[$secondCourse] / $aiMass : 0.0;
-
-        $appHead1ExactaRows[] = [
-            'second_course' => $secondCourse,
-            'head_boat' => $headBoat,
-            'second_boat' => $secondBoat,
-            'base' => $base,
-            'ai' => $ai,
-            'delta' => $ai - $base,
-        ];
-    }
-}
 
 // 基本情報は取得値だけに限定する。
 // 加工・評価結果はメイン情報へ集約し、計算ロジック自体は共用する。
