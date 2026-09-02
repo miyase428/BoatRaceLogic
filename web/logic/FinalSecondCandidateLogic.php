@@ -3,9 +3,12 @@
 /**
  * 共通2着確率を、最終予想の「2着候補」に反映するための純粋ロジック。
  *
- * 現時点の本番適用条件は検証済み範囲だけに限定する。
- * - SecondPlaceProbabilityLogic の head_course = 1
- * - 共通2着確率の head_boat と最終予想の本命頭が一致
+ * 全頭コース一般化検証で、1C頭だけでなくNON1C頭でも
+ * AI_FINALが現行2着順位をP2ホールドアウトで改善したことを確認済み。
+ *
+ * 適用仕様:
+ * - SecondPlaceProbabilityLogic の head_course は1～6Cを許可
+ * - 共通2着確率の head_boat と最終予想の本命頭が一致する時だけ適用
  * - 既存の切る艇判定はそのまま維持
  * - 3着候補集合は変更しない
  * - 2着候補だけ、共通2着確率順位の上位最大3艇へ置き換える
@@ -28,6 +31,8 @@ class FinalSecondCandidateLogic
     ): array {
         $summary['common_second_applied'] = false;
         $summary['common_second_reason'] = '';
+        $summary['common_second_head_course'] = 0;
+        $summary['common_second_head_boat'] = 0;
         $summary['common_second_ranked_boats'] = [];
         $summary['common_second_probability_by_boat'] = [];
 
@@ -40,9 +45,11 @@ class FinalSecondCandidateLogic
         $headBoat = (int)($secondPlaceData['head_boat'] ?? 0);
         $honmeiHead = (int)($summary['honmei_head'] ?? 0);
 
-        // 現時点で統計検証済みなのは「1C頭」のみ。
-        if ($headCourse !== 1) {
-            $summary['common_second_reason'] = 'head_course_not_verified';
+        $summary['common_second_head_course'] = $headCourse;
+        $summary['common_second_head_boat'] = $headBoat;
+
+        if ($headCourse < 1 || $headCourse > 6) {
+            $summary['common_second_reason'] = 'head_course_invalid';
             return $summary;
         }
 
@@ -111,7 +118,7 @@ class FinalSecondCandidateLogic
             $thirdKako = implode('', $third);
         }
 
-        // 既存買い目文字列は艇番昇順を維持し、表示だけ確率順位を見せる。
+        // 買い目文字列は艇番昇順を維持し、表示だけ確率順位を見せる。
         $aiteForBet = $aitePriority;
         sort($aiteForBet);
         $aiteKako = implode('', $aiteForBet);
