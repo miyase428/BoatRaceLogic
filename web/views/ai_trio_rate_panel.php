@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/../logic/RecentCourseTrioRateLogic.php';
+require_once __DIR__ . '/../logic/CommonSecondRuntimeBridge.php';
 
 $aiTrioCourseByBoat = [];
 if (!empty($simulation_active) && is_array($prediction_course_by_boat ?? null)) {
@@ -260,8 +261,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <?php
 // AI3連対率まで計算済みの同一スコープを利用し、出目確率をその直後へ表示する。
-// 既存の最終予想・買い目ロジックには接続しない。
 include __DIR__ . '/trifecta_probability_panel.php';
+
+// PC版もアプリと同じ共通2着確率ブリッジへ接続する。
+// trifecta_probability_panel.php で作成した同じ120通りを再利用し、
+// 現在の本命頭に対する2着候補だけを③ AI_FINAL順位へ置き換える。
+// 頭・kiru・3着候補は既存summaryを維持する。
+if (is_array($trifectaData ?? null) && is_array($viewData ?? null)) {
+    $commonSecondBridge = new CommonSecondRuntimeBridge();
+    $commonSecondBridgeResult = $commonSecondBridge->apply(
+        $viewData,
+        is_array($final_predictions ?? null) ? $final_predictions : [],
+        $trifectaData
+    );
+
+    $viewData = is_array($commonSecondBridgeResult['view_data'] ?? null)
+        ? $commonSecondBridgeResult['view_data']
+        : $viewData;
+    extract($viewData, EXTR_OVERWRITE);
+}
 
 // C2/C3で検証した穴警戒HIGH + TRIO_OUTERを表示専用で追加する。
 // DOM読込後に最終予想の買い目直下へ移動し、買い目計算には接続しない。
