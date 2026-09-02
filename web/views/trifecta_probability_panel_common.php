@@ -1,13 +1,9 @@
 <?php
 require_once __DIR__ . '/../logic/SecondPlaceProbabilityLogic.php';
 
-// 既存の120通りパネルはそのまま利用しつつ、
-// 「イン1着時 2連単」の表示部分だけを共通2着確率ロジックへ差し替える。
-// これによりPC版の2連単表示と最終予想2着候補が、同じ
-// SecondPlaceProbabilityLogic（③ AI_FINAL）を参照する。
-ob_start();
-include __DIR__ . '/trifecta_probability_panel.php';
-$legacyHtml = ob_get_clean();
+// 120通りの計算・表示ヘルパーだけを共通ランタイムで準備する。
+// 旧 trifecta_probability_panel.php の2着集計は実行しない。
+include __DIR__ . '/trifecta_probability_runtime.php';
 
 $head1SecondLogic = new SecondPlaceProbabilityLogic();
 $head1SecondData = $head1SecondLogic->calculate(
@@ -23,8 +19,6 @@ $head1ExactaRows = (
     : [];
 
 $head1SecondError = (string)($head1SecondData['error'] ?? '');
-
-ob_start();
 ?>
 <!-- メイン表示：イン1着時の2連単。DOM読込後に最終予想の買い目直下へ移動する。 -->
 <div id="head1-exacta-panel" style="margin:0 0 10px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; padding:14px; color:#3f4b5a;">
@@ -113,20 +107,7 @@ ob_start();
         </div>
     <?php endif; ?>
 </div>
+
 <?php
-$commonExactaHtml = ob_get_clean();
-
-$startMarker = '<!-- メイン表示：イン1着時の2連単。DOM読込後に最終予想の買い目直下へ移動する。 -->';
-$referenceMarker = '<!-- 参考情報：完成済み3連単120通りは削除せず折りたたんで保持 -->';
-$startPos = strpos($legacyHtml, $startMarker);
-$referencePos = strpos($legacyHtml, $referenceMarker);
-
-if ($startPos !== false && $referencePos !== false && $referencePos > $startPos) {
-    echo substr($legacyHtml, 0, $startPos)
-        . $commonExactaHtml
-        . "\n\n"
-        . substr($legacyHtml, $referencePos);
-} else {
-    // マーカー変更時は120通りパネルを壊さないことを優先し、旧HTMLへ安全にフォールバックする。
-    echo $legacyHtml;
-}
+// 120通り参考表示は同じ $trifectaData をそのまま使う。
+include __DIR__ . '/trifecta_probability_reference.php';
