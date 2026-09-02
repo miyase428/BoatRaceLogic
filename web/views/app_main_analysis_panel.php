@@ -1,4 +1,31 @@
 <?php
+require_once __DIR__ . '/../logic/CommonSecondRuntimeBridge.php';
+
+// アプリでもPC版と同じ共通2着確率エンジンを使う。
+// app.phpで作成済みの120通り出目確率を再利用し、
+// 1C頭2連単表示と本命買い目の2着候補を同じ③ AI_FINALへ揃える。
+if (is_array($trifectaData ?? null) && is_array($viewData ?? null)) {
+    $commonSecondBridge = new CommonSecondRuntimeBridge();
+    $commonSecondBridgeResult = $commonSecondBridge->apply(
+        $viewData,
+        is_array($final_predictions ?? null) ? $final_predictions : [],
+        $trifectaData
+    );
+
+    $viewData = is_array($commonSecondBridgeResult['view_data'] ?? null)
+        ? $commonSecondBridgeResult['view_data']
+        : $viewData;
+    extract($viewData, EXTR_OVERWRITE);
+
+    $head1CommonData = is_array($commonSecondBridgeResult['head1'] ?? null)
+        ? $commonSecondBridgeResult['head1']
+        : [];
+    $appHead1ExactaRows = (string)($head1CommonData['status'] ?? '') === 'ok'
+        && is_array($head1CommonData['rows'] ?? null)
+        ? $head1CommonData['rows']
+        : [];
+}
+
 // app_basic_info_panel.php で作成した6艇マップと表示ヘルパーを共用する。
 // メイン情報はPC版と同じく、艇番順ではなく「現在の進入コース順」で並べる。
 $appMainBoatOrder = [];
