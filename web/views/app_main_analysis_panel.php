@@ -177,3 +177,5 @@ $appMainRenderRow = static function (string $label, callable $valueFn, string $e
         <div class="app-basic-status">補正後1着率：<?= htmlspecialchars($correctedWinError ?: '展示情報待ち', ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
 </section>
+
+<?php include __DIR__ . '/app_sam_slit_panel.php'; ?>
