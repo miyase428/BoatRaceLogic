@@ -261,10 +261,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <?php
 // AI3連対率まで計算済みの同一スコープを利用し、出目確率をその直後へ表示する。
-include __DIR__ . '/trifecta_probability_panel.php';
+// 2連単表示はラッパー側でSecondPlaceProbabilityLogicへ差し替え、
+// 120通り表示は既存パネルをそのまま維持する。
+include __DIR__ . '/trifecta_probability_panel_common.php';
 
 // PC版もアプリと同じ共通2着確率ブリッジへ接続する。
-// trifecta_probability_panel.php で作成した同じ120通りを再利用し、
+// trifecta_probability_panel_common.php で作成した同じ120通りを再利用し、
 // 現在の本命頭に対する2着候補だけを③ AI_FINAL順位へ置き換える。
 // 頭・kiru・3着候補は既存summaryを維持する。
 if (is_array($trifectaData ?? null) && is_array($viewData ?? null)) {
