@@ -102,20 +102,35 @@ foreach ($masterRows as $r) {
 printf("\n【BaseWinRateLogic calculate】\n");
 $logic = new BaseWinRateLogic();
 $result = $logic->calculate($raceCode);
-printf("error=%s\n", (string)($result['error'] ?? ''));
+$error = trim((string)($result['error'] ?? ''));
+$boatCount = count($result['boats'] ?? []);
+$normalizedTotal = (float)($result['normalized_total'] ?? 0);
+printf("error=%s\n", $error);
 printf("boats=%d raw_total=%.6f normalized_total=%.6f\n",
-    count($result['boats'] ?? []),
+    $boatCount,
     (float)($result['raw_total'] ?? 0),
-    (float)($result['normalized_total'] ?? 0)
+    $normalizedTotal
 );
+
+$calcOk = $boatCount === 6
+    && $error === ''
+    && abs($normalizedTotal - 1.0) < 0.000001;
 
 printf("\n【判定目安】\n");
 if ($entryCount !== 6 || $entryDistinctLane !== 6) {
     printf("NG: race_entry 自体が6艇揃っていません。出走表保存側を確認。\n");
-} elseif ($masterCount !== 1) {
-    printf("NG: race_master が1行ではありません。JOINで6行を超える可能性があります。\n");
+} elseif ($masterCount > 1) {
+    printf("NG: race_master が重複しています。JOINで行数が増えるためrace_master側を確認。\n");
+} elseif ($masterCount === 0) {
+    if ($calcOk) {
+        printf("OK: race_master は欠損していますが、race_entry + race_codeフォールバックで基本1着率を6艇分計算できています。\n");
+    } else {
+        printf("NG: race_master欠損フォールバックで基本1着率を計算できていません。上のerrorを確認。\n");
+    }
 } elseif ($joinCount !== 6) {
-    printf("NG: BaseWinRateLogic のJOIN結果が6行ではありません。\n");
+    printf("NG: race_master はありますが entry x master JOIN が6行ではありません。\n");
+} elseif (!$calcOk) {
+    printf("NG: target取得は6艇ですが、BaseWinRateLogicの後段で失敗しています。上のerrorを確認。\n");
 } else {
-    printf("OK: target取得条件は6艇です。次はBaseWinRateLogic内の別条件を確認。\n");
+    printf("OK: race_masterあり・6艇取得・基本1着率100%%正規化まで正常です。\n");
 }
