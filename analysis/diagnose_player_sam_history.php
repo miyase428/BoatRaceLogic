@@ -101,7 +101,6 @@ SELECT
     SUBSTRING(pe.race_code, 1, 8) AS race_ymd,
     CASE WHEN f.race_code IS NOT NULL THEN 1 ELSE 0 END AS has_sum,
     f.interval_label,
-    f.avg_diff,
     CASE WHEN rd.race_code IS NOT NULL THEN 1 ELSE 0 END AS has_result,
     rd.rank,
     rd.player_id::text AS result_player_id,
@@ -187,11 +186,10 @@ if (!$details) {
 } else {
     foreach ($details as $r) {
         printf(
-            "%s | SUM=%s interval=%s diff=%s | RESULT=%s rank=%s result_player=%s(%s)\n",
+            "%s | SUM=%s interval=%s | RESULT=%s rank=%s result_player=%s(%s)\n",
             (string)$r['race_code'],
             (int)$r['has_sum'] === 1 ? 'OK' : 'NG',
             (string)($r['interval_label'] ?? '-'),
-            $r['avg_diff'] === null ? '-' : (string)$r['avg_diff'],
             (int)$r['has_result'] === 1 ? 'OK' : 'NG',
             (string)($r['rank'] ?? '-'),
             trim((string)($r['result_player_name'] ?? '-')),
