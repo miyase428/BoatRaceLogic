@@ -19,6 +19,9 @@ require_once __DIR__ . '/../common/db_connect.php';
  * 「4行なら正常」のような総行数固定判定は行わない。
  * 分析で必要なTop3が一意かつ対応可能かを品質基準とする。
  *
+ * 3着同着は結果取得不備ではないが、現行race_payoutsが複数の3連単払戻を
+ * 完全保持できないため「分析利用可能」には含めず、特殊レースとして別集計する。
+ *
  * Usage:
  *   php analysis/check_db_data_quality.php 2026-08-01 2026-09-02 [表示上限]
  */
@@ -125,6 +128,7 @@ $stats = [
     'entry_bad' => 0,
     'master_bad' => 0,
     'top3_bad' => 0,
+    'dead_heat_third' => 0,
     'payout_unavailable' => 0,
     'suspicious_result_missing' => 0,
     'payout_only_issue' => 0,
@@ -136,6 +140,7 @@ $examples = [
     'entry_bad' => [],
     'master_bad' => [],
     'top3_bad' => [],
+    'dead_heat_third' => [],
     'payout_unavailable' => [],
     'suspicious_result_missing' => [],
     'payout_only_issue' => [],
@@ -161,10 +166,23 @@ foreach ($rows as $row) {
         && (int)$row['top3_player_count'] === 3;
     $payoutOk = (int)$row['payout_rows'] === 1 && (float)$row['trifecta_payout'] > 0.0;
     $exhibitionOk = (int)$row['exhibition_rows'] > 0;
+
+    // 3着同着の特殊レース。
+    // rank=1/2 は一意、rank=3 が複数で、Top3扱いの全行が進入・race_entry対応とも正常なら
+    // 「結果取得漏れ」ではなく同着候補として扱う。
+    $top3Rows = (int)$row['rank1_rows'] + (int)$row['rank2_rows'] + (int)$row['rank3_rows'];
+    $deadHeatThird = (int)$row['rank1_rows'] === 1
+        && (int)$row['rank2_rows'] === 1
+        && (int)$row['rank3_rows'] >= 2
+        && (int)$row['top3_course_rows'] === $top3Rows
+        && (int)$row['top3_entry_match_rows'] === $top3Rows
+        && (int)$row['top3_player_count'] === $top3Rows
+        && $payoutOk;
+
     $analysisReady = $entryOk && $masterOk && $top3Ok && $payoutOk;
 
-    // 払戻が成立しているのにTop3が欠ける場合は、取得漏れ・不整合の疑いが強い。
-    $suspiciousResultMissing = !$top3Ok && $payoutOk;
+    // 払戻が成立しているのに標準Top3が揃わず、かつ同着でもない場合だけ取得漏れ疑い。
+    $suspiciousResultMissing = !$top3Ok && $payoutOk && !$deadHeatThird;
     // Top3は揃うのに払戻が無い場合も、払戻取得漏れの疑いがある。
     $payoutOnlyIssue = $top3Ok && !$payoutOk;
     // Top3も3連単払戻も無い場合は、中止・不成立レースの可能性が高い。
@@ -177,6 +195,7 @@ foreach ($rows as $row) {
             'entry_bad' => 0,
             'master_bad' => 0,
             'top3_bad' => 0,
+            'dead_heat_third' => 0,
             'payout_unavailable' => 0,
             'suspicious_result_missing' => 0,
         ];
@@ -205,7 +224,8 @@ foreach ($rows as $row) {
     $badFlags = [
         'entry_bad' => !$entryOk,
         'master_bad' => !$masterOk,
-        'top3_bad' => !$top3Ok,
+        'top3_bad' => !$top3Ok && !$deadHeatThird,
+        'dead_heat_third' => $deadHeatThird,
         'payout_unavailable' => !$payoutOk,
         'suspicious_result_missing' => $suspiciousResultMissing,
         'payout_only_issue' => $payoutOnlyIssue,
@@ -221,7 +241,8 @@ foreach ($rows as $row) {
 
     if (!$entryOk) $daily[$date]['entry_bad']++;
     if (!$masterOk) $daily[$date]['master_bad']++;
-    if (!$top3Ok) $daily[$date]['top3_bad']++;
+    if (!$top3Ok && !$deadHeatThird) $daily[$date]['top3_bad']++;
+    if ($deadHeatThird) $daily[$date]['dead_heat_third']++;
     if (!$payoutOk) $daily[$date]['payout_unavailable']++;
     if ($suspiciousResultMissing) $daily[$date]['suspicious_result_missing']++;
     if ($analysisReady) $stats['analysis_ready']++;
@@ -253,6 +274,7 @@ printf("分析利用可能               : %6d / %6d = %s\n", $stats['analysis_r
 printf("出走表6艇不備             : %6d / %6d = %s\n", $stats['entry_bad'], $total, pct($stats['entry_bad'], $total));
 printf("race_master不備           : %6d / %6d = %s\n", $stats['master_bad'], $total, pct($stats['master_bad'], $total));
 printf("Top3結果不備              : %6d / %6d = %s\n", $stats['top3_bad'], $total, pct($stats['top3_bad'], $total));
+printf("3着同着特殊レース         : %6d / %6d = %s\n", $stats['dead_heat_third'], $total, pct($stats['dead_heat_third'], $total));
 printf("3連単払戻なし/0           : %6d / %6d = %s\n", $stats['payout_unavailable'], $total, pct($stats['payout_unavailable'], $total));
 printf("払戻あり＋Top3不備        : %6d / %6d = %s\n", $stats['suspicious_result_missing'], $total, pct($stats['suspicious_result_missing'], $total));
 printf("Top3完備＋払戻なし        : %6d / %6d = %s\n", $stats['payout_only_issue'], $total, pct($stats['payout_only_issue'], $total));
@@ -262,7 +284,7 @@ printf("展示なし（参考）          : %6d / %6d = %s\n", $stats['exhibitio
 echo "\n【日別品質】\n";
 foreach ($daily as $date => $s) {
     printf(
-        "%s | N=%3d READY=%3d(%6s) | entry=%2d master=%2d top3=%2d payout=%2d suspicious=%2d\n",
+        "%s | N=%3d READY=%3d(%6s) | entry=%2d master=%2d top3=%2d deadheat3=%2d payout=%2d suspicious=%2d\n",
         $date,
         $s['n'],
         $s['ready'],
@@ -270,6 +292,7 @@ foreach ($daily as $date => $s) {
         $s['entry_bad'],
         $s['master_bad'],
         $s['top3_bad'],
+        $s['dead_heat_third'],
         $s['payout_unavailable'],
         $s['suspicious_result_missing']
     );
@@ -278,6 +301,7 @@ foreach ($daily as $date => $s) {
 printExamples('出走表6艇不備', $examples['entry_bad'], $stats['entry_bad'], $limit);
 printExamples('race_master不備', $examples['master_bad'], $stats['master_bad'], $limit);
 printExamples('Top3結果不備', $examples['top3_bad'], $stats['top3_bad'], $limit);
+printExamples('3着同着特殊レース（標準ROI分析から除外推奨）', $examples['dead_heat_third'], $stats['dead_heat_third'], $limit);
 printExamples('3連単払戻なし/0', $examples['payout_unavailable'], $stats['payout_unavailable'], $limit);
 printExamples('払戻あり＋Top3不備（取得漏れ疑い）', $examples['suspicious_result_missing'], $stats['suspicious_result_missing'], $limit);
 printExamples('Top3完備＋払戻なし（払戻取得漏れ疑い）', $examples['payout_only_issue'], $stats['payout_only_issue'], $limit);
@@ -287,6 +311,7 @@ printExamples('展示なし（参考）', $examples['exhibition_none'], $stats['
 echo "\n【判定メモ】\n";
 echo "- race_result_detailの総行数は3～6行が混在するため、行数固定では判定しない。\n";
 echo "- 長期分析の主要基準は、1～3着が各1行・実進入1～6・race_entryとの選手対応が成立すること。\n";
-echo "- 『払戻あり＋Top3不備』は、成立レースの結果取得漏れ・DB不整合として最優先で確認する。\n";
+echo "- 3着同着は結果取得不備ではないが、現行race_payoutsが複数3連単払戻を完全保持しないため標準ROI分析から除外推奨。\n";
+echo "- 『払戻あり＋Top3不備』は、同着を除外したうえで成立レースの結果取得漏れ・DB不整合として最優先で確認する。\n";
 echo "- 『Top3なし＋払戻なし』は中止・不成立の可能性が高く、直ちに取得漏れとは扱わない。\n";
 echo "- exhibition_liveは未取得レースがあり得るため、このチェックでは分析利用可能判定に含めない。\n";
