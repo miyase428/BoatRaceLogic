@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 /**
- * BOAT RACE公式サイトの2連単30通りオッズを取得し、レース単位JSONでキャッシュする。
+ * BOAT RACE公式サイトの2連単オッズを取得し、レース単位JSONでキャッシュする。
  *
+ * - 通常6艇立て: 30通り
+ * - 実質5艇立て: 20通り
  * - 初回表示: キャッシュがなければ1回だけ公式サイトへ取得
- * - 以後: キャッシュを再利用
+ * - 以後: 正常キャッシュを再利用
  * - 手動更新: force=true の時だけ再取得
  * - DBには保存しない
  */
@@ -20,7 +22,13 @@ class OfficialExactaOddsLogic
 
         if (!$force && is_file($cachePath)) {
             $cached = json_decode((string)file_get_contents($cachePath), true);
-            if (is_array($cached) && ($cached['race_code'] ?? '') === $raceCode) {
+            $cachedCount = is_array($cached) ? (int)($cached['count'] ?? 0) : 0;
+            if (
+                is_array($cached)
+                && ($cached['race_code'] ?? '') === $raceCode
+                && ($cached['status'] ?? '') === 'ok'
+                && in_array($cachedCount, [20, 30], true)
+            ) {
                 $cached['cache'] = ['used' => true];
                 return $cached;
             }
@@ -40,10 +48,11 @@ class OfficialExactaOddsLogic
             }
 
             $odds = $this->parseExactaOdds($html);
-            $status = count($odds) === 30 ? 'ok' : 'waiting';
+            $count = count($odds);
+            $status = in_array($count, [20, 30], true) ? 'ok' : 'waiting';
             $error = $status === 'ok'
                 ? ''
-                : '公式2連単オッズを30通り取得できませんでした。未公開またはページ構造変更の可能性があります。';
+                : '公式2連単オッズを20/30通り取得できませんでした。未公開またはページ構造変更の可能性があります。';
         } catch (Throwable $e) {
             $odds = [];
             $status = 'error';
@@ -188,7 +197,7 @@ class OfficialExactaOddsLogic
         }
 
         ksort($best, SORT_NATURAL);
-        return count($best) === 30 ? $best : [];
+        return in_array(count($best), [20, 30], true) ? $best : [];
     }
 
     private function expandTable(DOMElement $table): array
@@ -277,7 +286,7 @@ class OfficialExactaOddsLogic
             }
         }
 
-        return count($best) === 30 ? $best : [];
+        return in_array(count($best), [20, 30], true) ? $best : [];
     }
 
     private function parseBoatNumber(string $value): int
