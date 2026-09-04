@@ -10,17 +10,14 @@
             const tbody = table.tBodies && table.tBodies[0];
             if (!tbody) return;
 
-            // PC版は検索・絞り込み・ソート付き120通り表を本体とする。
-            // 旧Top20プレビュー表だけ非表示にして、同じ内容の二重表示を避ける。
+            // Top20プレビュー表だけ非表示にして、同じ内容の二重表示を避ける。
             if (tbody.rows.length === 20) {
                 const wrap = table.parentElement;
                 if (wrap) wrap.style.display = 'none';
             }
         });
 
-        // 外側の「参考情報：3連単120通り 出目確率」自体が折りたためるため、
-        // 内側の「120通りすべて表示」は二重折りたたみになる。
-        // 内側は常時展開し、summaryだけ削除して検索・絞り込み・120通り表を直接表示する。
+        // 外側details自体が折りたためるため、内側detailsは常時展開する。
         const allDetails = document.getElementById('trifecta-all-details');
         if (allDetails) {
             allDetails.open = true;
@@ -29,8 +26,7 @@
             allDetails.style.marginTop = '10px';
         }
 
-        // 元の120通りスクリプトが行メタ情報を作った後でオッズ列を追加する。
-        // 既存の検索・絞り込み・ソートの列位置を壊さないため0ms後へ送る。
+        // 元の出目確率スクリプトが行メタ情報を作った後でオッズ列を追加する。
         window.setTimeout(setupOfficialOdds, 0);
     }
 
@@ -60,6 +56,7 @@
         const statusNode = box.querySelector('.web-official-odds-status');
         const refreshButton = box.querySelector('.web-official-odds-refresh');
         const tbody = table.tBodies && table.tBodies[0];
+        const totalRows = tbody ? tbody.rows.length : 0;
         const countNode = document.getElementById('web-trifecta-count');
         const filters = document.getElementById('web-trifecta-filters');
         const search = document.getElementById('web-trifecta-search');
@@ -187,7 +184,7 @@
             const combinedOdds = oddsReady && inverseOddsSum > 0 ? 1 / inverseOddsSum : null;
 
             if (countNode) {
-                countNode.textContent = '表示中：' + visibleRows.length + ' / 120通り';
+                countNode.textContent = '表示中：' + visibleRows.length + ' / ' + totalRows + '通り';
             }
             if (probabilitySumNode) {
                 probabilitySumNode.textContent = probabilitySum.toFixed(2) + '%';
@@ -218,12 +215,12 @@
 
         function showResult(data) {
             if (!statusNode) return;
-            const count = Number(data && data.count ? data.count : 0);
+            const fetchedCount = Number(data && data.count ? data.count : 0);
             const time = formatTime(data && data.fetched_at ? data.fetched_at : '');
 
-            if (data && data.status === 'ok' && count === 120) {
+            if (data && data.status === 'ok' && fetchedCount > 0) {
                 applyOdds(data.odds || {});
-                statusNode.textContent = 'オッズ取得 ' + (time || '--:--') + ' / 120通り';
+                statusNode.textContent = 'オッズ取得 ' + (time || '--:--') + ' / 表示' + totalRows + '通り';
                 return;
             }
 
@@ -265,7 +262,6 @@
             });
         }
 
-        // 既存の絞り込み処理がイベント内で行表示を更新した後に再集計する。
         if (filters) filters.addEventListener('click', scheduleSelectionSummary);
         if (search) search.addEventListener('input', scheduleSelectionSummary);
         if (clear) clear.addEventListener('click', scheduleSelectionSummary);
