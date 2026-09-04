@@ -36,10 +36,12 @@
         if (!tbody) return [];
 
         const map = new Map();
+        const active = new Set();
         Array.from(tbody.rows).forEach(function (tr) {
             if (!tr.cells || tr.cells.length < 4) return;
             const boats = (String(tr.cells[1].textContent || '').match(/[1-6]/g) || []).slice(0, 3).map(Number);
             if (boats.length !== 3 || boats[0] === boats[1]) return;
+            boats.forEach(function (boat) { active.add(boat); });
 
             const key = boats[0] + '-' + boats[1];
             if (!map.has(key)) {
@@ -74,7 +76,24 @@
             row.cumulative_probability = cumulative;
         });
 
-        return rows.length === 30 ? rows : [];
+        const activeCount = active.size;
+        const expected = activeCount >= 2 ? activeCount * (activeCount - 1) : 0;
+        return expected > 0 && rows.length === expected ? rows : [];
+    }
+
+    function activeBoatsFromRows(rows) {
+        const set = new Set();
+        rows.forEach(function (row) {
+            set.add(Number(row.first));
+            set.add(Number(row.second));
+        });
+        return Array.from(set).filter(function (boat) { return boat >= 1 && boat <= 6; }).sort(function (a, b) { return a - b; });
+    }
+
+    function trifectaCountFromDom() {
+        const tableBox = document.getElementById('web-trifecta-all-table');
+        const tbody = tableBox ? tableBox.querySelector('tbody') : null;
+        return tbody ? tbody.rows.length : 0;
     }
 
     function badge(boat) {
@@ -123,7 +142,10 @@
             if (tabs.querySelector('[data-pc-main-tab="exacta"]')) return;
 
             const rows = deriveExactaRows();
-            if (rows.length !== 30) return;
+            if (rows.length < 2) return;
+            const activeBoats = activeBoatsFromRows(rows);
+            const exactaCount = rows.length;
+            const trifectaCount = trifectaCountFromDom();
 
             const recentButton = tabs.querySelector('[data-pc-main-tab="recent"]');
             const button = document.createElement('button');
@@ -151,8 +173,8 @@
             panel.innerHTML = ''
                 + '<div style="margin:0 0 14px;background:#f8f4ec;border:1px solid #d8cdbc;border-radius:8px;overflow:hidden;color:#3f4b5a;">'
                 + '  <div style="padding:14px;">'
-                + '    <div style="font-size:16px;font-weight:bold;color:#aa741f;">🎯 2連単30通り 出目確率</div>'
-                + '    <div style="font-size:12px;color:#6b7785;margin-top:3px;">3連単120通りの最終出目確率を1着-2着ごとに合算して30通りへ集約。</div>'
+                + '    <div style="font-size:16px;font-weight:bold;color:#aa741f;">🎯 2連単' + exactaCount + '通り 出目確率</div>'
+                + '    <div style="font-size:12px;color:#6b7785;margin-top:3px;">3連単' + trifectaCount + '通りの最終出目確率を1着-2着ごとに合算して' + exactaCount + '通りへ集約。</div>'
                 + '    <div class="pc-exacta-odds-bar" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 0;padding:8px 10px;border:1px solid #cbbda9;border-radius:6px;background:#fffaf2;">'
                 + '      <span class="pc-exacta-odds-status" style="font-size:12px;color:#4b5866;">公式2連単オッズ：取得中…</span>'
                 + '      <button type="button" class="pc-exacta-refresh" style="padding:5px 10px;border:1px solid #1683bd;border-radius:5px;background:#fff;color:#1683bd;font-weight:bold;cursor:pointer;">更新</button>'
@@ -182,7 +204,7 @@
                 + '        <tbody></tbody>'
                 + '      </table>'
                 + '    </div>'
-                + '    <div style="margin-top:8px;font-size:11px;color:#6b7785;">30通り合計は100% / オッズはBOAT RACE公式 / 通常表示はキャッシュ・更新時のみ再取得</div>'
+                + '    <div style="margin-top:8px;font-size:11px;color:#6b7785;">' + exactaCount + '通り合計は100% / オッズはBOAT RACE公式 / 通常表示はキャッシュ・更新時のみ再取得</div>'
                 + '  </div>'
                 + '</div>';
 
@@ -210,7 +232,8 @@
                 title.style.cssText = 'width:34px;color:#6b7785;font-size:12px;font-weight:bold;text-align:center;';
                 group.appendChild(title);
 
-                for (let boat = 0; boat <= 6; boat++) {
+                const allBoats = [0].concat(activeBoats);
+                allBoats.forEach(function (boat) {
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'pc-exacta-filter';
@@ -218,7 +241,7 @@
                     btn.textContent = boat === 0 ? '全' : String(boat);
                     btn.style.cssText = 'min-width:42px;padding:6px 9px;border:1px solid #cbbda9;border-radius:5px;background:#eee6da;color:#4b5866;font-weight:bold;cursor:pointer;';
                     group.appendChild(btn);
-                }
+                });
                 filters.appendChild(group);
             });
 
@@ -353,7 +376,7 @@
 
                 const probabilitySum = current.reduce(function (sum, row) { return sum + number(row.probability); }, 0);
                 const combined = combinedOdds(current);
-                if (count) count.textContent = '表示中：' + current.length + ' / 30通り';
+                if (count) count.textContent = '表示中：' + current.length + ' / ' + exactaCount + '通り';
                 if (summary) {
                     summary.textContent = '最終出目確率合計：' + (probabilitySum * 100).toFixed(2) + '%'
                         + '　合成オッズ：' + (combined === null ? '-' : combined.toFixed(2) + '倍');
@@ -398,10 +421,10 @@
                     });
                     const data = await response.json();
                     const fetchedCount = Number(data && data.count ? data.count : 0);
-                    if (data && data.status === 'ok' && fetchedCount === 30) {
+                    if (data && data.status === 'ok' && fetchedCount > 0) {
                         applyOdds(data);
                         const time = formatTime(data.fetched_at || '');
-                        if (oddsStatus) oddsStatus.textContent = 'オッズ取得 ' + (time || '--:--') + ' / 30通り';
+                        if (oddsStatus) oddsStatus.textContent = 'オッズ取得 ' + (time || '--:--') + ' / 表示' + exactaCount + '通り';
                     } else if (oddsStatus) {
                         oddsStatus.textContent = '公式2連単オッズ：' + (data && data.error ? String(data.error) : '取得できませんでした');
                     }
@@ -425,7 +448,7 @@
                     selected[position].delete(boat);
                 } else {
                     selected[position].add(boat);
-                    if (selected[position].size === 6) selected[position].clear();
+                    if (selected[position].size === activeBoats.length) selected[position].clear();
                 }
                 paintGroup(group, position);
                 render();
