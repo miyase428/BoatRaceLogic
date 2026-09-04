@@ -108,6 +108,7 @@ $trifectaData = $trifectaLogic->calculate(
     $outcomeCourseByBoat
 );
 $trifectaStatus = (string)($trifectaData['status'] ?? 'error');
+$trifectaError = (string)($trifectaData['error'] ?? '');
 $trifectaRows = is_array($trifectaData['rows'] ?? null) ? $trifectaData['rows'] : [];
 
 // app_main_analysis_panel.php の共通ブリッジで5通りへ上書きされる。
@@ -122,6 +123,89 @@ $appBasicInfoHtml = ob_get_clean();
 ob_start();
 include __DIR__ . '/views/app_main_analysis_panel.php';
 $appMainAnalysisHtml = ob_get_clean();
+
+// 2連単・120通りタブだけは、展示前でも暫定表示できるようにする。
+// 既存のメイン予想・共通2着ロジックへは暫定値を流さず、アプリ表示専用で分離する。
+$appTrifectaDisplayMode = 'exhibition';
+$appTrifectaData = $trifectaData;
+$appTrifectaStatus = $trifectaStatus;
+$appTrifectaError = $trifectaError;
+$appTrifectaRows = $trifectaRows;
+
+if ($appTrifectaStatus !== 'ok' || count($appTrifectaRows) !== 120) {
+    $appTrifectaDisplayMode = 'provisional';
+
+    // 展示前は枠なり進入を基本とする。仮想進入中だけ指定進入を使用する。
+    $appProvisionalCourseByBoat = [];
+    if (
+        !empty($simulation_active)
+        && is_array($prediction_course_by_boat ?? null)
+        && count($prediction_course_by_boat) === 6
+    ) {
+        $appProvisionalCourseByBoat = $prediction_course_by_boat;
+    } else {
+        for ($boat = 1; $boat <= 6; $boat++) {
+            $appProvisionalCourseByBoat[$boat] = $boat;
+        }
+    }
+
+    // 展示前の1着側は基本1着率を使用する。
+    $appProvisionalBaseWinBoats = $baseWinBoats;
+    if (!empty($simulation_active)) {
+        $appProvisionalBaseWinLogic = new BaseWinRateLogic();
+        $appProvisionalBaseWinData = $appProvisionalBaseWinLogic->calculate(
+            (string)($race_code ?? ''),
+            $appProvisionalCourseByBoat
+        );
+        if (is_array($appProvisionalBaseWinData['boats'] ?? null) && count($appProvisionalBaseWinData['boats']) === 6) {
+            $appProvisionalBaseWinBoats = $appProvisionalBaseWinData['boats'];
+        }
+    }
+
+    $appProvisionalWinBoats = [];
+    for ($boat = 1; $boat <= 6; $boat++) {
+        $rate = $appProvisionalBaseWinBoats[$boat]['normalized_rate']
+            ?? $appProvisionalBaseWinBoats[(string)$boat]['normalized_rate']
+            ?? null;
+        if (is_numeric($rate)) {
+            $appProvisionalWinBoats[$boat] = ['corrected_rate' => (float)$rate];
+        }
+    }
+
+    // AI3連対率は二次評価だけ中立（Z=0）にし、基礎3連対率＋一次評価で暫定計算する。
+    // AiTrioRateLogic本体の確定ロジックは変更しない。
+    $appNeutralTenjiList = [];
+    for ($boat = 1; $boat <= 6; $boat++) {
+        $appNeutralTenjiList[] = [
+            'teiban' => $boat,
+            'tenji_course' => (int)$appProvisionalCourseByBoat[$boat],
+            'final_2nd_score' => 0.0,
+        ];
+    }
+
+    $appProvisionalAiTrioData = $aiTrioLogic->calculate(
+        (string)($race_code ?? ''),
+        is_array($results ?? null) ? $results : [],
+        $appNeutralTenjiList,
+        $appProvisionalCourseByBoat,
+        true
+    );
+    $appProvisionalAiTrioBoats = is_array($appProvisionalAiTrioData['boats'] ?? null)
+        ? $appProvisionalAiTrioData['boats']
+        : [];
+
+    $appTrifectaData = $trifectaLogic->calculate(
+        (string)($race_code ?? ''),
+        $appProvisionalWinBoats,
+        $appProvisionalAiTrioBoats,
+        $appProvisionalCourseByBoat
+    );
+    $appTrifectaStatus = (string)($appTrifectaData['status'] ?? 'error');
+    $appTrifectaError = (string)($appTrifectaData['error'] ?? '');
+    $appTrifectaRows = is_array($appTrifectaData['rows'] ?? null)
+        ? $appTrifectaData['rows']
+        : [];
+}
 
 // 既存アプリViewは土台として維持し、DOM上で「基本情報 / メイン情報」の2タブへ整理する。
 ob_start();
