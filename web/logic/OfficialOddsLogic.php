@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 /**
- * BOAT RACE公式サイトの3連単120通りオッズを取得し、レース単位JSONでキャッシュする。
+ * BOAT RACE公式サイトの3連単オッズを取得し、レース単位JSONでキャッシュする。
  *
+ * - 通常6艇立て: 120通り
+ * - 実質5艇立て: 60通り
  * - 初回表示: キャッシュがなければ1回だけ公式サイトへ取得
- * - 以後: キャッシュを再利用
+ * - 以後: 正常キャッシュを再利用
  * - 手動更新: force=true の時だけ再取得
  * - DBには保存しない
  */
@@ -20,7 +22,13 @@ class OfficialOddsLogic
 
         if (!$force && is_file($cachePath)) {
             $cached = json_decode((string)file_get_contents($cachePath), true);
-            if (is_array($cached) && ($cached['race_code'] ?? '') === $raceCode) {
+            $cachedCount = is_array($cached) ? (int)($cached['count'] ?? 0) : 0;
+            if (
+                is_array($cached)
+                && ($cached['race_code'] ?? '') === $raceCode
+                && ($cached['status'] ?? '') === 'ok'
+                && in_array($cachedCount, [60, 120], true)
+            ) {
                 $cached['cache'] = [
                     'used' => true,
                 ];
@@ -42,10 +50,11 @@ class OfficialOddsLogic
             }
 
             $odds = $this->parseTrifectaOdds($html);
-            $status = count($odds) === 120 ? 'ok' : 'waiting';
+            $count = count($odds);
+            $status = in_array($count, [60, 120], true) ? 'ok' : 'waiting';
             $error = $status === 'ok'
                 ? ''
-                : '公式3連単オッズを120通り取得できませんでした。未公開またはページ構造変更の可能性があります。';
+                : '公式3連単オッズを60/120通り取得できませんでした。未公開またはページ構造変更の可能性があります。';
         } catch (Throwable $e) {
             $odds = [];
             $status = 'error';
@@ -193,7 +202,7 @@ class OfficialOddsLogic
         }
 
         ksort($best, SORT_NATURAL);
-        return $best;
+        return in_array(count($best), [60, 120], true) ? $best : [];
     }
 
     /**
@@ -290,7 +299,7 @@ class OfficialOddsLogic
             }
         }
 
-        return count($best) === 120 ? $best : [];
+        return in_array(count($best), [60, 120], true) ? $best : [];
     }
 
     private function parseBoatNumber(string $value): int
