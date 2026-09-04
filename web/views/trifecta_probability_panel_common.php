@@ -109,5 +109,65 @@ $head1SecondError = (string)($head1SecondData['error'] ?? '');
 </div>
 
 <?php
-// 120通り参考表示は同じ $trifectaData をそのまま使う。
+// 120通り・2連単30通りの専用表示だけ、展示前は暫定データへ切り替える。
+// 上の「イン1着時2連単」など既存ロジックは正式な$trifectaDataのまま維持する。
+$trifectaStatus = (string)($trifectaDisplayStatus ?? $trifectaStatus ?? 'error');
+$trifectaError = (string)($trifectaDisplayError ?? $trifectaError ?? '');
+$trifectaRows = is_array($trifectaDisplayRows ?? null) ? $trifectaDisplayRows : $trifectaRows;
+$trifectaTop20 = is_array($trifectaDisplayTop20 ?? null) ? $trifectaDisplayTop20 : $trifectaTop20;
+$trifectaHistory = is_array($trifectaDisplayHistory ?? null) ? $trifectaDisplayHistory : $trifectaHistory;
+$trifectaTotals = is_array($trifectaDisplayTotals ?? null) ? $trifectaDisplayTotals : $trifectaTotals;
 include __DIR__ . '/trifecta_probability_reference.php';
+
+$trifectaStateLabel = (($trifectaDisplayMode ?? 'exhibition') === 'provisional')
+    ? '【暫定版】'
+    : '【展示情報反映済】';
+$trifectaStateColor = (($trifectaDisplayMode ?? 'exhibition') === 'provisional')
+    ? '#a36a18'
+    : '#3f7659';
+?>
+<script>
+(function () {
+    const label = <?= json_encode($trifectaStateLabel, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const color = <?= json_encode($trifectaStateColor, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    let retry = 120;
+
+    function addBadge(title) {
+        if (!title || title.querySelector('.pc-probability-state')) return;
+        const state = document.createElement('span');
+        state.className = 'pc-probability-state';
+        state.textContent = label;
+        state.style.cssText = 'display:inline-block;margin-left:7px;font-size:12px;font-weight:700;white-space:nowrap;color:' + color + ';';
+        title.appendChild(state);
+    }
+
+    function findLeafTitle(root, text) {
+        if (!root) return null;
+        return Array.from(root.querySelectorAll('div')).find(function (node) {
+            return node.children.length === 0 && String(node.textContent || '').includes(text);
+        }) || null;
+    }
+
+    function applyState() {
+        const reference = document.getElementById('trifecta-reference-panel');
+        addBadge(findLeafTitle(reference, '🎲 出目確率'));
+
+        const exactaPanel = document.querySelector('.pc-main-tab-panel[data-pc-main-panel="exacta"]');
+        const exactaTitle = findLeafTitle(exactaPanel, '2連単30通り 出目確率');
+        if (exactaTitle) {
+            addBadge(exactaTitle);
+            return;
+        }
+
+        if (retry-- > 0) {
+            window.setTimeout(applyState, 50);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyState);
+    } else {
+        applyState();
+    }
+})();
+</script>
