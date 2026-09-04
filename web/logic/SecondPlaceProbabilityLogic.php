@@ -1,36 +1,12 @@
 <?php
 
 /**
- * 120通りの最終出目確率から、指定した頭コース条件の2着確率を取り出す共通ロジック。
+ * 3連単の最終出目確率から、指定した頭コース条件の2着確率を取り出す共通ロジック。
  *
- * 現在の「イン1着時 2連単」で使っている考え方（③ AI_FINAL）を、
- * 表示側・最終予想側の両方から再利用できる形へ切り出す。
- *
- * 重要:
- * - このクラス自身は TrifectaProbabilityLogic の重みや確率を変更しない。
- * - 120通りの final probability を条件付き2着分布へ集約するだけ。
- * - headCourse=1 が、検証済みの「イン1着時 2連単」と同じ定義。
- * - headCourse!=1 も計算自体は可能だが、最終予想へ本番適用する前に別途検証する。
+ * 通常6艇=120通り、実質5艇立て=60通りのどちらでも同じ考え方で集約する。
  */
 class SecondPlaceProbabilityLogic
 {
-    /**
-     * @param array $trifectaData TrifectaProbabilityLogic::calculate() の戻り値
-     * @param int   $headCourse   1着と仮定するコース
-     *
-     * @return array{
-     *   status:string,
-     *   error:string,
-     *   head_course:int,
-     *   head_boat:int,
-     *   base_mass:float,
-     *   ai_mass:float,
-     *   rows:array,
-     *   probability_by_course:array,
-     *   probability_by_boat:array,
-     *   ranked_second_boats:array
-     * }
-     */
     public function calculate(array $trifectaData, int $headCourse = 1): array
     {
         $empty = [
@@ -52,7 +28,7 @@ class SecondPlaceProbabilityLogic
         }
 
         if ((string)($trifectaData['status'] ?? '') !== 'ok') {
-            $empty['error'] = (string)($trifectaData['error'] ?? '120通り確率が未計算です');
+            $empty['error'] = (string)($trifectaData['error'] ?? '3連単出目確率が未計算です');
             return $empty;
         }
 
@@ -62,9 +38,21 @@ class SecondPlaceProbabilityLogic
         $boatByCourse = is_array($trifectaData['boat_by_course'] ?? null)
             ? $trifectaData['boat_by_course']
             : [];
+        $activeBoats = is_array($trifectaData['active_boats'] ?? null)
+            ? array_values(array_unique(array_filter(
+                array_map('intval', $trifectaData['active_boats']),
+                static fn(int $boat): bool => $boat >= 1 && $boat <= 6
+            )))
+            : range(1, 6);
+        sort($activeBoats, SORT_NUMERIC);
 
-        if (count($trifectaRows) !== 120) {
-            $empty['error'] = '120通り確率が揃っていません';
+        $activeCount = count($activeBoats);
+        $expectedCount = (int)($trifectaData['outcome_count'] ?? 0);
+        if ($expectedCount <= 0 && $activeCount >= 3) {
+            $expectedCount = $activeCount * ($activeCount - 1) * ($activeCount - 2);
+        }
+        if ($expectedCount <= 0 || count($trifectaRows) !== $expectedCount) {
+            $empty['error'] = '3連単出目確率が必要件数そろっていません';
             return $empty;
         }
 
@@ -78,11 +66,21 @@ class SecondPlaceProbabilityLogic
             $courseMap[$course] = $boat;
         }
 
+        $activeSet = array_fill_keys($activeBoats, true);
         $headBoat = (int)$courseMap[$headCourse];
+        if (!isset($activeSet[$headBoat])) {
+            $empty['error'] = '指定頭コースの艇は欠場扱いです';
+            return $empty;
+        }
+
         $baseBySecondCourse = [];
         $aiBySecondCourse = [];
         for ($course = 1; $course <= 6; $course++) {
             if ($course === $headCourse) {
+                continue;
+            }
+            $secondBoat = (int)$courseMap[$course];
+            if (!isset($activeSet[$secondBoat])) {
                 continue;
             }
             $baseBySecondCourse[$course] = 0.0;
