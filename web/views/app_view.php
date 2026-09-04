@@ -49,12 +49,20 @@ $appPcUrl = '/web/index.php?' . $appCurrentQuery;
 $appPostUrl = '/web/app.php?' . $appCurrentQuery;
 
 // PC版の3連単120通りと同じ計算結果を、アプリ専用タブへ渡す。
+// 展示前だけはapp.phpで作った表示専用の暫定値へ切り替える。
 $appTrifectaPayload = [
-    'status' => (string)($trifectaStatus ?? 'error'),
-    'error' => (string)($trifectaError ?? ''),
-    'rows' => is_array($trifectaRows ?? null) ? array_values($trifectaRows) : [],
-    'history' => is_array($trifectaData['history'] ?? null) ? $trifectaData['history'] : [],
-    'totals' => is_array($trifectaData['totals'] ?? null) ? $trifectaData['totals'] : [],
+    'status' => (string)($appTrifectaStatus ?? $trifectaStatus ?? 'error'),
+    'error' => (string)($appTrifectaError ?? $trifectaError ?? ''),
+    'display_mode' => (string)($appTrifectaDisplayMode ?? 'exhibition'),
+    'rows' => is_array($appTrifectaRows ?? null)
+        ? array_values($appTrifectaRows)
+        : (is_array($trifectaRows ?? null) ? array_values($trifectaRows) : []),
+    'history' => is_array($appTrifectaData['history'] ?? null)
+        ? $appTrifectaData['history']
+        : (is_array($trifectaData['history'] ?? null) ? $trifectaData['history'] : []),
+    'totals' => is_array($appTrifectaData['totals'] ?? null)
+        ? $appTrifectaData['totals']
+        : (is_array($trifectaData['totals'] ?? null) ? $trifectaData['totals'] : []),
 ];
 $appTrifectaJson = json_encode(
     $appTrifectaPayload,
@@ -66,7 +74,7 @@ $appTrifectaJson = json_encode(
         | JSON_HEX_QUOT
 );
 if (!is_string($appTrifectaJson)) {
-    $appTrifectaJson = '{"status":"error","error":"JSON生成失敗","rows":[],"history":{},"totals":{}}';
+    $appTrifectaJson = '{"status":"error","error":"JSON生成失敗","display_mode":"provisional","rows":[],"history":{},"totals":{}}';
 }
 ?>
 <!DOCTYPE html>
@@ -304,6 +312,59 @@ if (!is_string($appTrifectaJson)) {
     'venue' => (string)($place_names[$selected_place] ?? $selected_place),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script src="/web/assets/js/app_recent_prediction_history.js?v=20260826a"></script>
+<script>
+(function () {
+    const payloadNode = document.getElementById('app-trifecta-data');
+    let mode = 'exhibition';
+    if (payloadNode) {
+        try {
+            const payload = JSON.parse(payloadNode.textContent || '{}');
+            mode = String(payload.display_mode || 'exhibition');
+        } catch (e) {}
+    }
+
+    const label = mode === 'provisional' ? '【暫定版】' : '【展示情報反映済】';
+    const color = mode === 'provisional' ? '#a36a18' : '#3f7659';
+    const selectors = [
+        '.app-tab-panel[data-panel="trifecta"] .app-section-title',
+        '.app-tab-panel[data-panel="exacta"] .app-section-title'
+    ];
+    let retry = 120;
+
+    function applyProbabilityState() {
+        let waiting = false;
+        selectors.forEach(function (selector) {
+            const title = document.querySelector(selector);
+            if (!title) {
+                waiting = true;
+                return;
+            }
+            if (title.querySelector('.app-probability-state')) return;
+
+            const state = document.createElement('span');
+            state.className = 'app-probability-state';
+            state.textContent = label;
+            state.style.display = 'inline-block';
+            state.style.marginLeft = '6px';
+            state.style.fontSize = '11px';
+            state.style.fontWeight = '700';
+            state.style.whiteSpace = 'nowrap';
+            state.style.color = color;
+            title.appendChild(state);
+        });
+
+        if (waiting && retry-- > 0) {
+            window.setTimeout(applyProbabilityState, 50);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', applyProbabilityState);
+    } else {
+        applyProbabilityState();
+    }
+})();
+</script>
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
