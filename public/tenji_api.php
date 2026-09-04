@@ -68,6 +68,31 @@ function calcStraightScore($straight, $avg_straight) {
 }
 
 //--------------------------------------
+// NULL安全化ヘルパー
+//--------------------------------------
+function nullableFloat($value): ?float {
+    if ($value === null || $value === '') {
+        return null;
+    }
+    return (float)$value;
+}
+
+function avgNonNull(array $values): ?float {
+    $valid = [];
+    foreach ($values as $value) {
+        if ($value !== null && $value !== '') {
+            $valid[] = (float)$value;
+        }
+    }
+
+    if (count($valid) === 0) {
+        return null;
+    }
+
+    return array_sum($valid) / count($valid);
+}
+
+//--------------------------------------
 // DB接続
 //--------------------------------------
 try {
@@ -157,16 +182,15 @@ $stmt->execute([':race_code' => $race_code]);
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 //--------------------------------------
-// ⑤ 6艇の平均値を先にまとめて計算
+// ⑤ レース内平均を非NULL艇だけで計算
+//
+// 取得元仕様や展示不参加で一部NULLになることがある。
+// NULLを0秒として平均・評価すると、その艇が異常に高評価されるため、
+// 平均は値が存在する艇だけで計算する。
 //--------------------------------------
-$lap_times = array_column($rows, 'lap_time');
-$avg_lap   = (count($lap_times) > 0) ? array_sum($lap_times) / count($lap_times) : 0;
-
-$mawari_times = array_column($rows, 'around_time');
-$avg_mawari   = (count($mawari_times) > 0) ? array_sum($mawari_times) / count($mawari_times) : 0;
-
-$straight_times = array_column($rows, 'straight_time');
-$avg_straight   = (count($straight_times) > 0) ? array_sum($straight_times) / count($straight_times) : 0;
+$avg_lap = avgNonNull(array_column($rows, 'lap_time'));
+$avg_mawari = avgNonNull(array_column($rows, 'around_time'));
+$avg_straight = avgNonNull(array_column($rows, 'straight_time'));
 
 //--------------------------------------
 // ⑥ JSON 生成
@@ -175,15 +199,24 @@ $result = [];
 
 foreach ($rows as $row) {
 
-    $course  = strval($row["tenji_course"]);
-    $ex_diff = (float)$row["exhibition_time"] - $avg_ex;
+    $course = strval($row["tenji_course"]);
 
-    // 各スコア計算
-    $ex_score       = calcExhibitionScore($ex_diff);
-    $st_score       = calcStScore((float)$row["start_timing"]);
-    $lap_score      = calcLapScore((float)$row["lap_time"], $avg_lap);
-    $mawari_score   = calcMawariScore((float)$row["around_time"], $avg_mawari);
-    $straight_score = calcStraightScore((float)$row["straight_time"], $avg_straight);
+    $exhibition = nullableFloat($row["exhibition_time"]);
+    $st = nullableFloat($row["start_timing"]);
+    $lap = nullableFloat($row["lap_time"]);
+    $mawari = nullableFloat($row["around_time"]);
+    $straight = nullableFloat($row["straight_time"]);
+
+    $ex_diff = $exhibition === null ? null : $exhibition - $avg_ex;
+
+    // NULLは「良い/悪い」と判断できないため中立3点。
+    // 全艇で当該指標が非提供の場合も全艇3点となり、順位差を生まない。
+    $ex_score = $ex_diff === null ? 3 : calcExhibitionScore($ex_diff);
+    $st_score = $st === null ? 3 : calcStScore($st);
+    $lap_score = ($lap === null || $avg_lap === null) ? 3 : calcLapScore($lap, $avg_lap);
+    $mawari_score = ($mawari === null || $avg_mawari === null) ? 3 : calcMawariScore($mawari, $avg_mawari);
+    $straight_score = ($straight === null || $avg_straight === null) ? 3 : calcStraightScore($straight, $avg_straight);
+
     $attack_potential = $st_score + $straight_score;
     $stable_score = $lap_score + $mawari_score;
 
@@ -191,22 +224,22 @@ foreach ($rows as $row) {
     $ex_total = $ex_score + $lap_score + $mawari_score + $straight_score;
 
     $result[$course] = [
-        "teiban"          => (int)$row["teiban"],
-        "tenji_course"    => (int)$row["tenji_course"],
-        "exhibition"      => (float)$row["exhibition_time"],
-        "ex_diff"         => $ex_diff,
-        "ex_score"        => $ex_score,
-        "st"              => (float)$row["start_timing"],
-        "st_score"        => $st_score,
-        "lap"             => (float)$row["lap_time"],
-        "lap_score"       => $lap_score,
-        "mawari"          => (float)$row["around_time"],
-        "mawari_score"    => $mawari_score,
-        "straight"        => (float)$row["straight_time"],
-        "straight_score"  => $straight_score,
-        "ex_total"        => $ex_total,
+        "teiban"           => (int)$row["teiban"],
+        "tenji_course"     => (int)$row["tenji_course"],
+        "exhibition"       => $exhibition,
+        "ex_diff"          => $ex_diff,
+        "ex_score"         => $ex_score,
+        "st"               => $st,
+        "st_score"         => $st_score,
+        "lap"              => $lap,
+        "lap_score"        => $lap_score,
+        "mawari"           => $mawari,
+        "mawari_score"     => $mawari_score,
+        "straight"         => $straight,
+        "straight_score"   => $straight_score,
+        "ex_total"         => $ex_total,
         "attack_potential" => $attack_potential,
-        "stable_score"    => $stable_score
+        "stable_score"     => $stable_score
     ];
 }
 
