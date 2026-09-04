@@ -18,6 +18,17 @@
         );
     }
 
+    function detectTrifectaCount() {
+        const tableBox = document.getElementById('web-trifecta-all-table');
+        const tbody = tableBox ? tableBox.querySelector('tbody') : null;
+        if (tbody && tbody.rows.length > 0) return tbody.rows.length;
+
+        const reference = document.getElementById('trifecta-reference-panel');
+        const text = String(reference ? reference.textContent : '');
+        const match = text.match(/3連単\s*(\d+)通り/);
+        return match ? Number(match[1]) : 120;
+    }
+
     function setupPcMainTabs() {
         const container = document.querySelector('.container');
         const codeBox = container ? container.querySelector('.code-box') : null;
@@ -29,6 +40,7 @@
         const codeIndex = children.indexOf(codeBox);
         if (codeIndex < 0) return;
         const sourceNodes = children.slice(codeIndex + 1);
+        const trifectaCount = detectTrifectaCount();
 
         const tabs = document.createElement('nav');
         tabs.className = 'pc-main-tabs';
@@ -36,7 +48,7 @@
         tabs.innerHTML = ''
             + '<button type="button" class="pc-main-tab is-active" data-pc-main-tab="basic">基本情報</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="main">メイン情報</button>'
-            + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">120通り</button>'
+            + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">' + trifectaCount + '通り</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="recent">直近60R</button>';
 
         const basicPanel = document.createElement('div');
@@ -142,7 +154,7 @@
         if (!trifectaReference) {
             const note = document.createElement('div');
             note.style.cssText = 'margin:12px 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-soft);color:var(--text-muted);font-size:13px;';
-            note.textContent = '3連単120通りは計算待ちです。';
+            note.textContent = '3連単' + trifectaCount + '通りは計算待ちです。';
             trifectaPanel.appendChild(note);
         }
 
