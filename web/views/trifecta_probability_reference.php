@@ -1,7 +1,18 @@
-<!-- 参考情報：完成済み3連単120通りは削除せず折りたたんで保持 -->
+<?php
+$trifectaActiveBoats = is_array($trifectaActiveBoats ?? null)
+    ? array_values(array_unique(array_filter(array_map('intval', $trifectaActiveBoats), static fn(int $b): bool => $b >= 1 && $b <= 6)))
+    : range(1, 6);
+sort($trifectaActiveBoats, SORT_NUMERIC);
+$trifectaOutcomeCount = (int)($trifectaOutcomeCount ?? count($trifectaRows ?? []));
+$trifectaExactaCount = (int)($trifectaExactaCount ?? (count($trifectaActiveBoats) * max(0, count($trifectaActiveBoats) - 1)));
+$trifectaExcludedBoats = is_array($trifectaExcludedBoats ?? null)
+    ? array_values(array_unique(array_filter(array_map('intval', $trifectaExcludedBoats), static fn(int $b): bool => $b >= 1 && $b <= 6)))
+    : [];
+?>
+<!-- 参考情報：3連単出目確率。通常6艇=120通り、実質5艇立て=60通り。 -->
 <details id="trifecta-reference-panel" style="margin:0 0 14px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; overflow:hidden; color:#3f4b5a;">
     <summary style="cursor:pointer; padding:12px 14px; color:#3f4b5a; font-size:14px; font-weight:bold; background:#e8dfd2;">
-        📚 参考情報：3連単120通り 出目確率
+        📚 参考情報：3連単<?= $trifectaOutcomeCount ?>通り 出目確率
     </summary>
     <div style="padding:14px;">
         <div style="margin-bottom:10px;">
@@ -12,9 +23,14 @@
             <div style="font-size:12px; color:#6b7785; margin-top:2px;">
                 2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
             </div>
+            <?php if (!empty($trifectaExcludedBoats)): ?>
+                <div style="font-size:12px; color:#a36a18; margin-top:3px; font-weight:bold;">
+                    欠場扱い <?= htmlspecialchars(implode('・', array_map(static fn(int $b): string => $b . '号艇', $trifectaExcludedBoats)), ENT_QUOTES, 'UTF-8') ?> を除外し、残り<?= count($trifectaActiveBoats) ?>艇で100%へ再正規化
+                </div>
+            <?php endif; ?>
         </div>
 
-        <?php if ($trifectaStatus === 'ok' && count($trifectaRows) === 120): ?>
+        <?php if ($trifectaStatus === 'ok' && $trifectaOutcomeCount > 0 && count($trifectaRows) === $trifectaOutcomeCount): ?>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px;">
                 <div style="background:#f2ece2; border:1px solid #d8cdbc; border-radius:5px; padding:6px 9px; font-size:12px; color:#3f4b5a;">
                     Top5累計 <strong><?= number_format($trifectaCum($trifectaRows, 5) * 100.0, 2) ?>%</strong>
@@ -34,7 +50,7 @@
 
             <details id="trifecta-all-details" style="margin-top:10px;">
                 <summary style="cursor:pointer; color:#3f4b5a; font-size:13px; font-weight:bold;">
-                    120通りすべて表示
+                    <?= $trifectaOutcomeCount ?>通りすべて表示
                 </summary>
                 <div style="margin-top:10px; padding:10px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px;">
                     <label style="display:block; color:#6b7785; font-size:12px; font-weight:bold;">
@@ -52,16 +68,16 @@
                                 </span>
                                 <button type="button" class="web-trifecta-filter" data-boat="0"
                                         style="min-width:42px; padding:6px 9px; border:1px solid #1683bd; border-radius:5px; background:#fffaf2; color:#1683bd; box-shadow:inset 0 0 0 1px #1683bd; font-weight:bold; cursor:pointer;">全</button>
-                                <?php for ($boat = 1; $boat <= 6; $boat++): ?>
+                                <?php foreach ($trifectaActiveBoats as $boat): ?>
                                     <button type="button" class="web-trifecta-filter" data-boat="<?= $boat ?>"
                                             style="min-width:42px; padding:6px 9px; border:1px solid #cbbda9; border-radius:5px; background:#eee6da; color:#4b5866; font-weight:bold; cursor:pointer;"><?= $boat ?></button>
-                                <?php endfor; ?>
+                                <?php endforeach; ?>
                             </div>
                         <?php endforeach; ?>
                     </div>
 
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px;">
-                        <span id="web-trifecta-count" style="color:#6b7785; font-size:12px; font-weight:bold;">120 / 120件</span>
+                        <span id="web-trifecta-count" style="color:#6b7785; font-size:12px; font-weight:bold;"><?= $trifectaOutcomeCount ?> / <?= $trifectaOutcomeCount ?>件</span>
                         <button id="web-trifecta-clear" type="button"
                                 style="padding:6px 12px; border:1px solid #cbbda9; border-radius:5px; background:#eee6da; color:#4b5866; font-weight:bold; cursor:pointer;">クリア</button>
                     </div>
@@ -72,7 +88,7 @@
             </details>
 
             <div style="margin-top:8px; font-size:12px; color:#6b7785;">
-                120通り合計 <?= number_format((float)($trifectaTotals['final'] ?? 0.0) * 100.0, 6) ?>%
+                <?= $trifectaOutcomeCount ?>通り合計 <?= number_format((float)($trifectaTotals['final'] ?? 0.0) * 100.0, 6) ?>%
                 / P1選択 → P2完全ホールドアウト検証済み
                 <?= !empty($simulation_active) ? ' / 仮想進入試算' : '' ?>
             </div>
@@ -86,6 +102,7 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const totalOutcomes = <?= (int)$trifectaOutcomeCount ?>;
     const exactaPanel = document.getElementById('head1-exacta-panel');
     const referencePanel = document.getElementById('trifecta-reference-panel');
     const summaryBox = document.querySelector('.summary-box');
@@ -204,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tbody.appendChild(meta.row);
             if (show) visible++;
         });
-        if (count) count.textContent = visible + ' / 120件';
+        if (count) count.textContent = visible + ' / ' + totalOutcomes + '件';
         updateHeaders();
     }
 
