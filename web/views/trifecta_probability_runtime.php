@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../logic/TrifectaProbabilityLogic.php';
+require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
+require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
 
 $outcomeCourseByBoat = [];
 if (is_array($aiTrioBoats ?? null) && count($aiTrioBoats) === 6) {
@@ -38,6 +40,88 @@ $trifectaTotals = is_array($trifectaData['totals'] ?? null) ? $trifectaData['tot
 $trifectaBoatByCourse = is_array($trifectaData['boat_by_course'] ?? null)
     ? $trifectaData['boat_by_course']
     : [];
+
+// Webの2連単30通り・3連単120通り専用表示データ。
+// 正式な$trifectaDataは既存の共通2着ロジック等でそのまま使い、展示前の暫定値は流さない。
+$trifectaDisplayMode = 'exhibition';
+$trifectaDisplayData = $trifectaData;
+
+if ($trifectaStatus !== 'ok' || count($trifectaRows) !== 120) {
+    $trifectaDisplayMode = 'provisional';
+
+    // 展示前は枠なり進入。仮想進入中のみ指定進入を使う。
+    $provisionalCourseByBoat = [];
+    if (
+        !empty($simulation_active)
+        && is_array($prediction_course_by_boat ?? null)
+        && count($prediction_course_by_boat) === 6
+    ) {
+        $provisionalCourseByBoat = $prediction_course_by_boat;
+    } else {
+        for ($boat = 1; $boat <= 6; $boat++) {
+            $provisionalCourseByBoat[$boat] = $boat;
+        }
+    }
+
+    // 1着側は展示補正前の基本1着率を使う。
+    $provisionalBaseWinBoats = is_array($baseWinBoats ?? null) ? $baseWinBoats : [];
+    if (!empty($simulation_active)) {
+        $provisionalBaseWinLogic = new BaseWinRateLogic();
+        $provisionalBaseWinData = $provisionalBaseWinLogic->calculate(
+            (string)($race_code ?? ''),
+            $provisionalCourseByBoat
+        );
+        if (is_array($provisionalBaseWinData['boats'] ?? null) && count($provisionalBaseWinData['boats']) === 6) {
+            $provisionalBaseWinBoats = $provisionalBaseWinData['boats'];
+        }
+    }
+
+    $provisionalWinBoats = [];
+    for ($boat = 1; $boat <= 6; $boat++) {
+        $rate = $provisionalBaseWinBoats[$boat]['normalized_rate']
+            ?? $provisionalBaseWinBoats[(string)$boat]['normalized_rate']
+            ?? null;
+        if (is_numeric($rate)) {
+            $provisionalWinBoats[$boat] = ['corrected_rate' => (float)$rate];
+        }
+    }
+
+    // AI3連対率は展示由来の二次評価だけ中立（Z=0）として暫定計算する。
+    $neutralTenjiList = [];
+    for ($boat = 1; $boat <= 6; $boat++) {
+        $neutralTenjiList[] = [
+            'teiban' => $boat,
+            'tenji_course' => (int)$provisionalCourseByBoat[$boat],
+            'final_2nd_score' => 0.0,
+        ];
+    }
+
+    $provisionalAiTrioLogic = new AiTrioRateLogic();
+    $provisionalAiTrioData = $provisionalAiTrioLogic->calculate(
+        (string)($race_code ?? ''),
+        is_array($results ?? null) ? $results : [],
+        $neutralTenjiList,
+        $provisionalCourseByBoat,
+        true
+    );
+    $provisionalAiTrioBoats = is_array($provisionalAiTrioData['boats'] ?? null)
+        ? $provisionalAiTrioData['boats']
+        : [];
+
+    $trifectaDisplayData = $trifectaLogic->calculate(
+        (string)($race_code ?? ''),
+        $provisionalWinBoats,
+        $provisionalAiTrioBoats,
+        $provisionalCourseByBoat
+    );
+}
+
+$trifectaDisplayStatus = (string)($trifectaDisplayData['status'] ?? 'error');
+$trifectaDisplayError = (string)($trifectaDisplayData['error'] ?? '');
+$trifectaDisplayRows = is_array($trifectaDisplayData['rows'] ?? null) ? $trifectaDisplayData['rows'] : [];
+$trifectaDisplayTop20 = is_array($trifectaDisplayData['top20'] ?? null) ? $trifectaDisplayData['top20'] : [];
+$trifectaDisplayHistory = is_array($trifectaDisplayData['history'] ?? null) ? $trifectaDisplayData['history'] : [];
+$trifectaDisplayTotals = is_array($trifectaDisplayData['totals'] ?? null) ? $trifectaDisplayData['totals'] : [];
 
 $trifectaCum = static function (array $rows, int $n): float {
     if ($n <= 0 || empty($rows)) {
