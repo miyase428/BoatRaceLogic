@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../logic/TrifectaProbabilityLogic.php';
 require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
+require_once __DIR__ . '/../logic/EffectiveRaceOutcomeFilter.php';
 
 $outcomeCourseByBoat = [];
 if (is_array($aiTrioBoats ?? null) && count($aiTrioBoats) === 6) {
@@ -24,12 +25,14 @@ if (count($outcomeCourseByBoat) !== 6 && is_array($prediction_course_by_boat ?? 
 }
 
 $trifectaLogic = new TrifectaProbabilityLogic();
+$effectiveOutcomeFilter = new EffectiveRaceOutcomeFilter();
 $trifectaData = $trifectaLogic->calculate(
     (string)($race_code ?? ''),
     is_array($correctedWinBoats ?? null) ? $correctedWinBoats : [],
     is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [],
     $outcomeCourseByBoat
 );
+$trifectaData = $effectiveOutcomeFilter->apply((string)($race_code ?? ''), $trifectaData);
 
 $trifectaStatus = (string)($trifectaData['status'] ?? 'error');
 $trifectaError = (string)($trifectaData['error'] ?? '');
@@ -40,13 +43,22 @@ $trifectaTotals = is_array($trifectaData['totals'] ?? null) ? $trifectaData['tot
 $trifectaBoatByCourse = is_array($trifectaData['boat_by_course'] ?? null)
     ? $trifectaData['boat_by_course']
     : [];
+$trifectaActiveBoats = is_array($trifectaData['active_boats'] ?? null)
+    ? array_values(array_map('intval', $trifectaData['active_boats']))
+    : range(1, 6);
+$trifectaExcludedBoats = is_array($trifectaData['excluded_boats'] ?? null)
+    ? array_values(array_map('intval', $trifectaData['excluded_boats']))
+    : [];
+$trifectaOutcomeCount = (int)($trifectaData['outcome_count'] ?? count($trifectaRows));
+$trifectaExactaCount = (int)($trifectaData['exacta_count'] ?? 30);
 
-// Webの2連単30通り・3連単120通り専用表示データ。
+// Webの2連単・3連単専用表示データ。
 // 正式な$trifectaDataは既存の共通2着ロジック等でそのまま使い、展示前の暫定値は流さない。
 $trifectaDisplayMode = 'exhibition';
 $trifectaDisplayData = $trifectaData;
 
-if ($trifectaStatus !== 'ok' || count($trifectaRows) !== 120) {
+$expectedOutcomeCount = max(0, $trifectaOutcomeCount);
+if ($trifectaStatus !== 'ok' || $expectedOutcomeCount <= 0 || count($trifectaRows) !== $expectedOutcomeCount) {
     $trifectaDisplayMode = 'provisional';
 
     // 展示前は枠なり進入。仮想進入中のみ指定進入を使う。
@@ -114,6 +126,7 @@ if ($trifectaStatus !== 'ok' || count($trifectaRows) !== 120) {
         $provisionalAiTrioBoats,
         $provisionalCourseByBoat
     );
+    $trifectaDisplayData = $effectiveOutcomeFilter->apply((string)($race_code ?? ''), $trifectaDisplayData);
 }
 
 $trifectaDisplayStatus = (string)($trifectaDisplayData['status'] ?? 'error');
@@ -122,6 +135,14 @@ $trifectaDisplayRows = is_array($trifectaDisplayData['rows'] ?? null) ? $trifect
 $trifectaDisplayTop20 = is_array($trifectaDisplayData['top20'] ?? null) ? $trifectaDisplayData['top20'] : [];
 $trifectaDisplayHistory = is_array($trifectaDisplayData['history'] ?? null) ? $trifectaDisplayData['history'] : [];
 $trifectaDisplayTotals = is_array($trifectaDisplayData['totals'] ?? null) ? $trifectaDisplayData['totals'] : [];
+$trifectaDisplayActiveBoats = is_array($trifectaDisplayData['active_boats'] ?? null)
+    ? array_values(array_map('intval', $trifectaDisplayData['active_boats']))
+    : $trifectaActiveBoats;
+$trifectaDisplayExcludedBoats = is_array($trifectaDisplayData['excluded_boats'] ?? null)
+    ? array_values(array_map('intval', $trifectaDisplayData['excluded_boats']))
+    : $trifectaExcludedBoats;
+$trifectaDisplayOutcomeCount = (int)($trifectaDisplayData['outcome_count'] ?? count($trifectaDisplayRows));
+$trifectaDisplayExactaCount = (int)($trifectaDisplayData['exacta_count'] ?? $trifectaExactaCount);
 
 $trifectaCum = static function (array $rows, int $n): float {
     if ($n <= 0 || empty($rows)) {
