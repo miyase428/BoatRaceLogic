@@ -4,10 +4,15 @@ declare(strict_types=1);
 /**
  * BoatRaceLogic - 二次評価 検証プログラム
  *
- * 現在の本番 tenji_api.php の二次評価ロジックを再現し、
- * 過去レースの実着順と比較する。
+ * 現在の本番Web二次評価を再現し、過去レースの実着順と比較する。
  *
- * 展示STは検証済みの ST_BAND を使用する。
+ * 本番定義:
+ * - 展示STは検証済みの ST_BAND を使用
+ * - 展示指標NULLは0秒へ変換せず中立3点
+ * - 周回/周り足/直線の平均は非NULL艇だけで計算
+ * - ApiClientProduction と同様、旧2・4号艇固定+1は二次スコアへ加算しない
+ *
+ * 展示ST:
  *   ST <= 0.00        => 3点
  *   0.00 < ST <= 0.12 => 5点
  *   0.12 < ST <= 0.20 => 3点
@@ -91,31 +96,47 @@ function calcStraightScore(float $straight, float $avgStraight): float
     return 1.0;
 }
 
+function nullableFloat(mixed $value): ?float
+{
+    if ($value === null || $value === '') return null;
+    return (float)$value;
+}
+
+function avgNonNull(array $values): ?float
+{
+    $valid = array_values(array_filter($values, static fn($v) => $v !== null));
+    if (!$valid) return null;
+    return array_sum($valid) / count($valid);
+}
+
 function calcSecondEval(
     int $lane,
-    float $exhibition,
+    ?float $exhibition,
     float $avgExhibition,
-    float $st,
-    float $lap,
-    float $avgLap,
-    float $mawari,
-    float $avgMawari,
-    float $straight,
-    float $avgStraight
+    ?float $st,
+    ?float $lap,
+    ?float $avgLap,
+    ?float $mawari,
+    ?float $avgMawari,
+    ?float $straight,
+    ?float $avgStraight
 ): array {
-    $exScore = calcExhibitionScore($exhibition - $avgExhibition);
-    $stScore = calcStScore($st);
-    $lapScore = calcLapScore($lap, $avgLap);
-    $mawariScore = calcMawariScore($mawari, $avgMawari);
-    $straightScore = calcStraightScore($straight, $avgStraight);
+    $exScore = $exhibition === null
+        ? 3.0
+        : calcExhibitionScore($exhibition - $avgExhibition);
+    $stScore = $st === null ? 3.0 : calcStScore($st);
+    $lapScore = ($lap === null || $avgLap === null) ? 3.0 : calcLapScore($lap, $avgLap);
+    $mawariScore = ($mawari === null || $avgMawari === null) ? 3.0 : calcMawariScore($mawari, $avgMawari);
+    $straightScore = ($straight === null || $avgStraight === null) ? 3.0 : calcStraightScore($straight, $avgStraight);
 
     $exTotal = $exScore + $lapScore + $mawariScore + $straightScore;
     $attackPotential = $stScore + $straightScore;
     $stableScore = $lapScore + $mawariScore;
     $exSougou = $exTotal + $attackPotential + $stableScore;
     $typeHosei = 0.0;
-    $tenkaiMorai = ($lane === 2 || $lane === 4) ? 1.0 : 0.0;
-    $finalSecondScore = $exSougou + $typeHosei + $tenkaiMorai;
+
+    // 本番Web(ApiClientProduction)では旧2・4号艇固定+1を加算しない。
+    $finalSecondScore = $exSougou + $typeHosei;
 
     return [
         'ex_score' => $exScore,
@@ -309,27 +330,27 @@ foreach ($races as $race) {
         continue;
     }
 
-    $lapValues = array_map(fn(array $r): float => (float)$r['lap_time'], $exRows);
-    $mawariValues = array_map(fn(array $r): float => (float)$r['around_time'], $exRows);
-    $straightValues = array_map(fn(array $r): float => (float)$r['straight_time'], $exRows);
+    $lapValues = array_map(static fn(array $r): ?float => nullableFloat($r['lap_time']), $exRows);
+    $mawariValues = array_map(static fn(array $r): ?float => nullableFloat($r['around_time']), $exRows);
+    $straightValues = array_map(static fn(array $r): ?float => nullableFloat($r['straight_time']), $exRows);
 
-    $avgLap = array_sum($lapValues) / 6.0;
-    $avgMawari = array_sum($mawariValues) / 6.0;
-    $avgStraight = array_sum($straightValues) / 6.0;
+    $avgLap = avgNonNull($lapValues);
+    $avgMawari = avgNonNull($mawariValues);
+    $avgStraight = avgNonNull($straightValues);
 
     $boats = [];
     foreach ($exRows as $row) {
         $lane = (int)$row['lane'];
         $score = calcSecondEval(
             $lane,
-            (float)$row['exhibition_time'],
+            nullableFloat($row['exhibition_time']),
             $avgExhibition,
-            (float)$row['start_timing'],
-            (float)$row['lap_time'],
+            nullableFloat($row['start_timing']),
+            nullableFloat($row['lap_time']),
             $avgLap,
-            (float)$row['around_time'],
+            nullableFloat($row['around_time']),
             $avgMawari,
-            (float)$row['straight_time'],
+            nullableFloat($row['straight_time']),
             $avgStraight
         );
 
@@ -352,13 +373,14 @@ foreach ($races as $race) {
 }
 
 echo "========================================\n";
-echo "二次評価 健康診断（ST_BAND本番ロジック）\n";
+echo "二次評価 健康診断（NULL_SAFE 本番Webロジック）\n";
 echo "========================================\n";
 echo "期間       : {$from} ～ {$to}\n";
 echo "対象レース : {$total}\n";
 echo "処理レース : {$processed}\n";
 echo "スキップ   : {$skipped}\n";
 echo "順位方式   : 競争順位（同点は同順位）\n";
+echo "旧2・4固定+1: 本番Web同様に加算なし\n";
 echo "\n【スキップ理由】\n";
 foreach ($skipReasons as $key => $value) {
     printf("%-24s : %d\n", $key, $value);
@@ -386,6 +408,7 @@ for ($rank = 1; $rank <= 6; $rank++) {
 }
 
 echo "\nST判定 : <=0.00=3 / <=0.12=5 / <=0.20=3 / <=0.30=2 / >0.30=1\n";
+echo "NULL扱い: 欠損=中立3点 / レース内平均は非NULL艇のみ\n";
 echo "========================================\n";
 echo "検証終了\n";
 echo "========================================\n";
