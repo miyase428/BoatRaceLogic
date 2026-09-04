@@ -62,23 +62,12 @@ const { chromium } = require('playwright');
     await safeGoto(url);
     await page.waitForTimeout(1500); // DOM安定のため
 
-    // ★ 中止レース判定（展示情報が無い＝中止）
+    // 展示情報が無いページでは、以前は6艇分のnull行を返していた。
+    // PHP側がそれを「6艇取得済み」と誤認して保存できてしまうため、
+    // 今後は空配列を返し、exhibition_live に偽の6行を作らない。
     const baseTenjiExists = await page.$("//td[normalize-space(text())='展示情報']");
     if (!baseTenjiExists) {
-      const results = [];
-      for (let course = 1; course <= 6; course++) {
-        results.push({
-          entry_course: course,
-          player_id: null,
-          exhibition_time: null,
-          lap_time: null,
-          around_time: null,
-          straight_time: null,
-          start_timing: null
-        });
-      }
-
-      console.log(JSON.stringify(results));
+      console.log(JSON.stringify([]));
       await browser.close();
       process.exit(0);
     }
@@ -114,6 +103,27 @@ const { chromium } = require('playwright');
         straight_time:   await safeText(`${baseTenji}/following-sibling::tr[5]/td[${col}]`),
         start_timing:    await safeText(`${baseTenji}/following-sibling::tr[6]/td[${col}]`)
       });
+    }
+
+    // 展示欄は見つかったが、実データがまだ入っていない場合も保存対象にしない。
+    const hasExhibitionData = results.some((row) => {
+      return String(row.exhibition_time || '').trim() !== ''
+        || String(row.start_timing || '').trim() !== '';
+    });
+
+    if (!hasExhibitionData) {
+      await page.close();
+      await context.close();
+      await browser.close();
+      console.log(JSON.stringify([]));
+      process.exit(0);
+    }
+
+    // 実データがあるのに選手ID取得が壊れている場合はアクセス/解析失敗として扱う。
+    // 空player_idのまま6行保存されることを防ぎ、PHP側の再試行対象にする。
+    const validPlayerCount = results.filter((row) => /^\d+$/.test(String(row.player_id || '').trim())).length;
+    if (validPlayerCount !== 6) {
+      throw new Error(`player_id parse error: valid=${validPlayerCount}/6`);
     }
 
     await page.close();
