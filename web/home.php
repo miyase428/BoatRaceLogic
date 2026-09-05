@@ -82,7 +82,7 @@ try {
     }
 
     $exhibitionStmt = $pdo->prepare(
-        "SELECT race_code, COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL OR start_time IS NOT NULL) AS valid_count\n"
+        "SELECT race_code, COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL OR start_timing IS NOT NULL) AS valid_count\n"
         . "FROM exhibition_live\n"
         . "WHERE race_code LIKE :prefix\n"
         . "GROUP BY race_code"
