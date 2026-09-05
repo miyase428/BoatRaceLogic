@@ -9,7 +9,7 @@
 - BB_MEDIUM + 展示進入リマップ
 - EX_TOTAL（AMG/TKY/SMEはEX_TOTAL3） beta=0.10
 - SUM_RAW gamma=2.0
-- スリット補正は6艇STが必要なため、取得できる場合だけ alpha=0.25 を適用
+- スリット補正は6艇STが必要なため、実質5艇立てでは対象外
 - RAW_TEMPは同じ固定式を5艇正規化後へ適用
 
 このスクリプトは実質5艇立て専用。通常6艇では呼ばない。
@@ -288,22 +288,13 @@ def main() -> int:
             if sum_probs is None:
                 raise RuntimeError("5艇SUM補正後確率を正規化できません")
 
+        # 実質5艇立ては欠場艇の展示STが存在しないため、6艇前提のスリット分類は対象外。
+        # 例外を起こしてフォールバックするのではなく、仕様として最初からスキップする。
         slit_applied = False
-        slit_error = ""
+        slit_error = "実質5艇立てのためスリット補正対象外（6艇分の展示STが必要）"
         slit_pattern_id = 0
         raw_buffs = [0.0 for _ in active_boats]
         before_temp = sum_probs
-        try:
-            predict, buff_data, slit_buff = live.slit_prediction_and_buff(race_code, target_date)
-            before_temp, raw_buffs = apply_slit_active(
-                live, sum_probs, exhibition, active_boats, slit_buff
-            )
-            slit_applied = True
-            slit_pattern_id = int(predict.get("pattern_id", 0))
-        except Exception as exc:
-            # 5艇立てでは欠場艇のSTがNULLのため通常スリット分類が成立しないことがある。
-            # その場合は展示+SUMまでを確定値として使い、スリットだけ中立でスキップする。
-            slit_error = str(exc)
 
         raw_total = sum(float(base_detail[lane]["p_final_raw"]) for lane in active_boats)
         final_probs, tau = apply_raw_temp(before_temp, raw_total)
