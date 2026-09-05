@@ -11,17 +11,20 @@
     function parsePayload() {
         const node = document.getElementById('app-trifecta-data');
         if (!node) return null;
-        try {
-            return JSON.parse(node.textContent || '{}');
-        } catch (e) {
-            return null;
-        }
+        try { return JSON.parse(node.textContent || '{}'); } catch (e) { return null; }
+    }
+
+    function writePayload(payload) {
+        const node = document.getElementById('app-trifecta-data');
+        if (node) node.textContent = JSON.stringify(payload || {});
     }
 
     function raceCode() {
         const node = document.querySelector('.app-code');
         return String(node ? node.textContent : '').trim();
     }
+
+    function rangeBoats() { return [1, 2, 3, 4, 5, 6]; }
 
     function normalizeSearch(value) {
         return String(value || '')
@@ -34,8 +37,7 @@
     }
 
     function boatKey(row) {
-        const boats = Array.isArray(row.boats) ? row.boats.map(Number) : [];
-        return boats.join('-');
+        return (Array.isArray(row.boats) ? row.boats : []).map(function (boat) { return Number(boat); }).join('-');
     }
 
     function activeFromRows(rows) {
@@ -55,25 +57,19 @@
             const boats = Array.isArray(row.boats) ? row.boats.map(Number) : [];
             return boats.length === 3 && boats.every(function (boat) { return active.has(boat); });
         });
-
         const n = activeBoats.length;
         const expected = n >= 3 ? n * (n - 1) * (n - 2) : 0;
         if (!expected || filtered.length !== expected) return null;
 
-        const fields = ['base_probability', 'step2_probability', 'probability'];
-        fields.forEach(function (field) {
+        ['base_probability', 'step2_probability', 'probability'].forEach(function (field) {
             const sum = filtered.reduce(function (acc, row) { return acc + Math.max(0, number(row[field])); }, 0);
-            if (sum > 0) {
-                filtered.forEach(function (row) { row[field] = Math.max(0, number(row[field])) / sum; });
-            }
+            if (sum > 0) filtered.forEach(function (row) { row[field] = Math.max(0, number(row[field])) / sum; });
         });
 
         filtered.sort(function (a, b) {
             const diff = number(b.probability) - number(a.probability);
-            if (diff !== 0) return diff;
-            return boatKey(a).localeCompare(boatKey(b));
+            return diff !== 0 ? diff : boatKey(a).localeCompare(boatKey(b));
         });
-
         let cumulative = 0;
         filtered.forEach(function (row, index) {
             row.rank = index + 1;
@@ -86,7 +82,6 @@
     async function preparePayload() {
         const payload = parsePayload();
         if (!payload) return null;
-
         const code = raceCode();
         if (!/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/.test(code)) {
             payload.active_boats = activeFromRows(payload.rows);
@@ -99,6 +94,32 @@
             const activeBoats = context && context.status === 'ok' && Array.isArray(context.active_boats)
                 ? context.active_boats.map(Number).filter(function (boat) { return boat >= 1 && boat <= 6; })
                 : rangeBoats();
+
+            // 実質5艇立ては、クライアント側で120通りを単に切るのではなく、
+            // 5艇専用の展示補正済みAPIを優先する。失敗時だけ従来の暫定表示へフォールバック。
+            if (activeBoats.length === 5) {
+                try {
+                    const formalResponse = await fetch(
+                        '/web/effective_five_boat_trifecta_api.php?race_code=' + encodeURIComponent(code),
+                        {cache: 'no-store'}
+                    );
+                    const formal = await formalResponse.json();
+                    if (
+                        formal && formal.status === 'ok'
+                        && Array.isArray(formal.rows) && formal.rows.length === 60
+                    ) {
+                        formal.display_mode = 'effective5';
+                        formal.active_boats = activeBoats;
+                        formal.excluded_boats = rangeBoats().filter(function (boat) { return activeBoats.indexOf(boat) < 0; });
+                        formal.outcome_count = 60;
+                        formal.exacta_count = 20;
+                        writePayload(formal);
+                        return formal;
+                    }
+                } catch (formalError) {
+                    // 下の暫定フォールバックへ進む。
+                }
+            }
 
             payload.active_boats = activeBoats;
             payload.excluded_boats = rangeBoats().filter(function (boat) { return activeBoats.indexOf(boat) < 0; });
@@ -116,9 +137,7 @@
                     payload.totals.final = 1;
                 }
             }
-
-            const node = document.getElementById('app-trifecta-data');
-            if (node) node.textContent = JSON.stringify(payload);
+            writePayload(payload);
             return payload;
         } catch (e) {
             payload.active_boats = activeFromRows(payload.rows);
@@ -126,11 +145,45 @@
         }
     }
 
-    function rangeBoats() {
-        return [1, 2, 3, 4, 5, 6];
+    window.boatraceAppTrifectaPayloadPromise = preparePayload();
+
+    function probabilityState(payload) {
+        const mode = String(payload && payload.display_mode || 'exhibition');
+        if (mode === 'provisional') return {label: '【暫定版】', color: '#a36a18'};
+        if (mode === 'effective5') return {label: '【展示5艇反映済】', color: '#3f7659'};
+        return {label: '【展示情報反映済】', color: '#3f7659'};
     }
 
-    window.boatraceAppTrifectaPayloadPromise = preparePayload();
+    function syncProbabilityState(payload) {
+        const stateInfo = probabilityState(payload);
+        const selectors = [
+            '.app-tab-panel[data-panel="trifecta"] .app-section-title',
+            '.app-tab-panel[data-panel="exacta"] .app-section-title'
+        ];
+        let retry = 120;
+        function apply() {
+            let waiting = false;
+            selectors.forEach(function (selector) {
+                const title = document.querySelector(selector);
+                if (!title) { waiting = true; return; }
+                let state = title.querySelector('.app-probability-state');
+                if (!state) {
+                    state = document.createElement('span');
+                    state.className = 'app-probability-state';
+                    state.style.display = 'inline-block';
+                    state.style.marginLeft = '6px';
+                    state.style.fontSize = '11px';
+                    state.style.fontWeight = '700';
+                    state.style.whiteSpace = 'nowrap';
+                    title.appendChild(state);
+                }
+                state.textContent = stateInfo.label;
+                state.style.color = stateInfo.color;
+            });
+            if (waiting && retry-- > 0) window.setTimeout(apply, 50);
+        }
+        apply();
+    }
 
     function makeBoatBadge(boat) {
         const span = document.createElement('span');
@@ -155,8 +208,10 @@
     }
 
     function sumTop(rows, n) {
-        return rows.slice().sort(function (a, b) { return number(a.rank) - number(b.rank); })
-            .slice(0, n).reduce(function (sum, row) { return sum + number(row.probability); }, 0);
+        return rows.slice()
+            .sort(function (a, b) { return number(a.rank) - number(b.rank); })
+            .slice(0, n)
+            .reduce(function (sum, row) { return sum + number(row.probability); }, 0);
     }
 
     function updateMainHead1Exacta(payload) {
@@ -174,12 +229,10 @@
         let aiMass = 0;
         headRows.forEach(function (row) {
             const boats = Array.isArray(row.boats) ? row.boats.map(Number) : [];
-            const courses = Array.isArray(row.courses) ? row.courses.map(Number) : [];
-            if (boats.length !== 3 || courses.length !== 3) return;
+            if (boats.length !== 3) return;
             const secondBoat = boats[1];
-            const key = secondBoat;
-            if (!map.has(key)) map.set(key, {head_boat: boats[0], second_boat: secondBoat, base: 0, ai: 0});
-            const item = map.get(key);
+            if (!map.has(secondBoat)) map.set(secondBoat, {head_boat: boats[0], second_boat: secondBoat, base: 0, ai: 0});
+            const item = map.get(secondBoat);
             item.base += Math.max(0, number(row.base_probability));
             item.ai += Math.max(0, number(row.probability));
             baseMass += Math.max(0, number(row.base_probability));
@@ -267,8 +320,14 @@
             group.style.gridTemplateColumns = '35px repeat(' + (activeBoats.length + 1) + ', minmax(0, 1fr))';
             const title = document.createElement('span'); title.className = 'app-trifecta-filter-label'; title.textContent = label; group.appendChild(title);
             [0].concat(activeBoats).forEach(function (boat) {
-                const filter = document.createElement('button'); filter.type = 'button'; filter.className = 'app-trifecta-filter' + (boat === 0 ? ' is-active' : '');
-                filter.dataset.position = String(index); filter.dataset.boat = String(boat); filter.textContent = boat === 0 ? '全' : String(boat); filter.setAttribute('aria-pressed', boat === 0 ? 'true' : 'false'); group.appendChild(filter);
+                const filter = document.createElement('button');
+                filter.type = 'button';
+                filter.className = 'app-trifecta-filter' + (boat === 0 ? ' is-active' : '');
+                filter.dataset.position = String(index);
+                filter.dataset.boat = String(boat);
+                filter.textContent = boat === 0 ? '全' : String(boat);
+                filter.setAttribute('aria-pressed', boat === 0 ? 'true' : 'false');
+                group.appendChild(filter);
             });
             positionFilters.appendChild(group);
         });
@@ -311,28 +370,37 @@
                 if (boats.length !== 3) return false;
                 for (let i = 0; i < 3; i++) if (selected[i].size && !selected[i].has(boats[i])) return false;
                 if (!query) return true;
-                const key = boatKey(row); return key === query || key.indexOf(query + '-') === 0;
+                const key = boatKey(row);
+                return key === query || key.indexOf(query + '-') === 0;
             }).sort(compareRows);
         }
         function updateFilters() {
             card.querySelectorAll('.app-trifecta-filter-group').forEach(function (group, position) {
                 group.querySelectorAll('.app-trifecta-filter').forEach(function (filter) {
-                    const boat = Number(filter.dataset.boat); const active = boat === 0 ? selected[position].size === 0 : selected[position].has(boat);
-                    filter.classList.toggle('is-active', active); filter.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    const boat = Number(filter.dataset.boat);
+                    const active = boat === 0 ? selected[position].size === 0 : selected[position].has(boat);
+                    filter.classList.toggle('is-active', active);
+                    filter.setAttribute('aria-pressed', active ? 'true' : 'false');
                 });
             });
         }
         function updateSortLabels() {
             sortButtons.forEach(function (button) {
-                const base = button.textContent.replace(/[▲▼]$/, '').trim(); button.textContent = base;
+                const base = button.textContent.replace(/[▲▼]$/, '').trim();
+                button.textContent = base;
                 button.classList.toggle('is-active', button.dataset.sort === sortKey);
                 if (button.dataset.sort === sortKey) button.textContent = base + (sortDirection > 0 ? ' ▲' : ' ▼');
             });
         }
         function render() {
-            const current = filteredRows(); tbody.textContent = '';
+            const current = filteredRows();
+            tbody.textContent = '';
             current.forEach(function (row) {
-                const tr = document.createElement('tr'); const base = number(row.base_probability); const final = number(row.probability); const odds = officialOdds(row); const delta = final - base;
+                const tr = document.createElement('tr');
+                const base = number(row.base_probability);
+                const final = number(row.probability);
+                const odds = officialOdds(row);
+                const delta = final - base;
                 const values = [
                     String(Math.round(number(row.rank))), null, (base * 100).toFixed(3) + '%', (final * 100).toFixed(3) + '%',
                     odds === null ? '-' : odds.toLocaleString('ja-JP', {maximumFractionDigits: 1}),
@@ -347,46 +415,100 @@
                     if (index === 4) td.className = 'app-trifecta-odds';
                     if (index === 5) td.className = delta >= 0 ? 'app-trifecta-delta-plus' : 'app-trifecta-delta-minus';
                     tr.appendChild(td);
-                }); tbody.appendChild(tr);
+                });
+                tbody.appendChild(tr);
             });
             const probabilitySum = current.reduce(function (sum, row) { return sum + number(row.probability); }, 0);
-            let inv = 0; let oddsReady = current.length > 0;
-            current.forEach(function (row) { const odds = officialOdds(row); if (odds === null) oddsReady = false; else inv += 1 / odds; });
+            let inv = 0;
+            let oddsReady = current.length > 0;
+            current.forEach(function (row) {
+                const odds = officialOdds(row);
+                if (odds === null) oddsReady = false;
+                else inv += 1 / odds;
+            });
             if (count) count.textContent = '表示中：' + current.length + ' / ' + totalCount + '通り';
             if (probabilitySumNode) probabilitySumNode.textContent = (probabilitySum * 100).toFixed(2) + '%';
             if (combinedOddsNode) combinedOddsNode.textContent = oddsReady && inv > 0 ? (1 / inv).toFixed(2) + '倍' : '取得待ち';
             updateSortLabels();
         }
-        function formatTime(iso) { const d = new Date(iso || ''); return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('ja-JP', {hour: '2-digit', minute: '2-digit', hour12: false}).format(d); }
+        function formatTime(iso) {
+            const d = new Date(iso || '');
+            return Number.isNaN(d.getTime()) ? '' : new Intl.DateTimeFormat('ja-JP', {hour: '2-digit', minute: '2-digit', hour12: false}).format(d);
+        }
         function applyOddsData(data) {
             const oddsMap = data && data.odds && typeof data.odds === 'object' ? data.odds : {};
-            rows.forEach(function (row) { const value = Number(oddsMap[boatKey(row)]); row.official_odds = Number.isFinite(value) && value > 0 ? value : null; }); render();
+            rows.forEach(function (row) {
+                const value = Number(oddsMap[boatKey(row)]);
+                row.official_odds = Number.isFinite(value) && value > 0 ? value : null;
+            });
+            render();
         }
         async function loadOdds(force) {
             if (oddsRefresh) oddsRefresh.disabled = true;
             if (oddsStatus) oddsStatus.textContent = force ? '公式3連単オッズ：更新中…' : '公式3連単オッズ：取得中…';
             try {
-                const body = new URLSearchParams(); body.set('race_code', raceCodeValue); body.set('refresh', force ? '1' : '0');
-                const response = await fetch('/web/official_odds_api.php', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString(), cache: 'no-store'});
-                const data = await response.json(); const fetchedCount = Number(data && data.count ? data.count : 0);
-                if (data && data.status === 'ok' && fetchedCount > 0) { applyOddsData(data); if (oddsStatus) oddsStatus.textContent = 'オッズ取得 ' + (formatTime(data.fetched_at) || '--:--') + ' / ' + totalCount + '通り'; }
-                else if (oddsStatus) oddsStatus.textContent = '公式3連単オッズ：' + (data && data.error ? String(data.error) : '取得できませんでした');
-            } catch (e) { if (oddsStatus) oddsStatus.textContent = '公式3連単オッズ：取得エラー'; }
-            finally { if (oddsRefresh) oddsRefresh.disabled = false; }
+                const body = new URLSearchParams();
+                body.set('race_code', raceCodeValue);
+                body.set('refresh', force ? '1' : '0');
+                const response = await fetch('/web/official_odds_api.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+                    body: body.toString(),
+                    cache: 'no-store'
+                });
+                const data = await response.json();
+                const fetchedCount = Number(data && data.count ? data.count : 0);
+                if (data && data.status === 'ok' && fetchedCount > 0) {
+                    applyOddsData(data);
+                    if (oddsStatus) oddsStatus.textContent = 'オッズ取得 ' + (formatTime(data.fetched_at) || '--:--') + ' / ' + totalCount + '通り';
+                } else if (oddsStatus) {
+                    oddsStatus.textContent = '公式3連単オッズ：' + (data && data.error ? String(data.error) : '取得できませんでした');
+                }
+            } catch (e) {
+                if (oddsStatus) oddsStatus.textContent = '公式3連単オッズ：取得エラー';
+            } finally {
+                if (oddsRefresh) oddsRefresh.disabled = false;
+            }
         }
 
         positionFilters.addEventListener('click', function (event) {
-            const target = event.target.closest('.app-trifecta-filter'); if (!target) return;
-            const pos = Number(target.dataset.position); const boat = Number(target.dataset.boat);
-            if (boat === 0) selected[pos].clear(); else if (selected[pos].has(boat)) selected[pos].delete(boat); else { selected[pos].add(boat); if (selected[pos].size === activeBoats.length) selected[pos].clear(); }
-            updateFilters(); render();
+            const target = event.target.closest('.app-trifecta-filter');
+            if (!target) return;
+            const pos = Number(target.dataset.position);
+            const boat = Number(target.dataset.boat);
+            if (boat === 0) selected[pos].clear();
+            else if (selected[pos].has(boat)) selected[pos].delete(boat);
+            else {
+                selected[pos].add(boat);
+                if (selected[pos].size === activeBoats.length) selected[pos].clear();
+            }
+            updateFilters();
+            render();
         });
         if (search) search.addEventListener('input', render);
-        if (clear) clear.addEventListener('click', function () { if (search) search.value = ''; selected.forEach(function (set) { set.clear(); }); sortKey = 'rank'; sortDirection = 1; updateFilters(); render(); });
-        sortButtons.forEach(function (button) { button.addEventListener('click', function () { const key = button.dataset.sort || 'rank'; if (sortKey === key) sortDirection *= -1; else { sortKey = key; sortDirection = (key === 'rank' || key === 'combination' || key === 'odds') ? 1 : -1; } render(); }); });
+        if (clear) clear.addEventListener('click', function () {
+            if (search) search.value = '';
+            selected.forEach(function (set) { set.clear(); });
+            sortKey = 'rank';
+            sortDirection = 1;
+            updateFilters();
+            render();
+        });
+        sortButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                const key = button.dataset.sort || 'rank';
+                if (sortKey === key) sortDirection *= -1;
+                else {
+                    sortKey = key;
+                    sortDirection = (key === 'rank' || key === 'combination' || key === 'odds') ? 1 : -1;
+                }
+                render();
+            });
+        });
         if (oddsRefresh) oddsRefresh.addEventListener('click', function () { loadOdds(true); });
         if (foot) foot.textContent = totalCount + '通り合計 ' + (number(totals.final || 1) * 100).toFixed(6) + '% / P1選択 → P2完全ホールドアウト検証済み';
-        render(); loadOdds(false);
+        render();
+        loadOdds(false);
     }
 
     async function setup() {
@@ -398,38 +520,60 @@
         updateMainHead1Exacta(payload);
         const rows = Array.isArray(payload.rows) ? payload.rows : [];
         const totalCount = rows.length;
-        const button = document.createElement('button'); button.type = 'button'; button.className = 'app-tab'; button.dataset.tab = 'trifecta'; button.textContent = totalCount + '通り'; tabs.appendChild(button);
-        const panel = document.createElement('div'); panel.className = 'app-tab-panel app-trifecta-panel'; panel.dataset.panel = 'trifecta'; panel.hidden = true; mainPanel.insertAdjacentElement('afterend', panel);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'app-tab';
+        button.dataset.tab = 'trifecta';
+        button.textContent = totalCount + '通り';
+        tabs.appendChild(button);
+
+        const panel = document.createElement('div');
+        panel.className = 'app-tab-panel app-trifecta-panel';
+        panel.dataset.panel = 'trifecta';
+        panel.hidden = true;
+        mainPanel.insertAdjacentElement('afterend', panel);
 
         function activate(name) {
             document.querySelectorAll('.app-tab').forEach(function (b) { b.classList.toggle('is-active', b.dataset.tab === name); });
-            document.querySelectorAll('.app-tab-panel').forEach(function (p) { const active = p.dataset.panel === name; p.classList.toggle('is-active', active); p.hidden = !active; });
+            document.querySelectorAll('.app-tab-panel').forEach(function (p) {
+                const active = p.dataset.panel === name;
+                p.classList.toggle('is-active', active);
+                p.hidden = !active;
+            });
             try { sessionStorage.setItem(STORAGE_KEY, name); } catch (e) {}
         }
-        document.querySelectorAll('.app-tab').forEach(function (b) { b.addEventListener('click', function () { activate(b.dataset.tab || 'basic'); }); });
+        document.querySelectorAll('.app-tab').forEach(function (b) {
+            b.addEventListener('click', function () { activate(b.dataset.tab || 'basic'); });
+        });
 
-        const activeBoats = Array.isArray(payload.active_boats) && payload.active_boats.length ? payload.active_boats : activeFromRows(rows);
+        const activeBoats = Array.isArray(payload.active_boats) && payload.active_boats.length
+            ? payload.active_boats
+            : activeFromRows(rows);
         const expected = activeBoats.length >= 3 ? activeBoats.length * (activeBoats.length - 1) * (activeBoats.length - 2) : 0;
         if (String(payload.status || '') !== 'ok' || !expected || totalCount !== expected) {
-            const card = document.createElement('section'); card.className = 'app-card';
+            const card = document.createElement('section');
+            card.className = 'app-card';
             card.innerHTML = '<div class="app-card-body"><h2 class="app-section-title">🎲 3連単出目確率</h2><div class="app-note app-trifecta-error"></div></div>';
-            const note = card.querySelector('.app-trifecta-error'); if (note) note.textContent = String(payload.error || '出目確率は計算待ちです。'); panel.appendChild(card);
+            const note = card.querySelector('.app-trifecta-error');
+            if (note) note.textContent = String(payload.error || '出目確率は計算待ちです。');
+            panel.appendChild(card);
         } else {
             buildPanel(panel, payload, raceCode());
         }
 
+        syncProbabilityState(payload);
         button.addEventListener('click', function () { activate('trifecta'); });
-        let saved = ''; try { saved = sessionStorage.getItem(STORAGE_KEY) || ''; } catch (e) {}
+        let saved = '';
+        try { saved = sessionStorage.getItem(STORAGE_KEY) || ''; } catch (e) {}
         if (saved === 'trifecta') activate('trifecta');
     }
 
     function boot() { window.setTimeout(setup, 0); }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 
-    // iPhoneホーム画面はJSキャッシュが残りやすいため、2連単だけ最新版を先に読み込む。
     if (!document.querySelector('script[data-app-exacta-loader="1"]')) {
         const script = document.createElement('script');
-        script.src = '/web/assets/js/app_exacta_tab.js?v=20260905a';
+        script.src = '/web/assets/js/app_exacta_tab.js?v=20260905b';
         script.dataset.appExactaLoader = '1';
         script.async = false;
         document.head.appendChild(script);
