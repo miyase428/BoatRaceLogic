@@ -311,7 +311,7 @@
             window.setTimeout(function () {
                 load(false);
             }, 350);
-        }, 50);
+        }, 1500);
     }
 
     if (document.readyState === 'loading') {
