@@ -56,7 +56,7 @@ try {
 
     $entryStmt = $pdo->prepare(
         "SELECT race_code, COUNT(*) AS row_count\n"
-        . "FROM race_entry\n"
+        . "FROM boat_race.race_entry\n"
         . "WHERE race_code LIKE :prefix\n"
         . "GROUP BY race_code\n"
         . "ORDER BY race_code"
@@ -78,12 +78,40 @@ try {
             'entry_count' => (int)($row['row_count'] ?? 0),
             'exhibition_count' => 0,
             'result_count' => 0,
+            'win_rates' => [],
         ];
+    }
+
+    // 左側のレース検索用。予想値ではなく、その日の出走表に紐づく全国勝率を使う。
+    $rateStmt = $pdo->prepare(
+        "SELECT re.race_code, re.lane_number, MAX(ps.national_win_rate) AS national_win_rate\n"
+        . "FROM boat_race.race_entry re\n"
+        . "LEFT JOIN boat_race.player_stats ps\n"
+        . "  ON ps.race_code = re.race_code\n"
+        . " AND ps.player_id = re.player_id\n"
+        . "WHERE re.race_code LIKE :prefix\n"
+        . "GROUP BY re.race_code, re.lane_number\n"
+        . "ORDER BY re.race_code, re.lane_number"
+    );
+    $rateStmt->execute([':prefix' => $datePrefix . '%']);
+    foreach ($rateStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $raceCode = (string)($row['race_code'] ?? '');
+        if (!preg_match('/^\\d{8}([A-Z0-9]{3})(0[1-9]|1[0-2])$/', $raceCode, $m)) {
+            continue;
+        }
+        $place = $m[1];
+        $raceNo = (int)$m[2];
+        $lane = (int)($row['lane_number'] ?? 0);
+        if (!isset($racesByPlace[$place][$raceNo]) || $lane < 1 || $lane > 6) {
+            continue;
+        }
+        $rate = $row['national_win_rate'];
+        $racesByPlace[$place][$raceNo]['win_rates'][$lane] = is_numeric($rate) ? (float)$rate : null;
     }
 
     $exhibitionStmt = $pdo->prepare(
         "SELECT race_code, COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL OR start_timing IS NOT NULL) AS valid_count\n"
-        . "FROM exhibition_live\n"
+        . "FROM boat_race.exhibition_live\n"
         . "WHERE race_code LIKE :prefix\n"
         . "GROUP BY race_code"
     );
@@ -102,7 +130,7 @@ try {
 
     $resultStmt = $pdo->prepare(
         "SELECT race_code, COUNT(*) AS row_count\n"
-        . "FROM race_result_detail\n"
+        . "FROM boat_race.race_result_detail\n"
         . "WHERE race_code LIKE :prefix\n"
         . "GROUP BY race_code"
     );
@@ -139,7 +167,7 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f4ecdf">
     <title>艇 BoatRace</title>
-    <link rel="stylesheet" href="/web/assets/css/home.css?v=20260905a">
+    <link rel="stylesheet" href="/web/assets/css/home.css?v=20260905b">
 </head>
 <body>
 <div class="home-shell">
@@ -164,65 +192,168 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
         <a class="date-nav" href="?date=<?= h($nextDate) ?>" aria-label="翌日">›</a>
     </section>
 
-    <section class="summary-card">
-        <div><strong><?= (int)$activePlaceCount ?></strong><span>開催場</span></div>
-        <div><strong><?= (int)$raceCount ?></strong><span>レース</span></div>
-        <div class="summary-legend"><span class="dot dot-entry"></span>出走表 <span class="dot dot-exhibition"></span>展示 <span class="dot dot-result"></span>結果</div>
-    </section>
-
     <?php if ($dbError !== ''): ?>
         <div class="error-card">開催情報を読み込めませんでした。<br><small><?= h($dbError) ?></small></div>
     <?php endif; ?>
 
-    <main class="venue-grid">
-        <?php foreach ($placeNames as $place => $name): ?>
-            <?php
-                $races = $racesByPlace[$place] ?? [];
-                ksort($races);
-                $isActive = !empty($races);
-                $placeNo = $placeNumbers[$place] ?? 0;
-            ?>
-            <section class="venue-card<?= $isActive ? ' is-active' : ' is-closed' ?>">
-                <div class="venue-head">
-                    <div class="venue-name-wrap">
-                        <span class="venue-no"><?= sprintf('%02d', $placeNo) ?></span>
-                        <strong class="venue-name"><?= h($name) ?></strong>
-                    </div>
-                    <span class="venue-state"><?= $isActive ? '開催' : '休催' ?></span>
+    <div class="home-layout">
+        <aside class="search-column">
+            <details class="search-card"<?= $isMobile ? '' : ' open' ?>>
+                <summary>
+                    <span>🔎 レース検索</span>
+                    <small>条件から今日のレースを絞り込み</small>
+                </summary>
+                <form id="race-search-form" class="search-form">
+                    <fieldset>
+                        <legend>1号艇 全国勝率</legend>
+                        <div class="choice-grid choice-grid-2">
+                            <label><input type="radio" name="lane1Min" value="" checked><span>指定なし</span></label>
+                            <label><input type="radio" name="lane1Min" value="6.0"><span>6.0以上</span></label>
+                            <label><input type="radio" name="lane1Min" value="6.5"><span>6.5以上</span></label>
+                            <label><input type="radio" name="lane1Min" value="7.0"><span>7.0以上</span></label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>2〜6号艇 最高全国勝率</legend>
+                        <div class="choice-grid choice-grid-2">
+                            <label><input type="radio" name="outerMax" value="" checked><span>指定なし</span></label>
+                            <label><input type="radio" name="outerMax" value="7.0"><span>7.0以下</span></label>
+                            <label><input type="radio" name="outerMax" value="6.5"><span>6.5以下</span></label>
+                            <label><input type="radio" name="outerMax" value="6.0"><span>6.0以下</span></label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>レース帯</legend>
+                        <div class="choice-grid choice-grid-4">
+                            <label><input type="radio" name="raceBand" value="all" checked><span>全</span></label>
+                            <label><input type="radio" name="raceBand" value="early"><span>1〜4R</span></label>
+                            <label><input type="radio" name="raceBand" value="middle"><span>5〜8R</span></label>
+                            <label><input type="radio" name="raceBand" value="late"><span>9〜12R</span></label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>データ状況</legend>
+                        <div class="choice-grid choice-grid-2">
+                            <label><input type="radio" name="raceStatus" value="all" checked><span>すべて</span></label>
+                            <label><input type="radio" name="raceStatus" value="entry"><span>展示前</span></label>
+                            <label><input type="radio" name="raceStatus" value="exhibition"><span>展示済</span></label>
+                            <label><input type="radio" name="raceStatus" value="result"><span>結果済</span></label>
+                        </div>
+                    </fieldset>
+
+                    <button type="submit" class="search-submit">この条件で検索</button>
+                    <button type="button" id="race-search-reset" class="search-reset">条件をクリア</button>
+                </form>
+
+                <div class="search-result-box" aria-live="polite">
+                    <strong id="search-result-count"><?= (int)$raceCount ?>R</strong>
+                    <span id="search-result-label">本日の全レース</span>
                 </div>
 
-                <?php if ($isActive): ?>
-                    <div class="race-grid">
-                        <?php foreach ($races as $raceNo => $race): ?>
-                            <?php
-                                $status = 'entry';
-                                $statusLabel = '出走表';
-                                if (($race['result_count'] ?? 0) >= 3) {
-                                    $status = 'result';
-                                    $statusLabel = '結果';
-                                } elseif (($race['exhibition_count'] ?? 0) >= 5) {
-                                    $status = 'exhibition';
-                                    $statusLabel = '展示';
-                                }
-                                $url = $predictionPath
-                                    . '?date=' . rawurlencode($selectedDate->format('Y-m-d'))
-                                    . '&place=' . rawurlencode($place)
-                                    . '&race=' . rawurlencode((string)$raceNo);
-                            ?>
-                            <a class="race-button status-<?= h($status) ?>" href="<?= h($url) ?>">
-                                <strong><?= (int)$raceNo ?>R</strong>
-                                <span><?= h($statusLabel) ?></span>
-                            </a>
-                        <?php endforeach; ?>
+                <div class="quick-search">
+                    <div class="quick-title">クイック検索</div>
+                    <div class="quick-buttons">
+                        <button type="button" data-quick="late">後半9〜12R</button>
+                        <button type="button" data-quick="exhibition">展示済</button>
+                        <button type="button" data-quick="unresolved">結果前</button>
                     </div>
-                <?php else: ?>
-                    <div class="closed-body">本日の出走表データなし</div>
-                <?php endif; ?>
+                </div>
+            </details>
+        </aside>
+
+        <div class="race-column">
+            <section class="summary-card">
+                <div><strong><?= (int)$activePlaceCount ?></strong><span>開催場</span></div>
+                <div><strong><?= (int)$raceCount ?></strong><span>レース</span></div>
+                <div class="summary-legend"><span class="dot dot-entry"></span>出走表 <span class="dot dot-exhibition"></span>展示 <span class="dot dot-result"></span>結果</div>
             </section>
-        <?php endforeach; ?>
-    </main>
+
+            <div class="race-column-head">
+                <div>
+                    <h2>開催一覧</h2>
+                    <p>場を見ながら、そのままRを選択できます。</p>
+                </div>
+                <span id="visible-race-count"><?= (int)$raceCount ?>R表示</span>
+            </div>
+
+            <main class="venue-grid">
+                <?php foreach ($placeNames as $place => $name): ?>
+                    <?php
+                        $races = $racesByPlace[$place] ?? [];
+                        ksort($races);
+                        $isActive = !empty($races);
+                        $placeNo = $placeNumbers[$place] ?? 0;
+                    ?>
+                    <section class="venue-card<?= $isActive ? ' is-active' : ' is-closed' ?>" data-venue-card data-active="<?= $isActive ? '1' : '0' ?>">
+                        <div class="venue-head">
+                            <div class="venue-name-wrap">
+                                <span class="venue-no"><?= sprintf('%02d', $placeNo) ?></span>
+                                <strong class="venue-name"><?= h($name) ?></strong>
+                            </div>
+                            <div class="venue-head-right">
+                                <?php if ($isActive): ?><span class="venue-match-count" data-match-count></span><?php endif; ?>
+                                <span class="venue-state"><?= $isActive ? '開催' : '休催' ?></span>
+                            </div>
+                        </div>
+
+                        <?php if ($isActive): ?>
+                            <div class="race-grid">
+                                <?php foreach ($races as $raceNo => $race): ?>
+                                    <?php
+                                        $status = 'entry';
+                                        $statusLabel = '出走表';
+                                        if (($race['result_count'] ?? 0) >= 3) {
+                                            $status = 'result';
+                                            $statusLabel = '結果';
+                                        } elseif (($race['exhibition_count'] ?? 0) >= 5) {
+                                            $status = 'exhibition';
+                                            $statusLabel = '展示';
+                                        }
+
+                                        $winRates = is_array($race['win_rates'] ?? null) ? $race['win_rates'] : [];
+                                        $lane1Rate = isset($winRates[1]) && is_numeric($winRates[1]) ? (float)$winRates[1] : null;
+                                        $outerRates = [];
+                                        for ($lane = 2; $lane <= 6; $lane++) {
+                                            if (isset($winRates[$lane]) && is_numeric($winRates[$lane])) {
+                                                $outerRates[] = (float)$winRates[$lane];
+                                            }
+                                        }
+                                        $outerMax = $outerRates !== [] ? max($outerRates) : null;
+
+                                        $url = $predictionPath
+                                            . '?date=' . rawurlencode($selectedDate->format('Y-m-d'))
+                                            . '&place=' . rawurlencode($place)
+                                            . '&race=' . rawurlencode((string)$raceNo);
+                                    ?>
+                                    <a class="race-button status-<?= h($status) ?>"
+                                       href="<?= h($url) ?>"
+                                       data-race-button
+                                       data-race-no="<?= (int)$raceNo ?>"
+                                       data-status="<?= h($status) ?>"
+                                       data-lane1-rate="<?= $lane1Rate === null ? '' : h(number_format($lane1Rate, 2, '.', '')) ?>"
+                                       data-outer-max="<?= $outerMax === null ? '' : h(number_format($outerMax, 2, '.', '')) ?>"
+                                       title="<?= $lane1Rate === null ? '' : '1号艇全国勝率 ' . h(number_format($lane1Rate, 2)) ?><?= $outerMax === null ? '' : ' / 2〜6号艇最高 ' . h(number_format($outerMax, 2)) ?>">
+                                        <strong><?= (int)$raceNo ?>R</strong>
+                                        <span><?= h($statusLabel) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="closed-body">本日の出走表データなし</div>
+                        <?php endif; ?>
+                    </section>
+                <?php endforeach; ?>
+            </main>
+
+            <div id="search-empty" class="search-empty" hidden>条件に一致するレースがありません。</div>
+        </div>
+    </div>
 
     <footer class="home-footer">BoatRace Analytics / 開催判定はDBの出走表データを使用</footer>
 </div>
+<script src="/web/assets/js/home.js?v=20260905a" defer></script>
 </body>
 </html>
