@@ -24,10 +24,45 @@ class CorrectedWinRateLogic
             }
         }
 
-        // 既存のexact / AMG-TKY / 仮想進入チェーンは専用Pythonラッパー側で選択する。
-        // その最終 corrected_rate にだけ、2期間ホールドアウト検証済みの
-        // RAW_TEMP後段較正を適用する。既存チェーン本体は変更しない。
-        $scriptName = 'corrected_winrate_live_calibrated.py';
+        return $this->runScript(
+            'corrected_winrate_live_calibrated.py',
+            [$raceCode, ...($virtualLaneToCourse !== null ? [$virtualLaneToCourse] : [])]
+        );
+    }
+
+    /**
+     * 展示5指標が全NULLの欠場艇を1艇だけ除外した、実質5艇立て専用。
+     * 通常6艇の検証済みチェーンは変更せず、専用Pythonへ分離する。
+     */
+    public function calculateEffective(string $raceCode, array $activeBoats): array
+    {
+        $active = array_values(array_unique(array_map('intval', $activeBoats)));
+        sort($active, SORT_NUMERIC);
+        if (count($active) !== 5) {
+            return [
+                'status' => 'error',
+                'boats' => [],
+                'error' => '実質5艇立ては有効艇5艇が必要です',
+            ];
+        }
+        foreach ($active as $boat) {
+            if ($boat < 1 || $boat > 6) {
+                return [
+                    'status' => 'error',
+                    'boats' => [],
+                    'error' => '有効艇番が不正です',
+                ];
+            }
+        }
+
+        return $this->runScript(
+            'corrected_winrate_live_effective.py',
+            [$raceCode, implode(',', $active)]
+        );
+    }
+
+    private function runScript(string $scriptName, array $args): array
+    {
         $script = realpath(__DIR__ . '/../../forecast/' . $scriptName);
         if ($script === false) {
             return [
@@ -38,13 +73,12 @@ class CorrectedWinRateLogic
         }
 
         $python = '/usr/bin/python3';
-        $cmd = $python . ' ' . escapeshellarg($script) . ' ' . escapeshellarg($raceCode);
-        if ($virtualLaneToCourse !== null) {
-            $cmd .= ' ' . escapeshellarg($virtualLaneToCourse);
+        $cmd = $python . ' ' . escapeshellarg($script);
+        foreach ($args as $arg) {
+            $cmd .= ' ' . escapeshellarg((string)$arg);
         }
 
         $raw = shell_exec($cmd);
-
         if ($raw === null || trim($raw) === '') {
             return [
                 'status' => 'error',
