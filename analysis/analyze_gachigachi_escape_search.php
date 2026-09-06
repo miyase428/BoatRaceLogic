@@ -2,8 +2,12 @@
 /**
  * ガチガチレース検索の基礎検証。
  *
- * 条件は「1号艇(1C)の1年逃げ率 >= X」AND「2号艇(2C)の1年逃し率 >= Y」だけ。
- * Web本命/AI/展示/場補正などは一切加えず、実際の1号艇1着率がどこまで上がるかを見る。
+ * 条件:
+ *   1C・1年逃げ率 >= X (50～80%, 1%刻み)
+ *   2C・1年逃し率 >= Y (30～70%, 1%刻み)
+ *
+ * Web本命 / AI / 展示 / 場補正は加えない。
+ * 31 × 41 = 1,271通りを全件検証し、CSVへ保存する。
  *
  * Usage:
  *   php analysis/analyze_gachigachi_escape_search.php \
@@ -61,7 +65,12 @@ foreach ($required as $col) {
     }
 }
 
-$rows = [];
+// 0～100% の整数バケット。
+$countGrid = array_fill(0, 101, array_fill(0, 101, 0));
+$winGrid = array_fill(0, 101, array_fill(0, 101, 0));
+
+$totalN = 0;
+$totalWin1 = 0;
 $dateMin = null;
 $dateMax = null;
 $skips = [
@@ -75,7 +84,7 @@ while (($data = fgetcsv($fh)) !== false) {
         continue;
     }
 
-    $raceCode = trim((string)$data[$idx['race_code']]);
+    $raceCode = trim((string)($data[$idx['race_code']] ?? ''));
     $n1 = (int)($data[$idx['c1_1y_sample_n']] ?? 0);
     $n2 = (int)($data[$idx['c2_1y_sample_n']] ?? 0);
     if ($n1 < $minSample || $n2 < $minSample) {
@@ -96,28 +105,28 @@ while (($data = fgetcsv($fh)) !== false) {
         continue;
     }
 
-    $raceNo = 0;
-    if (preg_match('/(0[1-9]|1[0-2])$/', $raceCode, $m)) {
-        $raceNo = (int)$m[1];
-    }
+    $nige = max(0.0, min(100.0, (float)$nigeRaw));
+    $nogashi = max(0.0, min(100.0, (float)$nogashiRaw));
+
+    // 整数閾値 >= X の判定には floor(value) のバケットで十分。
+    $nigeBucket = (int)floor($nige + 1e-9);
+    $nogashiBucket = (int)floor($nogashi + 1e-9);
+    $win1 = ((int)$actualRaw === 1) ? 1 : 0;
+
+    $countGrid[$nigeBucket][$nogashiBucket]++;
+    $winGrid[$nigeBucket][$nogashiBucket] += $win1;
+    $totalN++;
+    $totalWin1 += $win1;
 
     $date = substr($raceCode, 0, 8);
     if (preg_match('/^\d{8}$/', $date)) {
         $dateMin = $dateMin === null || $date < $dateMin ? $date : $dateMin;
         $dateMax = $dateMax === null || $date > $dateMax ? $date : $dateMax;
     }
-
-    $rows[] = [
-        'race_code' => $raceCode,
-        'race_no' => $raceNo,
-        'nige' => (float)$nigeRaw,
-        'nogashi' => (float)$nogashiRaw,
-        'actual_1st' => (int)$actualRaw,
-    ];
 }
 fclose($fh);
 
-if (!$rows) {
+if ($totalN === 0) {
     fwrite(STDERR, "分析可能な行がありません\n");
     exit(1);
 }
@@ -127,114 +136,193 @@ function pct(int $num, int $den): float
     return $den > 0 ? 100.0 * $num / $den : 0.0;
 }
 
-function calcStats(array $rows, ?float $nigeMin = null, ?float $nogashiMin = null, ?array $raceRange = null): array
-{
-    $n = 0;
-    $win1 = 0;
-
-    foreach ($rows as $r) {
-        if ($nigeMin !== null && $r['nige'] < $nigeMin) continue;
-        if ($nogashiMin !== null && $r['nogashi'] < $nogashiMin) continue;
-        if ($raceRange !== null) {
-            [$from, $to] = $raceRange;
-            if ($r['race_no'] < $from || $r['race_no'] > $to) continue;
-        }
-        $n++;
-        if ($r['actual_1st'] === 1) {
-            $win1++;
-        }
-    }
-
-    return [
-        'n' => $n,
-        'win1' => $win1,
-        'rate' => pct($win1, $n),
-    ];
-}
-
 function fmtDate(?string $ymd): string
 {
     if ($ymd === null || strlen($ymd) !== 8) return '-';
     return substr($ymd, 0, 4) . '-' . substr($ymd, 4, 2) . '-' . substr($ymd, 6, 2);
 }
 
-$nigeThresholds = [50, 55, 60, 65, 70, 75];
-$nogashiThresholds = [35, 40, 45, 50, 55, 60];
+/** 2次元の suffix sum: [x][y] = nige>=x AND nogashi>=y */
+function buildSuffix(array $grid): array
+{
+    $suffix = array_fill(0, 102, array_fill(0, 102, 0));
+    for ($x = 100; $x >= 0; $x--) {
+        for ($y = 100; $y >= 0; $y--) {
+            $suffix[$x][$y] = $grid[$x][$y]
+                + $suffix[$x + 1][$y]
+                + $suffix[$x][$y + 1]
+                - $suffix[$x + 1][$y + 1];
+        }
+    }
+    return $suffix;
+}
 
-$base = calcStats($rows);
+function outputPath(string $csvPath): string
+{
+    $dir = dirname($csvPath);
+    $base = basename($csvPath);
+    if (preg_match('/kimarite_analysis_dataset_(\d{8}_\d{8})\.csv$/', $base, $m)) {
+        return $dir . '/gachigachi_escape_grid_' . $m[1] . '.csv';
+    }
+    return $dir . '/gachigachi_escape_grid.csv';
+}
+
+function sortByRate(array &$rows): void
+{
+    usort($rows, static function (array $a, array $b): int {
+        $rateCmp = $b['win_rate'] <=> $a['win_rate'];
+        if ($rateCmp !== 0) return $rateCmp;
+        $nCmp = $b['n'] <=> $a['n'];
+        if ($nCmp !== 0) return $nCmp;
+        $xCmp = $b['nige_min'] <=> $a['nige_min'];
+        if ($xCmp !== 0) return $xCmp;
+        return $b['nogashi_min'] <=> $a['nogashi_min'];
+    });
+}
+
+function printTop(string $title, array $all, int $minN, int $limit = 10): void
+{
+    $filtered = array_values(array_filter($all, static fn(array $r): bool => $r['n'] >= $minN));
+    sortByRate($filtered);
+
+    echo "\n【{$title}】\n";
+    if (!$filtered) {
+        echo "該当なし\n";
+        return;
+    }
+
+    foreach (array_slice($filtered, 0, $limit) as $i => $r) {
+        printf(
+            "%2d位 逃げ>=%2d%% × 逃し>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt  逃し上乗せ=%+5.2fpt\n",
+            $i + 1,
+            $r['nige_min'],
+            $r['nogashi_min'],
+            $r['n'],
+            $r['win_rate'],
+            $r['base_diff'],
+            $r['nogashi_added_diff']
+        );
+    }
+}
+
+$countSuffix = buildSuffix($countGrid);
+$winSuffix = buildSuffix($winGrid);
+$baseRate = pct($totalWin1, $totalN);
+
+// 1C逃げ率だけの基準値（nogashi>=0 と等価）
+$nigeOnly = [];
+for ($x = 0; $x <= 100; $x++) {
+    $n = $countSuffix[$x][0];
+    $w = $winSuffix[$x][0];
+    $nigeOnly[$x] = [
+        'n' => $n,
+        'win1' => $w,
+        'rate' => pct($w, $n),
+    ];
+}
+
+$all = [];
+for ($x = 50; $x <= 80; $x++) {
+    for ($y = 30; $y <= 70; $y++) {
+        $n = $countSuffix[$x][$y];
+        $w = $winSuffix[$x][$y];
+        $rate = pct($w, $n);
+        $nigeOnlyRate = $nigeOnly[$x]['rate'];
+
+        $all[] = [
+            'nige_min' => $x,
+            'nogashi_min' => $y,
+            'n' => $n,
+            'win1' => $w,
+            'win_rate' => $rate,
+            'base_diff' => $rate - $baseRate,
+            'nige_only_n' => $nigeOnly[$x]['n'],
+            'nige_only_rate' => $nigeOnlyRate,
+            'nogashi_added_diff' => $rate - $nigeOnlyRate,
+            'retention_vs_nige_only' => $nigeOnly[$x]['n'] > 0 ? 100.0 * $n / $nigeOnly[$x]['n'] : 0.0,
+        ];
+    }
+}
+
+$outPath = outputPath($csvPath);
+$out = fopen($outPath, 'wb');
+if ($out === false) {
+    fwrite(STDERR, "出力CSVを作成できません: {$outPath}\n");
+    exit(1);
+}
+
+fputcsv($out, [
+    'nige_min',
+    'nogashi_min',
+    'n',
+    'win1',
+    'win_rate',
+    'base_diff',
+    'nige_only_n',
+    'nige_only_rate',
+    'nogashi_added_diff',
+    'retention_vs_nige_only',
+]);
+foreach ($all as $r) {
+    fputcsv($out, [
+        $r['nige_min'],
+        $r['nogashi_min'],
+        $r['n'],
+        $r['win1'],
+        number_format($r['win_rate'], 4, '.', ''),
+        number_format($r['base_diff'], 4, '.', ''),
+        $r['nige_only_n'],
+        number_format($r['nige_only_rate'], 4, '.', ''),
+        number_format($r['nogashi_added_diff'], 4, '.', ''),
+        number_format($r['retention_vs_nige_only'], 4, '.', ''),
+    ]);
+}
+fclose($out);
 
 $line = str_repeat('=', 132);
 echo $line . "\n";
-echo "ガチガチ検索 基礎検証（1C逃げ率 × 2C逃し率だけ）\n";
+echo "ガチガチ検索 1%刻み総当たり（1C逃げ率 × 2C逃し率）\n";
 echo "CSV      : " . basename($csvPath) . "\n";
 echo "期間     : " . fmtDate($dateMin) . " ～ " . fmtDate($dateMax) . "\n";
-echo "分析母体 : " . number_format($base['n']) . "R\n";
-printf("基礎1号艇1着率: %.2f%% (%d/%d)\n", $base['rate'], $base['win1'], $base['n']);
+echo "分析母体 : " . number_format($totalN) . "R\n";
+printf("基礎1号艇1着率: %.2f%% (%d/%d)\n", $baseRate, $totalWin1, $totalN);
 echo "sample_n : c1/c2とも {$minSample}以上\n";
+echo "総当たり : 逃げ50～80% × 逃し30～70% = " . number_format(count($all)) . "通り\n";
 echo "追加条件 : Web本命・AI・展示・場補正なし\n";
-echo $line . "\n\n";
+echo "出力CSV  : {$outPath}\n";
+echo $line . "\n";
 
-echo "【閾値マトリクス：セル = N / 1号艇1着率 / 基礎差】\n";
-printf("%-12s", '1C\\2C');
-foreach ($nogashiThresholds as $y) {
-    printf(" | %-18s", "逃し>={$y}");
-}
-echo "\n" . str_repeat('-', 132) . "\n";
+printTop('勝率上位10（母数制限なし）', $all, 1, 10);
+printTop('実用上位10（N>=500）', $all, 500, 10);
+printTop('実用上位10（N>=1000）', $all, 1000, 10);
+printTop('実用上位10（N>=2000）', $all, 2000, 10);
 
-foreach ($nigeThresholds as $x) {
-    printf("%-12s", "逃げ>={$x}");
-    foreach ($nogashiThresholds as $y) {
-        $s = calcStats($rows, (float)$x, (float)$y);
-        $diff = $s['rate'] - $base['rate'];
-        $cell = sprintf("%5d / %5.2f / %+5.2f", $s['n'], $s['rate'], $diff);
-        printf(" | %-18s", $cell);
-    }
-    echo "\n";
-}
+// 逃し率を足した「上乗せ」自体が大きい条件も確認。
+$added = array_values(array_filter($all, static fn(array $r): bool => $r['n'] >= 1000));
+usort($added, static function (array $a, array $b): int {
+    $cmp = $b['nogashi_added_diff'] <=> $a['nogashi_added_diff'];
+    if ($cmp !== 0) return $cmp;
+    return $b['n'] <=> $a['n'];
+});
 
-echo "\n【1C逃げ率だけ】\n";
-foreach ($nigeThresholds as $x) {
-    $s = calcStats($rows, (float)$x, null);
-    printf("逃げ>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n", $x, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
-}
-
-echo "\n【2C逃し率だけ】\n";
-foreach ($nogashiThresholds as $y) {
-    $s = calcStats($rows, null, (float)$y);
-    printf("逃し>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n", $y, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
-}
-
-echo "\n【競艇日和型の代表条件】\n";
-$representatives = [
-    [50, 35], [55, 40], [60, 45], [65, 50], [70, 55], [70, 60], [75, 60],
-];
-foreach ($representatives as [$x, $y]) {
-    $s = calcStats($rows, (float)$x, (float)$y);
-    printf("逃げ>=%2d%% × 逃し>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n",
-        $x, $y, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
+echo "\n【逃し率を足した上乗せ効果 上位10（N>=1000）】\n";
+foreach (array_slice($added, 0, 10) as $i => $r) {
+    printf(
+        "%2d位 逃げ>=%2d%% × 逃し>=%2d%%  N=%6d  1号艇1着=%6.2f%%  逃げ単独=%6.2f%%  上乗せ=%+5.2fpt  母数維持=%5.1f%%\n",
+        $i + 1,
+        $r['nige_min'],
+        $r['nogashi_min'],
+        $r['n'],
+        $r['win_rate'],
+        $r['nige_only_rate'],
+        $r['nogashi_added_diff'],
+        $r['retention_vs_nige_only']
+    );
 }
 
-echo "\n【R帯別：逃げ>=70% × 逃し>=60%】\n";
-foreach ([[1,4],[5,8],[9,12]] as [$from, $to]) {
-    $s = calcStats($rows, 70.0, 60.0, [$from, $to]);
-    printf("%2d～%2dR  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n",
-        $from, $to, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
-}
-
-echo "\n【参考：逃げ率+逃し率 >= 100】\n";
-$n = 0;
-$w = 0;
-foreach ($rows as $r) {
-    if (($r['nige'] + $r['nogashi']) < 100.0) continue;
-    $n++;
-    if ($r['actual_1st'] === 1) $w++;
-}
-$rate = pct($w, $n);
-printf("N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n", $n, $rate, $rate - $base['rate']);
-
-echo "\n判断ポイント:\n";
-echo "1. 閾値を厳しくするほど1号艇1着率が素直に上がるか。\n";
-echo "2. Nが急減していないか。率だけでなく母数も見る。\n";
-echo "3. 1C逃げ率単独と2C逃し率単独より、AND条件に追加価値があるか。\n";
-echo "4. まずこの2条件だけで固定候補を探し、AI/展示条件は後段で別検証する。\n";
+echo "\n【検索プリセット候補を見る時の基準】\n";
+echo "- 率だけの上位3は母数が小さすぎる可能性があるため、そのまま採用しない。\n";
+echo "- N>=500 / 1000 / 2000 の各上位を比較し、精度と出現頻度のバランスで3候補を選ぶ。\n";
+echo "- nogashi_added_diff が小さい場合、2C逃し率は検索条件としての追加価値が薄い。\n";
+echo "- 3候補を決めた後に別期間で再現確認してからトップ画面へ固定する。\n";
 echo $line . "\n";
