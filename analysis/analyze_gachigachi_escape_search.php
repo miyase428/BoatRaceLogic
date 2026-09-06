@@ -127,11 +127,10 @@ function pct(int $num, int $den): float
     return $den > 0 ? 100.0 * $num / $den : 0.0;
 }
 
-function stat(array $rows, ?float $nigeMin = null, ?float $nogashiMin = null, ?array $raceRange = null): array
+function calcStats(array $rows, ?float $nigeMin = null, ?float $nogashiMin = null, ?array $raceRange = null): array
 {
     $n = 0;
     $win1 = 0;
-    $actualEscape = 0;
 
     foreach ($rows as $r) {
         if ($nigeMin !== null && $r['nige'] < $nigeMin) continue;
@@ -143,7 +142,6 @@ function stat(array $rows, ?float $nigeMin = null, ?float $nogashiMin = null, ?a
         $n++;
         if ($r['actual_1st'] === 1) {
             $win1++;
-            $actualEscape++;
         }
     }
 
@@ -151,7 +149,6 @@ function stat(array $rows, ?float $nigeMin = null, ?float $nogashiMin = null, ?a
         'n' => $n,
         'win1' => $win1,
         'rate' => pct($win1, $n),
-        'actual_escape' => $actualEscape,
     ];
 }
 
@@ -164,7 +161,7 @@ function fmtDate(?string $ymd): string
 $nigeThresholds = [50, 55, 60, 65, 70, 75];
 $nogashiThresholds = [35, 40, 45, 50, 55, 60];
 
-$base = stat($rows);
+$base = calcStats($rows);
 
 $line = str_repeat('=', 132);
 echo $line . "\n";
@@ -187,7 +184,7 @@ echo "\n" . str_repeat('-', 132) . "\n";
 foreach ($nigeThresholds as $x) {
     printf("%-12s", "逃げ>={$x}");
     foreach ($nogashiThresholds as $y) {
-        $s = stat($rows, (float)$x, (float)$y);
+        $s = calcStats($rows, (float)$x, (float)$y);
         $diff = $s['rate'] - $base['rate'];
         $cell = sprintf("%5d / %5.2f / %+5.2f", $s['n'], $s['rate'], $diff);
         printf(" | %-18s", $cell);
@@ -197,13 +194,13 @@ foreach ($nigeThresholds as $x) {
 
 echo "\n【1C逃げ率だけ】\n";
 foreach ($nigeThresholds as $x) {
-    $s = stat($rows, (float)$x, null);
+    $s = calcStats($rows, (float)$x, null);
     printf("逃げ>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n", $x, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
 }
 
 echo "\n【2C逃し率だけ】\n";
 foreach ($nogashiThresholds as $y) {
-    $s = stat($rows, null, (float)$y);
+    $s = calcStats($rows, null, (float)$y);
     printf("逃し>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n", $y, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
 }
 
@@ -212,14 +209,14 @@ $representatives = [
     [50, 35], [55, 40], [60, 45], [65, 50], [70, 55], [70, 60], [75, 60],
 ];
 foreach ($representatives as [$x, $y]) {
-    $s = stat($rows, (float)$x, (float)$y);
+    $s = calcStats($rows, (float)$x, (float)$y);
     printf("逃げ>=%2d%% × 逃し>=%2d%%  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n",
         $x, $y, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
 }
 
 echo "\n【R帯別：逃げ>=70% × 逃し>=60%】\n";
 foreach ([[1,4],[5,8],[9,12]] as [$from, $to]) {
-    $s = stat($rows, 70.0, 60.0, [$from, $to]);
+    $s = calcStats($rows, 70.0, 60.0, [$from, $to]);
     printf("%2d～%2dR  N=%6d  1号艇1着=%6.2f%%  基礎差=%+6.2fpt\n",
         $from, $to, $s['n'], $s['rate'], $s['rate'] - $base['rate']);
 }
