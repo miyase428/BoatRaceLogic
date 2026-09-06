@@ -436,7 +436,7 @@ if ($actual['actual'] !== null) {
     printf("\n【結果確認】\n");
     printf("実3連単       : %s", $actual['actual']);
     if ($actual['payout'] !== null) {
-        printf(" / %,d円", $actual['payout']);
+        printf(" / %s円", number_format((int)$actual['payout']));
     }
     printf("\n");
     if ($allBets !== []) {
