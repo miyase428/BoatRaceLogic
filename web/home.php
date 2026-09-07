@@ -82,7 +82,7 @@ try {
         ];
     }
 
-    // 左側のレース検索用。予想値ではなく、その日の出走表に紐づく全国勝率を使う。
+    // 左側のレース検索・カチカチ候補用。予想値ではなく、その日の出走表に紐づく全国勝率を使う。
     $rateStmt = $pdo->prepare(
         "SELECT re.race_code, re.lane_number, MAX(ps.national_win_rate) AS national_win_rate\n"
         . "FROM boat_race.race_entry re\n"
@@ -156,6 +156,56 @@ foreach ($racesByPlace as $races) {
     $raceCount += count($races);
 }
 
+// カチカチ側は、まずTOP画面の形を見るための暫定候補。
+// 現在の詳細検索で既に使っている全国勝率だけを使い、ロジックを新規に断定しない。
+// 1号艇>=6.5 かつ 2～6号艇の最高<=6.5 を候補にし、勝率差の大きい順に表示する。
+$solidCandidatesAll = [];
+foreach ($racesByPlace as $place => $races) {
+    foreach ($races as $raceNo => $race) {
+        if (($race['result_count'] ?? 0) >= 3) {
+            continue;
+        }
+
+        $winRates = is_array($race['win_rates'] ?? null) ? $race['win_rates'] : [];
+        $lane1Rate = isset($winRates[1]) && is_numeric($winRates[1]) ? (float)$winRates[1] : null;
+        $outerRates = [];
+        for ($lane = 2; $lane <= 6; $lane++) {
+            if (isset($winRates[$lane]) && is_numeric($winRates[$lane])) {
+                $outerRates[] = (float)$winRates[$lane];
+            }
+        }
+        $outerMax = $outerRates !== [] ? max($outerRates) : null;
+
+        if ($lane1Rate === null || $outerMax === null || $lane1Rate < 6.5 || $outerMax > 6.5) {
+            continue;
+        }
+
+        $solidCandidatesAll[] = [
+            'place' => $place,
+            'venue' => $placeNames[$place] ?? $place,
+            'race_no' => (int)$raceNo,
+            'lane1_rate' => $lane1Rate,
+            'outer_max' => $outerMax,
+            'gap' => $lane1Rate - $outerMax,
+            'status' => (($race['exhibition_count'] ?? 0) >= 5) ? '展示済' : '展示前',
+        ];
+    }
+}
+
+usort($solidCandidatesAll, static function (array $a, array $b): int {
+    $gapCmp = ((float)$b['gap']) <=> ((float)$a['gap']);
+    if ($gapCmp !== 0) {
+        return $gapCmp;
+    }
+    $laneCmp = ((float)$b['lane1_rate']) <=> ((float)$a['lane1_rate']);
+    if ($laneCmp !== 0) {
+        return $laneCmp;
+    }
+    return ((int)$a['race_no']) <=> ((int)$b['race_no']);
+});
+$solidCandidateCount = count($solidCandidatesAll);
+$solidCandidates = array_slice($solidCandidatesAll, 0, 5);
+
 $dayLabel = $selectedDate->format('Y/m/d');
 $weekdays = ['日', '月', '火', '水', '木', '金', '土'];
 $weekday = $weekdays[(int)$selectedDate->format('w')];
@@ -167,7 +217,7 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f4ecdf">
     <title>艇 BoatRace</title>
-    <link rel="stylesheet" href="/web/assets/css/home.css?v=20260905b">
+    <link rel="stylesheet" href="/web/assets/css/home.css?v=20260907a">
 </head>
 <body>
 <div class="home-shell">
@@ -197,7 +247,64 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
     <?php endif; ?>
 
     <div class="home-layout">
-        <aside class="search-column">
+        <aside class="search-column" id="home-highlights"
+               data-date="<?= h($selectedDate->format('Y-m-d')) ?>"
+               data-prediction-path="<?= h($predictionPath) ?>">
+
+            <section class="pick-card pick-card-solid">
+                <div class="pick-card-head">
+                    <div>
+                        <strong>🔒 カチカチ候補</strong>
+                        <small>イン逃げを狙いやすいレース</small>
+                    </div>
+                    <span class="pick-mode pick-mode-provisional">暫定</span>
+                </div>
+                <div class="pick-rule">仮条件：1号艇6.5↑ × 外最高6.5↓ / 全国勝率差順</div>
+                <div class="pick-list">
+                    <?php if ($solidCandidates): ?>
+                        <?php foreach ($solidCandidates as $candidate): ?>
+                            <?php
+                                $solidUrl = $predictionPath
+                                    . '?date=' . rawurlencode($selectedDate->format('Y-m-d'))
+                                    . '&place=' . rawurlencode((string)$candidate['place'])
+                                    . '&race=' . rawurlencode((string)$candidate['race_no']);
+                            ?>
+                            <a class="pick-item pick-item-solid" href="<?= h($solidUrl) ?>">
+                                <div class="pick-item-main">
+                                    <strong><?= h((string)$candidate['venue']) ?> <?= (int)$candidate['race_no'] ?>R</strong>
+                                    <span><?= h((string)$candidate['status']) ?></span>
+                                </div>
+                                <div class="pick-item-sub">
+                                    <span>① <?= number_format((float)$candidate['lane1_rate'], 2) ?></span>
+                                    <span>外最高 <?= number_format((float)$candidate['outer_max'], 2) ?></span>
+                                    <b>差 <?= sprintf('%+.2f', (float)$candidate['gap']) ?></b>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                        <?php if ($solidCandidateCount > count($solidCandidates)): ?>
+                            <div class="pick-more">ほか <?= $solidCandidateCount - count($solidCandidates) ?>R</div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="pick-empty">現在の仮条件では該当レースなし</div>
+                    <?php endif; ?>
+                </div>
+            </section>
+
+            <section class="pick-card pick-card-upset">
+                <div class="pick-card-head">
+                    <div>
+                        <strong>🔥 荒れ警戒</strong>
+                        <small>完成済みのイン飛び警報を一覧化</small>
+                    </div>
+                    <span class="pick-mode pick-mode-live">展示後</span>
+                </div>
+                <div class="pick-rule">展示済み・結果前のレースを自動判定</div>
+                <div id="upset-pick-list" class="pick-list" aria-live="polite">
+                    <div class="pick-loading"><span></span> 荒れ判定を読み込み中…</div>
+                </div>
+                <div id="upset-pick-meta" class="pick-meta"></div>
+            </section>
+
             <details class="search-card"<?= $isMobile ? '' : ' open' ?>>
                 <summary>
                     <span>🔎 レース検索</span>
@@ -354,6 +461,6 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
 
     <footer class="home-footer">BoatRace Analytics / 開催判定はDBの出走表データを使用</footer>
 </div>
-<script src="/web/assets/js/home.js?v=20260905a" defer></script>
+<script src="/web/assets/js/home.js?v=20260907a" defer></script>
 </body>
 </html>
