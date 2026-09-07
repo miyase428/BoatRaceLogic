@@ -154,3 +154,121 @@
 
     applyFilters();
 })();
+
+(function () {
+    'use strict';
+
+    const root = document.getElementById('home-highlights');
+    const list = document.getElementById('upset-pick-list');
+    const meta = document.getElementById('upset-pick-meta');
+    if (!root || !list) return;
+
+    const date = String(root.dataset.date || '').trim();
+    const predictionPath = String(root.dataset.predictionPath || '/web/index.php').trim() || '/web/index.php';
+
+    function clear(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function addEmpty(text) {
+        clear(list);
+        const div = document.createElement('div');
+        div.className = 'pick-empty';
+        div.textContent = text;
+        list.appendChild(div);
+    }
+
+    function levelClass(level) {
+        if (level === 'very_high') return 'pick-alert-very-high';
+        if (level === 'high') return 'pick-alert-high';
+        return 'pick-alert-attention';
+    }
+
+    function raceUrl(row) {
+        return predictionPath
+            + '?date=' + encodeURIComponent(date)
+            + '&place=' + encodeURIComponent(String(row.place || ''))
+            + '&race=' + encodeURIComponent(String(row.race_no || ''));
+    }
+
+    function render(data) {
+        if (!data || data.status !== 'ok') {
+            throw new Error(String((data && data.error) || '荒れ判定を取得できませんでした。'));
+        }
+
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        clear(list);
+
+        if (!rows.length) {
+            addEmpty(Number(data.evaluated_races || 0) > 0
+                ? '現在、荒れ警戒に該当するレースなし'
+                : '展示済み・結果前の判定対象レースなし');
+        } else {
+            rows.forEach(function (row) {
+                const link = document.createElement('a');
+                link.className = 'pick-item pick-item-upset';
+                link.href = raceUrl(row);
+
+                const main = document.createElement('div');
+                main.className = 'pick-item-main';
+
+                const title = document.createElement('strong');
+                title.textContent = String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
+                main.appendChild(title);
+
+                const badge = document.createElement('span');
+                badge.className = 'pick-alert-badge ' + levelClass(String(row.level || 'attention'));
+                badge.textContent = String(row.level_label || '注意');
+                main.appendChild(badge);
+                link.appendChild(main);
+
+                const sub = document.createElement('div');
+                sub.className = 'pick-item-sub';
+
+                const inRate = document.createElement('span');
+                const rate = Number(row.in_rate);
+                inRate.textContent = 'イン補正1着 ' + (Number.isFinite(rate) ? rate.toFixed(1) + '%' : '-');
+                sub.appendChild(inRate);
+
+                const current = document.createElement('span');
+                current.textContent = '現行本命 ' + Number(row.current_head || 0) + '号';
+                sub.appendChild(current);
+
+                const note = document.createElement('b');
+                note.textContent = 'イン飛び警報';
+                sub.appendChild(note);
+
+                link.appendChild(sub);
+                list.appendChild(link);
+            });
+        }
+
+        if (meta) {
+            const total = Number(data.total_alerts || 0);
+            const evaluated = Number(data.evaluated_races || 0);
+            const candidate = Number(data.candidate_races || 0);
+            meta.textContent = '警戒 ' + total + 'R / 判定 ' + evaluated + 'R'
+                + (candidate > evaluated ? ' / 準備中 ' + (candidate - evaluated) + 'R' : '')
+                + (data.cache_used ? ' / キャッシュ' : '');
+        }
+    }
+
+    async function load() {
+        try {
+            const response = await fetch(
+                '/web/home_highlights_api.php?date=' + encodeURIComponent(date),
+                {cache: 'no-store'}
+            );
+            const data = await response.json();
+            if (!response.ok && (!data || data.status !== 'ok')) {
+                throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+            }
+            render(data);
+        } catch (error) {
+            addEmpty('荒れ判定の読み込みに失敗しました');
+            if (meta) meta.textContent = String(error && error.message ? error.message : error);
+        }
+    }
+
+    load();
+})();
