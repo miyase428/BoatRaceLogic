@@ -163,6 +163,17 @@
     const meta = document.getElementById('upset-pick-meta');
     if (!root || !list) return;
 
+    // 初期HTMLは旧表示との互換を残しているため、荒れ警戒だけ正しい用途へ置換する。
+    const card = list.closest('.pick-card-upset');
+    if (card) {
+        const subtitle = card.querySelector('.pick-card-head small');
+        const mode = card.querySelector('.pick-mode');
+        const rule = card.querySelector('.pick-rule');
+        if (subtitle) subtitle.textContent = '展示前から使える荒れサインを一覧化';
+        if (mode) mode.textContent = '展示不要';
+        if (rule) rule.textContent = '直近1年の決まり手を共通判定 / 当日展示情報は不使用';
+    }
+
     const date = String(root.dataset.date || '').trim();
     const predictionPath = String(root.dataset.predictionPath || '/web/index.php').trim() || '/web/index.php';
 
