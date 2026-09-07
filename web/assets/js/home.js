@@ -172,6 +172,11 @@
         '.race-button{min-height:54px}',
         '.deadline-time{display:block;margin-top:1px;color:#168bc3;font-size:8px;font-style:normal;font-weight:900;line-height:1.05}',
         '.pick-deadline{color:#168bc3;font-weight:900}',
+        '.race-button.is-deadline-past{opacity:.48;filter:grayscale(.55);background:#f0ece6!important;border-color:#d8d0c7!important}',
+        '.race-button.is-deadline-past .deadline-time{color:#8d8d8d}',
+        '.pick-item.is-deadline-past{opacity:.50;filter:grayscale(.45);background:#f3efe9}',
+        '.pick-item.is-deadline-past .pick-deadline{color:#8a8a8a}',
+        '.pick-item.is-deadline-past .pick-alert-badge{opacity:.75}',
         '.home-deadline-controls{display:inline-flex;align-items:center;gap:5px;margin-left:8px}',
         '.home-deadline-refresh{border:1px solid #9fcce0;border-radius:999px;background:#f5fcff;color:#168bc3;padding:3px 7px;font-size:9px;font-weight:900;cursor:pointer}',
         '.home-deadline-refresh:disabled{opacity:.55;cursor:wait}',
@@ -192,6 +197,19 @@
         const direct = String(row && row.race_code ? row.race_code : '').toUpperCase();
         const code = direct || raceCodeFor(row && row.place, row && row.race_no);
         return code && deadlines[code] ? String(deadlines[code]) : '';
+    }
+
+    function isPastDeadlineTime(time) {
+        const value = String(time || '').trim();
+        if (!/^\d{2}:\d{2}$/.test(value) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return false;
+        }
+        const deadlineMs = Date.parse(date + 'T' + value + ':00+09:00');
+        return Number.isFinite(deadlineMs) && Date.now() >= deadlineMs;
+    }
+
+    function isPastDeadline(row) {
+        return isPastDeadlineTime(timeForRow(row));
     }
 
     function sortRows(rows) {
@@ -229,6 +247,7 @@
             let node = link.querySelector('.deadline-time');
             if (!time) {
                 if (node) node.remove();
+                link.classList.remove('is-deadline-past');
                 return;
             }
             if (!node) {
@@ -238,7 +257,13 @@
             }
             node.textContent = time;
             node.dateTime = date + 'T' + time + ':00+09:00';
-            link.title = (link.title ? link.title + ' / ' : '') + '締切予定 ' + time;
+            link.classList.toggle('is-deadline-past', isPastDeadlineTime(time));
+
+            const originalTitle = String(link.dataset.deadlineBaseTitle || link.title || '').replace(/\s*\/\s*締切予定\s*\d{2}:\d{2}.*$/, '');
+            link.dataset.deadlineBaseTitle = originalTitle;
+            link.title = (originalTitle ? originalTitle + ' / ' : '')
+                + '締切予定 ' + time
+                + (isPastDeadlineTime(time) ? '（締切時刻経過）' : '');
         });
     }
 
@@ -272,6 +297,12 @@
         const requested = Number(data.requested_places || 0);
         statusNode.textContent = '公式時刻 ' + complete + '/' + requested + '場'
             + (data.cache && data.cache.used ? '・保存済' : '');
+    }
+
+    function refreshClockState() {
+        if (!currentData) return;
+        decorateRaceButtons();
+        document.dispatchEvent(new CustomEvent('boatrace:clock'));
     }
 
     async function load(force) {
@@ -313,6 +344,8 @@
         load: load,
         timeForRow: timeForRow,
         sortRows: sortRows,
+        isPastDeadline: isPastDeadline,
+        isPastDeadlineTime: isPastDeadlineTime,
         getData: function () { return currentData; }
     };
 
@@ -322,6 +355,7 @@
         });
     }
 
+    window.setInterval(refreshClockState, 30000);
     window.BoatRaceDeadlinesPromise = load(false).catch(function () { return null; });
 })();
 
@@ -387,6 +421,12 @@
             : '';
     }
 
+    function pastDeadline(row) {
+        return window.BoatRaceHomeDeadlines
+            ? window.BoatRaceHomeDeadlines.isPastDeadline(row)
+            : false;
+    }
+
     function sortedRows(rows) {
         return window.BoatRaceHomeDeadlines
             ? window.BoatRaceHomeDeadlines.sortRows(rows)
@@ -397,6 +437,10 @@
         const link = document.createElement('a');
         link.className = 'pick-item pick-item-upset';
         link.href = raceUrl(row);
+        if (pastDeadline(row)) {
+            link.classList.add('is-deadline-past');
+            link.title = '締切予定時刻を過ぎています';
+        }
 
         const main = document.createElement('div');
         main.className = 'pick-item-main';
@@ -507,6 +551,9 @@
     document.addEventListener('boatrace:deadlines', function () {
         if (latestData) render(latestData);
     });
+    document.addEventListener('boatrace:clock', function () {
+        if (latestData) render(latestData);
+    });
 
     load();
 })();
@@ -557,6 +604,12 @@
             : '';
     }
 
+    function pastDeadline(row) {
+        return window.BoatRaceHomeDeadlines
+            ? window.BoatRaceHomeDeadlines.isPastDeadline(row)
+            : false;
+    }
+
     function sortedRows(input) {
         return window.BoatRaceHomeDeadlines
             ? window.BoatRaceHomeDeadlines.sortRows(input)
@@ -567,6 +620,10 @@
         const link = document.createElement('a');
         link.className = 'pick-item pick-item-solid';
         link.href = raceUrl(row);
+        if (pastDeadline(row)) {
+            link.classList.add('is-deadline-past');
+            link.title = '締切予定時刻を過ぎています';
+        }
 
         const main = document.createElement('div');
         main.className = 'pick-item-main';
@@ -647,6 +704,9 @@
     }
 
     document.addEventListener('boatrace:deadlines', function () {
+        if (Array.isArray(rows)) render();
+    });
+    document.addEventListener('boatrace:clock', function () {
         if (Array.isArray(rows)) render();
     });
 
