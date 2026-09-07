@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../common/db_connect.php';
-require_once __DIR__ . '/controllers/IndexController.php';
-require_once __DIR__ . '/logic/AiTrioRateLogic.php';
+require_once __DIR__ . '/../common/PayoutSignalFeatureBuilder.php';
+require_once __DIR__ . '/../common/PayoutSignalClassifier.php';
 
 date_default_timezone_set('Asia/Tokyo');
 header('Content-Type: application/json; charset=UTF-8');
@@ -21,6 +21,15 @@ function homeHighlightsValidDate(string $value): bool
 {
     $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
     return $dt !== false && $dt->format('Y-m-d') === $value;
+}
+
+function homeHighlightsLevelWeight(string $level): int
+{
+    return match ($level) {
+        'strong' => 2,
+        'watch' => 1,
+        default => 0,
+    };
 }
 
 $dateText = trim((string)($_GET['date'] ?? date('Y-m-d')));
@@ -60,213 +69,285 @@ $placeNames = [
 try {
     $pdo = getPDO();
 
-    // TOP画面では「展示が入り、まだ結果が出ていないレース」だけを判定する。
-    // 全144Rを毎回再計算せず、実際に今買える候補へ絞ることで負荷を抑える。
-    $stmt = $pdo->prepare(<<<SQL
-        WITH entries AS (
-            SELECT race_code, COUNT(*) AS entry_count
-            FROM boat_race.race_entry
-            WHERE race_code LIKE :prefix_entries
-            GROUP BY race_code
-        ), exhibitions AS (
-            SELECT
-                race_code,
-                COUNT(*) FILTER (
-                    WHERE exhibition_time IS NOT NULL OR start_timing IS NOT NULL
-                ) AS exhibition_count
-            FROM boat_race.exhibition_live
-            WHERE race_code LIKE :prefix_exhibitions
-            GROUP BY race_code
-        ), results AS (
-            SELECT race_code, COUNT(*) AS result_count
-            FROM boat_race.race_result_detail
-            WHERE race_code LIKE :prefix_results
-            GROUP BY race_code
-        )
-        SELECT e.race_code
-        FROM entries e
-        LEFT JOIN exhibitions x ON x.race_code = e.race_code
-        LEFT JOIN results r ON r.race_code = e.race_code
-        WHERE e.entry_count >= 6
-          AND COALESCE(x.exhibition_count, 0) >= 5
-          AND COALESCE(r.result_count, 0) < 3
-        ORDER BY e.race_code
-    SQL);
+    // 展示前から判定できるよう、kimarite_api.php と同じ「当日艇番=コース」基準で
+    // 各選手の直近1年決まり手を日単位で一括集計する。
+    // 当日展示・展示進入・二次評価・補正後1着率は一切使わない。
+    $sql = <<<SQL
+WITH target_date AS (
+    SELECT TO_DATE(:target_date, 'YYYYMMDD') AS d
+),
+finished AS (
+    SELECT race_code, COUNT(*)::int AS result_count
+    FROM boat_race.race_result_detail
+    WHERE race_code LIKE :result_prefix
+    GROUP BY race_code
+),
+targets_raw AS (
+    SELECT
+        re.race_code,
+        SUBSTRING(re.race_code FROM 9 FOR 3) AS place,
+        CAST(SUBSTRING(re.race_code FROM 12 FOR 2) AS integer) AS race_no,
+        re.lane_number::integer AS course,
+        re.player_id
+    FROM boat_race.race_entry re
+    LEFT JOIN finished f ON f.race_code = re.race_code
+    WHERE re.race_code LIKE :entry_prefix
+      AND COALESCE(f.result_count, 0) = 0
+      AND re.lane_number BETWEEN 1 AND 6
+),
+eligible_races AS (
+    SELECT race_code
+    FROM targets_raw
+    GROUP BY race_code
+    HAVING COUNT(DISTINCT course) = 6
+),
+target_members AS (
+    SELECT tr.*
+    FROM targets_raw tr
+    JOIN eligible_races er ON er.race_code = tr.race_code
+),
+past AS (
+    SELECT
+        tm.race_code AS target_race_code,
+        tm.place,
+        tm.race_no,
+        tm.course,
+        tm.player_id AS target_player_id,
+        re.race_code AS past_race_code,
+        rm.race_date,
+        COALESCE(rd.entry_course, ex.entry_course)::integer AS past_course,
+        w.player_id AS winner_player_id,
+        TRIM(COALESCE(w.technique, '')) AS winner_technique
+    FROM target_members tm
+    CROSS JOIN target_date td
+    JOIN boat_race.race_entry re
+      ON re.player_id = tm.player_id
+    JOIN boat_race.race_master rm
+      ON rm.race_code = re.race_code
+
+    LEFT JOIN LATERAL (
+        SELECT rrd.entry_course
+        FROM boat_race.race_result_detail rrd
+        WHERE rrd.race_code = re.race_code
+          AND rrd.player_id = re.player_id
+          AND rrd.entry_course BETWEEN 1 AND 6
+        LIMIT 1
+    ) rd ON TRUE
+
+    LEFT JOIN LATERAL (
+        SELECT el.entry_course
+        FROM boat_race.exhibition_live el
+        WHERE el.race_code = re.race_code
+          AND el.player_id = re.player_id
+          AND el.entry_course BETWEEN 1 AND 6
+        LIMIT 1
+    ) ex ON TRUE
+
+    JOIN LATERAL (
+        SELECT
+            rrd.player_id,
+            rrd.technique
+        FROM boat_race.race_result_detail rrd
+        WHERE rrd.race_code = re.race_code
+          AND TRIM(rrd.rank) = '1'
+        LIMIT 1
+    ) w ON TRUE
+
+    WHERE rm.race_date >= td.d - INTERVAL '12 months'
+      AND rm.race_date < td.d
+),
+matched AS (
+    SELECT *
+    FROM past
+    WHERE past_course = course
+),
+agg AS (
+    SELECT
+        tm.race_code,
+        tm.place,
+        tm.race_no,
+        tm.course,
+        tm.player_id,
+        COUNT(m.past_race_code)::int AS total_12,
+        COUNT(*) FILTER (
+            WHERE m.winner_player_id = tm.player_id
+        )::int AS win_12,
+        COUNT(*) FILTER (
+            WHERE tm.course = 1
+              AND m.winner_player_id = tm.player_id
+              AND m.winner_technique = '逃げ'
+        )::int AS nige_12,
+        COUNT(*) FILTER (
+            WHERE tm.course <> 1
+              AND m.winner_player_id = tm.player_id
+              AND m.winner_technique = '差し'
+        )::int AS sashi_12,
+        COUNT(*) FILTER (
+            WHERE tm.course <> 1
+              AND m.winner_player_id = tm.player_id
+              AND m.winner_technique = 'まくり'
+        )::int AS makuri_12
+    FROM target_members tm
+    LEFT JOIN matched m
+      ON m.target_race_code = tm.race_code
+     AND m.course = tm.course
+     AND m.target_player_id = tm.player_id
+    GROUP BY tm.race_code, tm.place, tm.race_no, tm.course, tm.player_id
+)
+SELECT *
+FROM agg
+ORDER BY race_code, course
+SQL;
+
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([
-        ':prefix_entries' => $datePrefix . '%',
-        ':prefix_exhibitions' => $datePrefix . '%',
-        ':prefix_results' => $datePrefix . '%',
+        ':target_date' => $datePrefix,
+        ':result_prefix' => $datePrefix . '%',
+        ':entry_prefix' => $datePrefix . '%',
     ]);
-    $raceCodes = array_values(array_filter(array_map(
-        static fn(array $row): string => (string)($row['race_code'] ?? ''),
-        $stmt->fetchAll(PDO::FETCH_ASSOC)
-    )));
 
-    $controller = new IndexController();
-    $aiTrioLogic = new AiTrioRateLogic();
-    $rows = [];
-    $evaluated = 0;
-    $errors = [];
-
-    $originalGet = $_GET;
-    $originalPost = $_POST;
-
-    foreach ($raceCodes as $raceCode) {
-        if (!preg_match('/^(\d{8})([A-Z0-9]{3})(0[1-9]|1[0-2])$/', $raceCode, $m)) {
+    $byRace = [];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $raceCode = (string)($r['race_code'] ?? '');
+        $course = (int)($r['course'] ?? 0);
+        if ($raceCode === '' || $course < 1 || $course > 6) {
             continue;
         }
 
-        $place = $m[2];
-        $raceNo = (int)$m[3];
-        if (!isset($placeNames[$place])) {
-            continue;
-        }
+        $total = (int)($r['total_12'] ?? 0);
+        $pct = static fn(int $count): float => $total > 0
+            ? round(100.0 * $count / $total, 1)
+            : 0.0;
 
-        try {
-            $_GET = [
-                'date' => $dateText,
-                'place' => $place,
-                'race' => (string)$raceNo,
-            ];
-            $_POST = [];
-
-            $view = $controller->handle();
-            $correctedData = is_array($view['corrected_win_rate_data'] ?? null)
-                ? $view['corrected_win_rate_data']
-                : [];
-            $correctedBoats = is_array($correctedData['boats'] ?? null)
-                ? $correctedData['boats']
-                : [];
-
-            if ((string)($correctedData['status'] ?? '') !== 'ok' || count($correctedBoats) !== 6) {
-                continue;
-            }
-
-            $courseByBoat = is_array($view['entry_course_by_boat'] ?? null)
-                ? $view['entry_course_by_boat']
-                : [];
-            if (count($courseByBoat) !== 6 || empty($view['entry_map_ready'])) {
-                continue;
-            }
-
-            $aiTrio = $aiTrioLogic->calculate(
-                $raceCode,
-                is_array($view['results'] ?? null) ? $view['results'] : [],
-                is_array($view['tenji_list'] ?? null) ? $view['tenji_list'] : [],
-                $courseByBoat,
-                false
-            );
-            if ((string)($aiTrio['status'] ?? '') !== 'ok') {
-                continue;
-            }
-
-            $inBoat = 0;
-            foreach ($courseByBoat as $boatKey => $course) {
-                $boat = (int)$boatKey;
-                if ((int)$course === 1 && $boat >= 1 && $boat <= 6) {
-                    $inBoat = $boat;
-                    break;
-                }
-            }
-            if ($inBoat < 1 || $inBoat > 6) {
-                continue;
-            }
-
-            $correctedRates = [];
-            for ($boat = 1; $boat <= 6; $boat++) {
-                $rate = $correctedBoats[$boat]['corrected_rate']
-                    ?? $correctedBoats[(string)$boat]['corrected_rate']
-                    ?? null;
-                if (!is_numeric($rate)) {
-                    $correctedRates = [];
-                    break;
-                }
-                $correctedRates[$boat] = (float)$rate;
-            }
-            if (count($correctedRates) !== 6) {
-                continue;
-            }
-
-            $ranked = range(1, 6);
-            usort($ranked, static function (int $a, int $b) use ($correctedRates): int {
-                $cmp = ($correctedRates[$b] <=> $correctedRates[$a]);
-                return $cmp !== 0 ? $cmp : ($a <=> $b);
-            });
-
-            $aiHead = (int)($ranked[0] ?? 0);
-            $currentHead = (int)($view['honmei_head'] ?? 0);
-            $inRate = $correctedRates[$inBoat] ?? null;
-            $evaluated++;
-
-            // 本番の upset_alert_panel.php と同じ荒れ警戒の入口。
-            // AI1着率ではインが最上位なのに、現行本命がイン以外へ振れた時だけ警戒する。
-            if ($aiHead !== $inBoat || $currentHead === $inBoat || $inRate === null) {
-                continue;
-            }
-
-            $level = 'normal';
-            $label = '通常';
-            if ($inRate < 40.0) {
-                $level = 'very_high';
-                $label = '非常に高';
-            } elseif ($inRate < 50.0) {
-                $level = 'high';
-                $label = '高';
-            } elseif ($inRate < 55.0) {
-                $level = 'attention';
-                $label = '注意';
-            }
-
-            if ($level === 'normal') {
-                continue;
-            }
-
-            $rows[] = [
-                'race_code' => $raceCode,
-                'place' => $place,
-                'venue' => $placeNames[$place],
-                'race_no' => $raceNo,
-                'level' => $level,
-                'level_label' => $label,
-                'in_boat' => $inBoat,
-                'in_rate' => round((float)$inRate, 2),
-                'current_head' => $currentHead,
-            ];
-        } catch (Throwable $raceError) {
-            $errors[] = [
-                'race_code' => $raceCode,
-                'error' => $raceError->getMessage(),
+        if (!isset($byRace[$raceCode])) {
+            $byRace[$raceCode] = [
+                'place' => (string)($r['place'] ?? ''),
+                'race_no' => (int)($r['race_no'] ?? 0),
+                'kimarite' => [],
             ];
         }
+
+        $byRace[$raceCode]['kimarite'][$course] = [
+            '1year' => [
+                '_sample_n' => $total,
+                'nige' => $pct((int)($r['nige_12'] ?? 0)),
+                'win' => $pct((int)($r['win_12'] ?? 0)),
+                'sashi' => $pct((int)($r['sashi_12'] ?? 0)),
+                'makuri' => $pct((int)($r['makuri_12'] ?? 0)),
+            ],
+        ];
     }
 
-    $_GET = $originalGet;
-    $_POST = $originalPost;
+    $rows = [];
+    $evaluated = 0;
+    $waiting = 0;
 
-    $priority = ['very_high' => 0, 'high' => 1, 'attention' => 2];
-    usort($rows, static function (array $a, array $b) use ($priority): int {
-        $pa = $priority[(string)($a['level'] ?? '')] ?? 9;
-        $pb = $priority[(string)($b['level'] ?? '')] ?? 9;
-        if ($pa !== $pb) {
-            return $pa <=> $pb;
+    foreach ($byRace as $raceCode => $race) {
+        $kimarite = is_array($race['kimarite'] ?? null) ? $race['kimarite'] : [];
+        if (count($kimarite) !== 6) {
+            $waiting++;
+            continue;
         }
-        $rateCmp = ((float)($a['in_rate'] ?? 999.0)) <=> ((float)($b['in_rate'] ?? 999.0));
-        if ($rateCmp !== 0) {
-            return $rateCmp;
+
+        $built = PayoutSignalFeatureBuilder::build(
+            (int)($race['race_no'] ?? 0),
+            $kimarite,
+            [] // TOP荒れ警戒は展示不要の暫定判定。Web本命/対抗は入れない。
+        );
+        if (($built['status'] ?? '') !== 'ok') {
+            $waiting++;
+            continue;
+        }
+
+        $evaluated++;
+        $classified = PayoutSignalClassifier::classify($built['input']);
+        $medium = is_array($classified['payout']['medium'] ?? null) ? $classified['payout']['medium'] : [];
+        $high = is_array($classified['payout']['high'] ?? null) ? $classified['payout']['high'] : [];
+        $big = is_array($classified['payout']['big'] ?? null) ? $classified['payout']['big'] : [];
+        $chaos = is_array($classified['chaos'] ?? null) ? $classified['chaos'] : [];
+
+        $hasAlert = (string)($medium['level'] ?? 'low') !== 'low'
+            || (string)($high['level'] ?? 'low') !== 'low'
+            || (string)($big['level'] ?? 'low') !== 'low'
+            || (string)($chaos['primary'] ?? '平常') !== '平常';
+        if (!$hasAlert) {
+            continue;
+        }
+
+        $input = is_array($built['input'] ?? null) ? $built['input'] : [];
+        $place = (string)($race['place'] ?? '');
+        $weight = homeHighlightsLevelWeight((string)($big['level'] ?? 'low')) * 100
+            + homeHighlightsLevelWeight((string)($high['level'] ?? 'low')) * 10
+            + homeHighlightsLevelWeight((string)($medium['level'] ?? 'low'));
+
+        $strongestLabel = '荒れ注意';
+        $strongestLevel = 'watch';
+        foreach ([
+            ['大穴', $big],
+            ['高配当', $high],
+            ['中配当', $medium],
+        ] as [$label, $bucket]) {
+            $level = (string)($bucket['level'] ?? 'low');
+            if ($level === 'strong') {
+                $strongestLabel = $label . ' 強';
+                $strongestLevel = 'strong';
+                break;
+            }
+            if ($level === 'watch' && $strongestLabel === '荒れ注意') {
+                $strongestLabel = $label . ' 注';
+                $strongestLevel = 'watch';
+            }
+        }
+
+        $rows[] = [
+            'race_code' => $raceCode,
+            'place' => $place,
+            'venue' => $placeNames[$place] ?? $place,
+            'race_no' => (int)($race['race_no'] ?? 0),
+            'primary' => (string)($chaos['primary'] ?? '平常'),
+            'types' => array_values(is_array($chaos['types'] ?? null) ? $chaos['types'] : []),
+            'badge' => $strongestLabel,
+            'severity' => $strongestLevel,
+            'medium_level' => (string)($medium['level'] ?? 'low'),
+            'high_level' => (string)($high['level'] ?? 'low'),
+            'big_level' => (string)($big['level'] ?? 'low'),
+            'nige' => isset($input['nige']) ? round((float)$input['nige'], 1) : null,
+            'attack_max' => isset($input['attack_max']) ? round((float)$input['attack_max'], 1) : null,
+            'weight' => $weight,
+        ];
+    }
+
+    usort($rows, static function (array $a, array $b): int {
+        $weightCmp = ((int)($b['weight'] ?? 0)) <=> ((int)($a['weight'] ?? 0));
+        if ($weightCmp !== 0) {
+            return $weightCmp;
+        }
+        $chaosCmp = ((string)($a['primary'] ?? '平常') === '平常' ? 1 : 0)
+            <=> ((string)($b['primary'] ?? '平常') === '平常' ? 1 : 0);
+        if ($chaosCmp !== 0) {
+            return $chaosCmp;
         }
         return strcmp((string)($a['race_code'] ?? ''), (string)($b['race_code'] ?? ''));
     });
+
+    $totalAlerts = count($rows);
+    foreach ($rows as &$row) {
+        unset($row['weight']);
+    }
+    unset($row);
 
     $payload = [
         'status' => 'ok',
         'date' => $dateText,
         'rows' => array_slice($rows, 0, 8),
-        'total_alerts' => count($rows),
-        'candidate_races' => count($raceCodes),
+        'total_alerts' => $totalAlerts,
+        'candidate_races' => count($byRace),
         'evaluated_races' => $evaluated,
+        'waiting_races' => $waiting,
+        'source' => '決まり手1年 / 展示情報不使用',
+        'classifier_version' => PayoutSignalClassifier::VERSION,
         'generated_at' => date(DATE_ATOM),
         'cache_used' => false,
-        'errors' => array_slice($errors, 0, 5),
     ];
 
     @file_put_contents(
