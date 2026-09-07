@@ -79,3 +79,12 @@
         window.setTimeout(refresh, 500);
     }
 })();
+
+// 開催一覧の「開催場のみ / 全場表示」切替は独立ファイルで管理する。
+(function () {
+    'use strict';
+    const script = document.createElement('script');
+    script.src = '/web/assets/js/home_venue_toggle.js?v=20260907a';
+    script.defer = true;
+    document.head.appendChild(script);
+})();
