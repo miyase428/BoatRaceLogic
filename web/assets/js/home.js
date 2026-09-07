@@ -163,6 +163,9 @@
     const meta = document.getElementById('upset-pick-meta');
     if (!root || !list) return;
 
+    const DISPLAY_LIMIT = 8;
+    let showAll = false;
+
     // 初期HTMLは旧表示との互換を残しているため、荒れ警戒だけ正しい用途へ置換する。
     const card = list.closest('.pick-card-upset');
     if (card) {
@@ -205,6 +208,47 @@
         return Number.isFinite(n) ? n.toFixed(1) + '%' : '-';
     }
 
+    function appendRow(row) {
+        const link = document.createElement('a');
+        link.className = 'pick-item pick-item-upset';
+        link.href = raceUrl(row);
+
+        const main = document.createElement('div');
+        main.className = 'pick-item-main';
+
+        const title = document.createElement('strong');
+        title.textContent = String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
+        main.appendChild(title);
+
+        const badge = document.createElement('span');
+        badge.className = 'pick-alert-badge ' + levelClass(String(row.severity || 'watch'));
+        badge.textContent = String(row.badge || '荒れ注意');
+        main.appendChild(badge);
+        link.appendChild(main);
+
+        const sub = document.createElement('div');
+        sub.className = 'pick-item-sub';
+
+        const chaos = document.createElement('span');
+        chaos.textContent = String(row.primary || '平常');
+        sub.appendChild(chaos);
+
+        const nige = document.createElement('span');
+        nige.textContent = '1C逃げ ' + pct(row.nige);
+        sub.appendChild(nige);
+
+        const attack = document.createElement('span');
+        attack.textContent = '外攻め最大 ' + pct(row.attack_max);
+        sub.appendChild(attack);
+
+        const note = document.createElement('b');
+        note.textContent = '展示前判定';
+        sub.appendChild(note);
+
+        link.appendChild(sub);
+        list.appendChild(link);
+    }
+
     function render(data) {
         if (!data || data.status !== 'ok') {
             throw new Error(String((data && data.error) || '荒れ判定を取得できませんでした。'));
@@ -218,55 +262,39 @@
                 ? '現在、荒れ警戒に該当するレースなし'
                 : '決まり手データの判定対象レースなし');
         } else {
-            rows.forEach(function (row) {
-                const link = document.createElement('a');
-                link.className = 'pick-item pick-item-upset';
-                link.href = raceUrl(row);
-
-                const main = document.createElement('div');
-                main.className = 'pick-item-main';
-
-                const title = document.createElement('strong');
-                title.textContent = String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
-                main.appendChild(title);
-
-                const badge = document.createElement('span');
-                badge.className = 'pick-alert-badge ' + levelClass(String(row.severity || 'watch'));
-                badge.textContent = String(row.badge || '荒れ注意');
-                main.appendChild(badge);
-                link.appendChild(main);
-
-                const sub = document.createElement('div');
-                sub.className = 'pick-item-sub';
-
-                const chaos = document.createElement('span');
-                chaos.textContent = String(row.primary || '平常');
-                sub.appendChild(chaos);
-
-                const nige = document.createElement('span');
-                nige.textContent = '1C逃げ ' + pct(row.nige);
-                sub.appendChild(nige);
-
-                const attack = document.createElement('span');
-                attack.textContent = '外攻め最大 ' + pct(row.attack_max);
-                sub.appendChild(attack);
-
-                const note = document.createElement('b');
-                note.textContent = '展示前判定';
-                sub.appendChild(note);
-
-                link.appendChild(sub);
-                list.appendChild(link);
-            });
+            const visibleRows = showAll ? rows : rows.slice(0, DISPLAY_LIMIT);
+            visibleRows.forEach(appendRow);
         }
 
         if (meta) {
-            const total = Number(data.total_alerts || 0);
+            clear(meta);
+
+            const total = Number(data.total_alerts || rows.length || 0);
             const evaluated = Number(data.evaluated_races || 0);
             const waiting = Number(data.waiting_races || 0);
-            meta.textContent = '警戒 ' + total + 'R / 判定 ' + evaluated + 'R'
+
+            const info = document.createElement('div');
+            info.textContent = '警戒 ' + total + 'R / 判定 ' + evaluated + 'R'
                 + (waiting > 0 ? ' / 母数待ち ' + waiting + 'R' : '')
                 + (data.cache_used ? ' / キャッシュ' : '');
+            meta.appendChild(info);
+
+            if (rows.length > DISPLAY_LIMIT) {
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'search-reset';
+                toggle.textContent = showAll
+                    ? DISPLAY_LIMIT + '件表示に戻す'
+                    : 'すべて表示（' + rows.length + 'R）';
+                toggle.addEventListener('click', function () {
+                    showAll = !showAll;
+                    render(data);
+                    if (!showAll && card) {
+                        card.scrollIntoView({behavior: 'smooth', block: 'start'});
+                    }
+                });
+                meta.appendChild(toggle);
+            }
         }
     }
 
