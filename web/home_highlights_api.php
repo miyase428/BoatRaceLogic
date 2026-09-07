@@ -66,7 +66,7 @@ try {
         WITH entries AS (
             SELECT race_code, COUNT(*) AS entry_count
             FROM boat_race.race_entry
-            WHERE race_code LIKE :prefix
+            WHERE race_code LIKE :prefix_entries
             GROUP BY race_code
         ), exhibitions AS (
             SELECT
@@ -75,12 +75,12 @@ try {
                     WHERE exhibition_time IS NOT NULL OR start_timing IS NOT NULL
                 ) AS exhibition_count
             FROM boat_race.exhibition_live
-            WHERE race_code LIKE :prefix
+            WHERE race_code LIKE :prefix_exhibitions
             GROUP BY race_code
         ), results AS (
             SELECT race_code, COUNT(*) AS result_count
             FROM boat_race.race_result_detail
-            WHERE race_code LIKE :prefix
+            WHERE race_code LIKE :prefix_results
             GROUP BY race_code
         )
         SELECT e.race_code
@@ -92,7 +92,11 @@ try {
           AND COALESCE(r.result_count, 0) < 3
         ORDER BY e.race_code
     SQL);
-    $stmt->execute([':prefix' => $datePrefix . '%']);
+    $stmt->execute([
+        ':prefix_entries' => $datePrefix . '%',
+        ':prefix_exhibitions' => $datePrefix . '%',
+        ':prefix_results' => $datePrefix . '%',
+    ]);
     $raceCodes = array_values(array_filter(array_map(
         static fn(array $row): string => (string)($row['race_code'] ?? ''),
         $stmt->fetchAll(PDO::FETCH_ASSOC)
