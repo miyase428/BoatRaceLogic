@@ -70,7 +70,6 @@
         const outerMax = numericData(button, 'outerMax');
 
         if (!bandMatch(raceNo, filters.raceBand)) return false;
-
         if (filters.raceStatus !== 'all' && status !== filters.raceStatus) return false;
         if (filters.unresolved && status === 'result') return false;
 
@@ -80,7 +79,6 @@
         if (filters.outerMax !== '') {
             if (outerMax === null || outerMax > Number(filters.outerMax)) return false;
         }
-
         return true;
     }
 
@@ -155,6 +153,181 @@
     applyFilters();
 })();
 
+// -----------------------------------------------------------------------------
+// 公式締切予定時刻
+// -----------------------------------------------------------------------------
+(function () {
+    'use strict';
+
+    const root = document.getElementById('home-highlights');
+    if (!root) return;
+
+    const date = String(root.dataset.date || '').trim();
+    const datePrefix = date.replace(/\D/g, '');
+    let currentData = null;
+    let currentPromise = null;
+
+    const style = document.createElement('style');
+    style.textContent = [
+        '.race-button{min-height:54px}',
+        '.deadline-time{display:block;margin-top:1px;color:#168bc3;font-size:8px;font-style:normal;font-weight:900;line-height:1.05}',
+        '.pick-deadline{color:#168bc3;font-weight:900}',
+        '.home-deadline-controls{display:inline-flex;align-items:center;gap:5px;margin-left:8px}',
+        '.home-deadline-refresh{border:1px solid #9fcce0;border-radius:999px;background:#f5fcff;color:#168bc3;padding:3px 7px;font-size:9px;font-weight:900;cursor:pointer}',
+        '.home-deadline-refresh:disabled{opacity:.55;cursor:wait}',
+        '.home-deadline-status{font-size:9px;color:#7b8793;font-weight:700}'
+    ].join('');
+    document.head.appendChild(style);
+
+    function raceCodeFor(place, raceNo) {
+        const n = Number(raceNo || 0);
+        if (!datePrefix || !place || n < 1 || n > 12) return '';
+        return datePrefix + String(place).toUpperCase() + String(n).padStart(2, '0');
+    }
+
+    function timeForRow(row) {
+        const deadlines = currentData && currentData.deadlines && typeof currentData.deadlines === 'object'
+            ? currentData.deadlines
+            : {};
+        const direct = String(row && row.race_code ? row.race_code : '').toUpperCase();
+        const code = direct || raceCodeFor(row && row.place, row && row.race_no);
+        return code && deadlines[code] ? String(deadlines[code]) : '';
+    }
+
+    function sortRows(rows) {
+        return (Array.isArray(rows) ? rows : []).map(function (row, index) {
+            return {row: row, index: index, time: timeForRow(row)};
+        }).sort(function (a, b) {
+            const at = a.time || '99:99';
+            const bt = b.time || '99:99';
+            const cmp = at.localeCompare(bt);
+            return cmp !== 0 ? cmp : a.index - b.index;
+        }).map(function (item) {
+            return item.row;
+        });
+    }
+
+    function codeFromRaceLink(link) {
+        try {
+            const url = new URL(link.href, window.location.origin);
+            const place = String(url.searchParams.get('place') || '').toUpperCase();
+            const raceNo = Number(url.searchParams.get('race') || 0);
+            return raceCodeFor(place, raceNo);
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function decorateRaceButtons() {
+        const deadlines = currentData && currentData.deadlines && typeof currentData.deadlines === 'object'
+            ? currentData.deadlines
+            : {};
+
+        document.querySelectorAll('[data-race-button]').forEach(function (link) {
+            const code = codeFromRaceLink(link);
+            const time = code ? String(deadlines[code] || '') : '';
+            let node = link.querySelector('.deadline-time');
+            if (!time) {
+                if (node) node.remove();
+                return;
+            }
+            if (!node) {
+                node = document.createElement('time');
+                node.className = 'deadline-time';
+                link.appendChild(node);
+            }
+            node.textContent = time;
+            node.dateTime = date + 'T' + time + ':00+09:00';
+            link.title = (link.title ? link.title + ' / ' : '') + '締切予定 ' + time;
+        });
+    }
+
+    const summaryLegend = document.querySelector('.summary-legend');
+    let refreshButton = null;
+    let statusNode = null;
+    if (summaryLegend) {
+        const controls = document.createElement('span');
+        controls.className = 'home-deadline-controls';
+
+        statusNode = document.createElement('span');
+        statusNode.className = 'home-deadline-status';
+        statusNode.textContent = '時刻取得中';
+        controls.appendChild(statusNode);
+
+        refreshButton = document.createElement('button');
+        refreshButton.type = 'button';
+        refreshButton.className = 'home-deadline-refresh';
+        refreshButton.textContent = '時刻更新';
+        controls.appendChild(refreshButton);
+        summaryLegend.appendChild(controls);
+    }
+
+    function updateStatus(data) {
+        if (!statusNode) return;
+        if (!data || (data.status !== 'ok' && data.status !== 'partial')) {
+            statusNode.textContent = '時刻取得失敗';
+            return;
+        }
+        const complete = Number(data.complete_places || 0);
+        const requested = Number(data.requested_places || 0);
+        statusNode.textContent = '公式時刻 ' + complete + '/' + requested + '場'
+            + (data.cache && data.cache.used ? '・保存済' : '');
+    }
+
+    async function load(force) {
+        if (currentPromise && !force) return currentPromise;
+
+        if (refreshButton) {
+            refreshButton.disabled = true;
+            refreshButton.textContent = force ? '更新中…' : '取得中…';
+        }
+
+        currentPromise = fetch(
+            '/web/home_deadlines_api.php?date=' + encodeURIComponent(date) + (force ? '&force=1' : ''),
+            {cache: 'no-store'}
+        ).then(async function (response) {
+            const data = await response.json();
+            if ((!response.ok && data.status !== 'partial') || !data || !data.deadlines) {
+                throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+            }
+            currentData = data;
+            decorateRaceButtons();
+            updateStatus(data);
+            document.dispatchEvent(new CustomEvent('boatrace:deadlines', {detail: data}));
+            return data;
+        }).catch(function (error) {
+            updateStatus(null);
+            throw error;
+        }).finally(function () {
+            if (refreshButton) {
+                refreshButton.disabled = false;
+                refreshButton.textContent = '時刻更新';
+            }
+            currentPromise = null;
+        });
+
+        return currentPromise;
+    }
+
+    window.BoatRaceHomeDeadlines = {
+        load: load,
+        timeForRow: timeForRow,
+        sortRows: sortRows,
+        getData: function () { return currentData; }
+    };
+
+    if (refreshButton) {
+        refreshButton.addEventListener('click', function () {
+            load(true).catch(function () {});
+        });
+    }
+
+    window.BoatRaceDeadlinesPromise = load(false).catch(function () { return null; });
+})();
+
+// -----------------------------------------------------------------------------
+// 荒れ警戒
+// -----------------------------------------------------------------------------
 (function () {
     'use strict';
 
@@ -165,8 +338,8 @@
 
     const DISPLAY_LIMIT = 8;
     let showAll = false;
+    let latestData = null;
 
-    // 初期HTMLは旧表示との互換を残しているため、荒れ警戒だけ正しい用途へ置換する。
     const card = list.closest('.pick-card-upset');
     if (card) {
         const subtitle = card.querySelector('.pick-card-head small');
@@ -208,6 +381,18 @@
         return Number.isFinite(n) ? n.toFixed(1) + '%' : '-';
     }
 
+    function deadlineFor(row) {
+        return window.BoatRaceHomeDeadlines
+            ? window.BoatRaceHomeDeadlines.timeForRow(row)
+            : '';
+    }
+
+    function sortedRows(rows) {
+        return window.BoatRaceHomeDeadlines
+            ? window.BoatRaceHomeDeadlines.sortRows(rows)
+            : rows.slice();
+    }
+
     function appendRow(row) {
         const link = document.createElement('a');
         link.className = 'pick-item pick-item-upset';
@@ -217,7 +402,9 @@
         main.className = 'pick-item-main';
 
         const title = document.createElement('strong');
-        title.textContent = String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
+        const time = deadlineFor(row);
+        title.textContent = (time ? time + ' ' : '') + String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
+        if (time) title.classList.add('pick-deadline');
         main.appendChild(title);
 
         const badge = document.createElement('span');
@@ -254,7 +441,9 @@
             throw new Error(String((data && data.error) || '荒れ判定を取得できませんでした。'));
         }
 
-        const rows = Array.isArray(data.rows) ? data.rows : [];
+        latestData = data;
+        const rawRows = Array.isArray(data.rows) ? data.rows : [];
+        const rows = sortedRows(rawRows);
         clear(list);
 
         if (!rows.length) {
@@ -315,9 +504,16 @@
         }
     }
 
+    document.addEventListener('boatrace:deadlines', function () {
+        if (latestData) render(latestData);
+    });
+
     load();
 })();
 
+// -----------------------------------------------------------------------------
+// カチカチ候補
+// -----------------------------------------------------------------------------
 (function () {
     'use strict';
 
@@ -326,26 +522,18 @@
     if (!root || !card) return;
 
     const list = card.querySelector('.pick-list');
-    const more = card.querySelector('.pick-more');
-    if (!list || !more) return;
+    if (!list) return;
 
-    const DISPLAY_LIMIT = list.querySelectorAll('.pick-item-solid').length;
-    const moreMatch = String(more.textContent || '').match(/(\d+)R/);
-    const moreCount = moreMatch ? Number(moreMatch[1]) : 0;
-    if (!Number.isFinite(moreCount) || moreCount <= 0 || DISPLAY_LIMIT <= 0) return;
+    const DISPLAY_LIMIT = 5;
+    const oldMore = card.querySelector('.pick-more');
+    if (oldMore) oldMore.remove();
 
-    const totalFromInitial = DISPLAY_LIMIT + moreCount;
-    more.remove();
-    const compactHtml = list.innerHTML;
-
-    const meta = document.createElement('div');
-    meta.className = 'pick-meta';
-    list.insertAdjacentElement('afterend', meta);
-
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'search-reset';
-    meta.appendChild(toggle);
+    let meta = card.querySelector('.pick-meta');
+    if (!meta) {
+        meta = document.createElement('div');
+        meta.className = 'pick-meta';
+        list.insertAdjacentElement('afterend', meta);
+    }
 
     const date = String(root.dataset.date || '').trim();
     const predictionPath = String(root.dataset.predictionPath || '/web/index.php').trim() || '/web/index.php';
@@ -363,6 +551,18 @@
             + '&race=' + encodeURIComponent(String(row.race_no || ''));
     }
 
+    function deadlineFor(row) {
+        return window.BoatRaceHomeDeadlines
+            ? window.BoatRaceHomeDeadlines.timeForRow(row)
+            : '';
+    }
+
+    function sortedRows(input) {
+        return window.BoatRaceHomeDeadlines
+            ? window.BoatRaceHomeDeadlines.sortRows(input)
+            : input.slice();
+    }
+
     function appendRow(row) {
         const link = document.createElement('a');
         link.className = 'pick-item pick-item-solid';
@@ -372,7 +572,9 @@
         main.className = 'pick-item-main';
 
         const title = document.createElement('strong');
-        title.textContent = String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
+        const time = deadlineFor(row);
+        title.textContent = (time ? time + ' ' : '') + String(row.venue || row.place || '') + ' ' + Number(row.race_no || 0) + 'R';
+        if (time) title.classList.add('pick-deadline');
         main.appendChild(title);
 
         const status = document.createElement('span');
@@ -400,17 +602,34 @@
         list.appendChild(link);
     }
 
-    function updateButton(total) {
-        toggle.textContent = showAll
-            ? DISPLAY_LIMIT + '件表示に戻す'
-            : 'すべて表示（' + total + 'R）';
+    function render() {
+        if (!Array.isArray(rows)) return;
+
+        const ordered = sortedRows(rows);
+        const visible = showAll ? ordered : ordered.slice(0, DISPLAY_LIMIT);
+        clear(list);
+        visible.forEach(appendRow);
+
+        clear(meta);
+        if (ordered.length > DISPLAY_LIMIT) {
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'search-reset';
+            toggle.textContent = showAll
+                ? DISPLAY_LIMIT + '件表示に戻す'
+                : 'すべて表示（' + ordered.length + 'R）';
+            toggle.addEventListener('click', function () {
+                showAll = !showAll;
+                render();
+                if (!showAll) {
+                    card.scrollIntoView({behavior: 'smooth', block: 'start'});
+                }
+            });
+            meta.appendChild(toggle);
+        }
     }
 
     async function loadAll() {
-        if (Array.isArray(rows)) return rows;
-
-        toggle.disabled = true;
-        toggle.textContent = '読み込み中…';
         try {
             const response = await fetch(
                 '/web/home_solid_candidates_api.php?date=' + encodeURIComponent(date),
@@ -421,39 +640,15 @@
                 throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
             }
             rows = Array.isArray(data.rows) ? data.rows : [];
-            return rows;
-        } finally {
-            toggle.disabled = false;
+            render();
+        } catch (error) {
+            // 初期PHP描画は残す。API失敗だけでTOPを壊さない。
         }
     }
 
-    toggle.addEventListener('click', async function () {
-        if (showAll) {
-            showAll = false;
-            list.innerHTML = compactHtml;
-            updateButton(Array.isArray(rows) ? rows.length : totalFromInitial);
-            card.scrollIntoView({behavior: 'smooth', block: 'start'});
-            return;
-        }
-
-        try {
-            const allRows = await loadAll();
-            clear(list);
-            allRows.forEach(appendRow);
-            showAll = true;
-            updateButton(allRows.length);
-        } catch (error) {
-            showAll = false;
-            updateButton(totalFromInitial);
-            const message = document.createElement('div');
-            message.className = 'pick-empty';
-            message.textContent = 'カチカチ候補の全件取得に失敗しました';
-            list.appendChild(message);
-            window.setTimeout(function () {
-                if (!showAll) list.innerHTML = compactHtml;
-            }, 2200);
-        }
+    document.addEventListener('boatrace:deadlines', function () {
+        if (Array.isArray(rows)) render();
     });
 
-    updateButton(totalFromInitial);
+    loadAll();
 })();
