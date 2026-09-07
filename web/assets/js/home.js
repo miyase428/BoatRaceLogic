@@ -178,10 +178,8 @@
         list.appendChild(div);
     }
 
-    function levelClass(level) {
-        if (level === 'very_high') return 'pick-alert-very-high';
-        if (level === 'high') return 'pick-alert-high';
-        return 'pick-alert-attention';
+    function levelClass(severity) {
+        return severity === 'strong' ? 'pick-alert-very-high' : 'pick-alert-attention';
     }
 
     function raceUrl(row) {
@@ -189,6 +187,11 @@
             + '?date=' + encodeURIComponent(date)
             + '&place=' + encodeURIComponent(String(row.place || ''))
             + '&race=' + encodeURIComponent(String(row.race_no || ''));
+    }
+
+    function pct(value) {
+        const n = Number(value);
+        return Number.isFinite(n) ? n.toFixed(1) + '%' : '-';
     }
 
     function render(data) {
@@ -202,7 +205,7 @@
         if (!rows.length) {
             addEmpty(Number(data.evaluated_races || 0) > 0
                 ? '現在、荒れ警戒に該当するレースなし'
-                : '展示済み・結果前の判定対象レースなし');
+                : '決まり手データの判定対象レースなし');
         } else {
             rows.forEach(function (row) {
                 const link = document.createElement('a');
@@ -217,25 +220,28 @@
                 main.appendChild(title);
 
                 const badge = document.createElement('span');
-                badge.className = 'pick-alert-badge ' + levelClass(String(row.level || 'attention'));
-                badge.textContent = String(row.level_label || '注意');
+                badge.className = 'pick-alert-badge ' + levelClass(String(row.severity || 'watch'));
+                badge.textContent = String(row.badge || '荒れ注意');
                 main.appendChild(badge);
                 link.appendChild(main);
 
                 const sub = document.createElement('div');
                 sub.className = 'pick-item-sub';
 
-                const inRate = document.createElement('span');
-                const rate = Number(row.in_rate);
-                inRate.textContent = 'イン補正1着 ' + (Number.isFinite(rate) ? rate.toFixed(1) + '%' : '-');
-                sub.appendChild(inRate);
+                const chaos = document.createElement('span');
+                chaos.textContent = String(row.primary || '平常');
+                sub.appendChild(chaos);
 
-                const current = document.createElement('span');
-                current.textContent = '現行本命 ' + Number(row.current_head || 0) + '号';
-                sub.appendChild(current);
+                const nige = document.createElement('span');
+                nige.textContent = '1C逃げ ' + pct(row.nige);
+                sub.appendChild(nige);
+
+                const attack = document.createElement('span');
+                attack.textContent = '外攻め最大 ' + pct(row.attack_max);
+                sub.appendChild(attack);
 
                 const note = document.createElement('b');
-                note.textContent = 'イン飛び警報';
+                note.textContent = '展示前判定';
                 sub.appendChild(note);
 
                 link.appendChild(sub);
@@ -246,9 +252,9 @@
         if (meta) {
             const total = Number(data.total_alerts || 0);
             const evaluated = Number(data.evaluated_races || 0);
-            const candidate = Number(data.candidate_races || 0);
+            const waiting = Number(data.waiting_races || 0);
             meta.textContent = '警戒 ' + total + 'R / 判定 ' + evaluated + 'R'
-                + (candidate > evaluated ? ' / 準備中 ' + (candidate - evaluated) + 'R' : '')
+                + (waiting > 0 ? ' / 母数待ち ' + waiting + 'R' : '')
                 + (data.cache_used ? ' / キャッシュ' : '');
         }
     }
