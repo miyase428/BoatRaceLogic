@@ -339,7 +339,7 @@ SQL;
     $payload = [
         'status' => 'ok',
         'date' => $dateText,
-        'rows' => array_slice($rows, 0, 8),
+        'rows' => $rows,
         'total_alerts' => $totalAlerts,
         'candidate_races' => count($byRace),
         'evaluated_races' => $evaluated,
