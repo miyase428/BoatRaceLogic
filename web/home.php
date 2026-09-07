@@ -82,7 +82,6 @@ try {
         ];
     }
 
-    // 左側のレース検索・カチカチ候補用。予想値ではなく、その日の出走表に紐づく全国勝率を使う。
     $rateStmt = $pdo->prepare(
         "SELECT re.race_code, re.lane_number, MAX(ps.national_win_rate) AS national_win_rate\n"
         . "FROM boat_race.race_entry re\n"
@@ -156,9 +155,6 @@ foreach ($racesByPlace as $races) {
     $raceCount += count($races);
 }
 
-// カチカチ側は、まずTOP画面の形を見るための暫定候補。
-// 現在の詳細検索で既に使っている全国勝率だけを使い、ロジックを新規に断定しない。
-// 1号艇>=6.5 かつ 2～6号艇の最高<=6.5 を候補にし、勝率差の大きい順に表示する。
 $solidCandidatesAll = [];
 foreach ($racesByPlace as $place => $races) {
     foreach ($races as $raceNo => $race) {
@@ -462,5 +458,6 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
     <footer class="home-footer">BoatRace Analytics / 開催判定はDBの出走表データを使用</footer>
 </div>
 <script src="/web/assets/js/home.js?v=20260907a" defer></script>
+<script src="/web/assets/js/home_deadline_emphasis.js?v=20260907a" defer></script>
 </body>
 </html>
