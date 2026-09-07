@@ -84,7 +84,16 @@
 (function () {
     'use strict';
     const script = document.createElement('script');
-    script.src = '/web/assets/js/home_venue_toggle.js?v=20260907a';
+    script.src = '/web/assets/js/home_venue_toggle.js?v=20260908a';
+    script.defer = true;
+    document.head.appendChild(script);
+})();
+
+// カチカチ候補・荒れ警戒は、終了済みを下へ送り直近レースを常に先頭にする。
+(function () {
+    'use strict';
+    const script = document.createElement('script');
+    script.src = '/web/assets/js/home_candidate_order.js?v=20260908a';
     script.defer = true;
     document.head.appendChild(script);
 })();
