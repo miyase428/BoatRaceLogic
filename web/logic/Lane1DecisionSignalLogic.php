@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/HomeBackLinkInjector.php';
+
 /**
  * 前方2期間で固定条件の再現を確認した「1号艇判断シグナル」を表示専用で返す。
  *
