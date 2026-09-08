@@ -43,14 +43,17 @@ if (!homeHighlightsValidDate($dateText)) {
 
 $force = (string)($_GET['force'] ?? '') === '1';
 $datePrefix = str_replace('-', '', $dateText);
-$cacheFile = sys_get_temp_dir() . '/boatrace_home_upset_' . $datePrefix . '.json';
-$cacheTtl = 90;
 
-if (!$force && is_file($cacheFile) && (time() - (int)filemtime($cacheFile)) < $cacheTtl) {
+// 荒れ警戒は展示前から使う固定サインで、入力は当日の出走表＋前日までの過去成績だけ。
+// レース進行中に判定値そのものは変わらないため、短時間ごとの再集計は不要。
+// 日付別・版別キャッシュを1日使い回し、TOP再表示時の重い1年集計を避ける。
+$cacheFile = sys_get_temp_dir() . '/boatrace_home_upset_v2_' . $datePrefix . '.json';
+
+if (!$force && is_file($cacheFile)) {
     $cached = file_get_contents($cacheFile);
     if (is_string($cached) && $cached !== '') {
         $data = json_decode($cached, true);
-        if (is_array($data)) {
+        if (is_array($data) && (string)($data['date'] ?? '') === $dateText) {
             $data['cache_used'] = true;
             homeHighlightsJson($data);
         }
@@ -72,15 +75,13 @@ try {
     // 展示前から判定できるよう、kimarite_api.php と同じ「当日艇番=コース」基準で
     // 各選手の直近1年決まり手を日単位で一括集計する。
     // 当日展示・展示進入・二次評価・補正後1着率は一切使わない。
+    //
+    // 以前は結果済みレースをSQLで除外していたため、レース結果が入るたびに母集団が変わり、
+    // 短いキャッシュ期限で再集計する必要があった。現在は当日全レースを一度だけ判定し、
+    // 終了済みかどうかはTOP側の締切時刻表示で下段へ移動する。
     $sql = <<<SQL
 WITH target_date AS (
     SELECT TO_DATE(:target_date, 'YYYYMMDD') AS d
-),
-finished AS (
-    SELECT race_code, COUNT(*)::int AS result_count
-    FROM boat_race.race_result_detail
-    WHERE race_code LIKE :result_prefix
-    GROUP BY race_code
 ),
 targets_raw AS (
     SELECT
@@ -90,9 +91,7 @@ targets_raw AS (
         re.lane_number::integer AS course,
         re.player_id
     FROM boat_race.race_entry re
-    LEFT JOIN finished f ON f.race_code = re.race_code
     WHERE re.race_code LIKE :entry_prefix
-      AND COALESCE(f.result_count, 0) = 0
       AND re.lane_number BETWEEN 1 AND 6
 ),
 eligible_races AS (
@@ -202,7 +201,6 @@ SQL;
     $stmt = $pdo->prepare($sql);
     $stmt->execute([
         ':target_date' => $datePrefix,
-        ':result_prefix' => $datePrefix . '%',
         ':entry_prefix' => $datePrefix . '%',
     ]);
 
@@ -344,10 +342,11 @@ SQL;
         'candidate_races' => count($byRace),
         'evaluated_races' => $evaluated,
         'waiting_races' => $waiting,
-        'source' => '決まり手1年 / 展示情報不使用',
+        'source' => '決まり手1年 / 展示情報不使用 / 日次固定',
         'classifier_version' => PayoutSignalClassifier::VERSION,
         'generated_at' => date(DATE_ATOM),
         'cache_used' => false,
+        'cache_scope' => 'daily',
     ];
 
     @file_put_contents(
