@@ -51,8 +51,41 @@ final class HomeBackLinkInjector
 </style>
 HTML;
 
+            $raceNormalizer = <<<'HTML'
+<script id="race-select-normalizer">
+document.addEventListener('DOMContentLoaded', function () {
+    const params = new URLSearchParams(window.location.search);
+    const raceNo = Number(params.get('race') || 0);
+    if (!Number.isInteger(raceNo) || raceNo < 1 || raceNo > 12) return;
+
+    const padded = String(raceNo).padStart(2, '0');
+    document.querySelectorAll('select[name="race"]').forEach(function (select) {
+        const hasPadded = Array.from(select.options).some(function (option) {
+            return option.value === padded;
+        });
+
+        if (hasPadded) {
+            select.value = padded;
+            return;
+        }
+
+        const matched = Array.from(select.options).find(function (option) {
+            return Number(option.value) === raceNo;
+        });
+        if (matched) {
+            select.value = matched.value;
+        }
+    });
+});
+</script>
+HTML;
+
             if (strpos($html, '</head>') !== false && strpos($html, 'home-back-link-style') === false) {
                 $html = str_replace('</head>', $style . "\n</head>", $html);
+            }
+
+            if (strpos($html, '</body>') !== false && strpos($html, 'race-select-normalizer') === false) {
+                $html = str_replace('</body>', $raceNormalizer . "\n</body>", $html);
             }
 
             if ($script === 'index.php') {
