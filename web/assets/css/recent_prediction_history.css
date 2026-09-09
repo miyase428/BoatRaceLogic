@@ -17,6 +17,11 @@
     margin-bottom: 10px;
 }
 
+.recent-history-heading > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .recent-history-heading h2 {
     margin: 0 0 5px;
     font-size: 18px;
@@ -34,6 +39,7 @@
 
 .recent-history-reload {
     flex: 0 0 auto;
+    width: auto;
     min-width: 84px;
     padding: 7px 10px;
     border: 1px solid var(--border-strong);
