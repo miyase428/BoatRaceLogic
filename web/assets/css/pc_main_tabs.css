@@ -3,6 +3,24 @@
  * 計算ロジックには触れず、既存DOMの表示位置だけを切り替える。
  */
 
+/* 大タブの中身によってページ全体の横幅が広がらないよう固定する。
+ * 特に基本情報のマトリクスや直近60Rの横長テーブルは、
+ * ページ本体ではなく各スクロール枠の中だけで横スクロールさせる。
+ */
+html {
+    overflow-y: scroll;
+}
+
+body {
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+.container {
+    min-width: 0;
+    box-sizing: border-box;
+}
+
 .pc-main-tabs {
     position: sticky;
     top: 0;
@@ -11,6 +29,7 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0;
     width: 100%;
+    max-width: 100%;
     margin: 18px 0 14px;
     padding: 4px;
     box-sizing: border-box;
@@ -60,7 +79,25 @@
 }
 
 .pc-main-tab-panel {
+    width: 100%;
+    max-width: 100%;
     min-width: 0;
+    box-sizing: border-box;
+}
+
+.pc-main-tab-panel > * {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.pc-main-tab-panel .matrix-wrapper,
+.pc-main-tab-panel .table-container,
+.pc-main-tab-panel .summary-box,
+.pc-main-tab-panel .recent-history-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .pc-main-tab-panel[hidden] {
