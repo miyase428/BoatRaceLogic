@@ -166,19 +166,22 @@
         }
 
         const buttons = Array.from(tabs.querySelectorAll('.pc-main-tab'));
-        const panels = [basicPanel, mainPanel, trifectaPanel, recentPanel];
         const validTabs = ['basic', 'main', 'trifecta', 'recent'];
 
         function activate(name) {
             if (!validTabs.includes(name)) name = 'basic';
 
-            buttons.forEach(function (button) {
+            // 2連単・買い目など後から追加される大タブも含め、
+            // 現在存在する全タブのactive状態を毎回整理する。
+            Array.from(tabs.querySelectorAll('.pc-main-tab')).forEach(function (button) {
                 const active = button.dataset.pcMainTab === name;
                 button.classList.toggle('is-active', active);
                 button.setAttribute('aria-selected', active ? 'true' : 'false');
             });
 
-            panels.forEach(function (panel) {
+            // 後から追加されたタブパネルも含めて切り替えることで、
+            // 2つのタブが同時に選択状態になる表示崩れを防ぐ。
+            Array.from(container.querySelectorAll('.pc-main-tab-panel')).forEach(function (panel) {
                 const active = panel.dataset.pcMainPanel === name;
                 panel.classList.toggle('is-active', active);
                 panel.hidden = !active;
