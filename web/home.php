@@ -290,165 +290,173 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
                 <div class="pick-card-head">
                     <div>
                         <strong>🔥 荒れ警戒</strong>
-                        <small>完成済みのイン飛び警報を一覧化</small>
+                        <small>完成済みのイン飛び警戒を一覧化</small>
                     </div>
-                    <span class="pick-mode pick-mode-live">展示後</span>
+                    <span class="pick-mode">展示不要</span>
                 </div>
-                <div class="pick-rule">展示済み・結果前のレースを自動判定</div>
-                <div id="upset-pick-list" class="pick-list" aria-live="polite">
-                    <div class="pick-loading"><span></span> 荒れ判定を読み込み中…</div>
+                <div class="pick-rule">直近1年の決まり手を共通判定 / 当日展示情報は不使用</div>
+                <div id="upset-pick-list" class="pick-list">
+                    <div class="pick-empty">荒れ判定を読み込み中…</div>
                 </div>
-                <div id="upset-pick-meta" class="pick-meta"></div>
+                <div id="upset-pick-meta" class="pick-more"></div>
             </section>
 
-            <details class="search-card"<?= $isMobile ? '' : ' open' ?>>
-                <summary>
-                    <span>🔎 レース検索</span>
-                    <small>条件から今日のレースを絞り込み</small>
-                </summary>
-                <form id="race-search-form" class="search-form">
-                    <fieldset>
-                        <legend>1号艇 全国勝率</legend>
-                        <div class="choice-grid choice-grid-2">
+            <section class="search-card">
+                <form id="race-search-form">
+                    <div class="search-card-head">
+                        <div>
+                            <strong>🔎 レース検索</strong>
+                            <small>条件から今日のレースを絞り込み</small>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <div class="filter-title">1号艇 全国勝率</div>
+                        <div class="filter-grid">
                             <label><input type="radio" name="lane1Min" value="" checked><span>指定なし</span></label>
-                            <label><input type="radio" name="lane1Min" value="6.0"><span>6.0以上</span></label>
+                            <label><input type="radio" name="lane1Min" value="6"><span>6.0以上</span></label>
                             <label><input type="radio" name="lane1Min" value="6.5"><span>6.5以上</span></label>
-                            <label><input type="radio" name="lane1Min" value="7.0"><span>7.0以上</span></label>
+                            <label><input type="radio" name="lane1Min" value="7"><span>7.0以上</span></label>
                         </div>
-                    </fieldset>
+                    </div>
 
-                    <fieldset>
-                        <legend>2〜6号艇 最高全国勝率</legend>
-                        <div class="choice-grid choice-grid-2">
+                    <div class="filter-group">
+                        <div class="filter-title">2〜6号艇 最高全国勝率</div>
+                        <div class="filter-grid">
                             <label><input type="radio" name="outerMax" value="" checked><span>指定なし</span></label>
-                            <label><input type="radio" name="outerMax" value="7.0"><span>7.0以下</span></label>
+                            <label><input type="radio" name="outerMax" value="7"><span>7.0以下</span></label>
                             <label><input type="radio" name="outerMax" value="6.5"><span>6.5以下</span></label>
-                            <label><input type="radio" name="outerMax" value="6.0"><span>6.0以下</span></label>
+                            <label><input type="radio" name="outerMax" value="6"><span>6.0以下</span></label>
                         </div>
-                    </fieldset>
+                    </div>
 
-                    <fieldset>
-                        <legend>レース帯</legend>
-                        <div class="choice-grid choice-grid-4">
+                    <div class="filter-group">
+                        <div class="filter-title">レース帯</div>
+                        <div class="filter-grid filter-grid-3">
                             <label><input type="radio" name="raceBand" value="all" checked><span>全</span></label>
                             <label><input type="radio" name="raceBand" value="early"><span>1〜4R</span></label>
                             <label><input type="radio" name="raceBand" value="middle"><span>5〜8R</span></label>
                             <label><input type="radio" name="raceBand" value="late"><span>9〜12R</span></label>
                         </div>
-                    </fieldset>
+                    </div>
 
-                    <fieldset>
-                        <legend>データ状況</legend>
-                        <div class="choice-grid choice-grid-2">
-                            <label><input type="radio" name="raceStatus" value="all" checked><span>すべて</span></label>
+                    <div class="filter-group">
+                        <div class="filter-title">データ状況</div>
+                        <div class="filter-grid">
+                            <label><input type="radio" name="raceStatus" value="all" checked><span>全</span></label>
                             <label><input type="radio" name="raceStatus" value="entry"><span>展示前</span></label>
                             <label><input type="radio" name="raceStatus" value="exhibition"><span>展示済</span></label>
                             <label><input type="radio" name="raceStatus" value="result"><span>結果済</span></label>
                         </div>
-                    </fieldset>
+                    </div>
 
-                    <button type="submit" class="search-submit">この条件で検索</button>
-                    <button type="button" id="race-search-reset" class="search-reset">条件をクリア</button>
-                </form>
-
-                <div class="search-result-box" aria-live="polite">
-                    <strong id="search-result-count"><?= (int)$raceCount ?>R</strong>
-                    <span id="search-result-label">本日の全レース</span>
-                </div>
-
-                <div class="quick-search">
-                    <div class="quick-title">クイック検索</div>
-                    <div class="quick-buttons">
-                        <button type="button" data-quick="late">後半9〜12R</button>
+                    <div class="quick-actions">
+                        <button type="button" data-quick="late">後半だけ</button>
                         <button type="button" data-quick="exhibition">展示済</button>
                         <button type="button" data-quick="unresolved">結果前</button>
                     </div>
-                </div>
-            </details>
+
+                    <button class="search-submit" type="submit">この条件で表示</button>
+                    <button class="search-reset" type="button" id="race-search-reset">条件をリセット</button>
+
+                    <div class="search-result">
+                        <strong id="search-result-count"><?= $raceCount ?>R</strong>
+                        <span id="search-result-label">本日の全レース</span>
+                    </div>
+                </form>
+            </section>
         </aside>
 
-        <div class="race-column">
+        <div class="venue-column">
             <section class="summary-card">
-                <div><strong><?= (int)$activePlaceCount ?></strong><span>開催場</span></div>
-                <div><strong><?= (int)$raceCount ?></strong><span>レース</span></div>
-                <div class="summary-legend"><span class="dot dot-entry"></span>出走表 <span class="dot dot-exhibition"></span>展示 <span class="dot dot-result"></span>結果</div>
+                <div class="summary-numbers">
+                    <div><strong><?= $activePlaceCount ?></strong><span>開催場</span></div>
+                    <div><strong><?= $raceCount ?></strong><span>レース</span></div>
+                </div>
+                <div class="summary-legend">
+                    <span><i class="legend-dot legend-entry"></i>出走表</span>
+                    <span><i class="legend-dot legend-exhibition"></i>展示</span>
+                    <span><i class="legend-dot legend-result"></i>結果</span>
+                </div>
             </section>
 
-            <div class="race-column-head">
-                <div>
-                    <h2>開催一覧</h2>
-                    <p>場を見ながら、そのままRを選択できます。</p>
+            <main class="venue-list">
+                <div class="venue-list-head">
+                    <div>
+                        <h2>開催一覧</h2>
+                        <p>場を見ながら、そのままRを選択できます。</p>
+                    </div>
+                    <span id="visible-race-count"><?= $raceCount ?>R表示</span>
                 </div>
-                <span id="visible-race-count"><?= (int)$raceCount ?>R表示</span>
-            </div>
 
-            <main class="venue-grid">
-                <?php foreach ($placeNames as $place => $name): ?>
-                    <?php
-                        $races = $racesByPlace[$place] ?? [];
-                        ksort($races);
-                        $isActive = !empty($races);
-                        $placeNo = $placeNumbers[$place] ?? 0;
-                    ?>
-                    <section class="venue-card<?= $isActive ? ' is-active' : ' is-closed' ?>" data-venue-card data-active="<?= $isActive ? '1' : '0' ?>">
-                        <div class="venue-head">
-                            <div class="venue-name-wrap">
-                                <span class="venue-no"><?= sprintf('%02d', $placeNo) ?></span>
-                                <strong class="venue-name"><?= h($name) ?></strong>
+                <div class="venue-grid">
+                    <?php foreach ($placeNames as $place => $placeName): ?>
+                        <?php
+                            $races = $racesByPlace[$place] ?? [];
+                            $active = !empty($races);
+                        ?>
+                        <section class="venue-card<?= $active ? '' : ' is-closed' ?>"
+                                 data-venue-card
+                                 data-active="<?= $active ? '1' : '0' ?>">
+                            <div class="venue-head">
+                                <div>
+                                    <span class="venue-no"><?= str_pad((string)$placeNumbers[$place], 2, '0', STR_PAD_LEFT) ?></span>
+                                    <strong><?= h($placeName) ?></strong>
+                                </div>
+                                <span class="venue-status"><?= $active ? '開催' : '休催' ?></span>
                             </div>
-                            <div class="venue-head-right">
-                                <?php if ($isActive): ?><span class="venue-match-count" data-match-count></span><?php endif; ?>
-                                <span class="venue-state"><?= $isActive ? '開催' : '休催' ?></span>
-                            </div>
-                        </div>
 
-                        <?php if ($isActive): ?>
-                            <div class="race-grid">
-                                <?php foreach ($races as $raceNo => $race): ?>
-                                    <?php
-                                        $status = 'entry';
-                                        $statusLabel = '出走表';
-                                        if (($race['result_count'] ?? 0) >= 3) {
-                                            $status = 'result';
-                                            $statusLabel = '結果';
-                                        } elseif (($race['exhibition_count'] ?? 0) >= 5) {
-                                            $status = 'exhibition';
-                                            $statusLabel = '展示';
-                                        }
-
-                                        $winRates = is_array($race['win_rates'] ?? null) ? $race['win_rates'] : [];
-                                        $lane1Rate = isset($winRates[1]) && is_numeric($winRates[1]) ? (float)$winRates[1] : null;
-                                        $outerRates = [];
-                                        for ($lane = 2; $lane <= 6; $lane++) {
-                                            if (isset($winRates[$lane]) && is_numeric($winRates[$lane])) {
-                                                $outerRates[] = (float)$winRates[$lane];
+                            <?php if ($active): ?>
+                                <div class="race-grid">
+                                    <?php for ($raceNo = 1; $raceNo <= 12; $raceNo++): ?>
+                                        <?php
+                                            $race = $races[$raceNo] ?? null;
+                                            if ($race === null) {
+                                                continue;
                                             }
-                                        }
-                                        $outerMax = $outerRates !== [] ? max($outerRates) : null;
+                                            $status = 'entry';
+                                            $statusLabel = '出走表';
+                                            if (($race['result_count'] ?? 0) >= 3) {
+                                                $status = 'result';
+                                                $statusLabel = '結果';
+                                            } elseif (($race['exhibition_count'] ?? 0) >= 5) {
+                                                $status = 'exhibition';
+                                                $statusLabel = '展示';
+                                            }
 
-                                        $url = $predictionPath
-                                            . '?date=' . rawurlencode($selectedDate->format('Y-m-d'))
-                                            . '&place=' . rawurlencode($place)
-                                            . '&race=' . rawurlencode((string)$raceNo);
-                                    ?>
-                                    <a class="race-button status-<?= h($status) ?>"
-                                       href="<?= h($url) ?>"
-                                       data-race-button
-                                       data-race-no="<?= (int)$raceNo ?>"
-                                       data-status="<?= h($status) ?>"
-                                       data-lane1-rate="<?= $lane1Rate === null ? '' : h(number_format($lane1Rate, 2, '.', '')) ?>"
-                                       data-outer-max="<?= $outerMax === null ? '' : h(number_format($outerMax, 2, '.', '')) ?>"
-                                       title="<?= $lane1Rate === null ? '' : '1号艇全国勝率 ' . h(number_format($lane1Rate, 2)) ?><?= $outerMax === null ? '' : ' / 2〜6号艇最高 ' . h(number_format($outerMax, 2)) ?>">
-                                        <strong><?= (int)$raceNo ?>R</strong>
-                                        <span><?= h($statusLabel) ?></span>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <div class="closed-body">本日の出走表データなし</div>
-                        <?php endif; ?>
-                    </section>
-                <?php endforeach; ?>
+                                            $winRates = is_array($race['win_rates'] ?? null) ? $race['win_rates'] : [];
+                                            $lane1Rate = isset($winRates[1]) && is_numeric($winRates[1]) ? (float)$winRates[1] : null;
+                                            $outerRates = [];
+                                            for ($lane = 2; $lane <= 6; $lane++) {
+                                                if (isset($winRates[$lane]) && is_numeric($winRates[$lane])) {
+                                                    $outerRates[] = (float)$winRates[$lane];
+                                                }
+                                            }
+                                            $outerMax = $outerRates !== [] ? max($outerRates) : null;
+                                            $url = $predictionPath
+                                                . '?date=' . rawurlencode($selectedDate->format('Y-m-d'))
+                                                . '&place=' . rawurlencode($place)
+                                                . '&race=' . rawurlencode((string)$raceNo);
+                                        ?>
+                                        <a class="race-button status-<?= h($status) ?>"
+                                           href="<?= h($url) ?>"
+                                           data-race-button
+                                           data-race-no="<?= (int)$raceNo ?>"
+                                           data-status="<?= h($status) ?>"
+                                           data-lane1-rate="<?= $lane1Rate === null ? '' : h(number_format($lane1Rate, 2, '.', '')) ?>"
+                                           data-outer-max="<?= $outerMax === null ? '' : h(number_format($outerMax, 2, '.', '')) ?>"
+                                           title="<?= $lane1Rate === null ? '' : '1号艇全国勝率 ' . h(number_format($lane1Rate, 2)) ?><?= $outerMax === null ? '' : ' / 2〜6号艇最高 ' . h(number_format($outerMax, 2)) ?>">
+                                            <strong><?= (int)$raceNo ?>R</strong>
+                                            <span><?= h($statusLabel) ?></span>
+                                        </a>
+                                    <?php endfor; ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="closed-body">本日の出走表データなし</div>
+                            <?php endif; ?>
+                        </section>
+                    <?php endforeach; ?>
+                </div>
             </main>
 
             <div id="search-empty" class="search-empty" hidden>条件に一致するレースがありません。</div>
@@ -459,5 +467,6 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
 </div>
 <script src="/web/assets/js/home.js?v=20260907a" defer></script>
 <script src="/web/assets/js/home_deadline_emphasis.js?v=20260907a" defer></script>
+<script src="/web/assets/js/home_navigation_loading.js?v=20260909a" defer></script>
 </body>
 </html>
