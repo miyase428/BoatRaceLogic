@@ -51,5 +51,5 @@ $recentHistoryVenue = (string)($place_names[$recentHistoryPlace] ?? $recentHisto
     </div>
 </section>
 
-<link rel="stylesheet" href="/web/assets/css/recent_prediction_history.css?v=20260826a">
+<link rel="stylesheet" href="/web/assets/css/recent_prediction_history.css?v=20260909a">
 <script src="/web/assets/js/recent_prediction_history.js?v=20260826a"></script>
