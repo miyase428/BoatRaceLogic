@@ -2,7 +2,7 @@
   "name": "BoatRace Analytics",
   "short_name": "BoatRace",
   "id": "/web/",
-  "start_url": "/web/home.php",
+  "start_url": "/web/home_app.php",
   "scope": "/web/",
   "display": "standalone",
   "background_color": "#f8f4ec",
