@@ -30,9 +30,7 @@
         if (active) return;
         active = true;
         const node = ensureOverlay();
-        requestAnimationFrame(function () {
-            node.classList.add('is-visible');
-        });
+        node.classList.add('is-visible');
     }
 
     function hideLoading() {
@@ -56,14 +54,23 @@
     }
 
     document.addEventListener('click', function (event) {
-        if (event.defaultPrevented || event.button !== 0) return;
+        if (event.defaultPrevented) return;
+        if (typeof event.button === 'number' && event.button !== 0) return;
         if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
         const link = event.target instanceof Element ? event.target.closest('a') : null;
         if (!isRaceDetailLink(link)) return;
         if (link.target && link.target !== '_self') return;
 
+        // iPhoneのWebアプリでは通常遷移が速いと描画前に次ページへ進み、
+        // 読込表示が見えないことがある。いったん遷移を止めて表示を描画し、
+        // ごく短い待ち時間のあと同一画面で遷移する。
+        event.preventDefault();
         showLoading();
+        const href = link.href;
+        window.setTimeout(function () {
+            window.location.assign(href);
+        }, 90);
     }, true);
 
     window.addEventListener('pageshow', hideLoading);
