@@ -106,3 +106,12 @@
     script.defer = true;
     document.head.appendChild(script);
 })();
+
+// 荒れ警戒のサイン一覧・レース別該当サイン詳細を追加する。
+(function () {
+    'use strict';
+    const script = document.createElement('script');
+    script.src = '/web/assets/js/home_upset_details.js?v=20260910a';
+    script.defer = true;
+    document.head.appendChild(script);
+})();
