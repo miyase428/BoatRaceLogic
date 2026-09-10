@@ -1,6 +1,15 @@
 (function () {
     'use strict';
 
+    const compat = document.createElement('link');
+    compat.rel = 'stylesheet';
+    compat.href = '/web/assets/css/home_markup_compat.css?v=20260910a';
+    document.head.appendChild(compat);
+})();
+
+(function () {
+    'use strict';
+
     const root = document.getElementById('home-highlights');
     if (!root) return;
 
