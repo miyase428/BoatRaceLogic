@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    const head = document.querySelector('.race-column-head');
+    const head = document.querySelector('.venue-list-head') || document.querySelector('.race-column-head');
     const cards = Array.from(document.querySelectorAll('[data-venue-card]'));
     if (!head || !cards.length) return;
 
@@ -34,7 +34,7 @@
     controls.appendChild(allButton);
 
     const visibleCount = document.getElementById('visible-race-count');
-    if (visibleCount) {
+    if (visibleCount && visibleCount.parentNode === head) {
         head.insertBefore(controls, visibleCount);
     } else {
         head.appendChild(controls);
