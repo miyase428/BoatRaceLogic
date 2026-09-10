@@ -84,7 +84,7 @@
 (function () {
     'use strict';
     const script = document.createElement('script');
-    script.src = '/web/assets/js/home_venue_toggle.js?v=20260908a';
+    script.src = '/web/assets/js/home_venue_toggle.js?v=20260910a';
     script.defer = true;
     document.head.appendChild(script);
 })();
@@ -93,7 +93,7 @@
 (function () {
     'use strict';
     const script = document.createElement('script');
-    script.src = '/web/assets/js/home_candidate_order.js?v=20260908a';
+    script.src = '/web/assets/js/home_candidate_order.js?v=20260910a';
     script.defer = true;
     document.head.appendChild(script);
 })();
