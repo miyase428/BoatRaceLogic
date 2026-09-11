@@ -32,7 +32,6 @@ from analyze_tamagawa_boaters_hypothesis import (  # noqa: E402
     TechniqueHistoryIndex,
     load_history,
     load_racer_results,
-    months_ago,
     parse_date,
     rate_band,
     relation_label,
@@ -53,50 +52,64 @@ def pct(num: int, den: int) -> float:
 
 
 def load_targets(start_date: date, end_date: date) -> dict[str, dict]:
+    # 先に対象期間・多摩川の race_code だけへ絞る。
+    # race_result_detail / exhibition_live 全体に DISTINCT ON を掛けると非常に重いため、
+    # target_races との JOIN 後に集約する。
     sql = """
-WITH result_course AS (
-    SELECT DISTINCT ON (race_code, player_id)
-        race_code, player_id, entry_course::integer AS entry_course
-    FROM boat_race.race_result_detail
-    WHERE entry_course BETWEEN 1 AND 6
-    ORDER BY race_code, player_id
+WITH target_races AS (
+    SELECT rm.race_code, rm.race_date
+    FROM boat_race.race_master rm
+    WHERE rm.race_date BETWEEN %s::date AND %s::date
+      AND SUBSTRING(rm.race_code, 9, 3) = %s
+),
+result_course AS (
+    SELECT DISTINCT ON (rrd.race_code, rrd.player_id)
+        rrd.race_code,
+        rrd.player_id,
+        rrd.entry_course::integer AS entry_course
+    FROM boat_race.race_result_detail rrd
+    JOIN target_races tr ON tr.race_code = rrd.race_code
+    WHERE rrd.entry_course BETWEEN 1 AND 6
+    ORDER BY rrd.race_code, rrd.player_id
 ),
 ex_course AS (
-    SELECT DISTINCT ON (race_code, player_id)
-        race_code, player_id, entry_course::integer AS entry_course
-    FROM boat_race.exhibition_live
-    WHERE entry_course BETWEEN 1 AND 6
-    ORDER BY race_code, player_id
+    SELECT DISTINCT ON (el.race_code, el.player_id)
+        el.race_code,
+        el.player_id,
+        el.entry_course::integer AS entry_course
+    FROM boat_race.exhibition_live el
+    JOIN target_races tr ON tr.race_code = el.race_code
+    WHERE el.entry_course BETWEEN 1 AND 6
+    ORDER BY el.race_code, el.player_id
 ),
 finish AS (
     SELECT
-        race_code,
-        MAX(entry_course::integer) FILTER (WHERE TRIM(rank::text) = '1') AS first_course,
-        MAX(entry_course::integer) FILTER (WHERE TRIM(rank::text) = '2') AS second_course,
-        MAX(entry_course::integer) FILTER (WHERE TRIM(rank::text) = '3') AS third_course
-    FROM boat_race.race_result_detail
-    GROUP BY race_code
+        rrd.race_code,
+        MAX(rrd.entry_course::integer) FILTER (WHERE TRIM(rrd.rank::text) = '1') AS first_course,
+        MAX(rrd.entry_course::integer) FILTER (WHERE TRIM(rrd.rank::text) = '2') AS second_course,
+        MAX(rrd.entry_course::integer) FILTER (WHERE TRIM(rrd.rank::text) = '3') AS third_course
+    FROM boat_race.race_result_detail rrd
+    JOIN target_races tr ON tr.race_code = rrd.race_code
+    GROUP BY rrd.race_code
 )
 SELECT
-    rm.race_code,
-    rm.race_date,
+    tr.race_code,
+    tr.race_date,
     re.player_id::text,
     COALESCE(rc.entry_course, ec.entry_course)::integer AS entry_course,
     f.first_course,
     f.second_course,
     f.third_course
-FROM boat_race.race_master rm
-JOIN boat_race.race_entry re ON re.race_code = rm.race_code
+FROM target_races tr
+JOIN boat_race.race_entry re ON re.race_code = tr.race_code
 LEFT JOIN result_course rc
   ON rc.race_code = re.race_code AND rc.player_id = re.player_id
 LEFT JOIN ex_course ec
   ON ec.race_code = re.race_code AND ec.player_id = re.player_id
-JOIN finish f ON f.race_code = rm.race_code
-WHERE rm.race_date BETWEEN %s::date AND %s::date
-  AND SUBSTRING(rm.race_code, 9, 3) = %s
-  AND f.first_course BETWEEN 1 AND 6
+JOIN finish f ON f.race_code = tr.race_code
+WHERE f.first_course BETWEEN 1 AND 6
   AND f.second_course BETWEEN 1 AND 6
-ORDER BY rm.race_date, rm.race_code, entry_course NULLS LAST
+ORDER BY tr.race_date, tr.race_code, entry_course NULLS LAST
     """
 
     races = defaultdict(lambda: {"boats": [], "date": None, "first": None, "second": None, "third": None})
