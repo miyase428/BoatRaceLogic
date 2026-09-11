@@ -29,7 +29,11 @@
         '.pick-item.is-deadline-next{opacity:1!important;filter:none!important;background:#fff8e7!important;border-color:#d8a94c!important;box-shadow:0 1px 7px rgba(172,122,22,.12)!important}',
         '.pick-item.is-deadline-next .pick-deadline{color:#a86d00!important}',
         '.pick-item-solid.is-deadline-next{border-left-color:#d8a94c!important}',
-        '.pick-item-upset.is-deadline-next{border-left-color:#d8a94c!important}'
+        '.pick-item-upset.is-deadline-next{border-left-color:#d8a94c!important}',
+
+        /* 多摩川4コース強条件：レース一覧の★ */
+        '.race-button .tmg-lane4-star{display:inline-block;margin-left:2px;color:#d18b00;font-size:13px;font-weight:1000;line-height:1;vertical-align:1px;text-shadow:0 1px 0 rgba(255,255,255,.7)}',
+        '.race-button.is-tmg-lane4-strong{border-color:#d8a94c!important;box-shadow:inset 0 0 0 1px rgba(216,169,76,.16)}'
     ].join('');
     document.head.appendChild(style);
 
@@ -87,6 +91,51 @@
     } else {
         window.setTimeout(refresh, 500);
     }
+
+    // 多摩川のみ：過去12ヶ月4コースまくり率15%以上 + 4が3より平均ST順位上なら開催一覧に★。
+    fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
+        .then(function (response) {
+            return response.json().then(function (data) {
+                if (!response.ok || !data || data.status !== 'ok') {
+                    throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+                }
+                return data;
+            });
+        })
+        .then(function (data) {
+            const matches = data.matches && typeof data.matches === 'object' ? data.matches : {};
+            document.querySelectorAll('[data-race-button]').forEach(function (link) {
+                const code = raceCodeFromLink(link);
+                const detail = code ? matches[code] : null;
+                const oldStar = link.querySelector('.tmg-lane4-star');
+                if (!detail) {
+                    link.classList.remove('is-tmg-lane4-strong');
+                    if (oldStar) oldStar.remove();
+                    return;
+                }
+
+                link.classList.add('is-tmg-lane4-strong');
+                const raceLabel = link.querySelector('strong');
+                if (raceLabel && !oldStar) {
+                    const star = document.createElement('span');
+                    star.className = 'tmg-lane4-star';
+                    star.textContent = '★';
+                    star.setAttribute('aria-label', '多摩川4コース攻め強条件');
+                    raceLabel.appendChild(star);
+                }
+
+                const baseTitle = String(link.dataset.tmgLane4BaseTitle || link.title || '');
+                link.dataset.tmgLane4BaseTitle = baseTitle;
+                const info = '★ 4コース攻め強条件（12ヶ月）'
+                    + ' / 4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
+                    + ' / ST順位 4=' + Number(detail.lane4_avg_rank).toFixed(2)
+                    + ' < 3=' + Number(detail.lane3_avg_rank).toFixed(2);
+                link.title = (baseTitle ? baseTitle + ' / ' : '') + info;
+            });
+        })
+        .catch(function () {
+            // TOP表示本体を壊さないため、強条件API失敗時は★を出さないだけにする。
+        });
 })();
 
 // 開催一覧の「開催場のみ / 全場表示」切替は独立ファイルで管理する。
