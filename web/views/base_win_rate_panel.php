@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (tabs.querySelector('[data-pc-main-tab="player"]')) return;
 
-        basicButton.textContent = '出走・展示';
+        basicButton.textContent = '場・出走・展示';
         mainButton.textContent = 'AI予想';
 
         const playerButton = document.createElement('button');
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         function moveRolePanels() {
             // 現行Webとの場相性 / R別予想相性 / 基本特性は
-            // BOATERS風の整理に合わせて「出走・展示」側へ置く。
+            // BOATERS風の整理に合わせて「場・出走・展示」側へ置く。
             const stadium = document.querySelector('[id^="stadium-characteristics-tabs-pc-"]');
             if (stadium && stadium.parentElement !== basicPanel) {
                 basicPanel.insertBefore(stadium, basicPanel.firstChild);
@@ -108,7 +108,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const cross = document.getElementById('player-sam-cross-panel');
             const playerSam = document.getElementById('player-sam-panel');
             if (cross && cross.parentElement !== playerPanel) playerPanel.appendChild(cross);
-            if (playerSam && playerSam.parentElement !== playerPanel) playerPanel.appendChild(playerSam);
+
+            // 選手SUM特性は判断材料として、いったん「AI予想」へ置く。
+            if (playerSam && playerSam.parentElement !== mainPanel) mainPanel.appendChild(playerSam);
 
             // 多摩川コースサインは場特性なので「場・選手」へ。
             const tmgSignal = document.querySelector('.tmg-lane4-detail-signal');
