@@ -172,21 +172,26 @@
         if (!panel) return false;
 
         const rateCard = buildRateSummary(panel);
-        const aiTenkaiCard = document.getElementById('ai-tenkai-trial-panel');
         const head1Card = findCardByExactTitle('🎯 1号艇1着時の2着率');
+        const head1ExactaCard = document.getElementById('head1-exacta-panel');
         const kimariteCard = buildKimariteSummary(panel);
+        const aiTenkaiCard = document.getElementById('ai-tenkai-trial-panel');
 
-        // 「連対率 → 1逃げ時2着 → 決まり手 → AI展開予想（試験）」の順。
+        // 「連対率 → 1号艇1着時2着率 → イン1着時2連単 → 決まり手 → AI展開予想」の順。
+        // 基本2着率と今回AIの2着分布を続けて比較できるよう、2連単カードを直下へ置く。
         if (rateCard) panel.appendChild(rateCard);
-        if (head1Card && head1Card.parentElement !== panel) panel.appendChild(head1Card);
-        if (head1Card && head1Card.parentElement === panel) panel.appendChild(head1Card);
+        if (head1Card) panel.appendChild(head1Card);
+        if (head1ExactaCard) {
+            head1ExactaCard.style.marginTop = '0';
+            panel.appendChild(head1ExactaCard);
+        }
         if (kimariteCard) panel.appendChild(kimariteCard);
         if (aiTenkaiCard) panel.appendChild(aiTenkaiCard);
 
         // 総合出走・展示マトリクス側の決まり手は重複表示しない。
         hideOriginalKimarite();
 
-        return !!(rateCard || aiTenkaiCard || head1Card || kimariteCard);
+        return !!(rateCard || head1Card || head1ExactaCard || kimariteCard || aiTenkaiCard);
     }
 
     function schedule() {
