@@ -27,46 +27,12 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <!-- PC Webは役割別タブへ段階的に再整理する。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260912a">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260912a"></script>
-<script src="/web/assets/js/pc_rate_development_tab.js?v=20260913a"></script>
+<script src="/web/assets/js/pc_rate_development_tab.js?v=20260913b"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
 
 <script>
-// PC Webでは決まり手の「直近1年 / 直近6ヶ月」を切替式にせず、上下に同時表示する。
-// 元の集計・決まり手ロジックには触れず、表示だけ上書きする。
-document.addEventListener('DOMContentLoaded', function () {
-    window.setTimeout(function () {
-        const matrix = document.querySelector('.matrix-table');
-        if (!matrix || !matrix.tBodies.length) return;
-
-        const rows = Array.from(matrix.tBodies[0].rows);
-        const yearTitle = rows.find(function (row) {
-            return String(row.textContent || '').includes('決まり手（直近1年）');
-        });
-        const halfTitle = rows.find(function (row) {
-            return String(row.textContent || '').includes('決まり手（直近6ヶ月）');
-        });
-        if (!yearTitle || !halfTitle) return;
-
-        const yearIndex = rows.indexOf(yearTitle);
-        const halfIndex = rows.indexOf(halfTitle);
-        if (yearIndex < 0 || halfIndex <= yearIndex) return;
-
-        const tabRow = matrix.querySelector('.kimarite-period-tabs');
-        if (tabRow) tabRow.style.display = 'none';
-
-        yearTitle.style.display = '';
-        halfTitle.style.display = '';
-        rows.slice(yearIndex + 1, halfIndex).slice(0, 5).forEach(function (row) {
-            row.style.display = '';
-        });
-        rows.slice(halfIndex + 1).slice(0, 5).forEach(function (row) {
-            row.style.display = '';
-        });
-    }, 0);
-});
-
 // BOATERSのように「何を見るタブか」が分かる大分類へ、まずPC Webだけ段階的に整理する。
 // 既存計算や既存パネルは壊さず、DOMの表示先だけを分ける。
 document.addEventListener('DOMContentLoaded', function () {
