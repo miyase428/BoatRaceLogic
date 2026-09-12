@@ -6,6 +6,10 @@ $forwardValidationMode = 'pc';
 include __DIR__ . '/forward_validation_panel.php';
 include __DIR__ . '/base_win_rate_panel_core.php';
 
+// 展示後限定のAI展開予想（試験）。
+// prototype v3 と同じ考え方で、今回確率 / 場平均 / 差を表示する。
+include __DIR__ . '/ai_tenkai_trial_panel.php';
+
 // 選手SUM特性はここで生成し、PCではDOMContentLoaded後に
 // 「展示サム理論（レース適用値）」の直下へ表示だけ移動する。
 $playerSamMode = 'pc';
@@ -23,7 +27,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <!-- PC Webは役割別タブへ段階的に再整理する。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260912a">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260912a"></script>
-<script src="/web/assets/js/pc_rate_development_tab.js?v=20260912b"></script>
+<script src="/web/assets/js/pc_rate_development_tab.js?v=20260912c"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
