@@ -36,7 +36,6 @@
 
         card = document.createElement('div');
         card.id = 'pc-rate-development-summary';
-        // 「連対率・展開」内の他カードと同じ明るい背景に統一する。
         card.style.cssText = 'margin:12px 0 14px;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:14px;color:#334155;';
 
         const title = document.createElement('div');
@@ -84,10 +83,7 @@
         return null;
     }
 
-    function buildKimariteSummary(panel) {
-        let card = document.getElementById('pc-rate-development-kimarite');
-        if (card) return card;
-
+    function kimariteRows() {
         const matrix = document.querySelector('.matrix-table');
         if (!matrix || !matrix.tBodies.length) return null;
 
@@ -104,10 +100,27 @@
         const halfIndex = rows.indexOf(halfTitle);
         if (yearIndex < 0 || halfIndex <= yearIndex) return null;
 
-        const selected = [yearTitle]
-            .concat(rows.slice(yearIndex + 1, halfIndex).slice(0, 5))
-            .concat([halfTitle])
-            .concat(rows.slice(halfIndex + 1).slice(0, 5));
+        return {
+            matrix: matrix,
+            yearTitle: yearTitle,
+            halfTitle: halfTitle,
+            yearGroup: rows.slice(yearIndex + 1, halfIndex).slice(0, 5),
+            halfGroup: rows.slice(halfIndex + 1).slice(0, 5),
+            tabRow: matrix.querySelector('.kimarite-period-tabs')
+        };
+    }
+
+    function buildKimariteSummary(panel) {
+        let card = document.getElementById('pc-rate-development-kimarite');
+        if (card) return card;
+
+        const source = kimariteRows();
+        if (!source) return null;
+
+        const selected = [source.yearTitle]
+            .concat(source.yearGroup)
+            .concat([source.halfTitle])
+            .concat(source.halfGroup);
 
         card = document.createElement('div');
         card.id = 'pc-rate-development-kimarite';
@@ -140,6 +153,20 @@
         return card;
     }
 
+    function hideOriginalKimarite() {
+        const source = kimariteRows();
+        if (!source) return;
+
+        // 元の総合マトリクスは既存ロジック参照用にDOMへ残し、画面上だけ隠す。
+        // 決まり手は「連対率・展開」側の複製カードだけを表示する。
+        [source.tabRow, source.yearTitle, source.halfTitle]
+            .concat(source.yearGroup, source.halfGroup)
+            .filter(Boolean)
+            .forEach(function (row) {
+                row.style.display = 'none';
+            });
+    }
+
     function arrange() {
         const panel = playerPanel();
         if (!panel) return false;
@@ -149,13 +176,15 @@
         const head1Card = findCardByExactTitle('🎯 1号艇1着時の2着率');
         const kimariteCard = buildKimariteSummary(panel);
 
-        // 「連対率 → 1逃げ時2着 → 決まり手 → AI展開予想（試験）」の順に並べる。
-        // AI展開予想は比較・確認用なので、このタブの一番下に置く。
+        // 「連対率 → 1逃げ時2着 → 決まり手 → AI展開予想（試験）」の順。
         if (rateCard) panel.appendChild(rateCard);
         if (head1Card && head1Card.parentElement !== panel) panel.appendChild(head1Card);
         if (head1Card && head1Card.parentElement === panel) panel.appendChild(head1Card);
         if (kimariteCard) panel.appendChild(kimariteCard);
         if (aiTenkaiCard) panel.appendChild(aiTenkaiCard);
+
+        // 総合出走・展示マトリクス側の決まり手は重複表示しない。
+        hideOriginalKimarite();
 
         return !!(rateCard || aiTenkaiCard || head1Card || kimariteCard);
     }
