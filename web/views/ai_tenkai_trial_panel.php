@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../common/db_connect.php';
 $aiTenkaiTrial = [
     'status' => 'waiting',
     'message' => '展示情報が揃うとAI展開予想を表示します。',
-    'top3' => [],
+    'top5' => [],
     'venue_races' => 0,
 ];
 
@@ -23,13 +23,13 @@ try {
     $aiTenkaiTrial = [
         'status' => 'error',
         'message' => 'AI展開予想の計算に失敗しました。',
-        'top3' => [],
+        'top5' => [],
         'venue_races' => 0,
     ];
 }
 
 $aiTenkaiStatus = (string)($aiTenkaiTrial['status'] ?? 'waiting');
-$aiTenkaiTop3 = is_array($aiTenkaiTrial['top3'] ?? null) ? $aiTenkaiTrial['top3'] : [];
+$aiTenkaiTop5 = is_array($aiTenkaiTrial['top5'] ?? null) ? $aiTenkaiTrial['top5'] : [];
 $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
 ?>
 <div id="ai-tenkai-trial-panel" style="margin:12px 0 14px;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:14px;color:#334155;">
@@ -38,7 +38,7 @@ $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
         <span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;background:#eee8f7;color:#75659b;border:1px solid #d7cbe8;">試験</span>
     </div>
 
-    <?php if ($aiTenkaiStatus === 'ok' && $aiTenkaiTop3): ?>
+    <?php if ($aiTenkaiStatus === 'ok' && $aiTenkaiTop5): ?>
         <div style="font-size:11px;color:#6b7785;margin-bottom:10px;line-height:1.6;">
             展示後の補正後1着率 × 選手の6ヶ月/1年決まり手を平滑化。場平均は対象日前日まで直近1年<?= $aiTenkaiVenueRaces > 0 ? '（' . number_format($aiTenkaiVenueRaces) . 'R）' : '' ?>。
         </div>
@@ -53,7 +53,7 @@ $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($aiTenkaiTop3 as $index => $event): ?>
+                <?php foreach ($aiTenkaiTop5 as $index => $event): ?>
                     <?php
                         $boat = (int)($event['boat'] ?? 0);
                         $course = (int)($event['course'] ?? 0);
@@ -83,7 +83,7 @@ $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
             </table>
         </div>
         <div style="font-size:10px;color:#8a939f;margin-top:8px;line-height:1.5;">
-            ※ 試験表示です。現在は主要決まり手（逃げ・差し・まくり・まくり差し）の上位3展開のみ表示しています。
+            ※ 試験表示です。現在は主要決まり手（逃げ・差し・まくり・まくり差し）の上位5展開を表示しています。
         </div>
     <?php else: ?>
         <div style="font-size:12px;color:#6b7785;padding:8px 0 2px;">
