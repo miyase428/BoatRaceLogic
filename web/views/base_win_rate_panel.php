@@ -108,9 +108,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const cross = document.getElementById('player-sam-cross-panel');
             const playerSam = document.getElementById('player-sam-panel');
-            if (cross && cross.parentElement !== playerPanel) playerPanel.appendChild(cross);
 
-            // 選手SUM特性は判断材料として、いったん「AI予想」へ置く。
+            // SUM関連の比較・選手特性は判断材料として、いったん「AI予想」へまとめる。
+            if (cross && cross.parentElement !== mainPanel) mainPanel.appendChild(cross);
             if (playerSam && playerSam.parentElement !== mainPanel) mainPanel.appendChild(playerSam);
 
             // 多摩川コースサインは展開材料なので「連対率・展開」へ。
