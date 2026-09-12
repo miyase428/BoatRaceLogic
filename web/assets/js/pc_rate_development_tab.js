@@ -149,12 +149,13 @@
         const head1Card = findCardByExactTitle('🎯 1号艇1着時の2着率');
         const kimariteCard = buildKimariteSummary(panel);
 
-        // 「連対率 → AI展開予想（試験） → 1逃げ時2着 → 決まり手」の順に並べる。
+        // 「連対率 → 1逃げ時2着 → 決まり手 → AI展開予想（試験）」の順に並べる。
+        // AI展開予想は比較・確認用なので、このタブの一番下に置く。
         if (rateCard) panel.appendChild(rateCard);
-        if (aiTenkaiCard) panel.appendChild(aiTenkaiCard);
         if (head1Card && head1Card.parentElement !== panel) panel.appendChild(head1Card);
         if (head1Card && head1Card.parentElement === panel) panel.appendChild(head1Card);
         if (kimariteCard) panel.appendChild(kimariteCard);
+        if (aiTenkaiCard) panel.appendChild(aiTenkaiCard);
 
         return !!(rateCard || aiTenkaiCard || head1Card || kimariteCard);
     }
