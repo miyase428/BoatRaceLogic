@@ -5,6 +5,28 @@ $stadiumCharacteristicsRootId = 'stadium-characteristics-tabs-' . $stadiumCharac
 $isApp = $stadiumCharacteristicsMode === 'app';
 $stadiumCharacteristicsStorageKey = 'br_stadium_characteristics_tab_' . $stadiumCharacteristicsMode;
 
+// PC Webは棚卸し後の表示方針に合わせ、場特性の内側タブを使わず
+// 「Web相性 → 基本特性」の順で常時表示する。
+if (!$isApp):
+?>
+<div id="<?= htmlspecialchars($stadiumCharacteristicsRootId, ENT_QUOTES, 'UTF-8') ?>" style="margin:14px 0 0;">
+    <div>
+        <?php
+        $stadiumAffinityMode = $stadiumCharacteristicsMode;
+        include __DIR__ . '/stadium_affinity_panel.php';
+        $raceNumberCompatibilityMode = $stadiumCharacteristicsMode;
+        include __DIR__ . '/race_number_compatibility_panel.php';
+        ?>
+    </div>
+
+    <div style="margin-top:12px;">
+        <?php include __DIR__ . '/stadium_characteristics_basic_panel.php'; ?>
+    </div>
+</div>
+<?php
+return;
+endif;
+
 // APP版ではこのHTMLをinnerHTMLで後から差し込むため、内部の<script>は実行されない。
 // ボタン自身にも切替処理を持たせ、iPhone/PWAでもタップだけで確実に切り替えられるようにする。
 $stadiumCharacteristicsInlineHandler = <<<'JS'
@@ -40,30 +62,23 @@ $stadiumCharacteristicsInlineHandler = <<<'JS'
 JS;
 ?>
 
-<div id="<?= htmlspecialchars($stadiumCharacteristicsRootId, ENT_QUOTES, 'UTF-8') ?>" style="<?= $isApp ? 'margin:0 0 8px;' : 'margin:14px 0 0;' ?>">
-    <div style="display:flex; gap:6px; <?= $isApp ? 'overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px;' : 'flex-wrap:wrap;' ?>">
+<div id="<?= htmlspecialchars($stadiumCharacteristicsRootId, ENT_QUOTES, 'UTF-8') ?>" style="margin:0 0 8px;">
+    <div style="display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px;">
         <?php
-        // PC Webは表示棚卸しに合わせ、普段使う「基本特性 / Web相性」だけを前面に残す。
-        // 逃げ時・イン飛び/外枠・展示/STは計算/部品を残したまま非表示。
-        $tabs = $isApp
-            ? [
-                'basic' => '基本特性',
-                'escape' => '逃げ時',
-                'outer' => 'イン飛び・外枠',
-                'exhibition' => '展示・ST',
-                'web' => 'Web相性',
-            ]
-            : [
-                'basic' => '基本特性',
-                'web' => 'Web相性',
-            ];
+        $tabs = [
+            'basic' => '基本特性',
+            'escape' => '逃げ時',
+            'outer' => 'イン飛び・外枠',
+            'exhibition' => '展示・ST',
+            'web' => 'Web相性',
+        ];
         foreach ($tabs as $key => $label):
             $isDefaultActive = $key === 'basic';
-            $normalBg = $isApp ? '#fffaf2' : 'var(--surface-soft)';
-            $normalColor = $isApp ? '#475569' : 'var(--text-muted)';
+            $normalBg = '#fffaf2';
+            $normalColor = '#475569';
             $buttonBg = $isDefaultActive ? '#334155' : $normalBg;
             $buttonColor = $isDefaultActive ? '#ffffff' : $normalColor;
-            $buttonBorder = $isDefaultActive ? '#334155' : ($isApp ? '#d8cdbc' : 'var(--border)');
+            $buttonBorder = $isDefaultActive ? '#334155' : '#d8cdbc';
         ?>
             <button
                 type="button"
@@ -73,7 +88,7 @@ JS;
                 data-storage-key="<?= htmlspecialchars($stadiumCharacteristicsStorageKey, ENT_QUOTES, 'UTF-8') ?>"
                 aria-selected="<?= $isDefaultActive ? 'true' : 'false' ?>"
                 onclick="<?= htmlspecialchars($stadiumCharacteristicsInlineHandler, ENT_QUOTES, 'UTF-8') ?>"
-                style="<?= $isApp ? 'flex:0 0 auto;' : 'flex:1 1 120px;' ?> min-height:34px; padding:7px 10px; border:1px solid <?= htmlspecialchars($buttonBorder, ENT_QUOTES, 'UTF-8') ?>; border-radius:8px; background:<?= htmlspecialchars($buttonBg, ENT_QUOTES, 'UTF-8') ?>; color:<?= htmlspecialchars($buttonColor, ENT_QUOTES, 'UTF-8') ?>; font-size:<?= $isApp ? '11px' : '12px' ?>; font-weight:700; cursor:pointer; white-space:nowrap;"
+                style="flex:0 0 auto; min-height:34px; padding:7px 10px; border:1px solid <?= htmlspecialchars($buttonBorder, ENT_QUOTES, 'UTF-8') ?>; border-radius:8px; background:<?= htmlspecialchars($buttonBg, ENT_QUOTES, 'UTF-8') ?>; color:<?= htmlspecialchars($buttonColor, ENT_QUOTES, 'UTF-8') ?>; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;"
             ><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></button>
         <?php endforeach; ?>
     </div>
@@ -120,8 +135,8 @@ JS;
     const buttons = Array.from(root.querySelectorAll('[data-stadium-char-tab]'));
     const panels = Array.from(root.querySelectorAll('[data-stadium-char-panel]'));
     const storageKey = <?= json_encode($stadiumCharacteristicsStorageKey, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    const normalBg = <?= json_encode($isApp ? '#fffaf2' : 'var(--surface-soft)') ?>;
-    const normalColor = <?= json_encode($isApp ? '#475569' : 'var(--text-muted)') ?>;
+    const normalBg = '#fffaf2';
+    const normalColor = '#475569';
     const activeBg = '#334155';
     const activeColor = '#ffffff';
 
