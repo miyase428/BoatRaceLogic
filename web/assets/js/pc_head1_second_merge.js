@@ -53,9 +53,9 @@
         cell.textContent = text;
         cell.style.padding = '10px 8px';
         cell.style.textAlign = opts.align || 'center';
-        cell.style.fontWeight = opts.bold ? 'bold' : 'normal';
+        cell.style.fontWeight = opts.bold ? '700' : '500';
         cell.style.fontSize = opts.size || '14px';
-        cell.style.color = opts.color || '#cbd5e1';
+        cell.style.color = opts.color || '#4b5866';
         if (opts.left) cell.style.textAlign = 'left';
         return cell;
     }
@@ -63,8 +63,8 @@
     function buildRow(className, label, values, styleForValue) {
         const row = document.createElement('tr');
         row.className = className;
-        row.style.borderTop = '1px solid #334155';
-        row.appendChild(makeCell(label, {left: true, bold: true, color: '#f8fafc', size: '13px'}));
+        row.style.borderTop = '1px solid #ddd2c2';
+        row.appendChild(makeCell(label, {left: true, bold: true, color: '#4b5866', size: '13px'}));
 
         for (let course = 1; course <= 6; course++) {
             const value = values[course];
@@ -113,38 +113,39 @@
                 : (map[course].diff >= 0 ? '+' : '') + map[course].diff.toFixed(1) + 'pt';
         }
 
+        // 同じカード内の補足ブロックとして、背景・文字色を既存の明るい表に合わせる。
         const section = document.createElement('tr');
         section.className = 'pc-head1-exacta-merged';
-        section.style.borderTop = '2px solid #475569';
+        section.style.borderTop = '2px solid #cbbda9';
         const sectionCell = document.createElement('td');
         sectionCell.colSpan = 7;
-        sectionCell.style.cssText = 'padding:9px 8px;text-align:left;font-size:12px;font-weight:bold;color:#fbbf24;background:#172033;';
+        sectionCell.style.cssText = 'padding:7px 8px;text-align:left;font-size:12px;font-weight:800;color:#75659b;background:#eee8f7;border-bottom:1px solid #d8cdbc;';
         sectionCell.textContent = '今回AI（イン1Cが1着の場合）';
         section.appendChild(sectionCell);
         tbody.appendChild(section);
 
         tbody.appendChild(buildRow(
             'pc-head1-exacta-merged',
-            'AI側場平均',
+            'AI場平均',
             venueValues,
-            function () { return {color: '#cbd5e1', size: '14px'}; }
+            function () { return {color: '#64748b', size: '14px', bold: true}; }
         ));
 
         tbody.appendChild(buildRow(
             'pc-head1-exacta-merged',
             'AI2着率',
             aiValues,
-            function () { return {color: '#a78bfa', size: '18px', bold: true}; }
+            function () { return {color: '#75659b', size: '18px', bold: true}; }
         ));
 
         tbody.appendChild(buildRow(
             'pc-head1-exacta-merged',
-            'AI場平均との差',
+            '場平均との差',
             diffValues,
             function (value, course) {
                 const diff = map[course] ? map[course].diff : null;
                 return {
-                    color: diff !== null && diff >= 0 ? '#fbbf24' : '#94a3b8',
+                    color: diff !== null && diff > 0 ? '#b45309' : '#64748b',
                     size: '13px',
                     bold: true
                 };
@@ -155,10 +156,10 @@
         if (!note) {
             note = document.createElement('div');
             note.className = 'pc-head1-exacta-note';
-            note.style.cssText = 'margin-top:7px;font-size:11px;color:#94a3b8;line-height:1.5;';
             head1Card.appendChild(note);
         }
-        note.textContent = 'AI2着率：最終3連単出目確率から P(2着 | 1C頭) を集約。AI側場平均・差は従来の「イン1着時 2連単」と同じ値。';
+        note.style.cssText = 'margin-top:7px;font-size:11px;color:#6b7785;line-height:1.5;';
+        note.textContent = 'AI2着率：最終3連単出目確率から P(2着 | 1C頭) を集約。AI場平均・差は従来の「イン1着時 2連単」と同じ値。';
 
         return true;
     }
