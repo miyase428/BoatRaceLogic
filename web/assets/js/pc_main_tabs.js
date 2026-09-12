@@ -221,3 +221,89 @@
         scheduleSetup();
     }
 })();
+
+(function () {
+    'use strict';
+
+    function currentRaceCode() {
+        const node = document.querySelector('.code-box .code-value');
+        const code = String(node ? node.textContent : '').trim().toUpperCase();
+        return /^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/.test(code) ? code : '';
+    }
+
+    function raceDateFromCode(code) {
+        return code.slice(0, 4) + '-' + code.slice(4, 6) + '-' + code.slice(6, 8);
+    }
+
+    function showSignal() {
+        const code = currentRaceCode();
+        if (!code || code.slice(8, 11) !== 'TMG') return;
+
+        const date = raceDateFromCode(code);
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data || data.status !== 'ok') {
+                        throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+                    }
+                    return data;
+                });
+            })
+            .then(function (data) {
+                const detail = data.matches && data.matches[code] ? data.matches[code] : null;
+                if (!detail) return;
+
+                let retries = 40;
+                function place() {
+                    const panel = document.querySelector('.pc-main-tab-panel[data-pc-main-panel="basic"]');
+                    if (!panel) {
+                        if (retries-- > 0) window.setTimeout(place, 50);
+                        return;
+                    }
+                    if (panel.querySelector('.tmg-lane4-detail-signal')) return;
+
+                    const level = Number(detail.star_level || 1);
+                    const label = level >= 3 ? '★★★ 4頭強' : (level === 2 ? '★★ 4軸' : '★ 4攻め');
+                    const note = level >= 3 ? '（検証中）' : '';
+
+                    const box = document.createElement('div');
+                    box.className = 'tmg-lane4-detail-signal';
+                    box.style.cssText = 'margin:10px 0 12px;padding:10px 13px;border:1px solid #d8a94c;border-radius:8px;background:#fff7df;color:#5d4a21;box-shadow:0 1px 5px rgba(140,104,35,.08);';
+
+                    const title = document.createElement('div');
+                    title.style.cssText = 'font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+                    title.innerHTML = '<span style="color:#b87500;font-size:17px;">' + label + '</span><span>多摩川4コースサイン' + note + '</span>';
+                    box.appendChild(title);
+
+                    const parts = [];
+                    if (Number.isFinite(Number(detail.makuri_rate))) {
+                        parts.push('4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
+                    }
+                    if (detail.secondary_ready) {
+                        parts.push('二次 ' + Number(detail.second_score).toFixed(0));
+                        parts.push('TOP差 ' + Number(detail.gap_to_top).toFixed(0));
+                        parts.push('直線 ' + Number(detail.straight_score).toFixed(0));
+                    } else {
+                        parts.push('展示前');
+                    }
+
+                    const sub = document.createElement('div');
+                    sub.style.cssText = 'margin-top:4px;font-size:12px;color:#7a6948;';
+                    sub.textContent = parts.join(' / ');
+                    box.appendChild(sub);
+
+                    panel.insertBefore(box, panel.firstChild);
+                }
+                place();
+            })
+            .catch(function () {
+                // 詳細表示本体を壊さないため、サインAPI失敗時は表示しない。
+            });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { window.setTimeout(showSignal, 120); });
+    } else {
+        window.setTimeout(showSignal, 120);
+    }
+})();
