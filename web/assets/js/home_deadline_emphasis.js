@@ -31,9 +31,14 @@
         '.pick-item-solid.is-deadline-next{border-left-color:#d8a94c!important}',
         '.pick-item-upset.is-deadline-next{border-left-color:#d8a94c!important}',
 
-        /* 多摩川4コース強条件：レース一覧の★ */
-        '.race-button .tmg-lane4-star{display:inline-block;margin-left:2px;color:#d18b00;font-size:13px;font-weight:1000;line-height:1;vertical-align:1px;text-shadow:0 1px 0 rgba(255,255,255,.7)}',
-        '.race-button.is-tmg-lane4-strong{border-color:#d8a94c!important;box-shadow:inset 0 0 0 1px rgba(216,169,76,.16)}'
+        /* 多摩川4コース：★=攻め / ★★=4軸 / ★★★=4頭強 */
+        '.race-button .tmg-lane4-star{display:inline-block;margin-left:2px;font-size:13px;font-weight:1000;line-height:1;vertical-align:1px;text-shadow:0 1px 0 rgba(255,255,255,.7);letter-spacing:-1px}',
+        '.race-button.is-tmg-lane4-star-1 .tmg-lane4-star{color:#d18b00}',
+        '.race-button.is-tmg-lane4-star-2 .tmg-lane4-star{color:#c56f00}',
+        '.race-button.is-tmg-lane4-star-3 .tmg-lane4-star{color:#b94d00}',
+        '.race-button.is-tmg-lane4-strong{border-color:#d8a94c!important;box-shadow:inset 0 0 0 1px rgba(216,169,76,.16)}',
+        '.race-button.is-tmg-lane4-star-2{box-shadow:inset 0 0 0 1px rgba(197,111,0,.24)!important}',
+        '.race-button.is-tmg-lane4-star-3{border-color:#c66a2b!important;box-shadow:inset 0 0 0 1px rgba(185,77,0,.30)!important}'
     ].join('');
     document.head.appendChild(style);
 
@@ -92,7 +97,31 @@
         window.setTimeout(refresh, 500);
     }
 
-    // 多摩川のみ：過去12ヶ月4コースまくり率15%以上 + 4が3より平均ST順位上なら開催一覧に★。
+    function clearTamagawaStar(link) {
+        link.classList.remove(
+            'is-tmg-lane4-strong',
+            'is-tmg-lane4-star-1',
+            'is-tmg-lane4-star-2',
+            'is-tmg-lane4-star-3'
+        );
+        delete link.dataset.tmgLane4Level;
+        const oldStar = link.querySelector('.tmg-lane4-star');
+        if (oldStar) oldStar.remove();
+        if (link.dataset.tmgLane4BaseTitle !== undefined) {
+            link.title = link.dataset.tmgLane4BaseTitle;
+        }
+    }
+
+    function levelLabel(level) {
+        if (level >= 3) return '4頭強';
+        if (level >= 2) return '4軸';
+        return '4攻め';
+    }
+
+    // 多摩川のみ。
+    // ★   = 過去12ヶ月4コースまくり率15%以上 + 4が3より平均ST順位上
+    // ★★  = ★ + 二次24以上 + TOP差5以内
+    // ★★★ = ★★ + 二次27以上 + 直線評価4以上（検証中）
     fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
         .then(function (response) {
             return response.json().then(function (data) {
@@ -107,34 +136,57 @@
             document.querySelectorAll('[data-race-button]').forEach(function (link) {
                 const code = raceCodeFromLink(link);
                 const detail = code ? matches[code] : null;
-                const oldStar = link.querySelector('.tmg-lane4-star');
                 if (!detail) {
-                    link.classList.remove('is-tmg-lane4-strong');
-                    if (oldStar) oldStar.remove();
+                    clearTamagawaStar(link);
                     return;
                 }
 
-                link.classList.add('is-tmg-lane4-strong');
+                const rawLevel = Number(detail.star_level || 1);
+                const level = Math.max(1, Math.min(3, Number.isFinite(rawLevel) ? Math.round(rawLevel) : 1));
+                const stars = '★'.repeat(level);
+                const label = String(detail.signal || levelLabel(level));
+
+                link.classList.remove('is-tmg-lane4-star-1', 'is-tmg-lane4-star-2', 'is-tmg-lane4-star-3');
+                link.classList.add('is-tmg-lane4-strong', 'is-tmg-lane4-star-' + level);
+                link.dataset.tmgLane4Level = String(level);
+
                 const raceLabel = link.querySelector('strong');
-                if (raceLabel && !oldStar) {
-                    const star = document.createElement('span');
+                let star = link.querySelector('.tmg-lane4-star');
+                if (raceLabel && !star) {
+                    star = document.createElement('span');
                     star.className = 'tmg-lane4-star';
-                    star.textContent = '★';
-                    star.setAttribute('aria-label', '多摩川4コース攻め強条件');
                     raceLabel.appendChild(star);
+                }
+                if (star) {
+                    star.textContent = stars;
+                    star.setAttribute('aria-label', '多摩川4コース ' + label + 'サイン');
+                    star.title = stars + ' ' + label;
                 }
 
                 const baseTitle = String(link.dataset.tmgLane4BaseTitle || link.title || '');
                 link.dataset.tmgLane4BaseTitle = baseTitle;
-                const info = '★ 4コース攻め強条件（12ヶ月）'
+
+                let info = stars + ' ' + label + 'サイン'
                     + ' / 4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
                     + ' / ST順位 4=' + Number(detail.lane4_avg_rank).toFixed(2)
                     + ' < 3=' + Number(detail.lane3_avg_rank).toFixed(2);
+
+                if (detail.secondary_ready) {
+                    info += ' / 二次 ' + Number(detail.second_score).toFixed(0)
+                        + ' / TOP差 ' + Number(detail.gap_to_top).toFixed(0)
+                        + ' / 直線 ' + Number(detail.straight_score).toFixed(0);
+                } else {
+                    info += ' / 展示前';
+                }
+
+                if (level >= 3) {
+                    info += ' / ★★★は前方検証中';
+                }
                 link.title = (baseTitle ? baseTitle + ' / ' : '') + info;
             });
         })
         .catch(function () {
-            // TOP表示本体を壊さないため、強条件API失敗時は★を出さないだけにする。
+            // TOP表示本体を壊さないため、強条件API失敗時は星を出さないだけにする。
         });
 })();
 
