@@ -23,6 +23,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <!-- PC Webは役割別タブへ段階的に再整理する。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260912a">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260912a"></script>
+<script src="/web/assets/js/pc_rate_development_tab.js?v=20260912a"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
@@ -88,7 +89,7 @@ document.addEventListener('DOMContentLoaded', function () {
         playerButton.type = 'button';
         playerButton.className = 'pc-main-tab';
         playerButton.dataset.pcMainTab = 'player';
-        playerButton.textContent = '場・選手';
+        playerButton.textContent = '連対率・展開';
         tabs.insertBefore(playerButton, mainButton);
 
         const playerPanel = document.createElement('div');
@@ -112,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // 選手SUM特性は判断材料として、いったん「AI予想」へ置く。
             if (playerSam && playerSam.parentElement !== mainPanel) mainPanel.appendChild(playerSam);
 
-            // 多摩川コースサインは場特性なので「場・選手」へ。
+            // 多摩川コースサインは展開材料なので「連対率・展開」へ。
             const tmgSignal = document.querySelector('.tmg-lane4-detail-signal');
             if (tmgSignal && tmgSignal.parentElement !== playerPanel) {
                 playerPanel.insertBefore(tmgSignal, playerPanel.firstChild);
