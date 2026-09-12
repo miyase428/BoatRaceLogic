@@ -43,13 +43,20 @@ JS;
 <div id="<?= htmlspecialchars($stadiumCharacteristicsRootId, ENT_QUOTES, 'UTF-8') ?>" style="<?= $isApp ? 'margin:0 0 8px;' : 'margin:14px 0 0;' ?>">
     <div style="display:flex; gap:6px; <?= $isApp ? 'overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px;' : 'flex-wrap:wrap;' ?>">
         <?php
-        $tabs = [
-            'basic' => '基本特性',
-            'escape' => '逃げ時',
-            'outer' => 'イン飛び・外枠',
-            'exhibition' => '展示・ST',
-            'web' => 'Web相性',
-        ];
+        // PC Webは表示棚卸しに合わせ、普段使う「基本特性 / Web相性」だけを前面に残す。
+        // 逃げ時・イン飛び/外枠・展示/STは計算/部品を残したまま非表示。
+        $tabs = $isApp
+            ? [
+                'basic' => '基本特性',
+                'escape' => '逃げ時',
+                'outer' => 'イン飛び・外枠',
+                'exhibition' => '展示・ST',
+                'web' => 'Web相性',
+            ]
+            : [
+                'basic' => '基本特性',
+                'web' => 'Web相性',
+            ];
         foreach ($tabs as $key => $label):
             $isDefaultActive = $key === 'basic';
             $normalBg = $isApp ? '#fffaf2' : 'var(--surface-soft)';
