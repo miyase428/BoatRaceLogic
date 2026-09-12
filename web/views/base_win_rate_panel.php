@@ -98,9 +98,11 @@ document.addEventListener('DOMContentLoaded', function () {
         mainPanel.insertAdjacentElement('beforebegin', playerPanel);
 
         function moveRolePanels() {
+            // 現行Webとの場相性 / R別予想相性 / 基本特性は
+            // BOATERS風の整理に合わせて「出走・展示」側へ置く。
             const stadium = document.querySelector('[id^="stadium-characteristics-tabs-pc-"]');
-            if (stadium && stadium.parentElement !== playerPanel) {
-                playerPanel.appendChild(stadium);
+            if (stadium && stadium.parentElement !== basicPanel) {
+                basicPanel.insertBefore(stadium, basicPanel.firstChild);
             }
 
             const cross = document.getElementById('player-sam-cross-panel');
