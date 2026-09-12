@@ -133,7 +133,7 @@
 
         tbody.appendChild(buildRow(
             'pc-head1-exacta-merged',
-            'AI2着率',
+            '今回AI2着率',
             aiValues,
             function () { return {color: '#75659b', size: '18px', bold: true}; }
         ));
@@ -159,7 +159,7 @@
             head1Card.appendChild(note);
         }
         note.style.cssText = 'margin-top:7px;font-size:11px;color:#6b7785;line-height:1.5;';
-        note.textContent = 'AI2着率：最終3連単出目確率から P(2着 | 1C頭) を集約。AI場平均・差は従来の「イン1着時 2連単」と同じ値。';
+        note.textContent = '今回AI2着率：最終3連単出目確率から P(2着 | 1C頭) を集約。AI場平均・差は従来の「イン1着時 2連単」と同じ値。';
 
         return true;
     }
