@@ -29,6 +29,135 @@
         return match ? Number(match[1]) : 120;
     }
 
+    function updateTabColumns(tabs) {
+        if (!tabs) return;
+        const count = tabs.querySelectorAll('.pc-main-tab').length;
+        if (count > 0) {
+            tabs.style.gridTemplateColumns = 'repeat(' + count + ', minmax(0, 1fr))';
+        }
+    }
+
+    function makeMatrixSubsetCard(sourceTable, rows, titleText, noteText, className) {
+        if (!sourceTable || !rows.length) return null;
+
+        const card = document.createElement('div');
+        card.className = className || 'pc-review-subset-card';
+        card.style.cssText = 'margin:12px 0 16px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-soft);';
+
+        const title = document.createElement('div');
+        title.style.cssText = 'font-size:16px;font-weight:800;color:var(--text-strong);margin-bottom:4px;';
+        title.textContent = titleText;
+        card.appendChild(title);
+
+        if (noteText) {
+            const note = document.createElement('div');
+            note.style.cssText = 'font-size:12px;color:var(--text-muted);margin-bottom:10px;';
+            note.textContent = noteText;
+            card.appendChild(note);
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'matrix-wrapper';
+        wrap.style.cssText = 'overflow-x:auto;';
+
+        const table = sourceTable.cloneNode(false);
+        table.removeAttribute('id');
+        table.classList.add('pc-review-subset-table');
+
+        if (sourceTable.tHead) table.appendChild(sourceTable.tHead.cloneNode(true));
+        const tbody = document.createElement('tbody');
+        rows.forEach(function (row) {
+            tbody.appendChild(row.cloneNode(true));
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        card.appendChild(wrap);
+        return card;
+    }
+
+    function reorganizeMatrix(basicPanel, mainPanel, otherPanel) {
+        const matrix = basicPanel ? basicPanel.querySelector('.matrix-table') : null;
+        const tbody = matrix && matrix.tBodies ? matrix.tBodies[0] : null;
+        if (!matrix || !tbody || matrix.dataset.pcReviewReorganized === '1') return;
+        matrix.dataset.pcReviewReorganized = '1';
+
+        const rows = Array.from(tbody.rows);
+        const otherRows = [];
+        const kimariteRows = [];
+        const hideOther = [];
+        const hideKimarite = [];
+        let section = '';
+
+        rows.forEach(function (row) {
+            if (!row.cells || !row.cells.length) return;
+            const firstCell = row.cells[0];
+            const label = String(firstCell.textContent || '').replace(/\s+/g, ' ').trim();
+            const isSection = Number(firstCell.colSpan || 1) >= 7;
+
+            if (isSection) {
+                if (label.includes('出走表・基本情報')) {
+                    section = 'basic';
+                } else if (label.includes('展示・評価情報')) {
+                    section = 'exhibition';
+                } else if (label.includes('決まり手（直近1年）') || label.includes('決まり手（直近6ヶ月）')) {
+                    section = 'kimarite';
+                } else if (section === 'kimarite') {
+                    section = 'after';
+                }
+            }
+
+            if (section === 'basic') {
+                if (isSection) {
+                    otherRows.push(row);
+                    return;
+                }
+                if (label === '選手名' || label === '級別 / 支部') return;
+                otherRows.push(row);
+                hideOther.push(row);
+                return;
+            }
+
+            if (section === 'exhibition') {
+                if (isSection) {
+                    otherRows.push(row);
+                    return;
+                }
+                // 基本情報側には、今回の進入だけ残す。
+                if (label === '展示進入コース') return;
+                otherRows.push(row);
+                hideOther.push(row);
+                return;
+            }
+
+            if (section === 'kimarite') {
+                kimariteRows.push(row);
+                hideKimarite.push(row);
+            }
+        });
+
+        // クローンを作ってから元行を隠す。元DOMは各既存スクリプトの参照用に残す。
+        const otherCard = makeMatrixSubsetCard(
+            matrix,
+            otherRows,
+            '📦 一次・展示・二次 詳細',
+            '使用頻度の低い詳細値は「その他」にまとめています。計算ロジックは変更していません。',
+            'pc-review-detail-card'
+        );
+        if (otherCard && otherPanel) otherPanel.insertBefore(otherCard, otherPanel.firstChild);
+
+        const kimariteCard = makeMatrixSubsetCard(
+            matrix,
+            kimariteRows,
+            '🎯 決まり手',
+            '直近1年 / 6ヶ月のコース別決まり手を、よく見る情報としてメインへ移動しました。',
+            'pc-review-kimarite-card'
+        );
+        if (kimariteCard && mainPanel) mainPanel.insertBefore(kimariteCard, mainPanel.firstChild);
+
+        hideOther.forEach(function (row) { row.style.display = 'none'; });
+        hideKimarite.forEach(function (row) { row.style.display = 'none'; });
+    }
+
     function setupPcMainTabs() {
         const container = document.querySelector('.container');
         const codeBox = container ? container.querySelector('.code-box') : null;
@@ -48,6 +177,7 @@
         tabs.innerHTML = ''
             + '<button type="button" class="pc-main-tab is-active" data-pc-main-tab="basic">基本情報</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="main">メイン情報</button>'
+            + '<button type="button" class="pc-main-tab" data-pc-main-tab="other">その他</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">' + trifectaCount + '通り</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="recent">直近60R</button>';
 
@@ -59,6 +189,11 @@
         mainPanel.className = 'pc-main-tab-panel';
         mainPanel.dataset.pcMainPanel = 'main';
         mainPanel.hidden = true;
+
+        const otherPanel = document.createElement('div');
+        otherPanel.className = 'pc-main-tab-panel';
+        otherPanel.dataset.pcMainPanel = 'other';
+        otherPanel.hidden = true;
 
         const trifectaPanel = document.createElement('div');
         trifectaPanel.className = 'pc-main-tab-panel';
@@ -73,22 +208,32 @@
         codeBox.insertAdjacentElement('afterend', tabs);
         tabs.insertAdjacentElement('afterend', basicPanel);
         basicPanel.insertAdjacentElement('afterend', mainPanel);
-        mainPanel.insertAdjacentElement('afterend', trifectaPanel);
+        mainPanel.insertAdjacentElement('afterend', otherPanel);
+        otherPanel.insertAdjacentElement('afterend', trifectaPanel);
         trifectaPanel.insertAdjacentElement('afterend', recentPanel);
+        updateTabColumns(tabs);
+
+        // 後から2連単・買い目タブが追加されても列数を自動追従する。
+        const tabsObserver = new MutationObserver(function () { updateTabColumns(tabs); });
+        tabsObserver.observe(tabs, {childList: true});
 
         const basicNodes = new Set();
+        const otherNodes = new Set();
 
-        // 場特性5タブと前向き実戦検証はアプリ版と同じく「基本情報」側。
+        // 場特性は「基本情報」。前向き実戦検証は棚卸し結果に合わせ「その他」へ。
         sourceNodes.forEach(function (node) {
             if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
             if (String(node.id || '').startsWith('stadium-characteristics-tabs-pc-')) {
                 basicNodes.add(node);
             } else if (isForwardValidationNode(node)) {
-                basicNodes.add(node);
+                otherNodes.add(node);
+            } else if (String(node.id || '') === 'sam-block') {
+                // 旧マスタ表示は残すが、普段使いからは外す。
+                otherNodes.add(node);
             }
         });
 
-        // 総合出走・展示マトリクスも「基本情報」側へまとめる。
+        // 総合出走・展示マトリクスは「基本情報」側へまとめる。
         const matrixIndex = sourceNodes.findIndex(function (node) {
             return node
                 && node.nodeType === Node.ELEMENT_NODE
@@ -135,6 +280,11 @@
                 return;
             }
 
+            if (otherNodes.has(node)) {
+                otherPanel.appendChild(node);
+                return;
+            }
+
             if (basicNodes.has(node)) {
                 basicPanel.appendChild(node);
                 return;
@@ -165,8 +315,15 @@
             recentPanel.appendChild(note);
         }
 
+        if (!otherPanel.children.length) {
+            const note = document.createElement('div');
+            note.style.cssText = 'margin:12px 0;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface-soft);color:var(--text-muted);font-size:13px;';
+            note.textContent = 'その他の詳細情報はありません。';
+            otherPanel.appendChild(note);
+        }
+
         const buttons = Array.from(tabs.querySelectorAll('.pc-main-tab'));
-        const validTabs = ['basic', 'main', 'trifecta', 'recent'];
+        const validTabs = ['basic', 'main', 'other', 'trifecta', 'recent'];
 
         function activate(name) {
             if (!validTabs.includes(name)) name = 'basic';
@@ -207,6 +364,12 @@
         } catch (e) {}
 
         activate(initial);
+
+        // 決まり手はメインへ、一次/展示/二次の詳細はその他へ。
+        // 元行はDOMに残したまま非表示にして、既存計算・抽出処理への影響を避ける。
+        window.setTimeout(function () {
+            reorganizeMatrix(basicPanel, mainPanel, otherPanel);
+        }, 120);
     }
 
     function scheduleSetup() {
