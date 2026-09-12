@@ -1,5 +1,6 @@
 /* PC Webの大分類タブ。
- * アプリ版の導線を基準に「基本情報 / メイン情報 / 120通り / 直近60R」を切り替える。
+ * 表示棚卸し後の「基本情報 / メイン情報 / その他 / 120通り / 直近60R」を基準にし、
+ * 2連単・買い目は既存JSから動的に追加する。
  * 計算ロジックには触れず、既存DOMの表示位置だけを切り替える。
  */
 
@@ -26,7 +27,7 @@ body {
     top: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     width: 100%;
     max-width: 100%;
