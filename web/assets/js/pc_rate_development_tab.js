@@ -145,19 +145,18 @@
         if (!panel) return false;
 
         const rateCard = buildRateSummary(panel);
+        const aiTenkaiCard = document.getElementById('ai-tenkai-trial-panel');
         const head1Card = findCardByExactTitle('🎯 1号艇1着時の2着率');
         const kimariteCard = buildKimariteSummary(panel);
-        const cross = document.getElementById('player-sam-cross-panel');
 
-        // 多摩川などの場別攻めサインは既存処理が先頭へ置く。
-        // その下を「連対率 → 1逃げ時2着 → 決まり手 → SUM比較」の順にする。
+        // 「連対率 → AI展開予想（試験） → 1逃げ時2着 → 決まり手」の順に並べる。
         if (rateCard) panel.appendChild(rateCard);
+        if (aiTenkaiCard) panel.appendChild(aiTenkaiCard);
         if (head1Card && head1Card.parentElement !== panel) panel.appendChild(head1Card);
         if (head1Card && head1Card.parentElement === panel) panel.appendChild(head1Card);
         if (kimariteCard) panel.appendChild(kimariteCard);
-        if (cross && cross.parentElement === panel) panel.appendChild(cross);
 
-        return !!(rateCard || head1Card || kimariteCard);
+        return !!(rateCard || aiTenkaiCard || head1Card || kimariteCard);
     }
 
     function schedule() {
