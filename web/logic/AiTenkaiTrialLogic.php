@@ -150,7 +150,7 @@ class AiTenkaiTrialLogic
             'status' => 'ok',
             'events' => $visibleEvents,
             'all_events' => $events,
-            'top3' => array_slice($visibleEvents, 0, 3),
+            'top5' => array_slice($visibleEvents, 0, 5),
             'details' => $details,
             'venue_races' => (int)($venue['race_count'] ?? 0),
             'recent_weight' => self::RECENT_WEIGHT,
