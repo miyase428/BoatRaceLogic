@@ -20,7 +20,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
 <script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260901a"></script>
 
-<!-- PC Webは大分類「基本情報 / メイン情報 / その他 / 2連単 / 120通り / 買い目 / 直近60R」で切り替える。 -->
+<!-- PC Webは役割別タブへ段階的に再整理する。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260912a">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260912a"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
@@ -48,11 +48,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const halfIndex = rows.indexOf(halfTitle);
         if (yearIndex < 0 || halfIndex <= yearIndex) return;
 
-        // 既存の期間切替タブは非表示。
         const tabRow = matrix.querySelector('.kimarite-period-tabs');
         if (tabRow) tabRow.style.display = 'none';
 
-        // 各期間の見出しと、決まり手5行（列見出し + 4項目）を同時表示。
         yearTitle.style.display = '';
         halfTitle.style.display = '';
         rows.slice(yearIndex + 1, halfIndex).slice(0, 5).forEach(function (row) {
@@ -62,5 +60,95 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.display = '';
         });
     }, 0);
+});
+
+// BOATERSのように「何を見るタブか」が分かる大分類へ、まずPC Webだけ段階的に整理する。
+// 既存計算や既存パネルは壊さず、DOMの表示先だけを分ける。
+document.addEventListener('DOMContentLoaded', function () {
+    let retry = 80;
+
+    function setupRoleTabs() {
+        const tabs = document.querySelector('.pc-main-tabs');
+        const basicButton = tabs ? tabs.querySelector('[data-pc-main-tab="basic"]') : null;
+        const mainButton = tabs ? tabs.querySelector('[data-pc-main-tab="main"]') : null;
+        const otherButton = tabs ? tabs.querySelector('[data-pc-main-tab="other"]') : null;
+        const basicPanel = document.querySelector('.pc-main-tab-panel[data-pc-main-panel="basic"]');
+        const mainPanel = document.querySelector('.pc-main-tab-panel[data-pc-main-panel="main"]');
+
+        if (!tabs || !basicButton || !mainButton || !otherButton || !basicPanel || !mainPanel) {
+            if (retry-- > 0) window.setTimeout(setupRoleTabs, 40);
+            return;
+        }
+        if (tabs.querySelector('[data-pc-main-tab="player"]')) return;
+
+        basicButton.textContent = '出走・展示';
+        mainButton.textContent = 'AI予想';
+
+        const playerButton = document.createElement('button');
+        playerButton.type = 'button';
+        playerButton.className = 'pc-main-tab';
+        playerButton.dataset.pcMainTab = 'player';
+        playerButton.textContent = '場・選手';
+        tabs.insertBefore(playerButton, mainButton);
+
+        const playerPanel = document.createElement('div');
+        playerPanel.className = 'pc-main-tab-panel';
+        playerPanel.dataset.pcMainPanel = 'player';
+        playerPanel.hidden = true;
+        mainPanel.insertAdjacentElement('beforebegin', playerPanel);
+
+        function moveRolePanels() {
+            const stadium = document.querySelector('[id^="stadium-characteristics-tabs-pc-"]');
+            if (stadium && stadium.parentElement !== playerPanel) {
+                playerPanel.appendChild(stadium);
+            }
+
+            const cross = document.getElementById('player-sam-cross-panel');
+            const playerSam = document.getElementById('player-sam-panel');
+            if (cross && cross.parentElement !== playerPanel) playerPanel.appendChild(cross);
+            if (playerSam && playerSam.parentElement !== playerPanel) playerPanel.appendChild(playerSam);
+
+            // 多摩川コースサインは場特性なので「場・選手」へ。
+            const tmgSignal = document.querySelector('.tmg-lane4-detail-signal');
+            if (tmgSignal && tmgSignal.parentElement !== playerPanel) {
+                playerPanel.insertBefore(tmgSignal, playerPanel.firstChild);
+            }
+        }
+
+        function activatePlayer() {
+            Array.from(tabs.querySelectorAll('.pc-main-tab')).forEach(function (button) {
+                const active = button.dataset.pcMainTab === 'player';
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            Array.from(document.querySelectorAll('.pc-main-tab-panel')).forEach(function (panel) {
+                const active = panel.dataset.pcMainPanel === 'player';
+                panel.classList.toggle('is-active', active);
+                panel.hidden = !active;
+            });
+            try { sessionStorage.setItem('boatracePcMainTab', 'player'); } catch (e) {}
+        }
+
+        playerButton.addEventListener('click', activatePlayer);
+
+        // pc_main_tabs.js側の列数調整MutationObserverが反応するが、念のため即時にも合わせる。
+        const count = tabs.querySelectorAll('.pc-main-tab').length;
+        tabs.style.gridTemplateColumns = 'repeat(' + count + ', minmax(0, 1fr))';
+
+        moveRolePanels();
+        window.setTimeout(moveRolePanels, 160);
+        window.setTimeout(moveRolePanels, 500);
+
+        const observer = new MutationObserver(moveRolePanels);
+        observer.observe(document.querySelector('.container') || document.body, {childList: true, subtree: true});
+
+        try {
+            if (sessionStorage.getItem('boatracePcMainTab') === 'player') {
+                activatePlayer();
+            }
+        } catch (e) {}
+    }
+
+    window.setTimeout(setupRoleTabs, 0);
 });
 </script>
