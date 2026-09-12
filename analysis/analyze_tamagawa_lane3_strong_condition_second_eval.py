@@ -173,7 +173,12 @@ def analyze(start_date: date, end_date: date):
         by_course = {}
         bad = False
         for boat in boats:
-            c = int(boat["course"])
+            raw_course = boat.get("course")
+            try:
+                c = int(raw_course)
+            except (TypeError, ValueError):
+                bad = True
+                break
             if c not in range(1, 7) or c in by_course:
                 bad = True
                 break
