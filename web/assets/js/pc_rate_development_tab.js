@@ -36,15 +36,16 @@
 
         card = document.createElement('div');
         card.id = 'pc-rate-development-summary';
-        card.style.cssText = 'margin:12px 0 14px;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;color:#e2e8f0;';
+        // 「連対率・展開」内の他カードと同じ明るい背景に統一する。
+        card.style.cssText = 'margin:12px 0 14px;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:14px;color:#334155;';
 
         const title = document.createElement('div');
-        title.style.cssText = 'font-size:16px;font-weight:800;color:#a78bfa;margin-bottom:4px;';
+        title.style.cssText = 'font-size:16px;font-weight:800;color:#75659b;margin-bottom:4px;';
         title.textContent = '📊 連対率・勝率';
         card.appendChild(title);
 
         const note = document.createElement('div');
-        note.style.cssText = 'font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.6;';
+        note.style.cssText = 'font-size:11px;color:#6b7785;margin-bottom:10px;line-height:1.6;';
         note.textContent = '既存の1着率・AI3連対率を、連対率を見るための一覧に集約。表示整理のみで予想ロジックは変更していません。';
         card.appendChild(note);
 
