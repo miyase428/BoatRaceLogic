@@ -27,6 +27,20 @@
         return heading ? heading.parentElement : null;
     }
 
+    function hideSamMaster() {
+        const heading = Array.from(document.querySelectorAll('h2')).find(function (node) {
+            return String(node.textContent || '').trim() === '📐 サム理論（コース・区間別マスタ）';
+        });
+        const toggle = document.getElementById('toggle-sam');
+        const block = document.getElementById('sam-block');
+
+        if (heading) heading.style.display = 'none';
+        if (toggle) toggle.style.display = 'none';
+        if (block) block.style.display = 'none';
+
+        return !!(heading || toggle || block);
+    }
+
     function cleanup() {
         const aiPanel = document.querySelector('.pc-main-tab-panel[data-pc-main-panel="main"]');
         if (!aiPanel) return false;
@@ -45,7 +59,11 @@
         const slitCard = findSlitCard();
         if (slitCard) slitCard.style.display = 'none';
 
-        return !!(winRateCard || trioRateCard || slitCard);
+        // コース・区間別のSUMマスタは参照頻度が低いため、PC Webでは見出し・切替・本体を非表示。
+        // 展示SUMのレース適用値や選手SUMなど、実戦用のSUM表示は残す。
+        const samMasterHidden = hideSamMaster();
+
+        return !!(winRateCard || trioRateCard || slitCard || samMasterHidden);
     }
 
     function schedule() {
