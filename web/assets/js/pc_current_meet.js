@@ -2,12 +2,12 @@
     'use strict';
 
     const COLORS = {
-        1: {line: '#cbd5e1', text: '#0f172a'},
-        2: {line: '#1e293b', text: '#0f172a'},
-        3: {line: '#ef4444', text: '#0f172a'},
-        4: {line: '#3b82f6', text: '#0f172a'},
-        5: {line: '#eab308', text: '#0f172a'},
-        6: {line: '#22c55e', text: '#0f172a'}
+        1: {line: '#cbd5e1'},
+        2: {line: '#1e293b'},
+        3: {line: '#ef4444'},
+        4: {line: '#3b82f6'},
+        5: {line: '#eab308'},
+        6: {line: '#22c55e'}
     };
 
     function getRaceCode() {
@@ -36,6 +36,25 @@
         return /^\d+$/.test(s) ? s + '着' : s;
     }
 
+    function makeLabelCell(text) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        td.style.cssText = [
+            'position:sticky',
+            'left:0',
+            'z-index:1',
+            'background:#0f172a',
+            'color:#f8fafc',
+            'font-weight:bold',
+            'border-right:2px solid #334155',
+            'vertical-align:middle',
+            'text-align:center',
+            'padding:10px 8px',
+            'white-space:nowrap'
+        ].join(';');
+        return td;
+    }
+
     function buildHeaderRow() {
         const tr = document.createElement('tr');
         tr.id = 'pc-current-meet-header';
@@ -55,89 +74,110 @@
         return tr;
     }
 
-    function buildDataRow(boats) {
+    function buildSummaryRow(boats) {
         const tr = document.createElement('tr');
-        tr.id = 'pc-current-meet-row';
-
-        const label = document.createElement('td');
-        label.textContent = '今節';
-        label.style.cssText = [
-            'position:sticky',
-            'left:0',
-            'z-index:1',
-            'background:#0f172a',
-            'color:#f8fafc',
-            'font-weight:bold',
-            'border-right:2px solid #334155',
-            'vertical-align:top',
-            'padding:10px 12px'
-        ].join(';');
-        tr.appendChild(label);
+        tr.id = 'pc-current-meet-summary';
+        tr.appendChild(makeLabelCell('概要'));
 
         for (let boat = 1; boat <= 6; boat++) {
             const info = boats[boat] || boats[String(boat)] || {};
             const records = Array.isArray(info.records) ? info.records : [];
-            const td = document.createElement('td');
-            td.style.cssText = [
-                'vertical-align:top',
-                'padding:8px 7px',
-                'background:#fbf8f2',
-                'text-align:center'
-            ].join(';');
-
-            const wrap = document.createElement('div');
-            wrap.style.cssText = [
-                'border-top:4px solid ' + (COLORS[boat]?.line || '#94a3b8'),
-                'border-radius:4px',
-                'padding-top:6px'
-            ].join(';');
-
-            const summary = document.createElement('div');
             const runCount = Number(info.run_count || records.length || 0);
             const avg = Number(info.average_st);
-            summary.textContent = (runCount ? runCount + '走' : '-') + ' / 平均ST ' + (Number.isFinite(avg) ? avg.toFixed(2) : '-');
-            summary.style.cssText = 'font-size:11px;font-weight:700;color:#64748b;margin-bottom:6px;white-space:nowrap;';
-            wrap.appendChild(summary);
 
-            if (!records.length) {
-                const empty = document.createElement('div');
-                empty.textContent = '-';
-                empty.style.cssText = 'padding:8px 0;color:#94a3b8;';
-                wrap.appendChild(empty);
-            } else {
-                records.forEach(function (record, idx) {
-                    const card = document.createElement('div');
-                    card.style.cssText = [
-                        'padding:6px 2px',
-                        idx ? 'border-top:1px solid #e2e8f0' : ''
-                    ].filter(Boolean).join(';');
-
-                    const race = document.createElement('div');
-                    race.textContent = record.race_no ? String(record.race_no) + 'R' : '-';
-                    race.style.cssText = 'font-size:12px;font-weight:800;color:#2563eb;line-height:1.25;';
-
-                    const finish = document.createElement('div');
-                    const course = Number(record.course);
-                    const courseText = course >= 1 && course <= 6 ? String(course) + 'C' : '-';
-                    finish.textContent = formatFinish(record.finish) + '（' + courseText + '）';
-                    finish.style.cssText = 'font-size:12px;font-weight:800;color:#0f172a;line-height:1.35;';
-
-                    const st = document.createElement('div');
-                    st.textContent = formatSt(record.st_raw);
-                    st.style.cssText = 'font-size:12px;color:#475569;line-height:1.3;';
-
-                    card.appendChild(race);
-                    card.appendChild(finish);
-                    card.appendChild(st);
-                    wrap.appendChild(card);
-                });
-            }
-
-            td.appendChild(wrap);
+            const td = document.createElement('td');
+            td.style.cssText = [
+                'text-align:center',
+                'padding:7px 4px',
+                'background:#fbf8f2',
+                'border-top:4px solid ' + (COLORS[boat]?.line || '#94a3b8'),
+                'font-size:11px',
+                'font-weight:700',
+                'color:#64748b',
+                'white-space:nowrap'
+            ].join(';');
+            td.textContent = (runCount ? runCount + '走' : '-') + ' / 平均ST ' + (Number.isFinite(avg) ? avg.toFixed(2) : '-');
             tr.appendChild(td);
         }
 
         return tr;
+    }
+
+    function buildRunCard(record, addBorder) {
+        const card = document.createElement('div');
+        card.style.cssText = [
+            'padding:6px 2px',
+            addBorder ? 'border-top:1px solid #e2e8f0' : ''
+        ].filter(Boolean).join(';');
+
+        const race = document.createElement('div');
+        race.textContent = record.race_no ? String(record.race_no) + 'R' : '-';
+        race.style.cssText = 'font-size:12px;font-weight:800;color:#2563eb;line-height:1.25;';
+
+        const finish = document.createElement('div');
+        const course = Number(record.course);
+        const courseText = course >= 1 && course <= 6 ? String(course) + 'C' : '-';
+        finish.textContent = formatFinish(record.finish) + '（' + courseText + '）';
+        finish.style.cssText = 'font-size:12px;font-weight:800;color:#0f172a;line-height:1.35;';
+
+        const st = document.createElement('div');
+        st.textContent = formatSt(record.st_raw);
+        st.style.cssText = 'font-size:12px;color:#475569;line-height:1.3;';
+
+        card.appendChild(race);
+        card.appendChild(finish);
+        card.appendChild(st);
+        return card;
+    }
+
+    function buildDayRow(boats, dayIndex) {
+        const tr = document.createElement('tr');
+        tr.className = 'pc-current-meet-day-row';
+        tr.dataset.dayIndex = String(dayIndex);
+        tr.appendChild(makeLabelCell(dayIndex + '日目'));
+
+        for (let boat = 1; boat <= 6; boat++) {
+            const info = boats[boat] || boats[String(boat)] || {};
+            const records = (Array.isArray(info.records) ? info.records : []).filter(function (record) {
+                return Number(record.day_index) === dayIndex;
+            });
+
+            const td = document.createElement('td');
+            td.style.cssText = [
+                'vertical-align:top',
+                'padding:4px 7px',
+                'background:#fbf8f2',
+                'text-align:center',
+                'min-height:56px'
+            ].join(';');
+
+            if (!records.length) {
+                const empty = document.createElement('div');
+                empty.textContent = '-';
+                empty.style.cssText = 'padding:12px 0;color:#cbd5e1;font-size:12px;';
+                td.appendChild(empty);
+            } else {
+                records.forEach(function (record, idx) {
+                    td.appendChild(buildRunCard(record, idx > 0));
+                });
+            }
+
+            tr.appendChild(td);
+        }
+
+        return tr;
+    }
+
+    function getDayCount(data, boats) {
+        let maxDay = Number(data && data.day_count) || 0;
+        for (let boat = 1; boat <= 6; boat++) {
+            const info = boats[boat] || boats[String(boat)] || {};
+            const records = Array.isArray(info.records) ? info.records : [];
+            records.forEach(function (record) {
+                maxDay = Math.max(maxDay, Number(record.day_index) || 0);
+            });
+        }
+        return maxDay;
     }
 
     async function render() {
@@ -156,10 +196,19 @@
             const boats = data && data.status === 'ok' && data.boats ? data.boats : null;
             if (!boats) return false;
 
-            const header = buildHeaderRow();
-            const row = buildDataRow(boats);
-            anchor.insertAdjacentElement('afterend', row);
-            row.insertAdjacentElement('beforebegin', header);
+            const dayCount = getDayCount(data, boats);
+            if (dayCount <= 0) return false;
+
+            const nodes = [buildHeaderRow(), buildSummaryRow(boats)];
+            for (let day = 1; day <= dayCount; day++) {
+                nodes.push(buildDayRow(boats, day));
+            }
+
+            let cursor = anchor;
+            nodes.forEach(function (node) {
+                cursor.insertAdjacentElement('afterend', node);
+                cursor = node;
+            });
             return true;
         } catch (e) {
             console.warn('[pc-current-meet] load failed', e);
