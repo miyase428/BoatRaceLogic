@@ -11,7 +11,7 @@ include __DIR__ . '/base_win_rate_panel_core.php';
 include __DIR__ . '/ai_tenkai_trial_panel.php';
 
 // 選手SUM特性はここで生成し、PCではDOMContentLoaded後に
-// 「展示サム理論（レース適用値）」の直下へ表示だけ移動する。
+// 「展示サム理論（レース適用値）」の艇番クリックからポップアップ表示する。
 $playerSamMode = 'pc';
 include __DIR__ . '/player_sam_panel.php';
 include __DIR__ . '/player_sam_cross_panel.php';
@@ -30,6 +30,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <script src="/web/assets/js/pc_rate_development_tab.js?v=20260913c"></script>
 <script src="/web/assets/js/pc_head1_second_merge.js?v=20260913c"></script>
 <script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260913c"></script>
+<script src="/web/assets/js/pc_player_sam_modal.js?v=20260913a"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
