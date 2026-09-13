@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../logic/AiTenkaiTrialLogic.php';
 require_once __DIR__ . '/../../common/db_connect.php';
 
+$aiTenkaiAppCompact = (string)($stadiumCharacteristicsMode ?? '') === 'app';
 $aiTenkaiTrial = [
     'status' => 'waiting',
     'message' => '展示情報が揃うとAI展開予想を表示します。',
@@ -43,13 +44,13 @@ $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
             展示後の補正後1着率 × 選手の6ヶ月/1年決まり手を平滑化。場平均は対象日前日まで直近1年<?= $aiTenkaiVenueRaces > 0 ? '（' . number_format($aiTenkaiVenueRaces) . 'R）' : '' ?>。
         </div>
         <div style="overflow-x:auto;">
-            <table style="width:100%;min-width:620px;border-collapse:collapse;font-size:12px;">
+            <table style="width:100%;min-width:<?= $aiTenkaiAppCompact ? '0' : '620px' ?>;border-collapse:collapse;font-size:<?= $aiTenkaiAppCompact ? '11px' : '12px' ?>;<?= $aiTenkaiAppCompact ? 'table-layout:fixed;' : '' ?>">
                 <thead>
                     <tr>
-                        <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #ddd2c2;">展開</th>
-                        <th style="text-align:right;padding:7px 8px;border-bottom:1px solid #ddd2c2;">今回</th>
-                        <th style="text-align:right;padding:7px 8px;border-bottom:1px solid #ddd2c2;">場平均</th>
-                        <th style="text-align:right;padding:7px 8px;border-bottom:1px solid #ddd2c2;">差</th>
+                        <th style="text-align:left;padding:7px <?= $aiTenkaiAppCompact ? '4px' : '8px' ?>;border-bottom:1px solid #ddd2c2;<?= $aiTenkaiAppCompact ? 'width:43%;' : '' ?>">展開</th>
+                        <th style="text-align:right;padding:7px <?= $aiTenkaiAppCompact ? '3px' : '8px' ?>;border-bottom:1px solid #ddd2c2;<?= $aiTenkaiAppCompact ? 'width:19%;' : '' ?>">今回</th>
+                        <th style="text-align:right;padding:7px <?= $aiTenkaiAppCompact ? '3px' : '8px' ?>;border-bottom:1px solid #ddd2c2;<?= $aiTenkaiAppCompact ? 'width:19%;' : '' ?>">場平均</th>
+                        <th style="text-align:right;padding:7px <?= $aiTenkaiAppCompact ? '3px' : '8px' ?>;border-bottom:1px solid #ddd2c2;<?= $aiTenkaiAppCompact ? 'width:19%;' : '' ?>">差</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -64,17 +65,21 @@ $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
                         $diffColor = $diff >= 0.0 ? '#b45309' : '#64748b';
                     ?>
                     <tr>
-                        <td style="padding:9px 8px;border-bottom:1px solid #eee4d7;font-weight:700;">
-                            <span style="display:inline-block;min-width:22px;color:#8a779f;"><?= $index + 1 ?>.</span>
-                            <?= htmlspecialchars((string)$boat, ENT_QUOTES, 'UTF-8') ?>号艇 / <?= htmlspecialchars((string)$course, ENT_QUOTES, 'UTF-8') ?>C が「<?= htmlspecialchars($tech, ENT_QUOTES, 'UTF-8') ?>」
+                        <td style="padding:9px <?= $aiTenkaiAppCompact ? '4px' : '8px' ?>;border-bottom:1px solid #eee4d7;font-weight:700;white-space:nowrap;">
+                            <span style="display:inline-block;min-width:<?= $aiTenkaiAppCompact ? '15px' : '22px' ?>;color:#8a779f;"><?= $index + 1 ?>.</span>
+                            <?php if ($aiTenkaiAppCompact): ?>
+                                <?= htmlspecialchars((string)$boat, ENT_QUOTES, 'UTF-8') ?>号/<?= htmlspecialchars((string)$course, ENT_QUOTES, 'UTF-8') ?>C <?= htmlspecialchars($tech, ENT_QUOTES, 'UTF-8') ?>
+                            <?php else: ?>
+                                <?= htmlspecialchars((string)$boat, ENT_QUOTES, 'UTF-8') ?>号艇 / <?= htmlspecialchars((string)$course, ENT_QUOTES, 'UTF-8') ?>C が「<?= htmlspecialchars($tech, ENT_QUOTES, 'UTF-8') ?>」
+                            <?php endif; ?>
                         </td>
-                        <td style="padding:9px 8px;border-bottom:1px solid #eee4d7;text-align:right;font-weight:800;font-size:14px;">
+                        <td style="padding:9px <?= $aiTenkaiAppCompact ? '3px' : '8px' ?>;border-bottom:1px solid #eee4d7;text-align:right;font-weight:800;font-size:<?= $aiTenkaiAppCompact ? '12px' : '14px' ?>;white-space:nowrap;">
                             <?= number_format($prob, 1) ?>%
                         </td>
-                        <td style="padding:9px 8px;border-bottom:1px solid #eee4d7;text-align:right;">
+                        <td style="padding:9px <?= $aiTenkaiAppCompact ? '3px' : '8px' ?>;border-bottom:1px solid #eee4d7;text-align:right;white-space:nowrap;">
                             <?= number_format($venueAverage, 1) ?>%
                         </td>
-                        <td style="padding:9px 8px;border-bottom:1px solid #eee4d7;text-align:right;font-weight:800;color:<?= $diffColor ?>;">
+                        <td style="padding:9px <?= $aiTenkaiAppCompact ? '3px' : '8px' ?>;border-bottom:1px solid #eee4d7;text-align:right;font-weight:800;color:<?= $diffColor ?>;white-space:nowrap;">
                             <?= $diff >= 0.0 ? '+' : '' ?><?= number_format($diff, 1) ?>pt
                         </td>
                     </tr>
