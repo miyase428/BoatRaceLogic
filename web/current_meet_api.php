@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/logic/OfficialCurrentMeetLogic.php';
+require_once __DIR__ . '/logic/CurrentMeetBoatNumberEnricher.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, max-age=0');
@@ -17,6 +18,7 @@ if (!preg_match('/^\d{8}[A-Z]{3}\d{2}$/', $raceCode)) {
 
 try {
     $data = (new OfficialCurrentMeetLogic())->load($raceCode);
+    $data = (new CurrentMeetBoatNumberEnricher())->enrich($data);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     http_response_code(500);
