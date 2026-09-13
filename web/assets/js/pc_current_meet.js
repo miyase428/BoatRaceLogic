@@ -98,9 +98,16 @@
         return tr;
     }
 
-    function applyHistoricalBoatColor(el, boatNumber) {
-        const boat = Number(boatNumber);
-        const color = BOAT_COLORS[boat];
+    function applyHistoricalBoatColor(el, boatNumber, course) {
+        // 過去レースの実艇番がDBで補完できた時はそれを優先。
+        // 補完できない走でも公式出走表から進入コースは必ず取れているので、
+        // コース色へフォールバックして全走を艇色表示する。
+        const historicalBoat = Number(boatNumber);
+        const entryCourse = Number(course);
+        const colorNo = historicalBoat >= 1 && historicalBoat <= 6
+            ? historicalBoat
+            : (entryCourse >= 1 && entryCourse <= 6 ? entryCourse : 0);
+        const color = BOAT_COLORS[colorNo];
         if (!color) return;
 
         el.style.background = color.bg;
@@ -128,7 +135,7 @@
         const courseText = course >= 1 && course <= 6 ? String(course) + 'C' : '-';
         finish.textContent = formatFinish(record.finish) + '（' + courseText + '）';
         finish.style.cssText = 'font-size:12px;font-weight:800;line-height:1.35;';
-        applyHistoricalBoatColor(finish, record.boat_number);
+        applyHistoricalBoatColor(finish, record.boat_number, course);
 
         const st = document.createElement('div');
         st.textContent = formatSt(record.st_raw);
