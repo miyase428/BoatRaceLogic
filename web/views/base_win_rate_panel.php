@@ -29,7 +29,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <script src="/web/assets/js/pc_main_tabs.js?v=20260912a"></script>
 <script src="/web/assets/js/pc_rate_development_tab.js?v=20260913c"></script>
 <script src="/web/assets/js/pc_head1_second_merge.js?v=20260913c"></script>
-<script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260913a"></script>
+<script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260913b"></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
