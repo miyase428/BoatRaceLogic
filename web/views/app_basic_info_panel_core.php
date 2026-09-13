@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../logic/OfficialCurrentMeetLogic.php';
+
 $appBasicEntries = [];
 foreach (is_array($entries ?? null) ? $entries : [] as $row) {
     $boat = (int)($row['lane_number'] ?? 0);
@@ -23,6 +25,20 @@ foreach (is_array($tenji_list ?? null) ? $tenji_list : [] as $row) {
     }
 }
 
+// BOAT RACE公式の今節成績。表示専用で、予想ロジックには未接続。
+$appCurrentMeetData = [
+    'status' => 'error',
+    'error' => '',
+    'boats' => [],
+];
+if (!empty($race_code)) {
+    $appCurrentMeetData = (new OfficialCurrentMeetLogic())->load((string)$race_code);
+}
+$appCurrentMeetStatus = (string)($appCurrentMeetData['status'] ?? 'error');
+$appCurrentMeetBoats = is_array($appCurrentMeetData['boats'] ?? null)
+    ? $appCurrentMeetData['boats']
+    : [];
+
 $appBasicCourseByBoat = [];
 for ($boat = 1; $boat <= 6; $boat++) {
     $course = (int)($prediction_course_by_boat[$boat] ?? $boat);
@@ -44,6 +60,19 @@ $appBasicPct = static function ($value, int $digits = 1, float $scale = 1.0): st
     return is_numeric($value)
         ? number_format((float)$value * $scale, $digits) . '%'
         : '-';
+};
+
+$appBasicCompactHistory = static function ($values, string $separator = '・'): string {
+    if (!is_array($values) || !$values) return '-';
+    $items = [];
+    foreach ($values as $value) {
+        $text = trim((string)$value);
+        if ($text !== '') $items[] = $text;
+    }
+    if (!$items) return '-';
+    return '<span style="display:block;font-size:10px;line-height:1.35;white-space:normal;word-break:break-all;">'
+        . htmlspecialchars(implode($separator, $items), ENT_QUOTES, 'UTF-8')
+        . '</span>';
 };
 
 $appBasicKimariteColor = static function (float $value): string {
@@ -187,6 +216,28 @@ $appBasicRenderRow = static function (string $label, callable $valueFn, string $
         <?php $appBasicRenderRow('展示ST', static function (int $boat) use ($appBasicTenji, $appBasicNum): string {
             return $appBasicNum($appBasicTenji[$boat]['st'] ?? null, 2);
         }); ?>
+
+        <?php if ($appCurrentMeetStatus === 'ok' && count($appCurrentMeetBoats) === 6): ?>
+            <div class="app-basic-section">📈 今節成績（公式）</div>
+
+            <?php $appBasicRenderRow('今節走数', static function (int $boat) use ($appCurrentMeetBoats): string {
+                $n = (int)($appCurrentMeetBoats[$boat]['run_count'] ?? 0);
+                return $n > 0 ? $n . '走' : '-';
+            }); ?>
+
+            <?php $appBasicRenderRow('今節平均ST', static function (int $boat) use ($appCurrentMeetBoats): string {
+                $value = $appCurrentMeetBoats[$boat]['average_st'] ?? null;
+                return is_numeric($value) ? number_format((float)$value, 2) : '-';
+            }, 'app-basic-small-label'); ?>
+
+            <?php $appBasicRenderRow('今節ST履歴', static function (int $boat) use ($appCurrentMeetBoats, $appBasicCompactHistory): string {
+                return $appBasicCompactHistory($appCurrentMeetBoats[$boat]['st_history'] ?? []);
+            }, 'app-basic-small-label'); ?>
+
+            <?php $appBasicRenderRow('今節着順', static function (int $boat) use ($appCurrentMeetBoats, $appBasicCompactHistory): string {
+                return $appBasicCompactHistory($appCurrentMeetBoats[$boat]['finish_history'] ?? [], '-');
+            }); ?>
+        <?php endif; ?>
     </div>
 
     <div class="app-basic-status">基本情報は取得値のみ表示。加工・評価結果は「メイン情報」に集約します。</div>
