@@ -21,7 +21,8 @@
         const rows = Array.from(table.querySelectorAll('tbody > tr'));
         return rows.find(function (row) {
             const first = row.cells && row.cells[0] ? row.cells[0].textContent.trim() : '';
-            return first === '最終二次予想スコア';
+            // 「今節成績」は加工・評価の後ろではなく、取得した展示値の直下へ置く。
+            return first === '展示ST';
         }) || null;
     }
 
