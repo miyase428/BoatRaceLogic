@@ -62,19 +62,6 @@ $appBasicPct = static function ($value, int $digits = 1, float $scale = 1.0): st
         : '-';
 };
 
-$appBasicCompactHistory = static function ($values, string $separator = '・'): string {
-    if (!is_array($values) || !$values) return '-';
-    $items = [];
-    foreach ($values as $value) {
-        $text = trim((string)$value);
-        if ($text !== '') $items[] = $text;
-    }
-    if (!$items) return '-';
-    return '<span style="display:block;font-size:10px;line-height:1.35;white-space:normal;word-break:break-all;">'
-        . htmlspecialchars(implode($separator, $items), ENT_QUOTES, 'UTF-8')
-        . '</span>';
-};
-
 $appBasicKimariteColor = static function (float $value): string {
     if ($value >= 40.0) return '#f87171';
     if ($value >= 25.0) return '#fb923c';
@@ -219,24 +206,46 @@ $appBasicRenderRow = static function (string $label, callable $valueFn, string $
 
         <?php if ($appCurrentMeetStatus === 'ok' && count($appCurrentMeetBoats) === 6): ?>
             <div class="app-basic-section">📈 今節成績（公式）</div>
-
-            <?php $appBasicRenderRow('今節走数', static function (int $boat) use ($appCurrentMeetBoats): string {
-                $n = (int)($appCurrentMeetBoats[$boat]['run_count'] ?? 0);
-                return $n > 0 ? $n . '走' : '-';
-            }); ?>
-
-            <?php $appBasicRenderRow('今節平均ST', static function (int $boat) use ($appCurrentMeetBoats): string {
-                $value = $appCurrentMeetBoats[$boat]['average_st'] ?? null;
-                return is_numeric($value) ? number_format((float)$value, 2) : '-';
-            }, 'app-basic-small-label'); ?>
-
-            <?php $appBasicRenderRow('今節ST履歴', static function (int $boat) use ($appCurrentMeetBoats, $appBasicCompactHistory): string {
-                return $appBasicCompactHistory($appCurrentMeetBoats[$boat]['st_history'] ?? []);
-            }, 'app-basic-small-label'); ?>
-
-            <?php $appBasicRenderRow('今節着順', static function (int $boat) use ($appCurrentMeetBoats, $appBasicCompactHistory): string {
-                return $appBasicCompactHistory($appCurrentMeetBoats[$boat]['finish_history'] ?? [], '-');
-            }); ?>
+            <div class="app-basic-label app-current-meet-label">今節</div>
+            <?php for ($boat = 1; $boat <= 6; $boat++): ?>
+                <?php
+                    $meet = is_array($appCurrentMeetBoats[$boat] ?? null)
+                        ? $appCurrentMeetBoats[$boat]
+                        : [];
+                    $records = is_array($meet['records'] ?? null) ? $meet['records'] : [];
+                    $runCount = (int)($meet['run_count'] ?? count($records));
+                    $avgSt = $meet['average_st'] ?? null;
+                    $laneColor = $lane_colors[$boat] ?? $lane_colors[1];
+                ?>
+                <div class="app-basic-value app-current-meet-column"
+                     style="--meet-lane-bg:<?= htmlspecialchars((string)($laneColor['bg'] ?? '#94a3b8'), ENT_QUOTES, 'UTF-8') ?>;--meet-lane-border:<?= htmlspecialchars((string)($laneColor['border'] ?? '#94a3b8'), ENT_QUOTES, 'UTF-8') ?>;">
+                    <div class="app-current-meet-summary">
+                        <span><?= $runCount > 0 ? $runCount . '走' : '-' ?></span>
+                        <span>平均ST <?= is_numeric($avgSt) ? number_format((float)$avgSt, 2) : '-' ?></span>
+                    </div>
+                    <?php if (!$records): ?>
+                        <div class="app-current-meet-empty">-</div>
+                    <?php else: ?>
+                        <?php foreach ($records as $record): ?>
+                            <?php
+                                $raceNo = (int)($record['race_no'] ?? 0);
+                                $finishRaw = trim((string)($record['finish'] ?? ''));
+                                $finishText = $finishRaw !== ''
+                                    ? (preg_match('/^\d+$/', $finishRaw) ? $finishRaw . '着' : $finishRaw)
+                                    : '-';
+                                $course = (int)($record['course'] ?? 0);
+                                $courseText = ($course >= 1 && $course <= 6) ? $course . 'C' : '-';
+                                $stRaw = trim((string)($record['st_raw'] ?? ''));
+                            ?>
+                            <div class="app-current-meet-run">
+                                <div class="app-current-meet-race"><?= $raceNo > 0 ? $raceNo . 'R' : '-' ?></div>
+                                <div class="app-current-meet-result"><?= htmlspecialchars($finishText, ENT_QUOTES, 'UTF-8') ?>（<?= htmlspecialchars($courseText, ENT_QUOTES, 'UTF-8') ?>）</div>
+                                <div class="app-current-meet-st"><?= $stRaw !== '' ? htmlspecialchars($stRaw, ENT_QUOTES, 'UTF-8') : '-' ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            <?php endfor; ?>
         <?php endif; ?>
     </div>
 
