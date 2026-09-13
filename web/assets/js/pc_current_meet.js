@@ -1,13 +1,13 @@
 (function () {
     'use strict';
 
-    const COLORS = {
-        1: {line: '#cbd5e1'},
-        2: {line: '#1e293b'},
-        3: {line: '#ef4444'},
-        4: {line: '#3b82f6'},
-        5: {line: '#eab308'},
-        6: {line: '#22c55e'}
+    const BOAT_COLORS = {
+        1: {bg: '#ffffff', text: '#0f172a', border: '#cbd5e1'},
+        2: {bg: '#111827', text: '#ffffff', border: '#111827'},
+        3: {bg: '#ef4444', text: '#ffffff', border: '#dc2626'},
+        4: {bg: '#3b82f6', text: '#ffffff', border: '#2563eb'},
+        5: {bg: '#facc15', text: '#111827', border: '#eab308'},
+        6: {bg: '#16a34a', text: '#ffffff', border: '#15803d'}
     };
 
     function getRaceCode() {
@@ -21,7 +21,6 @@
         const rows = Array.from(table.querySelectorAll('tbody > tr'));
         return rows.find(function (row) {
             const first = row.cells && row.cells[0] ? row.cells[0].textContent.trim() : '';
-            // 「今節成績」は加工・評価の後ろではなく、取得した展示値の直下へ置く。
             return first === '展示ST';
         }) || null;
     }
@@ -44,10 +43,7 @@
             'position:sticky',
             'left:0',
             'z-index:1',
-            'background:#0f172a',
-            'color:#f8fafc',
             'font-weight:bold',
-            'border-right:2px solid #334155',
             'vertical-align:middle',
             'text-align:center',
             'padding:10px 8px',
@@ -90,8 +86,6 @@
             td.style.cssText = [
                 'text-align:center',
                 'padding:7px 4px',
-                'background:#fbf8f2',
-                'border-top:4px solid ' + (COLORS[boat]?.line || '#94a3b8'),
                 'font-size:11px',
                 'font-weight:700',
                 'color:#64748b',
@@ -104,11 +98,25 @@
         return tr;
     }
 
+    function applyHistoricalBoatColor(el, boatNumber) {
+        const boat = Number(boatNumber);
+        const color = BOAT_COLORS[boat];
+        if (!color) return;
+
+        el.style.background = color.bg;
+        el.style.color = color.text;
+        el.style.border = '1px solid ' + color.border;
+        el.style.borderRadius = '3px';
+        el.style.padding = '2px 4px';
+        el.style.margin = '2px auto';
+        el.style.maxWidth = '88px';
+    }
+
     function buildRunCard(record, addBorder) {
         const card = document.createElement('div');
         card.style.cssText = [
             'padding:6px 2px',
-            addBorder ? 'border-top:1px solid #e2e8f0' : ''
+            addBorder ? 'border-top:1px solid var(--border)' : ''
         ].filter(Boolean).join(';');
 
         const race = document.createElement('div');
@@ -119,7 +127,8 @@
         const course = Number(record.course);
         const courseText = course >= 1 && course <= 6 ? String(course) + 'C' : '-';
         finish.textContent = formatFinish(record.finish) + '（' + courseText + '）';
-        finish.style.cssText = 'font-size:12px;font-weight:800;color:#0f172a;line-height:1.35;';
+        finish.style.cssText = 'font-size:12px;font-weight:800;line-height:1.35;';
+        applyHistoricalBoatColor(finish, record.boat_number);
 
         const st = document.createElement('div');
         st.textContent = formatSt(record.st_raw);
@@ -147,7 +156,6 @@
             td.style.cssText = [
                 'vertical-align:top',
                 'padding:4px 7px',
-                'background:#fbf8f2',
                 'text-align:center',
                 'min-height:56px'
             ].join(';');
@@ -155,7 +163,7 @@
             if (!records.length) {
                 const empty = document.createElement('div');
                 empty.textContent = '-';
-                empty.style.cssText = 'padding:12px 0;color:#cbd5e1;font-size:12px;';
+                empty.style.cssText = 'padding:12px 0;color:#94a3b8;font-size:12px;';
                 td.appendChild(empty);
             } else {
                 records.forEach(function (record, idx) {
