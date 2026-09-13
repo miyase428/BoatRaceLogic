@@ -110,6 +110,61 @@
         return map;
     }
 
+    function parseDiffPt(text) {
+        const match = String(text || '').replace(/\s+/g, '').match(/([+-]?\d+(?:\.\d+)?)pt/);
+        return match ? Number(match[1]) : null;
+    }
+
+    function currentBandHint(details) {
+        if (!details) return null;
+
+        const currentRow = Array.from(details.querySelectorAll('tbody tr')).find(function (row) {
+            return String(row.textContent || '').includes('←現在');
+        });
+        if (!currentRow || !currentRow.cells || currentRow.cells.length < 6) return null;
+
+        const nMatch = String(currentRow.cells[1].textContent || '').match(/\d+/);
+        const n = nMatch ? Number(nMatch[0]) : 0;
+        if (n < 5) return null;
+
+        const metrics = [
+            {label: '1着', value: parseDiffPt(currentRow.cells[2].textContent)},
+            {label: '2着', value: parseDiffPt(currentRow.cells[3].textContent)},
+            {label: '3着', value: parseDiffPt(currentRow.cells[4].textContent)}
+        ];
+        const trio = {label: '3連', value: parseDiffPt(currentRow.cells[5].textContent)};
+
+        // 補助タグは「現在の選手SUM帯で、同選手・同コース基準から10pt以上ずれる着順」を表示する。
+        // 1着/2着/3着の役割差を優先し、その差が小さい時だけ3連対差を使う。
+        const exactCandidates = metrics.filter(function (metric) {
+            return Number.isFinite(metric.value) && Math.abs(metric.value) >= 10.0;
+        }).sort(function (a, b) {
+            return Math.abs(b.value) - Math.abs(a.value);
+        });
+
+        let selected = exactCandidates.length > 0 ? exactCandidates[0] : null;
+        if (!selected && Number.isFinite(trio.value) && Math.abs(trio.value) >= 10.0) {
+            selected = trio;
+        }
+        if (!selected) return null;
+
+        const positive = selected.value > 0;
+        const lowN = n < 10;
+        const signed = (selected.value > 0 ? '+' : '') + selected.value.toFixed(1) + 'pt';
+        const arrow = positive ? '↑' : '↓';
+
+        return {
+            text: selected.label + arrow + ' ' + signed + (lowN ? ' ※' : ''),
+            title: '選手SUM現在帯：' + selected.label + '差 ' + signed + ' / N=' + n
+                + (lowN ? '（母数少・参考）' : '')
+                + '。基準はその選手自身の同コース全体。',
+            css: positive
+                ? 'background:#eef7fb;border-color:#b7d6df;color:#2f789f;'
+                : 'background:#f9efec;border-color:#e3c0b8;color:#a74932;',
+            lowN: lowN
+        };
+    }
+
     function ensureModal() {
         let backdrop = document.getElementById('pc-player-sam-modal-backdrop');
         if (backdrop) {
@@ -246,12 +301,30 @@
         if (!marker) {
             marker = document.createElement('div');
             marker.className = 'pc-player-sam-cross-marker';
-            marker.style.cssText = 'display:table;margin:5px auto 0;padding:2px 5px;border:1px solid;border-radius:999px;font-size:9px;font-weight:800;line-height:1.25;white-space:nowrap;';
             cell.appendChild(marker);
         }
         marker.textContent = pattern.text;
         marker.setAttribute('title', pattern.title);
         marker.style.cssText = 'display:table;margin:5px auto 0;padding:2px 5px;border:1px solid;border-radius:999px;font-size:9px;font-weight:800;line-height:1.25;white-space:nowrap;' + pattern.css;
+    }
+
+    function decorateHint(cell, hint) {
+        if (!cell) return;
+        let marker = cell.querySelector('.pc-player-sam-position-hint');
+        if (!hint) {
+            if (marker) marker.remove();
+            return;
+        }
+        if (!marker) {
+            marker = document.createElement('div');
+            marker.className = 'pc-player-sam-position-hint';
+            cell.appendChild(marker);
+        }
+        marker.textContent = hint.text;
+        marker.setAttribute('title', hint.title);
+        marker.style.cssText = 'display:table;margin:3px auto 0;padding:2px 5px;border:1px solid;border-radius:5px;font-size:9px;font-weight:800;line-height:1.25;white-space:nowrap;'
+            + (hint.lowN ? 'border-style:dashed;' : '')
+            + hint.css;
     }
 
     function setup() {
@@ -268,7 +341,7 @@
             const hint = document.createElement('span');
             hint.className = 'pc-player-sam-modal-hint';
             hint.style.cssText = 'margin-left:10px;font-size:11px;font-weight:500;color:#8a8176;';
-            hint.textContent = '艇番クリックで選手SUM特性 / 艇番下＝場SUM×選手SUM';
+            hint.textContent = '艇番クリックで選手SUM特性 / 艇番下＝場SUM×選手SUM・着順偏り';
             heading.appendChild(hint);
         }
 
@@ -281,8 +354,10 @@
             const match = String(badge.textContent || '').match(/([1-6])/);
             if (!match) return;
             const boat = Number(match[1]);
-            decorateTrigger(badge, boat, sources[boat] || null);
+            const sourceDetails = sources[boat] || null;
+            decorateTrigger(badge, boat, sourceDetails);
             if (patterns[boat]) decoratePattern(row.cells[1], patterns[boat]);
+            decorateHint(row.cells[1], currentBandHint(sourceDetails));
         });
 
         return true;
