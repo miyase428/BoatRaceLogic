@@ -21,7 +21,18 @@
         return true;
     }
 
+    function loadCurrentMeetScript() {
+        if (document.querySelector('script[data-pc-current-meet-loader="1"]')) return;
+        const script = document.createElement('script');
+        script.src = '/web/assets/js/pc_current_meet.js?v=20260913a';
+        script.dataset.pcCurrentMeetLoader = '1';
+        script.async = false;
+        document.head.appendChild(script);
+    }
+
     function setup() {
+        loadCurrentMeetScript();
+
         let tries = 100;
         let observer = null;
 
