@@ -29,7 +29,7 @@ foreach (is_array($sam_applied_list ?? null) ? $sam_applied_list : [] as $samRow
 
 <?php if (($playerSamStatus ?? 'error') === 'ok' && count($playerSamBoats ?? []) === 6): ?>
 <div id="player-sam-cross-panel"
-     style="margin:<?= $pscIsApp ? '0 0 10px' : '0 0 16px' ?>;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:<?= $pscIsApp ? '9px' : '11px 12px' ?>;color:#3f4b5a;">
+     style="display:<?= $pscIsApp ? 'block' : 'none' ?>;margin:<?= $pscIsApp ? '0 0 10px' : '0 0 16px' ?>;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:<?= $pscIsApp ? '9px' : '11px 12px' ?>;color:#3f4b5a;">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:7px;">
         <strong style="font-size:<?= $pscIsApp ? '12px' : '13px' ?>;color:#75659b;">🔀 場SUM × 選手SUM 比較</strong>
         <span style="font-size:9px;color:#8a8176;">3連対差の方向比較 / 最終予想未反映</span>
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return false;
     });
 
-    // まず場SUM×選手SUM比較で気づきを得て、その下で選手SUM特性の詳細を見る順にする。
+    // 比較データはPCでもDOMに残す。展示SUMの艇番下サイン生成に利用するため削除しない。
     playerPanel.insertAdjacentElement('beforebegin', crossPanel);
 });
 </script>
