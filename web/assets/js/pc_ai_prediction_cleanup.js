@@ -20,6 +20,13 @@
         return null;
     }
 
+    function findSlitCard() {
+        const heading = Array.from(document.querySelectorAll('h2')).find(function (node) {
+            return String(node.textContent || '').trim() === '📊 スリット体系';
+        });
+        return heading ? heading.parentElement : null;
+    }
+
     function cleanup() {
         const aiPanel = document.querySelector('.pc-main-tab-panel[data-pc-main-panel="main"]');
         if (!aiPanel) return false;
@@ -33,7 +40,12 @@
         if (winRateCard) winRateCard.style.display = 'none';
         if (trioRateCard) trioRateCard.style.display = 'none';
 
-        return !!(winRateCard || trioRateCard);
+        // 最近は実戦で参照していないため、PC Webではスリット体系も表示だけ隠す。
+        // 判定・計算データはそのまま残す。
+        const slitCard = findSlitCard();
+        if (slitCard) slitCard.style.display = 'none';
+
+        return !!(winRateCard || trioRateCard || slitCard);
     }
 
     function schedule() {
