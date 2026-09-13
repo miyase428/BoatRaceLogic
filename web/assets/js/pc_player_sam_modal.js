@@ -5,6 +5,10 @@
         return document.getElementById('player-sam-panel');
     }
 
+    function findCrossPanel() {
+        return document.getElementById('player-sam-cross-panel');
+    }
+
     function findAppliedSamHeading() {
         return Array.from(document.querySelectorAll('h2')).find(function (node) {
             return String(node.textContent || '').includes('展示サム理論（レース適用値）');
@@ -34,6 +38,73 @@
             const match = text.match(/([1-6])号艇/);
             if (!match) return;
             map[Number(match[1])] = details;
+        });
+
+        return map;
+    }
+
+    function crossPatternByBoat(panel) {
+        const map = {};
+        if (!panel) return map;
+
+        Array.from(panel.querySelectorAll('tbody tr')).forEach(function (row) {
+            if (!row.cells || row.cells.length < 5) return;
+            const boatMatch = String(row.cells[0].textContent || '').match(/([1-6])号艇/);
+            if (!boatMatch) return;
+
+            const boat = Number(boatMatch[1]);
+            const label = String(row.cells[row.cells.length - 1].textContent || '').replace(/\s+/g, ' ').trim();
+            let pattern = {
+                text: '—',
+                title: '場SUM × 選手SUM：判定なし',
+                css: 'background:#f1ede6;border-color:#d8cdbc;color:#8a8176;'
+            };
+
+            if (label.includes('一致') && label.includes('↑')) {
+                pattern = {
+                    text: '◎ 場↑ 選↑',
+                    title: '場SUMも選手SUMもプラス方向（一致↑）',
+                    css: 'background:#e8f4f7;border-color:#9ec7d3;color:#2f789f;'
+                };
+            } else if (label.includes('一致') && label.includes('↓')) {
+                pattern = {
+                    text: '▼ 場↓ 選↓',
+                    title: '場SUMも選手SUMもマイナス方向（一致↓）',
+                    css: 'background:#f8ece8;border-color:#dfb2a7;color:#a74932;'
+                };
+            } else if (label.includes('逆行') && label.includes('選手↑')) {
+                pattern = {
+                    text: '⚠ 場↓ 選↑',
+                    title: '場SUMはマイナス方向、選手SUMはプラス方向（逆行・選手↑）',
+                    css: 'background:#fff3d6;border-color:#e2bf73;color:#8a5a12;'
+                };
+            } else if (label.includes('逆行') && label.includes('選手↓')) {
+                pattern = {
+                    text: '⚠ 場↑ 選↓',
+                    title: '場SUMはプラス方向、選手SUMはマイナス方向（逆行・選手↓）',
+                    css: 'background:#fff3d6;border-color:#e2bf73;color:#8a5a12;'
+                };
+            } else if (label.includes('中立')) {
+                pattern = {
+                    text: '－ 中立',
+                    title: '場SUM × 選手SUM：中立',
+                    css: 'background:#f1ede6;border-color:#d8cdbc;color:#6b7785;'
+                };
+            } else if (label.includes('選手参考外')) {
+                pattern = {
+                    text: '? 参考外',
+                    title: '選手SUMのサンプル不足で参考外',
+                    css: 'background:#f7efe0;border-color:#dbc79f;color:#9a6b26;'
+                };
+            } else if (label.includes('場SUMなし')) {
+                pattern = {
+                    text: '? 場なし',
+                    title: '場SUMデータなし',
+                    css: 'background:#f1ede6;border-color:#d8cdbc;color:#8a8176;'
+                };
+            }
+
+            map[boat] = pattern;
         });
 
         return map;
@@ -169,8 +240,23 @@
         });
     }
 
+    function decoratePattern(cell, pattern) {
+        if (!cell || !pattern) return;
+        let marker = cell.querySelector('.pc-player-sam-cross-marker');
+        if (!marker) {
+            marker = document.createElement('div');
+            marker.className = 'pc-player-sam-cross-marker';
+            marker.style.cssText = 'display:table;margin:5px auto 0;padding:2px 5px;border:1px solid;border-radius:999px;font-size:9px;font-weight:800;line-height:1.25;white-space:nowrap;';
+            cell.appendChild(marker);
+        }
+        marker.textContent = pattern.text;
+        marker.setAttribute('title', pattern.title);
+        marker.style.cssText = 'display:table;margin:5px auto 0;padding:2px 5px;border:1px solid;border-radius:999px;font-size:9px;font-weight:800;line-height:1.25;white-space:nowrap;' + pattern.css;
+    }
+
     function setup() {
         const panel = findPlayerSamPanel();
+        const crossPanel = findCrossPanel();
         const heading = findAppliedSamHeading();
         const table = findAppliedSamTable(heading);
         if (!panel || !heading || !table) return false;
@@ -182,11 +268,12 @@
             const hint = document.createElement('span');
             hint.className = 'pc-player-sam-modal-hint';
             hint.style.cssText = 'margin-left:10px;font-size:11px;font-weight:500;color:#8a8176;';
-            hint.textContent = '艇番クリックで選手SUM特性';
+            hint.textContent = '艇番クリックで選手SUM特性 / 艇番下＝場SUM×選手SUM';
             heading.appendChild(hint);
         }
 
         const sources = detailsByBoat(panel);
+        const patterns = crossPatternByBoat(crossPanel);
         Array.from(table.querySelectorAll('tbody tr')).forEach(function (row) {
             if (!row.cells || row.cells.length < 2) return;
             const badge = row.cells[1].querySelector('.lane-badge');
@@ -195,6 +282,7 @@
             if (!match) return;
             const boat = Number(match[1]);
             decorateTrigger(badge, boat, sources[boat] || null);
+            if (patterns[boat]) decoratePattern(row.cells[1], patterns[boat]);
         });
 
         return true;
