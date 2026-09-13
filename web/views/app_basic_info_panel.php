@@ -11,3 +11,6 @@ $playerSamMode = 'app';
 include __DIR__ . '/player_sam_panel.php';
 include __DIR__ . '/player_sam_cross_panel.php';
 include __DIR__ . '/player_sam_ui_enhancements.php';
+
+// PC Webと同じAI展開予想。アプリではapp_web_parity.jsが「連対率・展開」へ移動する。
+include __DIR__ . '/ai_tenkai_trial_panel.php';
