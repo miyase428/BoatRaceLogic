@@ -4,20 +4,13 @@ declare(strict_types=1);
 
 /**
  * BOAT RACE公式「出走表」から今節成績を取得する表示専用ロジック。
- *
- * 取得対象:
- * - 今節走数
- * - 今節平均ST
- * - 今節進入履歴
- * - 今節ST履歴
- * - 今節着順履歴
- *
  * 予想ロジックには接続しない。
  */
 final class OfficialCurrentMeetLogic
 {
     private const CURRENT_DAY_TTL = 300;
     private const OTHER_DAY_TTL = 86400;
+    private const CACHE_SCHEMA = 2;
 
     public function load(string $raceCode, bool $force = false): array
     {
@@ -56,13 +49,22 @@ final class OfficialCurrentMeetLogic
                 throw new RuntimeException('今節成績を6艇分取得できませんでした。取得=' . count($boats) . '艇');
             }
 
+            $dayCount = 0;
+            foreach ($boats as $boat) {
+                foreach (is_array($boat['records'] ?? null) ? $boat['records'] : [] as $record) {
+                    $dayCount = max($dayCount, (int)($record['day_index'] ?? 0));
+                }
+            }
+
             $payload = [
                 'status' => 'ok',
                 'error' => '',
+                'schema_version' => self::CACHE_SCHEMA,
                 'race_code' => $raceCode,
                 'source' => 'BOAT RACE公式 出走表・今節成績',
                 'source_url' => $url,
                 'fetched_at' => date('c'),
+                'day_count' => $dayCount,
                 'boats' => $boats,
                 'cache' => ['used' => false],
             ];
@@ -218,6 +220,7 @@ final class OfficialCurrentMeetLogic
             if (!$courseCells || !$stCells || !$finishCells) continue;
 
             // 本行の末尾は「早見」。その直前slotCount列が今節成績。
+            // 公式は1日あたり最大2走分の列を確保しているため、slot位置を残す。
             $slotStart = count($mainCells) - $slotCount - 1;
             if ($slotStart < 0) continue;
 
@@ -254,6 +257,8 @@ final class OfficialCurrentMeetLogic
                 }
 
                 $records[] = [
+                    'slot_index' => $slot + 1,
+                    'day_index' => intdiv($slot, 2) + 1,
                     'race_no' => $raceNo,
                     'course' => $course,
                     'st_raw' => $stRaw,
@@ -405,6 +410,7 @@ final class OfficialCurrentMeetLogic
         $data = json_decode($raw, true);
         if (!is_array($data)) return null;
         if (($data['status'] ?? '') !== 'ok' || ($data['race_code'] ?? '') !== $raceCode) return null;
+        if ((int)($data['schema_version'] ?? 0) !== self::CACHE_SCHEMA) return null;
 
         $ttl = $date === date('Ymd') ? self::CURRENT_DAY_TTL : self::OTHER_DAY_TTL;
         if ((time() - (int)@filemtime($path)) > $ttl) return null;
@@ -434,10 +440,12 @@ final class OfficialCurrentMeetLogic
         return [
             'status' => 'error',
             'error' => $message,
+            'schema_version' => self::CACHE_SCHEMA,
             'race_code' => $raceCode,
             'source' => 'BOAT RACE公式 出走表・今節成績',
             'source_url' => $url,
             'fetched_at' => date('c'),
+            'day_count' => 0,
             'boats' => [],
             'cache' => ['used' => false],
         ];
