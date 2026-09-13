@@ -220,6 +220,89 @@
     white-space: nowrap;
 }
 
+/* 今節成績は1走を「R / 着順(進入) / ST」の3段で縦積みする。 */
+.app-current-meet-label {
+    justify-content: flex-start !important;
+    padding-top: 10px !important;
+}
+
+.app-current-meet-column {
+    justify-content: flex-start !important;
+    gap: 5px;
+    padding: 5px 2px 7px !important;
+}
+
+.app-current-meet-summary {
+    width: 100%;
+    min-height: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    color: #667085;
+    font-size: 7px;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.app-current-meet-run {
+    position: relative;
+    width: calc(100% - 4px);
+    min-height: 54px;
+    box-sizing: border-box;
+    padding: 7px 1px 4px;
+    border: 1px solid var(--meet-lane-border, #cbd5e1);
+    border-radius: 5px;
+    background: #fffdf9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.app-current-meet-run::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--meet-lane-bg, #94a3b8);
+    border-bottom: 1px solid var(--meet-lane-border, #94a3b8);
+}
+
+.app-current-meet-race {
+    color: #2f789f;
+    font-size: 9px;
+    font-weight: 900;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.app-current-meet-result {
+    color: #344154;
+    font-size: 8px;
+    font-weight: 900;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.app-current-meet-st {
+    color: #697586;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.app-current-meet-empty {
+    color: #94a3b8;
+    font-size: 10px;
+}
+
 .app-basic-status {
     padding: 8px 10px;
     color: #a16b17;
@@ -264,5 +347,28 @@
 
     .app-kimarite-heat {
         min-height: 34px;
+    }
+
+    .app-current-meet-column {
+        gap: 4px;
+    }
+
+    .app-current-meet-summary {
+        font-size: 6px;
+    }
+
+    .app-current-meet-run {
+        min-height: 50px;
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .app-current-meet-race {
+        font-size: 8px;
+    }
+
+    .app-current-meet-result,
+    .app-current-meet-st {
+        font-size: 7px;
     }
 }
