@@ -98,4 +98,12 @@
     if(!document.querySelector('script[data-app-five-bet-loader="1"]')){
         const s=document.createElement('script');s.src='/web/assets/js/app_bet_simulator_five_boat.js?v=20260905a';s.dataset.appFiveBetLoader='1';s.async=false;document.head.appendChild(s);
     }
+
+    if(!document.querySelector('script[data-app-web-parity-loader="1"]')){
+        const s=document.createElement('script');
+        s.src='/web/assets/js/app_web_parity.js?v=20260913a';
+        s.dataset.appWebParityLoader='1';
+        s.async=false;
+        document.head.appendChild(s);
+    }
 })();
