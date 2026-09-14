@@ -286,8 +286,9 @@
                 });
             })
             .then(function (data) {
-                const detail = data.matches && data.matches[code] ? data.matches[code] : null;
-                if (!detail) return;
+                const lane3Detail = data.lane3_matches && data.lane3_matches[code] ? data.lane3_matches[code] : null;
+                const lane4Detail = data.matches && data.matches[code] ? data.matches[code] : null;
+                if (!lane3Detail && !lane4Detail) return;
 
                 let retries = 40;
                 function place() {
@@ -296,39 +297,63 @@
                         if (retries-- > 0) window.setTimeout(place, 50);
                         return;
                     }
-                    if (panel.querySelector('.tmg-lane4-detail-signal')) return;
+                    if (panel.querySelector('.tmg-course-detail-signals')) return;
 
-                    const level = Number(detail.star_level || 1);
-                    const label = level >= 3 ? '★★★ 4頭強' : (level === 2 ? '★★ 4軸' : '★ 4攻め');
-                    const note = level >= 3 ? '（検証中）' : '';
+                    function makeBox(detail, course) {
+                        const isLane3 = course === 3;
+                        const level = Math.max(1, Math.min(3, Number(detail.star_level || 1)));
+                        const stars = '★'.repeat(level);
+                        const signal = String(detail.signal || (course + (level >= 2 ? '軸' : '攻め')));
+                        const note = level >= 3 ? '（検証中）' : '';
+                        const accent = isLane3 ? '#176c9f' : '#b87500';
 
-                    const box = document.createElement('div');
-                    box.className = 'tmg-lane4-detail-signal';
-                    box.style.cssText = 'margin:10px 0 12px;padding:10px 13px;border:1px solid #d8a94c;border-radius:8px;background:#fff7df;color:#5d4a21;box-shadow:0 1px 5px rgba(140,104,35,.08);';
+                        const box = document.createElement('div');
+                        box.className = 'tmg-lane' + course + '-detail-signal';
+                        box.style.cssText = isLane3
+                            ? 'padding:10px 13px;border:1px solid #8fc5e3;border-radius:8px;background:#edf8ff;color:#274f67;box-shadow:0 1px 5px rgba(38,112,151,.08);'
+                            : 'padding:10px 13px;border:1px solid #d8a94c;border-radius:8px;background:#fff7df;color:#5d4a21;box-shadow:0 1px 5px rgba(140,104,35,.08);';
 
-                    const title = document.createElement('div');
-                    title.style.cssText = 'font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
-                    title.innerHTML = '<span style="color:#b87500;font-size:17px;">' + label + '</span><span>多摩川4コースサイン' + note + '</span>';
-                    box.appendChild(title);
+                        const title = document.createElement('div');
+                        title.style.cssText = 'font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
+                        const badge = document.createElement('span');
+                        badge.style.cssText = 'color:' + accent + ';font-size:17px;';
+                        badge.textContent = course + 'C' + stars + ' ' + signal;
+                        const name = document.createElement('span');
+                        name.textContent = '多摩川' + course + 'コースサイン' + note;
+                        title.appendChild(badge);
+                        title.appendChild(name);
+                        box.appendChild(title);
 
-                    const parts = [];
-                    if (Number.isFinite(Number(detail.makuri_rate))) {
-                        parts.push('4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
+                        const parts = [];
+                        if (isLane3 && Number.isFinite(Number(detail.attack_rate))) {
+                            parts.push('3攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
+                        } else if (!isLane3 && Number.isFinite(Number(detail.makuri_rate))) {
+                            parts.push('4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
+                        }
+                        if (detail.secondary_ready) {
+                            parts.push('二次 ' + Number(detail.second_score).toFixed(0));
+                            parts.push('TOP差 ' + Number(detail.gap_to_top).toFixed(0));
+                            parts.push('直線 ' + Number(detail.straight_score).toFixed(0));
+                            if (isLane3 && Number.isFinite(Number(detail.mawari_score))) {
+                                parts.push('周り足 ' + Number(detail.mawari_score).toFixed(0));
+                            }
+                        } else {
+                            parts.push('展示前');
+                        }
+
+                        const sub = document.createElement('div');
+                        sub.style.cssText = 'margin-top:4px;font-size:12px;color:' + (isLane3 ? '#52758a' : '#7a6948') + ';';
+                        sub.textContent = parts.join(' / ');
+                        box.appendChild(sub);
+                        return box;
                     }
-                    if (detail.secondary_ready) {
-                        parts.push('二次 ' + Number(detail.second_score).toFixed(0));
-                        parts.push('TOP差 ' + Number(detail.gap_to_top).toFixed(0));
-                        parts.push('直線 ' + Number(detail.straight_score).toFixed(0));
-                    } else {
-                        parts.push('展示前');
-                    }
 
-                    const sub = document.createElement('div');
-                    sub.style.cssText = 'margin-top:4px;font-size:12px;color:#7a6948;';
-                    sub.textContent = parts.join(' / ');
-                    box.appendChild(sub);
-
-                    panel.insertBefore(box, panel.firstChild);
+                    const signals = document.createElement('div');
+                    signals.className = 'tmg-course-detail-signals';
+                    signals.style.cssText = 'display:grid;gap:8px;margin:10px 0 12px;';
+                    if (lane3Detail) signals.appendChild(makeBox(lane3Detail, 3));
+                    if (lane4Detail) signals.appendChild(makeBox(lane4Detail, 4));
+                    panel.insertBefore(signals, panel.firstChild);
                 }
                 place();
             })
