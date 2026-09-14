@@ -60,10 +60,10 @@
             'text-align:left',
             'padding:8px 12px',
             'font-weight:bold',
-            'color:#0877ad',
-            'background:#eaf6fc',
-            'border-top:2px solid #9bcbe2',
-            'border-bottom:1px solid #b9dbea'
+            'color:#2f789f',
+            'background:#e8dfd2',
+            'border-top:2px solid #cbbda9',
+            'border-bottom:1px solid #cbbda9'
         ].join(';');
         tr.appendChild(td);
         return tr;

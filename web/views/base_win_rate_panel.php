@@ -34,7 +34,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
-<script src="/web/assets/js/pc_tab_order.js?v=20260915b"></script>
+<script src="/web/assets/js/pc_tab_order.js?v=20260915c"></script>
 
 <script>
 // BOATERSのように「何を見るタブか」が分かる大分類へ、まずPC Webだけ段階的に整理する。
