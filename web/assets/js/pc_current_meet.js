@@ -19,10 +19,8 @@
         const table = document.querySelector('.matrix-table');
         if (!table) return null;
         const rows = Array.from(table.querySelectorAll('tbody > tr'));
-        return rows.find(function (row) {
-            const first = row.cells && row.cells[0] ? row.cells[0].textContent.trim() : '';
-            return first === '展示ST';
-        }) || null;
+        // 今節成績は展示値・二次評価を含む基本情報表の最後に表示する。
+        return rows.length ? rows[rows.length - 1] : null;
     }
 
     function formatSt(value) {

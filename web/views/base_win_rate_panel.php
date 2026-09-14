@@ -26,7 +26,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 
 <!-- PC Webは役割別タブへ段階的に再整理する。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260912a">
-<script src="/web/assets/js/pc_main_tabs.js?v=20260915a"></script>
+<script src="/web/assets/js/pc_main_tabs.js?v=20260915b"></script>
 <script src="/web/assets/js/pc_rate_development_tab.js?v=20260913c"></script>
 <script src="/web/assets/js/pc_head1_second_merge.js?v=20260913c"></script>
 <script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260913c"></script>
@@ -34,7 +34,7 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
 <script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
 <script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
-<script src="/web/assets/js/pc_tab_order.js?v=20260913a"></script>
+<script src="/web/assets/js/pc_tab_order.js?v=20260915a"></script>
 
 <script>
 // BOATERSのように「何を見るタブか」が分かる大分類へ、まずPC Webだけ段階的に整理する。
@@ -87,11 +87,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (cross && cross.parentElement !== mainPanel) mainPanel.appendChild(cross);
             if (playerSam && playerSam.parentElement !== mainPanel) mainPanel.appendChild(playerSam);
 
-            // 多摩川コースサインは展開材料なので「連対率・展開」へ。
-            const tmgSignal = document.querySelector('.tmg-lane4-detail-signal');
-            if (tmgSignal && tmgSignal.parentElement !== playerPanel) {
-                playerPanel.insertBefore(tmgSignal, playerPanel.firstChild);
-            }
+            // 多摩川3C/4Cサインは同じ枠で比較できるよう、
+            // pc_main_tabs.jsが配置した「場・出走・展示」の先頭に残す。
         }
 
         function activatePlayer() {
