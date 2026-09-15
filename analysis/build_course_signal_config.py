@@ -106,6 +106,10 @@ def main() -> None:
             }
 
         secondary_path = root / "analysis" / "output" / f"all_venue_secondary_{place}_{end_label}.json"
+        optimized_secondary_path = root / "analysis" / "output" / f"all_venue_secondary_optimized_{place}_{end_label}.json"
+        optimized_secondary = {}
+        if optimized_secondary_path.exists():
+            optimized_secondary = (json.loads(optimized_secondary_path.read_text(encoding="utf-8")).get("places") or {}).get(place, {})
         if secondary_path.exists():
             secondary = json.loads(secondary_path.read_text(encoding="utf-8"))
             for key, item in (secondary.get("courses") or {}).items():
@@ -124,6 +128,14 @@ def main() -> None:
                     course_rule["secondary"][variant][f"{level}_n"] = n
                     course_rule["secondary"][variant][f"{level}_stability_blocks"] = stable
                     course_rule["secondary"][variant][f"{level}_delta_top3"] = round(delta, 2)
+        for key, item in optimized_secondary.items():
+            course_text, variant, level = key.split("_", 2)
+            course_rule = rules[place].get(course_text)
+            if course_rule is None:
+                continue
+            sec = course_rule.setdefault("secondary", {}).setdefault(variant, {})
+            sec[f"{level}_optimized_enabled"] = bool(item.get("enabled"))
+            sec[f"{level}_optimized"] = item
 
     output = root / "config" / "course_signal_rules.json"
     output.write_text(json.dumps({

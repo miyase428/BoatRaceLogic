@@ -76,11 +76,33 @@ function primaryThreshold(array $venueRules, int $course, string $variant = 'mai
 
 function secondaryEnabled(array $venueRules, int $course, string $variant, string $level, string $placeCode): bool
 {
-    // 多摩川は既存の検証済み表示を維持する。他場は場別集計で許可した条件だけ昇格。
+    $configured = $venueRules[(string)$course]['secondary'][$variant] ?? null;
+    if (is_array($configured) && array_key_exists($level . '_optimized_enabled', $configured)) {
+        return !empty($configured[$level . '_optimized_enabled']);
+    }
+    // 最適化結果が未生成の間は、多摩川の既存検証済み表示を維持する。
     if ($placeCode === 'TMG') {
         return true;
     }
-    return !empty($venueRules[(string)$course]['secondary'][$variant][$level . '_enabled']);
+    return !empty($configured[$level . '_enabled']);
+}
+
+function secondaryParam(array $venueRules, int $course, string $variant, string $level, string $name, float $default): float
+{
+    $params = $venueRules[(string)$course]['secondary'][$variant][$level . '_optimized']['params'] ?? null;
+    if (!is_array($params)) {
+        return $default;
+    }
+    if (array_key_exists($name, $params) && is_numeric($params[$name])) {
+        return (float)$params[$name];
+    }
+    // 探索スクリプトのJSONは [name, value, ...] 形式。
+    for ($i = 0; $i + 1 < count($params); $i += 2) {
+        if ((string)$params[$i] === $name && is_numeric($params[$i + 1])) {
+            return (float)$params[$i + 1];
+        }
+    }
+    return $default;
 }
 
 function termInfoForDate(DateTimeImmutable $date): string
@@ -423,33 +445,33 @@ SQL;
         'profile_months' => 12,
         'conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コースまくり率%.0f%%以上 + 4が3より平均ST順位上', $threshold4)),
-            'double_star' => '★ + 二次24以上 + TOP差5以内',
-            'triple_star' => '★★ + 二次27以上 + 直線評価4以上（検証中）',
+            'double_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内', secondaryParam($venueRules, 4, 'main', 'double', 'score_min', 24.0), secondaryParam($venueRules, 4, 'main', 'double', 'gap_max', 5.0)),
+            'triple_star' => sprintf('★★ + 二次%.0f以上 + 直線評価%.0f以上', secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0), secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0)),
         ],
         'lane3_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 3), sprintf('3コース攻め率（まくり+まくり差し）%.0f%%以上', $threshold3)),
-            'double_star' => '★ + 二次30以上 + TOP差2以内',
-            'triple_star' => '★★ + 直線評価5 + 周り足4以上（検証中）',
+            'double_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内', secondaryParam($venueRules, 3, 'main', 'double', 'score_min', 30.0), secondaryParam($venueRules, 3, 'main', 'double', 'gap_max', 2.0)),
+            'triple_star' => sprintf('★★ + 直線評価%.0f以上 + 周り足%.0f以上', secondaryParam($venueRules, 3, 'main', 'triple', 'straight_min', 5.0), secondaryParam($venueRules, 3, 'main', 'triple', 'mawari_min', 4.0)),
         ],
         'lane6_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 6), sprintf('6コース攻め率%.0f%%以上 + 6が5より平均ST順位上', $threshold6)),
-            'double_star' => '★ + 二次評価3位以内',
+            'double_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 6, 'main', 'double', 'rank_max', 3.0)),
             'triple_star' => '未採用',
         ],
         'lane1_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 1), sprintf('1コース過去逃げ率%.0f%%以上', $threshold1)),
-            'double_star' => '★ + 二次評価3位以内',
-            'triple_star' => '★ + 二次評価1位',
+            'double_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 1, 'main', 'double', 'rank_max', 3.0)),
+            'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 1, 'main', 'triple', 'rank_max', 1.0)),
         ],
         'lane2_sashi_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 2, 'sashi'), sprintf('2コース差し率%.0f%%以上', $threshold2Sashi)),
-            'double_star' => '★ + 二次評価3位以内 または 周回評価4以上',
-            'triple_star' => '★ + 二次評価1位',
+            'double_star' => sprintf('★ + 二次評価%.0f位以内 または 周回評価%.1f以上', secondaryParam($venueRules, 2, 'sashi', 'double', 'rank_max', 3.0), secondaryParam($venueRules, 2, 'sashi', 'double', 'lap_min', 4.0)),
+            'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 2, 'sashi', 'triple', 'rank_max', 1.0)),
         ],
         'lane2_makuri_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 2, 'makuri'), sprintf('2コースまくり率%.0f%%以上 + 2が1より平均ST順位上', $threshold2Makuri)),
-            'double_star' => '★ + 周回評価4以上',
-            'triple_star' => '★ + 二次評価1位',
+            'double_star' => sprintf('★ + 周回評価%.1f以上', secondaryParam($venueRules, 2, 'makuri', 'double', 'lap_min', 4.0)),
+            'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 2, 'makuri', 'triple', 'rank_max', 1.0)),
         ],
         'lane2_sashi_matches' => [],
         'lane2_makuri_matches' => [],
@@ -460,8 +482,8 @@ SQL;
         'lane1_matches' => [],
         'lane5_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 5), sprintf('5コース攻め率（まくり+まくり差し）%.0f%%以上', $threshold5)),
-            'double_star' => '★ + 二次評価3位以内 または 周回評価4以上',
-            'triple_star' => '★ + 二次評価1位',
+            'double_star' => sprintf('★ + 二次評価%.0f位以内 または 周回評価%.1f以上', secondaryParam($venueRules, 5, 'main', 'double', 'rank_max', 3.0), secondaryParam($venueRules, 5, 'main', 'double', 'lap_min', 4.0)),
+            'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 5, 'main', 'triple', 'rank_max', 1.0)),
         ],
     ];
 
@@ -700,9 +722,11 @@ SQL;
             $secondary = buildSecondEval($exhibitionByRace[$raceCode], $avgExhibition, $pid1);
         }
         $starLevel = 1;
-        if (is_array($secondary) && secondaryEnabled($venueRules, 1, 'main', 'double', $placeCode) && (int)$secondary['second_rank'] <= 3) {
+        if (is_array($secondary) && secondaryEnabled($venueRules, 1, 'main', 'double', $placeCode)
+            && (int)$secondary['second_rank'] <= secondaryParam($venueRules, 1, 'main', 'double', 'rank_max', 3.0)) {
             $starLevel = 2;
-            if (secondaryEnabled($venueRules, 1, 'main', 'triple', $placeCode) && (int)$secondary['second_rank'] === 1) {
+            if (secondaryEnabled($venueRules, 1, 'main', 'triple', $placeCode)
+                && (int)$secondary['second_rank'] <= secondaryParam($venueRules, 1, 'main', 'triple', 'rank_max', 1.0)) {
                 $starLevel = 3;
             }
         }
@@ -760,9 +784,12 @@ SQL;
         if (is_array($secondary)) {
             $secondRank = (int)$secondary['second_rank'];
             $lapScore = (float)$secondary['lap_score'];
-            if (secondaryEnabled($venueRules, 2, 'sashi', 'double', $placeCode) && ($secondRank <= 3 || $lapScore >= 4.0)) {
+            if (secondaryEnabled($venueRules, 2, 'sashi', 'double', $placeCode)
+                && ($secondRank <= secondaryParam($venueRules, 2, 'sashi', 'double', 'rank_max', 3.0)
+                    || $lapScore >= secondaryParam($venueRules, 2, 'sashi', 'double', 'lap_min', 4.0))) {
                 $starLevel = 2;
-                if (secondaryEnabled($venueRules, 2, 'sashi', 'triple', $placeCode) && $secondRank === 1) {
+                if (secondaryEnabled($venueRules, 2, 'sashi', 'triple', $placeCode)
+                    && $secondRank <= secondaryParam($venueRules, 2, 'sashi', 'triple', 'rank_max', 1.0)) {
                     $starLevel = 3;
                 }
             }
@@ -826,9 +853,11 @@ SQL;
         if (is_array($secondary)) {
             $secondRank = (int)$secondary['second_rank'];
             $lapScore = (float)$secondary['lap_score'];
-            if (secondaryEnabled($venueRules, 2, 'makuri', 'double', $placeCode) && $lapScore >= 4.0) {
+            if (secondaryEnabled($venueRules, 2, 'makuri', 'double', $placeCode)
+                && $lapScore >= secondaryParam($venueRules, 2, 'makuri', 'double', 'lap_min', 4.0)) {
                 $starLevel = 2;
-                if (secondaryEnabled($venueRules, 2, 'makuri', 'triple', $placeCode) && $secondRank === 1) {
+                if (secondaryEnabled($venueRules, 2, 'makuri', 'triple', $placeCode)
+                    && $secondRank <= secondaryParam($venueRules, 2, 'makuri', 'triple', 'rank_max', 1.0)) {
                     $starLevel = 3;
                 }
             }
@@ -905,9 +934,13 @@ SQL;
                 $gap = (float)$secondary['gap_to_top'];
                 $straightScore = (float)$secondary['straight_score'];
 
-                if (secondaryEnabled($venueRules, 4, 'main', 'double', $placeCode) && $score >= 24.0 && $gap <= 5.0) {
+                if (secondaryEnabled($venueRules, 4, 'main', 'double', $placeCode)
+                    && $score >= secondaryParam($venueRules, 4, 'main', 'double', 'score_min', 24.0)
+                    && $gap <= secondaryParam($venueRules, 4, 'main', 'double', 'gap_max', 5.0)) {
                     $starLevel = 2;
-                    if (secondaryEnabled($venueRules, 4, 'main', 'triple', $placeCode) && $score >= 27.0 && $straightScore >= 4.0) {
+                    if (secondaryEnabled($venueRules, 4, 'main', 'triple', $placeCode)
+                        && $score >= secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0)
+                        && $straightScore >= secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0)) {
                         $starLevel = 3;
                     }
                 }
@@ -971,9 +1004,13 @@ SQL;
                 $straightScore = (float)$secondary['straight_score'];
                 $mawariScore = (float)$secondary['mawari_score'];
 
-                if (secondaryEnabled($venueRules, 3, 'main', 'double', $placeCode) && $score >= 30.0 && $gap <= 2.0) {
+                if (secondaryEnabled($venueRules, 3, 'main', 'double', $placeCode)
+                    && $score >= secondaryParam($venueRules, 3, 'main', 'double', 'score_min', 30.0)
+                    && $gap <= secondaryParam($venueRules, 3, 'main', 'double', 'gap_max', 2.0)) {
                     $starLevel = 2;
-                    if (secondaryEnabled($venueRules, 3, 'main', 'triple', $placeCode) && $straightScore >= 5.0 && $mawariScore >= 4.0) {
+                    if (secondaryEnabled($venueRules, 3, 'main', 'triple', $placeCode)
+                        && $straightScore >= secondaryParam($venueRules, 3, 'main', 'triple', 'straight_min', 5.0)
+                        && $mawariScore >= secondaryParam($venueRules, 3, 'main', 'triple', 'mawari_min', 4.0)) {
                         $starLevel = 3;
                     }
                 }
@@ -1046,9 +1083,12 @@ SQL;
             if (is_array($secondary)) {
                 $secondRank = (int)$secondary['second_rank'];
                 $lapScore = (float)$secondary['lap_score'];
-                if (secondaryEnabled($venueRules, 5, 'main', 'double', $placeCode) && ($secondRank <= 3 || $lapScore >= 4.0)) {
+                if (secondaryEnabled($venueRules, 5, 'main', 'double', $placeCode)
+                    && ($secondRank <= secondaryParam($venueRules, 5, 'main', 'double', 'rank_max', 3.0)
+                        || $lapScore >= secondaryParam($venueRules, 5, 'main', 'double', 'lap_min', 4.0))) {
                     $starLevel = 2;
-                    if (secondaryEnabled($venueRules, 5, 'main', 'triple', $placeCode) && $secondRank === 1) {
+                    if (secondaryEnabled($venueRules, 5, 'main', 'triple', $placeCode)
+                        && $secondRank <= secondaryParam($venueRules, 5, 'main', 'triple', 'rank_max', 1.0)) {
                         $starLevel = 3;
                     }
                 }
@@ -1114,7 +1154,8 @@ SQL;
             $secondary = buildSecondEval($exhibitionByRace[$raceCode], $avgExhibition, $pid6);
         }
         $starLevel = 1;
-        if (is_array($secondary) && secondaryEnabled($venueRules, 6, 'main', 'double', $placeCode) && (int)$secondary['second_rank'] <= 3) {
+        if (is_array($secondary) && secondaryEnabled($venueRules, 6, 'main', 'double', $placeCode)
+            && (int)$secondary['second_rank'] <= secondaryParam($venueRules, 6, 'main', 'double', 'rank_max', 3.0)) {
             $starLevel = 2;
         }
 
