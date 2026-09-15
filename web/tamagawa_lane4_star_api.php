@@ -7,8 +7,40 @@ date_default_timezone_set('Asia/Tokyo');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, max-age=0');
 
+// サインは日付・開催場単位で同じ集計を共有する。ブラウザキャッシュではなく
+// サーバー側へ保存することで、Webとアプリの両方から再利用できるようにする。
+$courseSignalCacheFile = null;
+$courseSignalCacheWrite = true;
+$courseSignalCacheConfigMtime = 0;
+
+function writeCourseSignalCache(string $path, array $data, int $configMtime): void
+{
+    $payload = $data;
+    $payload['_course_signal_cache'] = [
+        'created_at' => time(),
+        'config_mtime' => $configMtime,
+    ];
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) {
+        return;
+    }
+    $tmp = $path . '.' . getmypid() . '.tmp';
+    if (@file_put_contents($tmp, $json, LOCK_EX) !== false) {
+        @rename($tmp, $path);
+    }
+}
+
 function respond(array $data, int $status = 200): never
 {
+    global $courseSignalCacheFile, $courseSignalCacheWrite, $courseSignalCacheConfigMtime;
+    if (
+        $status === 200
+        && $courseSignalCacheWrite
+        && is_string($courseSignalCacheFile)
+        && ($data['status'] ?? '') === 'ok'
+    ) {
+        writeCourseSignalCache($courseSignalCacheFile, $data, $courseSignalCacheConfigMtime);
+    }
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
@@ -72,6 +104,12 @@ function primaryThreshold(array $venueRules, int $course, string $variant = 'mai
         [6, 'main'] => 5.0,
         default => 0.0,
     };
+}
+
+function primaryVulnerabilityThreshold(array $venueRules, int $course, string $variant = 'main'): ?float
+{
+    $configured = $venueRules[(string)$course]['primary_rules'][$variant]['vulnerability_threshold'] ?? null;
+    return is_numeric($configured) ? (float)$configured : null;
 }
 
 function secondaryEnabled(array $venueRules, int $course, string $variant, string $level, string $placeCode): bool
@@ -376,8 +414,36 @@ if (!isset($places[$placeCode])) {
 $placeName = $places[$placeCode];
 $rules = courseSignalRules();
 $venueRules = $rules['places'][$placeCode] ?? [];
-
 $date = new DateTimeImmutable($dateText);
+
+$courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
+$courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
+$courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v3_' . $date->format('Ymd') . '_' . $placeCode . '.json';
+$forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
+$today = new DateTimeImmutable('today');
+$cacheTtl = $date >= $today ? 300 : 30 * 86400;
+
+if (!$forceCourseSignalRefresh && is_file($courseSignalCacheFile)) {
+    $cached = json_decode((string)@file_get_contents($courseSignalCacheFile), true);
+    $cacheMeta = is_array($cached) ? ($cached['_course_signal_cache'] ?? []) : [];
+    $cacheAge = is_array($cacheMeta) ? time() - (int)($cacheMeta['created_at'] ?? 0) : PHP_INT_MAX;
+    if (
+        is_array($cached)
+        && ($cached['status'] ?? '') === 'ok'
+        && ($cached['date'] ?? '') === $dateText
+        && ($cached['place'] ?? '') === $placeCode
+        && (int)($cacheMeta['config_mtime'] ?? -1) === $courseSignalCacheConfigMtime
+        && $cacheAge >= 0
+        && $cacheAge <= $cacheTtl
+    ) {
+        unset($cached['_course_signal_cache']);
+        $cached['cache'] = ['used' => true, 'scope' => 'date_place'];
+        $courseSignalCacheWrite = false;
+        respond($cached);
+    }
+}
+
 $historyStart = $date->modify('-12 months')->format('Y-m-d');
 $term = termInfoForDate($date);
 $datePrefix = $date->format('Ymd') . $placeCode;
@@ -435,6 +501,10 @@ SQL;
     $primary4Rule = $venueRules['4']['primary_rules']['main'] ?? [];
     $primary4Parameter = is_array($primary4Rule) ? (string)($primary4Rule['parameter'] ?? 'makuri_rate') : 'makuri_rate';
     $primary4MetricLabel = $primary4Parameter === 'attack_rate' ? '攻め率（まくり+まくり差し）' : 'まくり率';
+    $primary4VulnerabilityThreshold = primaryVulnerabilityThreshold($venueRules, 4, 'main');
+    $primary4VulnerabilityText = $primary4VulnerabilityThreshold !== null
+        ? sprintf('（1C脆弱性%.0f%%以上）', $primary4VulnerabilityThreshold)
+        : '';
     $threshold5 = primaryThreshold($venueRules, 5, 'main');
     $threshold6 = primaryThreshold($venueRules, 6, 'main');
     $conditionText = static function (bool $enabled, string $text): string {
@@ -447,14 +517,14 @@ SQL;
         'place_name' => $placeName,
         'profile_months' => 12,
         'conditions' => [
-            'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コース%s%.0f%%以上 + 4が3より平均ST順位上%s', $primary4MetricLabel, $threshold4, $placeCode === 'KRY' ? '（1C脆弱性15%以上は補助目安）' : '')),
+            'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コース%s%.0f%%以上 + 4が3より平均ST順位上%s', $primary4MetricLabel, $threshold4, $primary4VulnerabilityText)),
             'double_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内', secondaryParam($venueRules, 4, 'main', 'double', 'score_min', 24.0), secondaryParam($venueRules, 4, 'main', 'double', 'gap_max', 5.0)),
-            'triple_star' => sprintf('★★ + 二次%.0f以上 + 直線評価%.0f以上', secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0), secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0)),
+            'triple_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内 + 直線評価%.0f以上', secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0), secondaryParam($venueRules, 4, 'main', 'triple', 'gap_max', 5.0), secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0)),
         ],
         'lane3_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 3), sprintf('3コース攻め率（まくり+まくり差し）%.0f%%以上', $threshold3)),
             'double_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内', secondaryParam($venueRules, 3, 'main', 'double', 'score_min', 30.0), secondaryParam($venueRules, 3, 'main', 'double', 'gap_max', 2.0)),
-            'triple_star' => sprintf('★★ + 直線評価%.0f以上 + 周り足%.0f以上', secondaryParam($venueRules, 3, 'main', 'triple', 'straight_min', 5.0), secondaryParam($venueRules, 3, 'main', 'triple', 'mawari_min', 4.0)),
+            'triple_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内 + 直線評価%.0f以上 + 周り足%.0f以上', secondaryParam($venueRules, 3, 'main', 'triple', 'score_min', 30.0), secondaryParam($venueRules, 3, 'main', 'triple', 'gap_max', 2.0), secondaryParam($venueRules, 3, 'main', 'triple', 'straight_min', 5.0), secondaryParam($venueRules, 3, 'main', 'triple', 'mawari_min', 4.0)),
         ],
         'lane6_conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 6), sprintf('6コース攻め率%.0f%%以上 + 6が5より平均ST順位上', $threshold6)),
@@ -735,12 +805,16 @@ SQL;
             $secondary = buildSecondEval($exhibitionByRace[$raceCode], $avgExhibition, $pid1);
         }
         $starLevel = 1;
-        if (is_array($secondary) && secondaryEnabled($venueRules, 1, 'main', 'double', $placeCode)
-            && (int)$secondary['second_rank'] <= secondaryParam($venueRules, 1, 'main', 'double', 'rank_max', 3.0)) {
-            $starLevel = 2;
-            if (secondaryEnabled($venueRules, 1, 'main', 'triple', $placeCode)
-                && (int)$secondary['second_rank'] <= secondaryParam($venueRules, 1, 'main', 'triple', 'rank_max', 1.0)) {
+        if (is_array($secondary)) {
+            $secondRank = (int)$secondary['second_rank'];
+            $doubleMatch = secondaryEnabled($venueRules, 1, 'main', 'double', $placeCode)
+                && $secondRank <= secondaryParam($venueRules, 1, 'main', 'double', 'rank_max', 3.0);
+            $tripleMatch = secondaryEnabled($venueRules, 1, 'main', 'triple', $placeCode)
+                && $secondRank <= secondaryParam($venueRules, 1, 'main', 'triple', 'rank_max', 1.0);
+            if ($tripleMatch) {
                 $starLevel = 3;
+            } elseif ($doubleMatch) {
+                $starLevel = 2;
             }
         }
 
@@ -797,14 +871,15 @@ SQL;
         if (is_array($secondary)) {
             $secondRank = (int)$secondary['second_rank'];
             $lapScore = (float)$secondary['lap_score'];
-            if (secondaryEnabled($venueRules, 2, 'sashi', 'double', $placeCode)
+            $doubleMatch = secondaryEnabled($venueRules, 2, 'sashi', 'double', $placeCode)
                 && ($secondRank <= secondaryParam($venueRules, 2, 'sashi', 'double', 'rank_max', 3.0)
-                    || $lapScore >= secondaryParam($venueRules, 2, 'sashi', 'double', 'lap_min', 4.0))) {
+                    || $lapScore >= secondaryParam($venueRules, 2, 'sashi', 'double', 'lap_min', 4.0));
+            $tripleMatch = secondaryEnabled($venueRules, 2, 'sashi', 'triple', $placeCode)
+                && $secondRank <= secondaryParam($venueRules, 2, 'sashi', 'triple', 'rank_max', 1.0);
+            if ($tripleMatch) {
+                $starLevel = 3;
+            } elseif ($doubleMatch) {
                 $starLevel = 2;
-                if (secondaryEnabled($venueRules, 2, 'sashi', 'triple', $placeCode)
-                    && $secondRank <= secondaryParam($venueRules, 2, 'sashi', 'triple', 'rank_max', 1.0)) {
-                    $starLevel = 3;
-                }
             }
         }
         if ((float)$profile['sashi_rate'] < primaryThreshold($venueRules, 2, 'sashi')) {
@@ -866,13 +941,14 @@ SQL;
         if (is_array($secondary)) {
             $secondRank = (int)$secondary['second_rank'];
             $lapScore = (float)$secondary['lap_score'];
-            if (secondaryEnabled($venueRules, 2, 'makuri', 'double', $placeCode)
-                && $lapScore >= secondaryParam($venueRules, 2, 'makuri', 'double', 'lap_min', 4.0)) {
+            $doubleMatch = secondaryEnabled($venueRules, 2, 'makuri', 'double', $placeCode)
+                && $lapScore >= secondaryParam($venueRules, 2, 'makuri', 'double', 'lap_min', 4.0);
+            $tripleMatch = secondaryEnabled($venueRules, 2, 'makuri', 'triple', $placeCode)
+                && $secondRank <= secondaryParam($venueRules, 2, 'makuri', 'triple', 'rank_max', 1.0);
+            if ($tripleMatch) {
+                $starLevel = 3;
+            } elseif ($doubleMatch) {
                 $starLevel = 2;
-                if (secondaryEnabled($venueRules, 2, 'makuri', 'triple', $placeCode)
-                    && $secondRank <= secondaryParam($venueRules, 2, 'makuri', 'triple', 'rank_max', 1.0)) {
-                    $starLevel = 3;
-                }
             }
         }
         $detail = [
@@ -942,6 +1018,16 @@ SQL;
             continue;
         }
 
+        $lane1Profile = $lane1Profiles[$row['lane1_player_id'] ?? ''] ?? null;
+        $lane1VulnerabilityRate = is_array($lane1Profile)
+            ? ($lane1Profile['vulnerability_rate'] ?? null)
+            : null;
+        $vulnerabilityThreshold = primaryVulnerabilityThreshold($venueRules, 4, 'main');
+        if ($vulnerabilityThreshold !== null
+            && (!is_numeric($lane1VulnerabilityRate) || (float)$lane1VulnerabilityRate < $vulnerabilityThreshold)) {
+            continue;
+        }
+
         $starLevel = 1;
         $secondary = null;
         if ($avgExhibition !== null && isset($exhibitionByRace[$raceCode])) {
@@ -950,16 +1036,17 @@ SQL;
                 $score = (float)$secondary['second_score'];
                 $gap = (float)$secondary['gap_to_top'];
                 $straightScore = (float)$secondary['straight_score'];
-
-                if (secondaryEnabled($venueRules, 4, 'main', 'double', $placeCode)
+                $doubleMatch = secondaryEnabled($venueRules, 4, 'main', 'double', $placeCode)
                     && $score >= secondaryParam($venueRules, 4, 'main', 'double', 'score_min', 24.0)
-                    && $gap <= secondaryParam($venueRules, 4, 'main', 'double', 'gap_max', 5.0)) {
+                    && $gap <= secondaryParam($venueRules, 4, 'main', 'double', 'gap_max', 5.0);
+                $tripleMatch = secondaryEnabled($venueRules, 4, 'main', 'triple', $placeCode)
+                    && $score >= secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0)
+                    && $gap <= secondaryParam($venueRules, 4, 'main', 'triple', 'gap_max', 5.0)
+                    && $straightScore >= secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0);
+                if ($tripleMatch) {
+                    $starLevel = 3;
+                } elseif ($doubleMatch) {
                     $starLevel = 2;
-                    if (secondaryEnabled($venueRules, 4, 'main', 'triple', $placeCode)
-                        && $score >= secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0)
-                        && $straightScore >= secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0)) {
-                        $starLevel = 3;
-                    }
                 }
             }
         }
@@ -978,8 +1065,8 @@ SQL;
             'attack_rate' => is_numeric($attackRate) ? round((float)$attackRate, 2) : null,
             'primary_metric' => $primary4Parameter,
             'history_n' => (int)($profile['n'] ?? 0),
-            'lane1_vulnerability_rate' => is_array($lane1Profiles[$row['lane1_player_id'] ?? ''] ?? null)
-                ? round((float)($lane1Profiles[$row['lane1_player_id']]['vulnerability_rate'] ?? 0.0), 2)
+            'lane1_vulnerability_rate' => is_numeric($lane1VulnerabilityRate)
+                ? round((float)$lane1VulnerabilityRate, 2)
                 : null,
             'lane3_avg_rank' => round($rank3, 2),
             'lane4_avg_rank' => round($rank4, 2),
@@ -1026,16 +1113,18 @@ SQL;
                 $gap = (float)$secondary['gap_to_top'];
                 $straightScore = (float)$secondary['straight_score'];
                 $mawariScore = (float)$secondary['mawari_score'];
-
-                if (secondaryEnabled($venueRules, 3, 'main', 'double', $placeCode)
+                $doubleMatch = secondaryEnabled($venueRules, 3, 'main', 'double', $placeCode)
                     && $score >= secondaryParam($venueRules, 3, 'main', 'double', 'score_min', 30.0)
-                    && $gap <= secondaryParam($venueRules, 3, 'main', 'double', 'gap_max', 2.0)) {
+                    && $gap <= secondaryParam($venueRules, 3, 'main', 'double', 'gap_max', 2.0);
+                $tripleMatch = secondaryEnabled($venueRules, 3, 'main', 'triple', $placeCode)
+                    && $score >= secondaryParam($venueRules, 3, 'main', 'triple', 'score_min', 30.0)
+                    && $gap <= secondaryParam($venueRules, 3, 'main', 'triple', 'gap_max', 2.0)
+                    && $straightScore >= secondaryParam($venueRules, 3, 'main', 'triple', 'straight_min', 5.0)
+                    && $mawariScore >= secondaryParam($venueRules, 3, 'main', 'triple', 'mawari_min', 4.0);
+                if ($tripleMatch) {
+                    $starLevel = 3;
+                } elseif ($doubleMatch) {
                     $starLevel = 2;
-                    if (secondaryEnabled($venueRules, 3, 'main', 'triple', $placeCode)
-                        && $straightScore >= secondaryParam($venueRules, 3, 'main', 'triple', 'straight_min', 5.0)
-                        && $mawariScore >= secondaryParam($venueRules, 3, 'main', 'triple', 'mawari_min', 4.0)) {
-                        $starLevel = 3;
-                    }
                 }
             }
         }
@@ -1106,14 +1195,15 @@ SQL;
             if (is_array($secondary)) {
                 $secondRank = (int)$secondary['second_rank'];
                 $lapScore = (float)$secondary['lap_score'];
-                if (secondaryEnabled($venueRules, 5, 'main', 'double', $placeCode)
+                $doubleMatch = secondaryEnabled($venueRules, 5, 'main', 'double', $placeCode)
                     && ($secondRank <= secondaryParam($venueRules, 5, 'main', 'double', 'rank_max', 3.0)
-                        || $lapScore >= secondaryParam($venueRules, 5, 'main', 'double', 'lap_min', 4.0))) {
+                        || $lapScore >= secondaryParam($venueRules, 5, 'main', 'double', 'lap_min', 4.0));
+                $tripleMatch = secondaryEnabled($venueRules, 5, 'main', 'triple', $placeCode)
+                    && $secondRank <= secondaryParam($venueRules, 5, 'main', 'triple', 'rank_max', 1.0);
+                if ($tripleMatch) {
+                    $starLevel = 3;
+                } elseif ($doubleMatch) {
                     $starLevel = 2;
-                    if (secondaryEnabled($venueRules, 5, 'main', 'triple', $placeCode)
-                        && $secondRank <= secondaryParam($venueRules, 5, 'main', 'triple', 'rank_max', 1.0)) {
-                        $starLevel = 3;
-                    }
                 }
             }
         }

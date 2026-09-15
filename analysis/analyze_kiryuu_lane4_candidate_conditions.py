@@ -28,8 +28,9 @@ def pct(n: int, d: int) -> float:
 def stat(rows: list[dict]) -> dict:
     n = len(rows)
     w = sum(r["winner"] == 4 for r in rows)
+    t2 = sum(4 in (r["winner"], r["second"]) for r in rows)
     t3 = sum(4 in (r["winner"], r["second"], r["third"]) for r in rows)
-    return {"n": n, "first": pct(w, n), "top3": pct(t3, n)}
+    return {"n": n, "first": pct(w, n), "top2": pct(t2, n), "top3": pct(t3, n)}
 
 
 def periods() -> list[tuple[str, date, date]]:

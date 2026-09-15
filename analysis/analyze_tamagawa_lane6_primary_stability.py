@@ -19,14 +19,22 @@ from analyze_tamagawa_boaters_hypothesis import (  # noqa: E402
     HISTORY_MONTHS, TechniqueHistoryIndex, load_history, load_racer_results,
     months_ago, parse_date, relation_label, required_terms, term_info_for_date,
 )
-from analyze_tamagawa_lane4_exacta_structure import load_targets, pct  # noqa: E402
-from analyze_tamagawa_lane4_strong_condition_second_eval import (  # noqa: E402
-    build_second_scores, load_exhibition,
-)
+import analyze_tamagawa_lane4_exacta_structure as exacta  # noqa: E402
+import analyze_tamagawa_lane4_strong_condition_second_eval as second_eval  # noqa: E402
+from analyze_tamagawa_lane4_exacta_structure import pct  # noqa: E402
+from analyze_tamagawa_lane4_strong_condition_second_eval import build_second_scores  # noqa: E402
 from analyze_tamagawa_lane5_primary_stability import RollingExhibitionAverage  # noqa: E402
 
 LANE = 6
 PROFILE_MONTHS = 12
+PLACE_NAMES = {
+    "KRY": "桐生", "TDA": "戸田", "EDG": "江戸川", "HWJ": "平和島", "TMG": "多摩川",
+    "HMN": "浜名湖", "GMG": "蒲郡", "TKN": "常滑", "TSU": "津", "MKN": "三国",
+    "BWK": "びわこ", "SME": "住之江", "AMG": "尼崎", "NRT": "鳴門", "MRG": "丸亀",
+    "KJM": "児島", "MYJ": "宮島", "TKY": "徳山", "SMS": "下関", "WKM": "若松",
+    "ASY": "芦屋", "FKO": "福岡", "KRT": "唐津", "OMR": "大村",
+}
+PLACE = "TMG"
 
 CONDITIONS = (
     ("BASE", "6C履歴あり"),
@@ -144,11 +152,11 @@ def print_window(label: str, start: date, end: date, rows: list[dict]) -> dict:
 
 
 def build_rows(start: date, end: date) -> tuple[list[dict], Counter]:
-    races = load_targets(start, end)
+    races = exacta.load_targets(start, end)
     pids = sorted({b["player_id"] for race in races.values() for b in race["boats"]})
     racer = load_racer_results(required_terms(start, end))
     hist = TechniqueHistoryIndex(load_history(start, end, pids))
-    exhibition = load_exhibition(months_ago(start, 6), end)
+    exhibition = second_eval.load_exhibition(months_ago(start, 6), end)
     rolling_exhibition = RollingExhibitionAverage(exhibition)
     rows, skips = [], Counter()
     for code, race in races.items():
@@ -196,7 +204,7 @@ def build_rows(start: date, end: date) -> tuple[list[dict], Counter]:
 
 
 def write_csv(end: date, rows: list[dict]) -> Path:
-    path = Path(__file__).resolve().parent / "output" / f"tamagawa_lane6_primary_stability_{end:%Y%m%d}.csv"
+    path = Path(__file__).resolve().parent / "output" / f"{PLACE.lower()}_lane6_primary_stability_{end:%Y%m%d}.csv"
     fields = ["race_code", "race_date", "st65", "p6_12_n", "p6_12_win",
               "p6_12_makuri", "p6_12_makurizashi", "p6_12_attack",
               "second_score", "second_rank", "gap", "attack_potential",
@@ -216,14 +224,21 @@ def write_csv(end: date, rows: list[dict]) -> Path:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("Usage: python3 analysis/analyze_tamagawa_lane6_primary_stability.py END_DATE")
+    if len(sys.argv) not in (2, 3):
+        raise SystemExit("Usage: python3 analysis/analyze_tamagawa_lane6_primary_stability.py END_DATE [PLACE_CODE]")
     end = parse_date(sys.argv[1])
+    global PLACE
+    PLACE = sys.argv[2].strip().upper() if len(sys.argv) == 3 else "TMG"
+    if PLACE not in PLACE_NAMES:
+        raise SystemExit(f"unknown place: {PLACE}")
+    exacta.VENUE_CODE = PLACE
+    exacta.VENUE_NAME = PLACE_NAMES[PLACE]
+    second_eval.VENUE_NAME = PLACE_NAMES[PLACE]
     long, short = windows(end)
     start = min(item[1] for item in long + short)
     rows, skips = build_rows(start, end)
     print("=" * 150)
-    print("多摩川6コース：主軸サイン候補比較と時系列安定性")
+    print(f"{PLACE_NAMES[PLACE]}6コース：主軸サイン候補比較と時系列安定性")
     print("=" * 150)
     print(f"対象={start}～{end} / 採用行={len(rows)}")
     if skips:
