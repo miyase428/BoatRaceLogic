@@ -16,7 +16,7 @@ import analyze_tamagawa_lane4_makurizashi_vulnerability as vuln  # noqa: E402
 from analyze_all_venue_lane_signals import load_targets as load_lane_targets  # noqa: E402
 
 
-PLACE = "KRY"
+PLACE = (sys.argv[3].upper() if len(sys.argv) > 3 else "KRY")
 END = base.parse_date(sys.argv[1]) if len(sys.argv) > 1 else base.parse_date("2026-09-09")
 START = base.parse_date(sys.argv[2]) if len(sys.argv) > 2 else base.months_ago(END, 24) + timedelta(days=1)
 
@@ -43,7 +43,7 @@ def periods() -> list[tuple[str, date, date]]:
 
 def main() -> None:
     base.VENUE_CODE = PLACE
-    base.VENUE_NAME = "桐生"
+    base.VENUE_NAME = PLACE
     races = load_lane_targets(START, END, (PLACE,))
     pids = sorted({b["player_id"] for r in races.values() for b in r["boats"]})
     racer = base.load_racer_results(base.required_terms(START, END))
@@ -108,11 +108,11 @@ def main() -> None:
         result.append({"condition": key, "stable": valid, "overall": stat(overall_rows), "periods": ps})
 
     result.sort(key=lambda x: (x["stable"], min(p["first"] for p in x["periods"]), x["overall"]["n"]), reverse=True)
-    print(f"桐生4C候補比較 {START}～{END} / 対象N={len(rows)} / 基準1着率={stat(rows)['first']:.2f}%")
+    print(f"{PLACE} 4C候補比較 {START}～{END} / 対象N={len(rows)} / 基準1着率={stat(rows)['first']:.2f}%")
     for x in result[:30]:
         p = x["periods"]
         print(f"{'採用候補' if x['stable'] else '不採用':4} {x['condition']:<35} N={x['overall']['n']:4d} 1着={x['overall']['first']:5.1f}% 3連={x['overall']['top3']:5.1f}% 期間Δ1着={[round(q['delta_first'],1) for q in p]} 期間Δ3連={[round(q['delta_top3'],1) for q in p]}")
-    out = Path(__file__).resolve().parent / "output" / f"kiryuu_lane4_candidate_conditions_{END:%Y%m%d}.json"
+    out = Path(__file__).resolve().parent / "output" / f"{PLACE.lower()}_lane4_candidate_conditions_{END:%Y%m%d}.json"
     out.write_text(json.dumps({"period": f"{START}～{END}", "rows": len(rows), "baseline": stat(rows), "candidates": result}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"出力: {out}")
 
