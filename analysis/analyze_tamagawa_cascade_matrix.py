@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """多摩川のコース間展開連鎖を横並び比較する。
 
-対象は内側から外側への全10通り（2→3〜6、3→4〜6、4→5〜6、5→6）。条件は既存の各コース★相当を基本にし、
+対象は内側から外側、外側から内側それぞれの全10通り。条件は既存の各コース★相当を基本にし、
 起点単独・浮上先単独・両者同時の成績を比較する。条件判定は対象日前の
 決まり手履歴と期別平均ST順位だけで行い、着順は評価にのみ使用する。
 """
@@ -23,6 +23,7 @@ from analyze_tamagawa_lane4_exacta_structure import load_targets  # noqa: E402
 
 VENUE_CODE = "TMG"
 PAIRS = tuple((source, target) for source in range(2, 6) for target in range(source + 1, 7))
+REVERSE_PAIRS = tuple((source, target) for source in range(6, 2 - 1, -1) for target in range(2, source))
 
 
 def pct(num: int, den: int) -> float:
@@ -184,25 +185,24 @@ def main() -> None:
     start = min(item[1] for item in short)
     rows, skips = load_rows(start, end)
     print("=" * 170)
-    print("多摩川 展開連鎖マトリクス（全コース間）")
+    print("多摩川 展開連鎖マトリクス（コース間・両方向）")
     print("=" * 170)
     print(f"対象={start}～{end} / 採用行={len(rows)} / スキップ={skips}")
-    pairs = PAIRS
-    print("\n【24ヶ月全体】")
-    all_values = {}
-    for source, target in pairs:
-        all_values[(source, target)] = print_pair(f"{source}C→{target}C", source, target, rows, start, end)
-    print("\n【6ヶ月ブロック安定性：CHAINの浮上先3連対率】")
-    for source, target in pairs:
-        vals = []
-        for label, st, en in short:
-            value = aggregate(rows, st, en, source, target)
-            chain, base = value["CHAIN"], value["BASE"]
-            vals.append((label, chain["n"], chain["top3"], base["top3"], chain["both"], base["both"]))
-        print(f"\n{source}C→{target}C")
-        for label, n, top3, base_top3, both, base_both in vals:
-            print(f"  {label:<10} N={n:3d} {target}3連={top3:6.2f}% (基準{base_top3:6.2f}%) "
-                  f"両TOP3={both:6.2f}% (基準{base_both:6.2f}%)")
+    for direction, pairs in (("内側→外側", PAIRS), ("外側→内側", REVERSE_PAIRS)):
+        print(f"\n【24ヶ月全体：{direction}】")
+        for source, target in pairs:
+            print_pair(f"{source}C→{target}C", source, target, rows, start, end)
+        print(f"\n【6ヶ月ブロック安定性：{direction} CHAINの浮上先3連対率】")
+        for source, target in pairs:
+            vals = []
+            for label, st, en in short:
+                value = aggregate(rows, st, en, source, target)
+                chain, base = value["CHAIN"], value["BASE"]
+                vals.append((label, chain["n"], chain["top3"], base["top3"], chain["both"], base["both"]))
+            print(f"\n{source}C→{target}C")
+            for label, n, top3, base_top3, both, base_both in vals:
+                print(f"  {label:<10} N={n:3d} {target}3連={top3:6.2f}% (基準{base_top3:6.2f}%) "
+                      f"両TOP3={both:6.2f}% (基準{base_both:6.2f}%)")
 
 
 if __name__ == "__main__":
