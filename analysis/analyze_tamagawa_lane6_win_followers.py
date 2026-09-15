@@ -34,6 +34,7 @@ def load_rows(path: Path) -> list[dict]:
                 "race_date": raw["race_date"],
                 "history_n": integer(raw["p6_12_n"]),
                 "attack": number(raw["p6_12_attack"]),
+                "st_up": raw["st65"] == "内側より上",
                 "rank": integer(raw["second_rank"]),
                 "lap": number(raw["lap_score"]),
                 "first": integer(raw["first"]),
@@ -45,21 +46,21 @@ def load_rows(path: Path) -> list[dict]:
 
 CONDITIONS = OrderedDict([
     ("BASE", "6C履歴あり（基準）"),
-    ("STAR", "★ 攻め率5%以上"),
-    ("DOUBLE", "★★ ★＋周回評価4以上"),
+    ("STAR", "★ 攻め率5%以上＋6が5よりST上"),
+    ("DOUBLE", "★★ ★＋二次順位3位以内"),
     ("TRIPLE", "★★★ ★＋二次順位1位（参考）"),
 ])
 
 
 def matches(row: dict, key: str) -> bool:
     base = row["history_n"] is not None and row["history_n"] > 0
-    star = base and row["attack"] is not None and row["attack"] >= 5.0
+    star = base and row["attack"] is not None and row["attack"] >= 5.0 and row["st_up"]
     if key == "BASE":
         return base
     if key == "STAR":
         return star
     if key == "DOUBLE":
-        return star and row["lap"] is not None and row["lap"] >= 4.0
+        return star and row["rank"] is not None and row["rank"] <= 3
     if key == "TRIPLE":
         return star and row["rank"] == 1
     raise ValueError(key)
