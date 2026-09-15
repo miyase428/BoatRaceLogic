@@ -466,7 +466,7 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
     <footer class="home-footer">BoatRace Analytics / 開催判定はDBの出走表データを使用</footer>
 </div>
 <script src="/web/assets/js/home.js?v=20260907a" defer></script>
-<script src="/web/assets/js/home_deadline_emphasis.js?v=20260915d" defer></script>
+<script src="/web/assets/js/home_deadline_emphasis.js?v=20260915e" defer></script>
 <script src="/web/assets/js/home_navigation_loading.js?v=20260909a" defer></script>
 </body>
 </html>
