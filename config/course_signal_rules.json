@@ -4911,19 +4911,55 @@
             }
           },
           "makuri": {
-            "enabled": false,
-            "threshold": null,
+            "enabled": true,
+            "threshold": 4.0,
             "parameter": "makuri_rate",
+            "st_relation": "same_or_better",
+            "vulnerability_threshold": 25.0,
+            "vulnerability_parameter": "lane1_vulnerability_rate",
             "optimization": {
-              "enabled": false,
-              "reason": "no_stable_candidate",
+              "enabled": true,
+              "value": 4.0,
+              "st_relation": "same_or_better",
+              "vulnerability_threshold": 25.0,
+              "overall": {
+                "n": 749,
+                "first": 19.89,
+                "top2": 50.33,
+                "top3": 68.49
+              },
               "baseline": {
                 "n": 3958,
                 "first": 11.824153612935826,
                 "top2": 36.30621526023244,
                 "top3": 55.457301667508844
               },
-              "disabled_reason": "改善幅1.0pt未満または安定性不足"
+              "recent120": {
+                "n": 12,
+                "first": 16.67,
+                "top2": 66.67,
+                "top3": 91.67
+              },
+              "recent120_baseline": {
+                "n": 120,
+                "first": 9.17,
+                "top2": 33.33,
+                "top3": 50.83
+              },
+              "holdout": {
+                "n": 175,
+                "first": 20.57,
+                "top2": 53.71,
+                "top3": 70.86
+              },
+              "holdout_delta_top3": 13.67,
+              "train_delta_top3": [
+                14.9,
+                11.9,
+                11.7
+              ],
+              "holdout_delta_first": 7.77,
+              "method": "過去18か月選定＋直近6か月ホールドアウト（1C脆弱性補助条件）"
             }
           }
         },

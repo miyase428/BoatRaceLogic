@@ -112,6 +112,22 @@ function primaryVulnerabilityThreshold(array $venueRules, int $course, string $v
     return is_numeric($configured) ? (float)$configured : null;
 }
 
+function primaryStRelation(array $venueRules, int $course, string $variant = 'main'): string
+{
+    $configured = $venueRules[(string)$course]['primary_rules'][$variant]['st_relation'] ?? null;
+    return in_array($configured, ['up', 'same_or_better'], true) ? $configured : 'up';
+}
+
+function primaryStRelationMatches(float $innerRank, float $outerRank, string $relation): bool
+{
+    return $relation === 'same_or_better' ? $innerRank <= $outerRank : $innerRank < $outerRank;
+}
+
+function primaryStRelationText(string $relation): string
+{
+    return $relation === 'same_or_better' ? '同等以上' : '上';
+}
+
 function secondaryEnabled(array $venueRules, int $course, string $variant, string $level, string $placeCode): bool
 {
     $configured = $venueRules[(string)$course]['secondary'][$variant] ?? null;
@@ -498,6 +514,12 @@ SQL;
     $threshold2Makuri = primaryThreshold($venueRules, 2, 'makuri');
     $threshold3 = primaryThreshold($venueRules, 3, 'main');
     $threshold4 = primaryThreshold($venueRules, 4, 'main');
+    $primary2MakuriStRelation = primaryStRelation($venueRules, 2, 'makuri');
+    $primary2MakuriVulnerabilityThreshold = primaryVulnerabilityThreshold($venueRules, 2, 'makuri');
+    $primary2MakuriStText = primaryStRelationText($primary2MakuriStRelation);
+    $primary2MakuriVulnerabilityText = $primary2MakuriVulnerabilityThreshold !== null
+        ? sprintf(' + 1C脆弱性%.0f%%以上', $primary2MakuriVulnerabilityThreshold)
+        : '';
     $primary4Rule = $venueRules['4']['primary_rules']['main'] ?? [];
     $primary4Parameter = is_array($primary4Rule) ? (string)($primary4Rule['parameter'] ?? 'makuri_rate') : 'makuri_rate';
     $primary4MetricLabel = $primary4Parameter === 'attack_rate' ? '攻め率（まくり+まくり差し）' : 'まくり率';
@@ -542,7 +564,7 @@ SQL;
             'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 2, 'sashi', 'triple', 'rank_max', 1.0)),
         ],
         'lane2_makuri_conditions' => [
-            'star' => $conditionText(primaryEnabled($venueRules, 2, 'makuri'), sprintf('2コースまくり率%.0f%%以上 + 2が1より平均ST順位上', $threshold2Makuri)),
+            'star' => $conditionText(primaryEnabled($venueRules, 2, 'makuri'), sprintf('2コースまくり率%.0f%%以上 + 2が1より平均ST順位%s%s', $threshold2Makuri, $primary2MakuriStText, $primary2MakuriVulnerabilityText)),
             'double_star' => sprintf('★ + 周回評価%.1f以上', secondaryParam($venueRules, 2, 'makuri', 'double', 'lap_min', 4.0)),
             'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 2, 'makuri', 'triple', 'rank_max', 1.0)),
         ],
@@ -928,9 +950,20 @@ SQL;
         $profile = $lane2Profiles[$pid2] ?? null;
         $rank1 = $ranks[$pid1][1] ?? null;
         $rank2 = $ranks[$pid2][2] ?? null;
+        $lane1Profile = $lane1Profiles[$pid1] ?? null;
+        $lane1VulnerabilityRate = is_array($lane1Profile)
+            ? ($lane1Profile['vulnerability_rate'] ?? null)
+            : null;
+        $stRelation = primaryStRelation($venueRules, 2, 'makuri');
         if (!is_array($profile) || !is_numeric($profile['makuri_rate'] ?? null)
             || !is_numeric($rank1) || !is_numeric($rank2)
-            || (float)$profile['makuri_rate'] < primaryThreshold($venueRules, 2, 'makuri') || (float)$rank2 >= (float)$rank1) {
+            || (float)$profile['makuri_rate'] < primaryThreshold($venueRules, 2, 'makuri')
+            || !primaryStRelationMatches((float)$rank2, (float)$rank1, $stRelation)) {
+            continue;
+        }
+        $vulnerabilityThreshold = primaryVulnerabilityThreshold($venueRules, 2, 'makuri');
+        if ($vulnerabilityThreshold !== null
+            && (!is_numeric($lane1VulnerabilityRate) || (float)$lane1VulnerabilityRate < $vulnerabilityThreshold)) {
             continue;
         }
         $secondary = null;
@@ -965,6 +998,10 @@ SQL;
             'makuri_rate' => round((float)$profile['makuri_rate'], 2),
             'lane1_avg_rank' => round((float)$rank1, 2),
             'lane2_avg_rank' => round((float)$rank2, 2),
+            'st_relation' => $stRelation,
+            'lane1_vulnerability_rate' => is_numeric($lane1VulnerabilityRate)
+                ? round((float)$lane1VulnerabilityRate, 2)
+                : null,
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
             'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode, 'makuri'),

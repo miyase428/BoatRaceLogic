@@ -350,7 +350,11 @@
                             parts.push('1C逃げ率 ' + Number(detail.nige_rate).toFixed(1) + '%');
                         } else if (isLane2Makuri && Number.isFinite(Number(detail.makuri_rate))) {
                             parts.push('2まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
-                            parts.push('ST順位 2=' + Number(detail.lane2_avg_rank).toFixed(2) + ' < 1=' + Number(detail.lane1_avg_rank).toFixed(2));
+                            const stOperator = detail.st_relation === 'same_or_better' ? ' ≤ ' : ' < ';
+                            parts.push('ST順位 2=' + Number(detail.lane2_avg_rank).toFixed(2) + stOperator + '1=' + Number(detail.lane1_avg_rank).toFixed(2));
+                            if (Number.isFinite(Number(detail.lane1_vulnerability_rate))) {
+                                parts.push('1C脆弱性 ' + Number(detail.lane1_vulnerability_rate).toFixed(1) + '%');
+                            }
                         } else if (isLane2 && Number.isFinite(Number(detail.sashi_rate))) {
                             parts.push('2差し率 ' + Number(detail.sashi_rate).toFixed(1) + '%');
                         } else if (isLane3 && Number.isFinite(Number(detail.attack_rate))) {
