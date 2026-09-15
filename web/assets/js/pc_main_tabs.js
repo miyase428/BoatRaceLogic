@@ -370,6 +370,22 @@
                         sub.style.cssText = 'margin-top:4px;font-size:12px;color:' + (isLane2Makuri ? '#735a8d' : (isLane2 ? '#527c6d' : (isLane3 ? '#52758a' : (isLane4 ? '#7a6948' : '#735a8d')))) + ';';
                         sub.textContent = parts.join(' / ');
                         box.appendChild(sub);
+
+                        const performance = detail.historical_stats;
+                        if (performance && Number.isFinite(Number(performance.first_rate))) {
+                            const signed = function (value) {
+                                const n = Number(value);
+                                return (n >= 0 ? '+' : '') + n.toFixed(1) + 'pt';
+                            };
+                            const history = document.createElement('div');
+                            history.style.cssText = 'margin-top:3px;font-size:11px;color:#6f767b;';
+                            const period = performance.period ? String(performance.period) : '過去24か月';
+                            history.textContent = period + '実績 N=' + Number(performance.n).toLocaleString()
+                                + ' / 1着率 ' + Number(performance.first_rate).toFixed(1) + '%（基準比' + signed(performance.first_delta) + '）'
+                                + ' / 2連対率 ' + Number(performance.top2_rate).toFixed(1) + '%（基準比' + signed(performance.top2_delta) + '）'
+                                + ' / 3連対率 ' + Number(performance.top3_rate).toFixed(1) + '%（基準比' + signed(performance.top3_delta) + '）';
+                            box.appendChild(history);
+                        }
                         return box;
                     }
 

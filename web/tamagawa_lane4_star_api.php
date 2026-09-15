@@ -186,6 +186,39 @@ function buildSecondEval(array $rows, float $avgExhibition, string $targetPlayer
     return $targetEval;
 }
 
+/** 2Cサインの固定検証期間（2024-09-10～2026-09-09）における実績。 */
+function lane2HistoricalStats(string $technique, int $level): array
+{
+    $baseline = ['n' => 3900, 'first' => 13.87, 'top2' => 38.64, 'top3' => 57.10];
+    $values = [
+        'sashi' => [
+            1 => ['n' => 1467, 'first' => 17.59, 'top2' => 46.22, 'top3' => 64.14],
+            2 => ['n' => 1098, 'first' => 19.40, 'top2' => 48.82, 'top3' => 67.58],
+            3 => ['n' => 381, 'first' => 25.20, 'top2' => 51.44, 'top3' => 70.08],
+        ],
+        'makuri' => [
+            1 => ['n' => 415, 'first' => 22.17, 'top2' => 50.12, 'top3' => 67.71],
+            2 => ['n' => 236, 'first' => 25.42, 'top2' => 54.24, 'top3' => 71.19],
+            3 => ['n' => 100, 'first' => 34.00, 'top2' => 56.00, 'top3' => 77.00],
+        ],
+    ];
+    $stat = $values[$technique][$level] ?? $values[$technique][1];
+    return [
+        'period' => '2024-09-10～2026-09-09',
+        'n' => $stat['n'],
+        'first_rate' => $stat['first'],
+        'top2_rate' => $stat['top2'],
+        'top3_rate' => $stat['top3'],
+        'first_delta' => round($stat['first'] - $baseline['first'], 2),
+        'top2_delta' => round($stat['top2'] - $baseline['top2'], 2),
+        'top3_delta' => round($stat['top3'] - $baseline['top3'], 2),
+        'baseline_n' => $baseline['n'],
+        'baseline_first_rate' => $baseline['first'],
+        'baseline_top2_rate' => $baseline['top2'],
+        'baseline_top3_rate' => $baseline['top3'],
+    ];
+}
+
 $dateText = trim((string)($_GET['date'] ?? ''));
 if (!validDate($dateText)) {
     respond(['status' => 'error', 'error' => 'invalid date'], 400);
@@ -512,6 +545,7 @@ SQL;
             'sashi_rate' => round((float)$profile['sashi_rate'], 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
+            'historical_stats' => lane2HistoricalStats('sashi', $starLevel),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -573,6 +607,7 @@ SQL;
             'lane2_avg_rank' => round((float)$rank2, 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
+            'historical_stats' => lane2HistoricalStats('makuri', $starLevel),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
