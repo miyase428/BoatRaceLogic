@@ -194,6 +194,7 @@ function laneHistoricalStats(int $course, int $level): array
         3 => ['n' => 3897, 'first' => 12.88, 'top2' => 34.74, 'top3' => 54.22],
         4 => ['n' => 3907, 'first' => 10.44, 'top2' => 26.90, 'top3' => 46.66],
         5 => ['n' => 3907, 'first' => 6.09, 'top2' => 19.96, 'top3' => 38.39],
+        6 => ['n' => 3899, 'first' => 2.28, 'top2' => 9.49, 'top3' => 23.80],
     ][$course] ?? null;
     $values = [
         2 => [
@@ -215,6 +216,12 @@ function laneHistoricalStats(int $course, int $level): array
             1 => ['n' => 686, 'first' => 11.37, 'top2' => 30.47, 'top3' => 50.58],
             2 => ['n' => 383, 'first' => 14.10, 'top2' => 35.77, 'top3' => 59.01],
             3 => ['n' => 105, 'first' => 19.05, 'top2' => 42.86, 'top3' => 62.86],
+        ],
+        6 => [
+            1 => ['n' => 180, 'first' => 11.11, 'top2' => 25.56, 'top3' => 45.00],
+            2 => ['n' => 78, 'first' => 14.10, 'top2' => 29.49, 'top3' => 48.72],
+            // 6Cでは★★★を公式採用しないため、万一の表示時も★★実績を基準にする。
+            3 => ['n' => 78, 'first' => 14.10, 'top2' => 29.49, 'top3' => 48.72],
         ],
     ];
     $courseValues = $values[$course] ?? [];
@@ -279,7 +286,8 @@ SELECT
     MAX(player_id) FILTER (WHERE entry_course = 2) AS lane2_player_id,
     MAX(player_id) FILTER (WHERE entry_course = 3) AS lane3_player_id,
     MAX(player_id) FILTER (WHERE entry_course = 4) AS lane4_player_id,
-    MAX(player_id) FILTER (WHERE entry_course = 5) AS lane5_player_id
+    MAX(player_id) FILTER (WHERE entry_course = 5) AS lane5_player_id,
+    MAX(player_id) FILTER (WHERE entry_course = 6) AS lane6_player_id
 FROM current_entries
 GROUP BY race_code
 ORDER BY race_code
@@ -306,6 +314,11 @@ SQL;
             'double_star' => '★ + 二次30以上 + TOP差2以内',
             'triple_star' => '★★ + 直線評価5 + 周り足4以上（検証中）',
         ],
+        'lane6_conditions' => [
+            'star' => '6コース攻め率5%以上 + 6が5より平均ST順位上',
+            'double_star' => '★ + 二次評価3位以内',
+            'triple_star' => '未採用',
+        ],
         'lane2_sashi_conditions' => [
             'star' => '2コース差し率10%以上',
             'double_star' => '★ + 二次評価3位以内 または 周回評価4以上',
@@ -321,6 +334,7 @@ SQL;
         'matches' => [],
         'lane3_matches' => [],
         'lane5_matches' => [],
+        'lane6_matches' => [],
         'lane5_conditions' => [
             'star' => '5コース攻め率（まくり+まくり差し）10%以上',
             'double_star' => '★ + 二次評価3位以内 または 周回評価4以上',
@@ -334,7 +348,7 @@ SQL;
 
     $playerIds = [];
     foreach ($targets as $row) {
-        foreach (['lane1_player_id', 'lane2_player_id', 'lane3_player_id', 'lane4_player_id', 'lane5_player_id'] as $key) {
+        foreach (['lane1_player_id', 'lane2_player_id', 'lane3_player_id', 'lane4_player_id', 'lane5_player_id', 'lane6_player_id'] as $key) {
             $pid = trim((string)($row[$key] ?? ''));
             if ($pid !== '') {
                 $playerIds[$pid] = true;
@@ -349,7 +363,7 @@ SQL;
     $placeholders = implode(',', array_fill(0, count($playerIds), '?'));
 
     // 期別のコース別平均ST順位。数値が小さいほど順位が上。
-    $rankSql = "SELECT player_id::text, course1_average_rank, course2_average_rank, course3_average_rank, course4_average_rank\n"
+    $rankSql = "SELECT player_id::text, course1_average_rank, course2_average_rank, course3_average_rank, course4_average_rank, course5_average_rank, course6_average_rank\n"
         . "FROM boat_race.racer_results\n"
         . "WHERE term_info::text = ? AND player_id::text IN ({$placeholders})";
     $rankStmt = $pdo->prepare($rankSql);
@@ -362,6 +376,8 @@ SQL;
             2 => is_numeric($row['course2_average_rank'] ?? null) ? (float)$row['course2_average_rank'] : null,
             3 => is_numeric($row['course3_average_rank'] ?? null) ? (float)$row['course3_average_rank'] : null,
             4 => is_numeric($row['course4_average_rank'] ?? null) ? (float)$row['course4_average_rank'] : null,
+            5 => is_numeric($row['course5_average_rank'] ?? null) ? (float)$row['course5_average_rank'] : null,
+            6 => is_numeric($row['course6_average_rank'] ?? null) ? (float)$row['course6_average_rank'] : null,
         ];
     }
 
@@ -371,6 +387,7 @@ SQL;
     $lane2Profiles = [];
     $lane3Profiles = [];
     $lane5Profiles = [];
+    $lane6Profiles = [];
     $historySql = <<<SQL
 WITH hr AS (
     SELECT race_code, race_date
@@ -434,7 +451,7 @@ LEFT JOIN ex_map ex
  AND ex.player_id = re.player_id
 JOIN winner w ON w.race_code = re.race_code
 WHERE re.player_id::text IN ({$placeholders})
-  AND COALESCE(rd.entry_course, ex.entry_course) IN (2, 3, 4, 5)
+      AND COALESCE(rd.entry_course, ex.entry_course) IN (2, 3, 4, 5, 6)
 GROUP BY re.player_id, COALESCE(rd.entry_course, ex.entry_course)
 SQL;
     $historyStmt = $pdo->prepare($historySql);
@@ -474,6 +491,13 @@ SQL;
                 'attack_rate' => $n > 0 ? (100.0 * ($makuriN + $makurizashiN) / $n) : null,
                 'makuri_rate' => $n > 0 ? (100.0 * $makuriN / $n) : null,
                 'makurizashi_rate' => $n > 0 ? (100.0 * $makurizashiN / $n) : null,
+            ];
+        } elseif ($course === 6) {
+            $lane6Profiles[$pid] = [
+                'n' => $n,
+                'makuri_n' => $makuriN,
+                'makurizashi_n' => $makurizashiN,
+                'attack_rate' => $n > 0 ? (100.0 * ($makuriN + $makurizashiN) / $n) : null,
             ];
         }
     }
@@ -856,11 +880,66 @@ SQL;
         $lane5Matches[$raceCode] = $detail;
     }
 
+    $lane6Matches = [];
+    foreach ($targets as $row) {
+        $raceCode = trim((string)($row['race_code'] ?? ''));
+        $pid6 = trim((string)($row['lane6_player_id'] ?? ''));
+        $pid5 = trim((string)($row['lane5_player_id'] ?? ''));
+        if ($raceCode === '' || $pid6 === '' || $pid5 === '') {
+            continue;
+        }
+
+        $profile = $lane6Profiles[$pid6] ?? null;
+        $rank6 = $ranks[$pid6][6] ?? null;
+        $rank5 = $ranks[$pid5][5] ?? null;
+        $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
+        if (!is_numeric($attackRate) || !is_numeric($rank6) || !is_numeric($rank5)
+            || (float)$attackRate < 5.0 || (float)$rank6 >= (float)$rank5) {
+            continue;
+        }
+
+        $secondary = null;
+        if ($avgExhibition !== null && isset($exhibitionByRace[$raceCode])) {
+            $secondary = buildSecondEval($exhibitionByRace[$raceCode], $avgExhibition, $pid6);
+        }
+        $starLevel = 1;
+        if (is_array($secondary) && (int)$secondary['second_rank'] <= 3) {
+            $starLevel = 2;
+        }
+
+        $detail = [
+            'race_code' => $raceCode,
+            'course' => 6,
+            'star_level' => $starLevel,
+            'star_text' => str_repeat('★', $starLevel),
+            'signal' => $starLevel >= 2 ? '6本命' : '6攻め',
+            'attack_rate' => round((float)$attackRate, 2),
+            'lane5_avg_rank' => round((float)$rank5, 2),
+            'lane6_avg_rank' => round((float)$rank6, 2),
+            'history_n' => (int)($profile['n'] ?? 0),
+            'secondary_ready' => is_array($secondary),
+            'historical_stats' => laneHistoricalStats(6, $starLevel),
+        ];
+        if (is_array($secondary)) {
+            $detail['second_rank'] = (int)$secondary['second_rank'];
+            $detail['second_score'] = round((float)$secondary['second_score'], 2);
+            $detail['top_score'] = round((float)$secondary['top_score'], 2);
+            $detail['gap_to_top'] = round((float)$secondary['gap_to_top'], 2);
+            $detail['lap_score'] = round((float)$secondary['lap_score'], 2);
+            $detail['straight_score'] = round((float)$secondary['straight_score'], 2);
+            $detail['mawari_score'] = round((float)$secondary['mawari_score'], 2);
+            $detail['st_score'] = round((float)$secondary['st_score'], 2);
+            $detail['attack_potential'] = round((float)$secondary['attack_potential'], 2);
+        }
+        $lane6Matches[$raceCode] = $detail;
+    }
+
     $baseResponse['matches'] = $matches;
     $baseResponse['lane2_sashi_matches'] = $lane2SashiMatches;
     $baseResponse['lane2_makuri_matches'] = $lane2MakuriMatches;
     $baseResponse['lane3_matches'] = $lane3Matches;
     $baseResponse['lane5_matches'] = $lane5Matches;
+    $baseResponse['lane6_matches'] = $lane6Matches;
     respond($baseResponse);
 } catch (Throwable $e) {
     respond([

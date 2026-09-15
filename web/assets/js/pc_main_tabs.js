@@ -291,7 +291,8 @@
                 const lane3Detail = data.lane3_matches && data.lane3_matches[code] ? data.lane3_matches[code] : null;
                 const lane4Detail = data.matches && data.matches[code] ? data.matches[code] : null;
                 const lane5Detail = data.lane5_matches && data.lane5_matches[code] ? data.lane5_matches[code] : null;
-                if (!lane2SashiDetail && !lane2MakuriDetail && !lane3Detail && !lane4Detail && !lane5Detail) return;
+                const lane6Detail = data.lane6_matches && data.lane6_matches[code] ? data.lane6_matches[code] : null;
+                if (!lane2SashiDetail && !lane2MakuriDetail && !lane3Detail && !lane4Detail && !lane5Detail && !lane6Detail) return;
 
                 let retries = 40;
                 function place() {
@@ -307,11 +308,12 @@
                         const isLane2Makuri = isLane2 && detail.technique === 'makuri';
                         const isLane3 = course === 3;
                         const isLane4 = course === 4;
+                        const isLane6 = course === 6;
                         const level = Math.max(1, Math.min(3, Number(detail.star_level || 1)));
                         const stars = '★'.repeat(level);
                         const signal = String(detail.signal || (course + (level >= 2 ? '軸' : '攻め')));
-                        const note = (course === 2 || course === 5) ? '' : (level >= 3 ? '（検証中）' : '');
-                        const accent = isLane2Makuri ? '#7042a8' : (isLane2 ? '#287a67' : (isLane3 ? '#176c9f' : (isLane4 ? '#b87500' : '#7042a8')));
+                        const note = (course === 2 || course === 5 || course === 6) ? '' : (level >= 3 ? '（検証中）' : '');
+                        const accent = isLane2Makuri ? '#7042a8' : (isLane2 ? '#287a67' : (isLane3 ? '#176c9f' : (isLane4 ? '#b87500' : (isLane6 ? '#4f5964' : '#7042a8'))));
 
                         const box = document.createElement('div');
                         box.className = 'tmg-lane' + course + '-detail-signal';
@@ -323,7 +325,9 @@
                                     ? 'padding:10px 13px;border:1px solid #8fc5e3;border-radius:8px;background:#edf8ff;color:#274f67;box-shadow:0 1px 5px rgba(38,112,151,.08);'
                                     : (isLane4
                                 ? 'padding:10px 13px;border:1px solid #d8a94c;border-radius:8px;background:#fff7df;color:#5d4a21;box-shadow:0 1px 5px rgba(140,104,35,.08);'
-                                : 'padding:10px 13px;border:1px solid #c4a7e7;border-radius:8px;background:#f7efff;color:#563b72;box-shadow:0 1px 5px rgba(112,66,168,.08);')));
+                                : (isLane6
+                                    ? 'padding:10px 13px;border:1px solid #aeb7bf;border-radius:8px;background:#f0f2f4;color:#43505b;box-shadow:0 1px 5px rgba(79,89,100,.08);'
+                                    : 'padding:10px 13px;border:1px solid #c4a7e7;border-radius:8px;background:#f7efff;color:#563b72;box-shadow:0 1px 5px rgba(112,66,168,.08);'))));
 
                         const title = document.createElement('div');
                         title.style.cssText = 'font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap;';
@@ -348,6 +352,9 @@
                             parts.push('4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
                         } else if (course === 5 && Number.isFinite(Number(detail.attack_rate))) {
                             parts.push('5攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
+                        } else if (isLane6 && Number.isFinite(Number(detail.attack_rate))) {
+                            parts.push('6攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
+                            parts.push('ST順位 6=' + Number(detail.lane6_avg_rank).toFixed(2) + ' < 5=' + Number(detail.lane5_avg_rank).toFixed(2));
                         }
                         if (detail.secondary_ready) {
                             parts.push('二次 ' + Number(detail.second_score).toFixed(0));
@@ -361,13 +368,16 @@
                             } else if (course === 5) {
                                 parts.push('二次順位 ' + Number(detail.second_rank).toFixed(0));
                                 parts.push('周回 ' + Number(detail.lap_score).toFixed(0));
+                            } else if (isLane6) {
+                                parts.push('二次順位 ' + Number(detail.second_rank).toFixed(0));
+                                parts.push('周回 ' + Number(detail.lap_score).toFixed(0));
                             }
                         } else {
                             parts.push('展示前');
                         }
 
                         const sub = document.createElement('div');
-                        sub.style.cssText = 'margin-top:4px;font-size:12px;color:' + (isLane2Makuri ? '#735a8d' : (isLane2 ? '#527c6d' : (isLane3 ? '#52758a' : (isLane4 ? '#7a6948' : '#735a8d')))) + ';';
+                        sub.style.cssText = 'margin-top:4px;font-size:12px;color:' + (isLane2Makuri ? '#735a8d' : (isLane2 ? '#527c6d' : (isLane3 ? '#52758a' : (isLane4 ? '#7a6948' : (isLane6 ? '#66737e' : '#735a8d'))))) + ';';
                         sub.textContent = parts.join(' / ');
                         box.appendChild(sub);
 
@@ -397,6 +407,7 @@
                     if (lane3Detail) signals.appendChild(makeBox(lane3Detail, 3));
                     if (lane4Detail) signals.appendChild(makeBox(lane4Detail, 4));
                     if (lane5Detail) signals.appendChild(makeBox(lane5Detail, 5));
+                    if (lane6Detail) signals.appendChild(makeBox(lane6Detail, 6));
                     panel.insertBefore(signals, panel.firstChild);
                 }
                 place();
