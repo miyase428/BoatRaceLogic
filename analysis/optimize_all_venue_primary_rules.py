@@ -42,6 +42,7 @@ GRIDS = {
     "5_main": [("attack_min", x) for x in (7.0, 10.0, 12.0, 15.0)],
     "6_main": [("attack_min", x) for x in (3.0, 5.0, 7.0, 10.0)],
 }
+REVIEW_COURSES = {1, 2, 3, 4, 5}
 
 # 安定しているだけでなく、無条件時からの3連対率改善が実戦上も確認できる最低幅。
 MIN_DELTA_TOP3 = 1.0
@@ -146,28 +147,33 @@ def choose(rows: list[dict], key: str, end: date) -> dict:
         if overall["n"] < 100:
             continue
         train_deltas = []
+        train_first_deltas = []
         train_ns = []
         for label, st, en in blocks[1:]:
             s = evaluate(rows, key, value, st, en)
             b = summary_stat(rows, course, st, en)
             train_deltas.append(s["top3"] - b["top3"])
+            train_first_deltas.append(s["first"] - b["first"])
             train_ns.append(s["n"])
         hold = evaluate(rows, key, value, blocks[0][1], blocks[0][2])
         hold_base = summary_stat(rows, course, blocks[0][1], blocks[0][2])
         hold_delta = hold["top3"] - hold_base["top3"]
+        hold_first_delta = hold["first"] - hold_base["first"]
         if hold["n"] < 20 or any(n < 20 for n in train_ns):
             continue
-        if hold_delta < MIN_DELTA_TOP3 or min(train_deltas) < MIN_DELTA_TOP3:
+        if hold_delta < MIN_DELTA_TOP3 or min(train_deltas) < MIN_DELTA_TOP3 or hold_first_delta < 0.0 or min(train_first_deltas) < 0.0:
             continue
-        score = min([hold_delta, *train_deltas]) + 0.2 * (overall["top3"] - base["top3"])
-        candidates.append((score, value, overall, hold, train_deltas, hold_delta))
+        score = min([hold_first_delta, *train_first_deltas]) + 0.2 * min([hold_delta, *train_deltas])
+        candidates.append((score, value, overall, hold, train_deltas, hold_delta, train_first_deltas, hold_first_delta))
     if not candidates:
         return {"enabled": False, "reason": "no_stable_candidate", "baseline": base}
-    score, value, overall, hold, train_deltas, hold_delta = max(candidates, key=lambda item: (item[0], item[2]["n"]))
+    score, value, overall, hold, train_deltas, hold_delta, train_first_deltas, hold_first_delta = max(candidates, key=lambda item: (item[0], item[2]["n"]))
     return {
         "enabled": True, "value": value, "overall": overall, "baseline": base,
         "holdout": hold, "holdout_delta_top3": round(hold_delta, 2),
-        "train_delta_top3": [round(x, 2) for x in train_deltas], "score": round(score, 2),
+        "train_delta_top3": [round(x, 2) for x in train_deltas],
+        "holdout_delta_first": round(hold_first_delta, 2),
+        "train_delta_first": [round(x, 2) for x in train_first_deltas], "score": round(score, 2),
     }
 
 
@@ -193,6 +199,11 @@ def main() -> None:
         print(f"=== {place} {PLACE_NAMES[place]} rows={len(rows)} ===", flush=True)
         result["places"][place] = {}
         for key in GRIDS:
+            if int(key.split("_")[0]) not in REVIEW_COURSES:
+                old_path = Path(__file__).resolve().parent / "output" / f"all_venue_primary_optimized_{place}_{end:%Y%m%d}.json"
+                old = json.loads(old_path.read_text(encoding="utf-8")) if old_path.exists() else {}
+                result["places"][place][key] = old.get("places", {}).get(place, {}).get(key) or {"enabled": False, "reason": "not_reviewed"}
+                continue
             chosen = choose(rows, key, end)
             result["places"][place][key] = chosen
             if chosen.get("enabled"):
