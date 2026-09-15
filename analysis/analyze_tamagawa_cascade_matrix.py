@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""多摩川の隣接コース展開連鎖を横並び比較する。
+"""多摩川のコース間展開連鎖を横並び比較する。
 
-対象は 2→3、3→4、4→5、5→6。条件は既存の各コース★相当を基本にし、
+対象は内側から外側への全10通り（2→3〜6、3→4〜6、4→5〜6、5→6）。条件は既存の各コース★相当を基本にし、
 起点単独・浮上先単独・両者同時の成績を比較する。条件判定は対象日前の
 決まり手履歴と期別平均ST順位だけで行い、着順は評価にのみ使用する。
 """
@@ -22,6 +22,7 @@ from analyze_tamagawa_boaters_hypothesis import (  # noqa: E402
 from analyze_tamagawa_lane4_exacta_structure import load_targets  # noqa: E402
 
 VENUE_CODE = "TMG"
+PAIRS = tuple((source, target) for source in range(2, 6) for target in range(source + 1, 7))
 
 
 def pct(num: int, den: int) -> float:
@@ -183,10 +184,10 @@ def main() -> None:
     start = min(item[1] for item in short)
     rows, skips = load_rows(start, end)
     print("=" * 170)
-    print("多摩川 展開連鎖マトリクス（隣接コース）")
+    print("多摩川 展開連鎖マトリクス（全コース間）")
     print("=" * 170)
     print(f"対象={start}～{end} / 採用行={len(rows)} / スキップ={skips}")
-    pairs = ((2, 3), (3, 4), (4, 5), (5, 6))
+    pairs = PAIRS
     print("\n【24ヶ月全体】")
     all_values = {}
     for source, target in pairs:
