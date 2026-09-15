@@ -31,19 +31,25 @@
         '.pick-item-solid.is-deadline-next{border-left-color:#d8a94c!important}',
         '.pick-item-upset.is-deadline-next{border-left-color:#d8a94c!important}',
 
-        /* 多摩川コースサイン：3Cは青、4Cは橙、5Cは紫。複数該当しても識別できる。 */
+        /* 多摩川コースサイン：2C差しは緑、2Cまくりは紫、3Cは青、4Cは橙、5Cは藤色。 */
         '.race-button .tmg-course-star{display:inline-block;margin-left:3px;padding:1px 3px;border-radius:3px;font-size:10px;font-weight:1000;line-height:1.2;vertical-align:1px;text-shadow:0 1px 0 rgba(255,255,255,.7);letter-spacing:-.4px}',
+        '.race-button .tmg-lane2-sashi-star{color:#287a67;background:#e8f7f0;border:1px solid #9bd2bf}',
+        '.race-button .tmg-lane2-makuri-star{color:#7042a8;background:#f3e8ff;border:1px solid #c4a7e7}',
         '.race-button .tmg-lane3-star{color:#176c9f;background:#e9f7ff;border:1px solid #9bcce7}',
         '.race-button .tmg-lane4-star{color:#b96b00;background:#fff4d8;border:1px solid #dfbd72}',
         '.race-button .tmg-lane5-star{color:#7042a8;background:#f3e8ff;border:1px solid #c4a7e7}',
         '.race-button.is-tmg-lane3-star-3 .tmg-lane3-star{color:#07537f;background:#d9f1ff;border-color:#66acd2}',
+        '.race-button.is-tmg-lane2-star-3 .tmg-lane2-sashi-star{color:#17614f;background:#d8f0e5;border-color:#69b99c}',
+        '.race-button.is-tmg-lane2-star-3 .tmg-lane2-makuri-star{color:#57228d;background:#ead7ff;border-color:#9b6aca}',
         '.race-button.is-tmg-lane4-star-3 .tmg-lane4-star{color:#a84200;background:#ffead0;border-color:#cf8b51}',
         '.race-button.is-tmg-lane5-star-3 .tmg-lane5-star{color:#57228d;background:#ead7ff;border-color:#9b6aca}',
         '.race-button.is-tmg-lane3-strong{border-color:#79b7d9!important;box-shadow:inset 0 0 0 1px rgba(41,132,181,.16)}',
+        '.race-button.is-tmg-lane2-strong{border-color:#86c6b0!important;box-shadow:inset 0 0 0 1px rgba(40,122,103,.16)}',
         '.race-button.is-tmg-lane4-strong{border-color:#d8a94c!important;box-shadow:inset 0 0 0 1px rgba(216,169,76,.16)}',
         '.race-button.is-tmg-lane5-strong{border-color:#a987c9!important;box-shadow:inset 0 0 0 1px rgba(112,66,168,.18)}',
         '.race-button.is-tmg-lane3-strong.is-tmg-lane4-strong{border-color:#8e83be!important;box-shadow:inset 0 0 0 1px rgba(93,102,184,.20)!important}',
         '.race-button.is-tmg-lane4-star-2{box-shadow:inset 0 0 0 1px rgba(197,111,0,.24)!important}',
+        '.race-button.is-tmg-lane2-star-2{box-shadow:inset 0 0 0 1px rgba(52,130,104,.24)!important}',
         '.race-button.is-tmg-lane4-star-3{border-color:#c66a2b!important;box-shadow:inset 0 0 0 1px rgba(185,77,0,.30)!important}',
         '.race-button.is-tmg-lane5-star-2{box-shadow:inset 0 0 0 1px rgba(112,66,168,.24)!important}',
         '.race-button.is-tmg-lane5-star-3{border-color:#8751b5!important;box-shadow:inset 0 0 0 1px rgba(112,66,168,.30)!important}'
@@ -111,6 +117,10 @@
             'is-tmg-lane3-star-1',
             'is-tmg-lane3-star-2',
             'is-tmg-lane3-star-3',
+            'is-tmg-lane2-strong',
+            'is-tmg-lane2-star-1',
+            'is-tmg-lane2-star-2',
+            'is-tmg-lane2-star-3',
             'is-tmg-lane4-strong',
             'is-tmg-lane4-star-1',
             'is-tmg-lane4-star-2',
@@ -147,7 +157,8 @@
         const raceLabel = link.querySelector('strong');
         if (raceLabel) {
             const star = document.createElement('span');
-            star.className = 'tmg-course-star tmg-lane' + course + '-star';
+            const variant = course === 2 ? (detail.technique === 'makuri' ? 'makuri' : 'sashi') : '';
+            star.className = 'tmg-course-star ' + (variant ? 'tmg-lane2-' + variant + '-star' : 'tmg-lane' + course + '-star');
             star.textContent = course + 'C' + stars;
             star.setAttribute('aria-label', '多摩川' + course + 'コース ' + label + 'サイン');
             star.title = course + 'C' + stars + ' ' + label;
@@ -155,7 +166,13 @@
         }
 
         let info = course + 'C' + stars + ' ' + label + 'サイン';
-        if (course === 3) {
+        if (course === 2 && detail.technique === 'makuri') {
+            info += ' / 2まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
+                + ' / ST順位 2=' + Number(detail.lane2_avg_rank).toFixed(2)
+                + ' < 1=' + Number(detail.lane1_avg_rank).toFixed(2);
+        } else if (course === 2) {
+            info += ' / 2差し率 ' + Number(detail.sashi_rate).toFixed(1) + '%';
+        } else if (course === 3) {
             info += ' / 3攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%';
         } else if (course === 4) {
             info += ' / 4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
@@ -169,7 +186,10 @@
             info += ' / 二次 ' + Number(detail.second_score).toFixed(0)
                 + ' / TOP差 ' + Number(detail.gap_to_top).toFixed(0)
                 + ' / 直線 ' + Number(detail.straight_score).toFixed(0);
-            if (course === 3 && Number.isFinite(Number(detail.mawari_score))) {
+            if (course === 2) {
+                info += ' / 二次順位 ' + Number(detail.second_rank).toFixed(0)
+                    + ' / 周回 ' + Number(detail.lap_score).toFixed(0);
+            } else if (course === 3 && Number.isFinite(Number(detail.mawari_score))) {
                 info += ' / 周り足 ' + Number(detail.mawari_score).toFixed(0);
             } else if (course === 5) {
                 info += ' / 二次順位 ' + Number(detail.second_rank).toFixed(0)
@@ -178,11 +198,11 @@
         } else {
             info += ' / 展示前';
         }
-        if (level >= 3 && course !== 5) info += ' / ★★★は前方検証中';
+        if (level >= 3 && course !== 2 && course !== 5) info += ' / ★★★は前方検証中';
         return info;
     }
 
-    // 多摩川のみ。3C～5Cは表示専用で、予想順位・買い目には接続しない。
+    // 多摩川のみ。2C～5Cは表示専用で、予想順位・買い目には接続しない。
     fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
         .then(function (response) {
             return response.json().then(function (data) {
@@ -193,6 +213,8 @@
             });
         })
         .then(function (data) {
+            const lane2SashiMatches = data.lane2_sashi_matches && typeof data.lane2_sashi_matches === 'object' ? data.lane2_sashi_matches : {};
+            const lane2MakuriMatches = data.lane2_makuri_matches && typeof data.lane2_makuri_matches === 'object' ? data.lane2_makuri_matches : {};
             const lane3Matches = data.lane3_matches && typeof data.lane3_matches === 'object' ? data.lane3_matches : {};
             const lane4Matches = data.matches && typeof data.matches === 'object' ? data.matches : {};
             const lane5Matches = data.lane5_matches && typeof data.lane5_matches === 'object' ? data.lane5_matches : {};
@@ -203,6 +225,8 @@
                 clearTamagawaStars(link);
 
                 const infos = [];
+                if (code && lane2SashiMatches[code]) infos.push(addTamagawaSignal(link, lane2SashiMatches[code], 2));
+                if (code && lane2MakuriMatches[code]) infos.push(addTamagawaSignal(link, lane2MakuriMatches[code], 2));
                 if (code && lane3Matches[code]) infos.push(addTamagawaSignal(link, lane3Matches[code], 3));
                 if (code && lane4Matches[code]) infos.push(addTamagawaSignal(link, lane4Matches[code], 4));
                 if (code && lane5Matches[code]) infos.push(addTamagawaSignal(link, lane5Matches[code], 5));
