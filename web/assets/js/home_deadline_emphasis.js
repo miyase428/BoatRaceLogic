@@ -261,6 +261,7 @@
             linksByPlace[place].forEach(function (item) {
                 const link = item.link;
                 const code = item.code;
+                const baseTitle = String(link.dataset.tmgLane4BaseTitle || link.title || '');
                 clearTamagawaStars(link);
                 const infos = [];
                 if (code && lane1Matches[code]) infos.push(addTamagawaSignal(link, lane1Matches[code], 1, placeName));
