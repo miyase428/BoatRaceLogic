@@ -141,6 +141,8 @@ def choose(rows: list[dict], key: str, end: date) -> dict:
             add(base_stat, course, row)
     base = summary(base_stat)
     blocks = list(windows(end))
+    recent_rows = sorted(rows, key=lambda r: (r["date"], r.get("race_code", "")), reverse=True)[:120]
+    recent_base = summary_stat(recent_rows, course)
     candidates = []
     for _, value in GRIDS[key]:
         overall = evaluate(rows, key, value)
@@ -159,17 +161,25 @@ def choose(rows: list[dict], key: str, end: date) -> dict:
         hold_base = summary_stat(rows, course, blocks[0][1], blocks[0][2])
         hold_delta = hold["top3"] - hold_base["top3"]
         hold_first_delta = hold["first"] - hold_base["first"]
+        recent = evaluate(recent_rows, key, value)
+        if recent["n"] < 10:
+            continue
         if hold["n"] < 20 or any(n < 20 for n in train_ns):
             continue
         if hold_delta < MIN_DELTA_TOP3 or min(train_deltas) < MIN_DELTA_TOP3 or hold_first_delta < 0.0 or min(train_first_deltas) < 0.0:
             continue
-        score = min([hold_first_delta, *train_first_deltas]) + 0.2 * min([hold_delta, *train_deltas])
-        candidates.append((score, value, overall, hold, train_deltas, hold_delta, train_first_deltas, hold_first_delta))
+        # 短期・中期・長期の絶対1着率を優先し、3連対率改善は補助評価とする。
+        train_first_rates = []
+        for _, st, en in blocks[1:]:
+            train_first_rates.append(evaluate(rows, key, value, st, en)["first"])
+        score = min([recent["first"], hold["first"], *train_first_rates]) + 0.1 * min([hold_delta, *train_deltas])
+        candidates.append((score, value, overall, hold, recent, train_deltas, hold_delta, train_first_deltas, hold_first_delta))
     if not candidates:
         return {"enabled": False, "reason": "no_stable_candidate", "baseline": base}
-    score, value, overall, hold, train_deltas, hold_delta, train_first_deltas, hold_first_delta = max(candidates, key=lambda item: (item[0], item[2]["n"]))
+    score, value, overall, hold, recent, train_deltas, hold_delta, train_first_deltas, hold_first_delta = max(candidates, key=lambda item: (item[0], item[2]["n"]))
     return {
         "enabled": True, "value": value, "overall": overall, "baseline": base,
+        "recent120": recent, "recent120_baseline": recent_base,
         "holdout": hold, "holdout_delta_top3": round(hold_delta, 2),
         "train_delta_top3": [round(x, 2) for x in train_deltas],
         "holdout_delta_first": round(hold_first_delta, 2),
@@ -177,10 +187,10 @@ def choose(rows: list[dict], key: str, end: date) -> dict:
     }
 
 
-def summary_stat(rows: list[dict], course: int, start: date, end: date) -> dict:
+def summary_stat(rows: list[dict], course: int, start: date | None = None, end: date | None = None) -> dict:
     stat = blank()
     for row in rows:
-        if start <= row["date"] <= end and row["profiles"][course]["n"] > 0:
+        if (start is None or start <= row["date"] <= end) and row["profiles"][course]["n"] > 0:
             add(stat, course, row)
     return summary(stat)
 
