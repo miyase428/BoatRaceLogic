@@ -19,6 +19,20 @@ def as_float(value: str) -> float:
     return float(value or 0.0)
 
 
+def optimized_item(item: dict | None) -> dict | None:
+    """探索結果を実戦採用判定に正規化する（改善幅1pt未満は停止）。"""
+    if not isinstance(item, dict):
+        return None
+    train = [float(x) for x in (item.get("train_delta_top3") or [])]
+    holdout = float(item.get("holdout_delta_top3", 0.0))
+    enabled = bool(item.get("enabled")) and holdout >= 1.0 and bool(train) and min(train) >= 1.0
+    normalized = dict(item)
+    normalized["enabled"] = enabled
+    if not enabled:
+        normalized["disabled_reason"] = "改善幅1.0pt未満または安定性不足"
+    return normalized
+
+
 def main() -> None:
     end_label = sys.argv[1] if len(sys.argv) > 1 else "20260909"
     root = Path(__file__).resolve().parents[1]
@@ -32,6 +46,10 @@ def main() -> None:
 
     rules = {}
     for place, rows in rows_by_place.items():
+        optimized_path = root / "analysis" / "output" / f"all_venue_primary_optimized_{place}_{end_label}.json"
+        optimized = {}
+        if optimized_path.exists():
+            optimized = (json.loads(optimized_path.read_text(encoding="utf-8")).get("places") or {}).get(place, {})
         rules[place] = {}
         for course in range(1, 7):
             selected = [r for r in rows if r["course"] == str(course)]
@@ -46,8 +64,28 @@ def main() -> None:
                     stable += 1
             n = int(star["n"]) if star else 0
             delta_top3 = as_float(star["delta_top3"]) if star else 0.0
+            legacy_enabled = bool(star and n >= 100 and stable >= 3 and delta_top3 >= 3.0)
+            if course == 2:
+                primary_candidates = {
+                    "sashi": optimized_item(optimized.get("2_sashi")),
+                    "makuri": optimized_item(optimized.get("2_makuri")),
+                }
+                primary_enabled = any(bool(item and item.get("enabled")) for item in primary_candidates.values()) or (not optimized)
+            else:
+                item = optimized_item(optimized.get(f"{course}_main"))
+                primary_candidates = {"main": item} if item else {}
+                primary_enabled = bool(item and item.get("enabled")) if optimized else legacy_enabled
             rules[place][str(course)] = {
-                "primary_enabled": bool(star and n >= 100 and stable >= 3 and delta_top3 >= 3.0),
+                "primary_enabled": primary_enabled,
+                "primary_rules": {
+                    variant: {
+                        "enabled": bool(item and item.get("enabled")),
+                        "threshold": float(item.get("value")) if item and item.get("enabled") else None,
+                        "parameter": ("sashi_rate" if course == 2 and variant == "sashi" else "makuri_rate" if course in (2, 4) else "nige_rate" if course == 1 else "attack_rate"),
+                        "optimization": item,
+                    }
+                    for variant, item in primary_candidates.items()
+                },
                 "primary_n": n,
                 "primary_stability_blocks": stable,
                 "primary_delta_top3": round(delta_top3, 2),
@@ -89,15 +127,16 @@ def main() -> None:
 
     output = root / "config" / "course_signal_rules.json"
     output.write_text(json.dumps({
-        "version": 1,
+        "version": 2,
         "generated_at": end_label,
         "primary_rule": {
-            "1": "逃げ率55%以上",
-            "2": "差し率10%以上、またはまくり率5%以上かつ内側より平均ST順位上",
-            "3": "攻め率15%以上",
-            "4": "まくり率15%以上かつ3Cより平均ST順位上",
-            "5": "攻め率10%以上",
-            "6": "攻め率5%以上かつ5Cより平均ST順位上",
+            "method": "場別候補閾値探索（24か月、直近6か月ホールドアウト、期間安定性）",
+            "1": "逃げ率（場別最適閾値）",
+            "2": "差し率／まくり率（場別最適閾値、まくりは内側より平均ST順位上）",
+            "3": "攻め率（場別最適閾値）",
+            "4": "まくり率（場別最適閾値、3Cより平均ST順位上）",
+            "5": "攻め率（場別最適閾値）",
+            "6": "攻め率（場別最適閾値、5Cより平均ST順位上）",
         },
         "places": rules,
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

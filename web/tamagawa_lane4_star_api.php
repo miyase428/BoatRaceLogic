@@ -46,10 +46,32 @@ function courseSignalRules(): array
     return $rules = is_array($decoded) ? $decoded : ['places' => []];
 }
 
-function primaryEnabled(array $venueRules, int $course): bool
+function primaryEnabled(array $venueRules, int $course, string $variant = 'main'): bool
 {
+    $configured = $venueRules[(string)$course]['primary_rules'][$variant] ?? null;
+    if (is_array($configured) && array_key_exists('enabled', $configured)) {
+        return !empty($configured['enabled']);
+    }
     return !array_key_exists((string)$course, $venueRules)
         || !empty($venueRules[(string)$course]['primary_enabled']);
+}
+
+function primaryThreshold(array $venueRules, int $course, string $variant = 'main'): float
+{
+    $configured = $venueRules[(string)$course]['primary_rules'][$variant]['threshold'] ?? null;
+    if (is_numeric($configured)) {
+        return (float)$configured;
+    }
+    return match ([$course, $variant]) {
+        [1, 'main'] => 55.0,
+        [2, 'sashi'] => 10.0,
+        [2, 'makuri'] => 5.0,
+        [3, 'main'] => 15.0,
+        [4, 'main'] => 15.0,
+        [5, 'main'] => 10.0,
+        [6, 'main'] => 5.0,
+        default => 0.0,
+    };
 }
 
 function secondaryEnabled(array $venueRules, int $course, string $variant, string $level, string $placeCode): bool
@@ -228,11 +250,30 @@ function buildSecondEval(array $rows, float $avgExhibition, string $targetPlayer
 }
 
 /** コースサインの固定検証期間（2024-09-10～2026-09-09）における実績。 */
-function laneHistoricalStats(int $course, int $level, string $placeCode = 'TMG'): ?array
+function laneHistoricalStats(int $course, int $level, string $placeCode = 'TMG', string $variant = 'main'): ?array
 {
+    $venueRules = courseSignalRules()['places'][$placeCode] ?? [];
+    $rule = $venueRules[(string)$course] ?? null;
+    $optimized = is_array($rule) ? ($rule['primary_rules'][$variant]['optimization'] ?? null) : null;
+    if ($level === 1 && is_array($optimized) && !empty($optimized['enabled'])) {
+        $overall = $optimized['overall'] ?? [];
+        $baseline = $optimized['baseline'] ?? [];
+        return [
+            'period' => '2024-09-10～2026-09-09',
+            'n' => (int)($overall['n'] ?? 0),
+            'first_rate' => round((float)($overall['first'] ?? 0.0), 2),
+            'top2_rate' => round((float)($overall['top2'] ?? 0.0), 2),
+            'top3_rate' => round((float)($overall['top3'] ?? 0.0), 2),
+            'first_delta' => round((float)($overall['first'] ?? 0.0) - (float)($baseline['first'] ?? 0.0), 2),
+            'top2_delta' => round((float)($overall['top2'] ?? 0.0) - (float)($baseline['top2'] ?? 0.0), 2),
+            'top3_delta' => round((float)($overall['top3'] ?? 0.0) - (float)($baseline['top3'] ?? 0.0), 2),
+            'baseline_n' => (int)($baseline['n'] ?? 0),
+            'baseline_first_rate' => round((float)($baseline['first'] ?? 0.0), 2),
+            'baseline_top2_rate' => round((float)($baseline['top2'] ?? 0.0), 2),
+            'baseline_top3_rate' => round((float)($baseline['top3'] ?? 0.0), 2),
+        ];
+    }
     if ($placeCode !== 'TMG') {
-        $venueRules = courseSignalRules()['places'][$placeCode] ?? [];
-        $rule = $venueRules[(string)$course] ?? null;
         if (!is_array($rule) || !$rule['primary_enabled'] || $level !== 1) {
             return null;
         }
@@ -364,6 +405,16 @@ SQL;
     ]);
     $targets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $threshold1 = primaryThreshold($venueRules, 1, 'main');
+    $threshold2Sashi = primaryThreshold($venueRules, 2, 'sashi');
+    $threshold2Makuri = primaryThreshold($venueRules, 2, 'makuri');
+    $threshold3 = primaryThreshold($venueRules, 3, 'main');
+    $threshold4 = primaryThreshold($venueRules, 4, 'main');
+    $threshold5 = primaryThreshold($venueRules, 5, 'main');
+    $threshold6 = primaryThreshold($venueRules, 6, 'main');
+    $conditionText = static function (bool $enabled, string $text): string {
+        return $enabled ? $text : '場別最適条件で安定性不足のため停止';
+    };
     $baseResponse = [
         'status' => 'ok',
         'date' => $dateText,
@@ -371,32 +422,32 @@ SQL;
         'place_name' => $placeName,
         'profile_months' => 12,
         'conditions' => [
-            'star' => '4コースまくり率15%以上 + 4が3より平均ST順位上',
+            'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コースまくり率%.0f%%以上 + 4が3より平均ST順位上', $threshold4)),
             'double_star' => '★ + 二次24以上 + TOP差5以内',
             'triple_star' => '★★ + 二次27以上 + 直線評価4以上（検証中）',
         ],
         'lane3_conditions' => [
-            'star' => '3コースまくり率+まくり差し率15%以上',
+            'star' => $conditionText(primaryEnabled($venueRules, 3), sprintf('3コース攻め率（まくり+まくり差し）%.0f%%以上', $threshold3)),
             'double_star' => '★ + 二次30以上 + TOP差2以内',
             'triple_star' => '★★ + 直線評価5 + 周り足4以上（検証中）',
         ],
         'lane6_conditions' => [
-            'star' => '6コース攻め率5%以上 + 6が5より平均ST順位上',
+            'star' => $conditionText(primaryEnabled($venueRules, 6), sprintf('6コース攻め率%.0f%%以上 + 6が5より平均ST順位上', $threshold6)),
             'double_star' => '★ + 二次評価3位以内',
             'triple_star' => '未採用',
         ],
         'lane1_conditions' => [
-            'star' => '1コース過去逃げ率55%以上',
+            'star' => $conditionText(primaryEnabled($venueRules, 1), sprintf('1コース過去逃げ率%.0f%%以上', $threshold1)),
             'double_star' => '★ + 二次評価3位以内',
             'triple_star' => '★ + 二次評価1位',
         ],
         'lane2_sashi_conditions' => [
-            'star' => '2コース差し率10%以上',
+            'star' => $conditionText(primaryEnabled($venueRules, 2, 'sashi'), sprintf('2コース差し率%.0f%%以上', $threshold2Sashi)),
             'double_star' => '★ + 二次評価3位以内 または 周回評価4以上',
             'triple_star' => '★ + 二次評価1位',
         ],
         'lane2_makuri_conditions' => [
-            'star' => '2コースまくり率5%以上 + 2が1より平均ST順位上',
+            'star' => $conditionText(primaryEnabled($venueRules, 2, 'makuri'), sprintf('2コースまくり率%.0f%%以上 + 2が1より平均ST順位上', $threshold2Makuri)),
             'double_star' => '★ + 周回評価4以上',
             'triple_star' => '★ + 二次評価1位',
         ],
@@ -408,7 +459,7 @@ SQL;
         'lane6_matches' => [],
         'lane1_matches' => [],
         'lane5_conditions' => [
-            'star' => '5コース攻め率（まくり+まくり差し）10%以上',
+            'star' => $conditionText(primaryEnabled($venueRules, 5), sprintf('5コース攻め率（まくり+まくり差し）%.0f%%以上', $threshold5)),
             'double_star' => '★ + 二次評価3位以内 または 周回評価4以上',
             'triple_star' => '★ + 二次評価1位',
         ],
@@ -640,7 +691,7 @@ SQL;
 
         $profile = $lane1Profiles[$pid1] ?? null;
         $escapeRate = is_array($profile) ? ($profile['nige_rate'] ?? null) : null;
-        if (!is_numeric($escapeRate) || (float)$escapeRate < 55.0) {
+        if (!is_numeric($escapeRate) || (float)$escapeRate < primaryThreshold($venueRules, 1)) {
             continue;
         }
 
@@ -693,7 +744,7 @@ SQL;
         if ($raceCode === '' || $pid2 === '') {
             continue;
         }
-        if (!primaryEnabled($venueRules, 2)) {
+        if (!primaryEnabled($venueRules, 2, 'sashi')) {
             continue;
         }
         $profile = $lane2Profiles[$pid2] ?? null;
@@ -716,7 +767,7 @@ SQL;
                 }
             }
         }
-        if ((float)$profile['sashi_rate'] < 10.0) {
+        if ((float)$profile['sashi_rate'] < primaryThreshold($venueRules, 2, 'sashi')) {
             continue;
         }
         $detail = [
@@ -733,7 +784,7 @@ SQL;
             'sashi_rate' => round((float)$profile['sashi_rate'], 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode),
+            'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode, 'sashi'),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -756,7 +807,7 @@ SQL;
         if ($raceCode === '' || $pid2 === '' || $pid1 === '') {
             continue;
         }
-        if (!primaryEnabled($venueRules, 2)) {
+        if (!primaryEnabled($venueRules, 2, 'makuri')) {
             continue;
         }
         $profile = $lane2Profiles[$pid2] ?? null;
@@ -764,7 +815,7 @@ SQL;
         $rank2 = $ranks[$pid2][2] ?? null;
         if (!is_array($profile) || !is_numeric($profile['makuri_rate'] ?? null)
             || !is_numeric($rank1) || !is_numeric($rank2)
-            || (float)$profile['makuri_rate'] < 5.0 || (float)$rank2 >= (float)$rank1) {
+            || (float)$profile['makuri_rate'] < primaryThreshold($venueRules, 2, 'makuri') || (float)$rank2 >= (float)$rank1) {
             continue;
         }
         $secondary = null;
@@ -798,7 +849,7 @@ SQL;
             'lane2_avg_rank' => round((float)$rank2, 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode),
+            'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode, 'makuri'),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -822,7 +873,7 @@ SQL;
         if ($raceCode === '' || $pid3 === '' || $pid4 === '') {
             continue;
         }
-        if (!primaryEnabled($venueRules, 4)) {
+        if (!primaryEnabled($venueRules, 4, 'main')) {
             continue;
         }
 
@@ -841,7 +892,7 @@ SQL;
             continue;
         }
 
-        if ($makuriRate < 15.0 || $rank4 >= $rank3) {
+        if ($makuriRate < primaryThreshold($venueRules, 4, 'main') || $rank4 >= $rank3) {
             continue;
         }
 
@@ -899,13 +950,13 @@ SQL;
         if ($raceCode === '' || $pid3 === '') {
             continue;
         }
-        if (!primaryEnabled($venueRules, 3)) {
+        if (!primaryEnabled($venueRules, 3, 'main')) {
             continue;
         }
 
         $profile = $lane3Profiles[$pid3] ?? null;
         $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
-        if (!is_numeric($attackRate) || (float)$attackRate < 15.0) {
+        if (!is_numeric($attackRate) || (float)$attackRate < primaryThreshold($venueRules, 3, 'main')) {
             continue;
         }
         $attackRate = (float)$attackRate;
@@ -977,13 +1028,13 @@ SQL;
         if ($raceCode === '' || $pid5 === '') {
             continue;
         }
-        if (!primaryEnabled($venueRules, 5)) {
+        if (!primaryEnabled($venueRules, 5, 'main')) {
             continue;
         }
 
         $profile = $lane5Profiles[$pid5] ?? null;
         $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
-        if (!is_numeric($attackRate) || (float)$attackRate < 10.0) {
+        if (!is_numeric($attackRate) || (float)$attackRate < primaryThreshold($venueRules, 5, 'main')) {
             continue;
         }
         $attackRate = (float)$attackRate;
@@ -1045,7 +1096,7 @@ SQL;
         if ($raceCode === '' || $pid6 === '' || $pid5 === '') {
             continue;
         }
-        if (!primaryEnabled($venueRules, 6)) {
+        if (!primaryEnabled($venueRules, 6, 'main')) {
             continue;
         }
 
@@ -1054,7 +1105,7 @@ SQL;
         $rank5 = $ranks[$pid5][5] ?? null;
         $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
         if (!is_numeric($attackRate) || !is_numeric($rank6) || !is_numeric($rank5)
-            || (float)$attackRate < 5.0 || (float)$rank6 >= (float)$rank5) {
+            || (float)$attackRate < primaryThreshold($venueRules, 6, 'main') || (float)$rank6 >= (float)$rank5) {
             continue;
         }
 
