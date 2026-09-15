@@ -166,7 +166,7 @@
         return course + '攻め';
     }
 
-    function addTamagawaSignal(link, detail, course) {
+    function addTamagawaSignal(link, detail, course, placeName) {
         const rawLevel = Number(detail.star_level || 1);
         const level = Math.max(1, Math.min(3, Number.isFinite(rawLevel) ? Math.round(rawLevel) : 1));
         const stars = '★'.repeat(level);
@@ -182,7 +182,7 @@
             const variant = course === 2 ? (detail.technique === 'makuri' ? 'makuri' : 'sashi') : '';
             star.className = 'tmg-course-star ' + (variant ? 'tmg-lane2-' + variant + '-star' : 'tmg-lane' + course + '-star');
             star.textContent = course + 'C' + stars;
-            star.setAttribute('aria-label', '多摩川' + course + 'コース ' + label + 'サイン');
+            star.setAttribute('aria-label', (placeName || '開催場') + course + 'コース ' + label + 'サイン');
             star.title = course + 'C' + stars + ' ' + label;
             raceLabel.appendChild(star);
         }
@@ -233,17 +233,30 @@
         return info;
     }
 
-    // 多摩川のみ。2C～6Cは表示専用で、予想順位・買い目には接続しない。
-    fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
-        .then(function (response) {
-            return response.json().then(function (data) {
-                if (!response.ok || !data || data.status !== 'ok') {
-                    throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
-                }
-                return data;
-            });
-        })
-        .then(function (data) {
+    // 開催場ごとに場別設定を取得する。サインは表示専用で、予想順位・買い目には接続しない。
+    const linksByPlace = {};
+    document.querySelectorAll('[data-race-button]').forEach(function (link) {
+        const code = raceCodeFromLink(link);
+        const place = code ? code.slice(8, 11) : '';
+        if (!place) return;
+        const baseTitle = String(link.dataset.tmgLane4BaseTitle || link.title || '');
+        link.dataset.tmgLane4BaseTitle = baseTitle;
+        clearTamagawaStars(link);
+        if (!linksByPlace[place]) linksByPlace[place] = [];
+        linksByPlace[place].push({link: link, code: code});
+    });
+
+    Object.keys(linksByPlace).forEach(function (place) {
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place), {cache: 'no-store'})
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data || data.status !== 'ok') {
+                        throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+                    }
+                    return data;
+                });
+            })
+            .then(function (data) {
             const lane1Matches = data.lane1_matches && typeof data.lane1_matches === 'object' ? data.lane1_matches : {};
             const lane2SashiMatches = data.lane2_sashi_matches && typeof data.lane2_sashi_matches === 'object' ? data.lane2_sashi_matches : {};
             const lane2MakuriMatches = data.lane2_makuri_matches && typeof data.lane2_makuri_matches === 'object' ? data.lane2_makuri_matches : {};
@@ -251,26 +264,25 @@
             const lane4Matches = data.matches && typeof data.matches === 'object' ? data.matches : {};
             const lane5Matches = data.lane5_matches && typeof data.lane5_matches === 'object' ? data.lane5_matches : {};
             const lane6Matches = data.lane6_matches && typeof data.lane6_matches === 'object' ? data.lane6_matches : {};
-            document.querySelectorAll('[data-race-button]').forEach(function (link) {
-                const code = raceCodeFromLink(link);
-                const baseTitle = String(link.dataset.tmgLane4BaseTitle || link.title || '');
-                link.dataset.tmgLane4BaseTitle = baseTitle;
-                clearTamagawaStars(link);
-
+            const placeName = String(data.place_name || place);
+            linksByPlace[place].forEach(function (item) {
+                const link = item.link;
+                const code = item.code;
                 const infos = [];
-                if (code && lane1Matches[code]) infos.push(addTamagawaSignal(link, lane1Matches[code], 1));
-                if (code && lane2SashiMatches[code]) infos.push(addTamagawaSignal(link, lane2SashiMatches[code], 2));
-                if (code && lane2MakuriMatches[code]) infos.push(addTamagawaSignal(link, lane2MakuriMatches[code], 2));
-                if (code && lane3Matches[code]) infos.push(addTamagawaSignal(link, lane3Matches[code], 3));
-                if (code && lane4Matches[code]) infos.push(addTamagawaSignal(link, lane4Matches[code], 4));
-                if (code && lane5Matches[code]) infos.push(addTamagawaSignal(link, lane5Matches[code], 5));
-                if (code && lane6Matches[code]) infos.push(addTamagawaSignal(link, lane6Matches[code], 6));
+                if (code && lane1Matches[code]) infos.push(addTamagawaSignal(link, lane1Matches[code], 1, placeName));
+                if (code && lane2SashiMatches[code]) infos.push(addTamagawaSignal(link, lane2SashiMatches[code], 2, placeName));
+                if (code && lane2MakuriMatches[code]) infos.push(addTamagawaSignal(link, lane2MakuriMatches[code], 2, placeName));
+                if (code && lane3Matches[code]) infos.push(addTamagawaSignal(link, lane3Matches[code], 3, placeName));
+                if (code && lane4Matches[code]) infos.push(addTamagawaSignal(link, lane4Matches[code], 4, placeName));
+                if (code && lane5Matches[code]) infos.push(addTamagawaSignal(link, lane5Matches[code], 5, placeName));
+                if (code && lane6Matches[code]) infos.push(addTamagawaSignal(link, lane6Matches[code], 6, placeName));
                 link.title = baseTitle + (infos.length ? (baseTitle ? ' / ' : '') + infos.join(' / ') : '');
             });
-        })
-        .catch(function () {
-            // TOP表示本体を壊さないため、強条件API失敗時は星を出さないだけにする。
-        });
+            })
+            .catch(function () {
+                // TOP表示本体を壊さないため、場別API失敗時はその場の星を出さないだけにする。
+            });
+    });
 })();
 
 // 開催一覧の「開催場のみ / 全場表示」切替は独立ファイルで管理する。

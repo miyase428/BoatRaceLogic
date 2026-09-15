@@ -1,0 +1,4910 @@
+{
+  "version": 1,
+  "generated_at": "20260909",
+  "primary_rule": {
+    "1": "逃げ率55%以上",
+    "2": "差し率10%以上、またはまくり率5%以上かつ内側より平均ST順位上",
+    "3": "攻め率15%以上",
+    "4": "まくり率15%以上かつ3Cより平均ST順位上",
+    "5": "攻め率10%以上",
+    "6": "攻め率5%以上かつ5Cより平均ST順位上"
+  },
+  "places": {
+    "KRY": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2218,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.45,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2218,
+          "first_rate": 63.4806,
+          "top2_rate": 80.0721,
+          "top3_rate": 87.6916,
+          "baseline_n": 4532,
+          "baseline_first_rate": 50.7282,
+          "baseline_top2_rate": 69.1527,
+          "baseline_top3_rate": 78.2436,
+          "first_delta": 12.7525,
+          "top2_delta": 10.9194,
+          "top3_delta": 9.448
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 1760,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 1.25,
+            "triple_enabled": true,
+            "triple_n": 1039,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.38
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1998,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.82,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1998,
+          "first_rate": 15.5656,
+          "top2_rate": 44.044,
+          "top3_rate": 62.1622,
+          "baseline_n": 4532,
+          "baseline_first_rate": 12.0477,
+          "baseline_top2_rate": 36.5622,
+          "baseline_top3_rate": 54.3469,
+          "first_delta": 3.5179,
+          "top2_delta": 7.4818,
+          "top3_delta": 7.8153
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 158,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.54,
+            "triple_enabled": true,
+            "triple_n": 91,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 5.02
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1204,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.12,
+            "triple_enabled": true,
+            "triple_n": 415,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 9.73
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1138,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.48,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1138,
+          "first_rate": 17.3111,
+          "top2_rate": 40.949,
+          "top3_rate": 63.7083,
+          "baseline_n": 4532,
+          "baseline_first_rate": 13.1509,
+          "baseline_top2_rate": 34.6867,
+          "baseline_top3_rate": 55.2295,
+          "first_delta": 4.1601,
+          "top2_delta": 6.2624,
+          "top3_delta": 8.4788
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 207,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 10.99,
+            "triple_enabled": true,
+            "triple_n": 105,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 10.39
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 162,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 17.07,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 162,
+          "first_rate": 32.0988,
+          "top2_rate": 46.9136,
+          "top3_rate": 64.1975,
+          "baseline_n": 4532,
+          "baseline_first_rate": 13.2833,
+          "baseline_top2_rate": 27.692,
+          "baseline_top3_rate": 47.1315,
+          "first_delta": 18.8154,
+          "top2_delta": 19.2216,
+          "top3_delta": 17.066
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 55,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 7.04,
+            "triple_enabled": false,
+            "triple_n": 45,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 9.46
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 873,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.73,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 873,
+          "first_rate": 14.5475,
+          "top2_rate": 33.4479,
+          "top3_rate": 52.921,
+          "baseline_n": 4532,
+          "baseline_first_rate": 8.451,
+          "baseline_top2_rate": 22.7935,
+          "baseline_top3_rate": 42.1889,
+          "first_delta": 6.0965,
+          "top2_delta": 10.6544,
+          "top3_delta": 10.7321
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 487,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 5.05,
+            "triple_enabled": true,
+            "triple_n": 138,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 12.77
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 186,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.96,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 186,
+          "first_rate": 5.3763,
+          "top2_rate": 13.4409,
+          "top3_rate": 30.6452,
+          "baseline_n": 4532,
+          "baseline_first_rate": 2.3389,
+          "baseline_top2_rate": 9.113,
+          "baseline_top3_rate": 22.6831,
+          "first_delta": 3.0374,
+          "top2_delta": 4.3279,
+          "top3_delta": 7.962
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 74,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 8.8,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -30.39
+          }
+        }
+      }
+    },
+    "TDA": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1803,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.36,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1803,
+          "first_rate": 56.406,
+          "top2_rate": 72.9895,
+          "top3_rate": 82.4182,
+          "baseline_n": 3969,
+          "baseline_first_rate": 42.58,
+          "baseline_top2_rate": 60.4434,
+          "baseline_top3_rate": 72.0585,
+          "first_delta": 13.826,
+          "top2_delta": 12.546,
+          "top3_delta": 10.3597
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 1646,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 1.54,
+            "triple_enabled": true,
+            "triple_n": 1143,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 4.55
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1783,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.49,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1783,
+          "first_rate": 21.8732,
+          "top2_rate": 46.7751,
+          "top3_rate": 64.2176,
+          "baseline_n": 3969,
+          "baseline_first_rate": 16.906,
+          "baseline_top2_rate": 40.5644,
+          "baseline_top3_rate": 58.7302,
+          "first_delta": 4.9672,
+          "top2_delta": 6.2107,
+          "top3_delta": 5.4875
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 214,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.27,
+            "triple_enabled": true,
+            "triple_n": 117,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 10.02
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1183,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 2.73,
+            "triple_enabled": true,
+            "triple_n": 385,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 8.43
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 945,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.34,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 945,
+          "first_rate": 22.4339,
+          "top2_rate": 44.4444,
+          "top3_rate": 61.3757,
+          "baseline_n": 3969,
+          "baseline_first_rate": 16.3769,
+          "baseline_top2_rate": 35.8781,
+          "baseline_top3_rate": 53.036,
+          "first_delta": 6.0569,
+          "top2_delta": 8.5664,
+          "top3_delta": 8.3396
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 150,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 9.29,
+            "triple_enabled": false,
+            "triple_n": 47,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 4.58
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 137,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 4.56,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 137,
+          "first_rate": 21.8978,
+          "top2_rate": 40.8759,
+          "top3_rate": 54.7445,
+          "baseline_n": 3969,
+          "baseline_first_rate": 14.3613,
+          "baseline_top2_rate": 31.3429,
+          "baseline_top3_rate": 50.189,
+          "first_delta": 7.5365,
+          "top2_delta": 9.533,
+          "top3_delta": 4.5556
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 42,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 9.54,
+            "triple_enabled": false,
+            "triple_n": 22,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 8.89
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 688,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 12.43,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 688,
+          "first_rate": 11.1919,
+          "top2_rate": 31.25,
+          "top3_rate": 53.9244,
+          "baseline_n": 3969,
+          "baseline_first_rate": 7.2814,
+          "baseline_top2_rate": 22.0459,
+          "baseline_top3_rate": 41.4966,
+          "first_delta": 3.9104,
+          "top2_delta": 9.2041,
+          "top3_delta": 12.4278
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 366,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.27,
+            "triple_enabled": false,
+            "triple_n": 97,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 7.93
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 216,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.73,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 216,
+          "first_rate": 5.0926,
+          "top2_rate": 11.5741,
+          "top3_rate": 30.0926,
+          "baseline_n": 3969,
+          "baseline_first_rate": 2.4943,
+          "baseline_top2_rate": 9.7254,
+          "baseline_top3_rate": 24.3638,
+          "first_delta": 2.5983,
+          "top2_delta": 1.8487,
+          "top3_delta": 5.7288
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 72,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 3.24,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -30.09
+          }
+        }
+      }
+    },
+    "EDG": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1402,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.5,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1402,
+          "first_rate": 59.6291,
+          "top2_rate": 75.9629,
+          "top3_rate": 85.4494,
+          "baseline_n": 3827,
+          "baseline_first_rate": 47.5046,
+          "baseline_top2_rate": 67.2328,
+          "baseline_top3_rate": 77.9462,
+          "first_delta": 12.1245,
+          "top2_delta": 8.7301,
+          "top3_delta": 7.5032
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 943,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.87,
+            "triple_enabled": true,
+            "triple_n": 483,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 2.34
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1545,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.98,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1545,
+          "first_rate": 21.7476,
+          "top2_rate": 48.2848,
+          "top3_rate": 66.0841,
+          "baseline_n": 3827,
+          "baseline_first_rate": 17.6901,
+          "baseline_top2_rate": 40.8675,
+          "baseline_top3_rate": 59.1063,
+          "first_delta": 4.0575,
+          "top2_delta": 7.4173,
+          "top3_delta": 6.9778
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": false,
+            "double_n": 42,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 10.28,
+            "triple_enabled": false,
+            "triple_n": 93,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 6.13
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 899,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 2.71,
+            "triple_enabled": false,
+            "triple_n": 412,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 1.17
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 742,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.16,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 742,
+          "first_rate": 19.6765,
+          "top2_rate": 43.8005,
+          "top3_rate": 62.938,
+          "baseline_n": 3827,
+          "baseline_first_rate": 14.267,
+          "baseline_top2_rate": 35.0928,
+          "baseline_top3_rate": 53.7758,
+          "first_delta": 5.4095,
+          "top2_delta": 8.7078,
+          "top3_delta": 9.1622
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 111,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 0.13,
+            "triple_enabled": false,
+            "triple_n": 84,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 2.54
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 126,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 12.99,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 126,
+          "first_rate": 21.4286,
+          "top2_rate": 40.4762,
+          "top3_rate": 57.9365,
+          "baseline_n": 3827,
+          "baseline_first_rate": 11.5495,
+          "baseline_top2_rate": 26.9402,
+          "baseline_top3_rate": 44.9438,
+          "first_delta": 9.8791,
+          "top2_delta": 13.536,
+          "top3_delta": 12.9927
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 66,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 2.67,
+            "triple_enabled": false,
+            "triple_n": 22,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 1.15
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 509,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 14.29,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 509,
+          "first_rate": 13.3595,
+          "top2_rate": 33.0059,
+          "top3_rate": 51.8664,
+          "baseline_n": 3827,
+          "baseline_first_rate": 6.4803,
+          "baseline_top2_rate": 19.2579,
+          "baseline_top3_rate": 37.5751,
+          "first_delta": 6.8793,
+          "top2_delta": 13.748,
+          "top3_delta": 14.2913
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 336,
+            "double_stability_blocks": 2,
+            "double_delta_top3": -0.97,
+            "triple_enabled": false,
+            "triple_n": 153,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": -0.89
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 152,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.66,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 152,
+          "first_rate": 5.2632,
+          "top2_rate": 17.1053,
+          "top3_rate": 34.2105,
+          "baseline_n": 3827,
+          "baseline_first_rate": 2.5085,
+          "baseline_top2_rate": 10.6088,
+          "baseline_top3_rate": 26.5482,
+          "first_delta": 2.7547,
+          "top2_delta": 6.4964,
+          "top3_delta": 7.6623
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 91,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 6.45,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -34.21
+          }
+        }
+      }
+    },
+    "HWJ": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1671,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.93,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1671,
+          "first_rate": 58.5877,
+          "top2_rate": 75.0449,
+          "top3_rate": 83.5428,
+          "baseline_n": 3855,
+          "baseline_first_rate": 45.5253,
+          "baseline_top2_rate": 64.5914,
+          "baseline_top3_rate": 75.6161,
+          "first_delta": 13.0624,
+          "top2_delta": 10.4534,
+          "top3_delta": 7.9267
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 1405,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 1.08,
+            "triple_enabled": true,
+            "triple_n": 833,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.53
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1581,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.12,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1581,
+          "first_rate": 21.5686,
+          "top2_rate": 46.9956,
+          "top3_rate": 66.0974,
+          "baseline_n": 3855,
+          "baseline_first_rate": 16.0052,
+          "baseline_top2_rate": 38.9364,
+          "baseline_top3_rate": 57.9767,
+          "first_delta": 5.5634,
+          "top2_delta": 8.0591,
+          "top3_delta": 8.1208
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 196,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.3,
+            "triple_enabled": true,
+            "triple_n": 105,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 9.11
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1001,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 2.72,
+            "triple_enabled": true,
+            "triple_n": 338,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 7.75
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 872,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.06,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 872,
+          "first_rate": 22.2477,
+          "top2_rate": 47.0183,
+          "top3_rate": 64.9083,
+          "baseline_n": 3855,
+          "baseline_first_rate": 15.4864,
+          "baseline_top2_rate": 35.9014,
+          "baseline_top3_rate": 53.8521,
+          "first_delta": 6.7613,
+          "top2_delta": 11.1169,
+          "top3_delta": 11.0561
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 186,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 14.66,
+            "triple_enabled": false,
+            "triple_n": 69,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 20.6
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 150,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 8.95,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 150,
+          "first_rate": 22.0,
+          "top2_rate": 44.0,
+          "top3_rate": 57.3333,
+          "baseline_n": 3855,
+          "baseline_first_rate": 12.3735,
+          "baseline_top2_rate": 30.0389,
+          "baseline_top3_rate": 48.3787,
+          "first_delta": 9.6265,
+          "top2_delta": 13.9611,
+          "top3_delta": 8.9546
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 64,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 2.04,
+            "triple_enabled": false,
+            "triple_n": 40,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 0.17
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 637,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 6.35,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 637,
+          "first_rate": 13.0298,
+          "top2_rate": 27.6295,
+          "top3_rate": 44.741,
+          "baseline_n": 3855,
+          "baseline_first_rate": 7.6524,
+          "baseline_top2_rate": 20.5447,
+          "baseline_top3_rate": 38.3917,
+          "first_delta": 5.3774,
+          "top2_delta": 7.0848,
+          "top3_delta": 6.3493
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 364,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.36,
+            "triple_enabled": true,
+            "triple_n": 102,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 13.1
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 167,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 19.38,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 167,
+          "first_rate": 10.1796,
+          "top2_rate": 20.3593,
+          "top3_rate": 44.9102,
+          "baseline_n": 3855,
+          "baseline_first_rate": 2.9572,
+          "baseline_top2_rate": 9.987,
+          "baseline_top3_rate": 25.5253,
+          "first_delta": 7.2224,
+          "top2_delta": 10.3723,
+          "top3_delta": 19.3849
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 80,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 7.59,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -44.91
+          }
+        }
+      }
+    },
+    "TMG": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1707,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.72,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1707,
+          "first_rate": 68.717,
+          "top2_rate": 82.4253,
+          "top3_rate": 88.4007,
+          "baseline_n": 3907,
+          "baseline_first_rate": 54.4919,
+          "baseline_top2_rate": 70.4377,
+          "baseline_top3_rate": 79.6775,
+          "first_delta": 14.2251,
+          "top2_delta": 11.9876,
+          "top3_delta": 8.7232
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1569,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.64,
+            "triple_enabled": false,
+            "triple_n": 1025,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 0.38
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1679,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.88,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1679,
+          "first_rate": 17.8678,
+          "top2_rate": 46.3371,
+          "top3_rate": 63.9071,
+          "baseline_n": 3907,
+          "baseline_first_rate": 13.8469,
+          "baseline_top2_rate": 38.5718,
+          "baseline_top3_rate": 57.0259,
+          "first_delta": 4.0208,
+          "top2_delta": 7.7653,
+          "top3_delta": 6.8812
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 236,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.48,
+            "triple_enabled": true,
+            "triple_n": 101,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 10.51
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1103,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.31,
+            "triple_enabled": true,
+            "triple_n": 388,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 6.47
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 943,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 12.65,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 943,
+          "first_rate": 18.5578,
+          "top2_rate": 45.281,
+          "top3_rate": 66.8081,
+          "baseline_n": 3907,
+          "baseline_first_rate": 12.8487,
+          "baseline_top2_rate": 34.6557,
+          "baseline_top3_rate": 54.1592,
+          "first_delta": 5.7091,
+          "top2_delta": 10.6253,
+          "top3_delta": 12.6489
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 170,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 7.31,
+            "triple_enabled": false,
+            "triple_n": 55,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 16.83
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 160,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 15.84,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 160,
+          "first_rate": 23.75,
+          "top2_rate": 40.625,
+          "top3_rate": 62.5,
+          "baseline_n": 3907,
+          "baseline_first_rate": 10.4428,
+          "baseline_top2_rate": 26.9004,
+          "baseline_top3_rate": 46.6598,
+          "first_delta": 13.3072,
+          "top2_delta": 13.7246,
+          "top3_delta": 15.8402
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 49,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 17.09,
+            "triple_enabled": false,
+            "triple_n": 24,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 12.5
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 686,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 12.19,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 686,
+          "first_rate": 11.3703,
+          "top2_rate": 30.4665,
+          "top3_rate": 50.5831,
+          "baseline_n": 3907,
+          "baseline_first_rate": 6.0916,
+          "baseline_top2_rate": 19.9642,
+          "baseline_top3_rate": 38.3926,
+          "first_delta": 5.2786,
+          "top2_delta": 10.5023,
+          "top3_delta": 12.1905
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 383,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.69,
+            "triple_enabled": true,
+            "triple_n": 102,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 13.14
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 180,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 21.25,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 180,
+          "first_rate": 11.1111,
+          "top2_rate": 25.5556,
+          "top3_rate": 45.0,
+          "baseline_n": 3907,
+          "baseline_first_rate": 2.278,
+          "baseline_top2_rate": 9.4702,
+          "baseline_top3_rate": 23.7522,
+          "first_delta": 8.8331,
+          "top2_delta": 16.0854,
+          "top3_delta": 21.2478
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 79,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 4.37,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -45.0
+          }
+        }
+      }
+    },
+    "HMN": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1871,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.42,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1871,
+          "first_rate": 66.1144,
+          "top2_rate": 81.3469,
+          "top3_rate": 87.0123,
+          "baseline_n": 3886,
+          "baseline_first_rate": 53.6799,
+          "baseline_top2_rate": 71.1014,
+          "baseline_top3_rate": 79.5934,
+          "first_delta": 12.4345,
+          "top2_delta": 10.2455,
+          "top3_delta": 7.4189
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1522,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.77,
+            "triple_enabled": true,
+            "triple_n": 768,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.7
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1615,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.74,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1615,
+          "first_rate": 18.0186,
+          "top2_rate": 47.0588,
+          "top3_rate": 64.2724,
+          "baseline_n": 3886,
+          "baseline_first_rate": 13.0726,
+          "baseline_top2_rate": 38.6258,
+          "baseline_top3_rate": 56.5363,
+          "first_delta": 4.946,
+          "top2_delta": 8.433,
+          "top3_delta": 7.7362
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 183,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 7.74,
+            "triple_enabled": true,
+            "triple_n": 102,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 13.81
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 968,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.69,
+            "triple_enabled": true,
+            "triple_n": 360,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 8.81
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 876,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.54,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 876,
+          "first_rate": 19.9772,
+          "top2_rate": 43.379,
+          "top3_rate": 63.8128,
+          "baseline_n": 3886,
+          "baseline_first_rate": 13.9732,
+          "baseline_top2_rate": 35.0232,
+          "baseline_top3_rate": 55.2753,
+          "first_delta": 6.0039,
+          "top2_delta": 8.3558,
+          "top3_delta": 8.5374
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 165,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 7.1,
+            "triple_enabled": false,
+            "triple_n": 74,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 15.92
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 125,
+        "primary_stability_blocks": 1,
+        "primary_delta_top3": 7.1,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 125,
+          "first_rate": 20.0,
+          "top2_rate": 39.2,
+          "top3_rate": 54.4,
+          "baseline_n": 3886,
+          "baseline_first_rate": 10.3963,
+          "baseline_top2_rate": 27.4575,
+          "baseline_top3_rate": 47.298,
+          "first_delta": 9.6037,
+          "top2_delta": 11.7425,
+          "top3_delta": 7.102
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 41,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 18.77,
+            "triple_enabled": false,
+            "triple_n": 29,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 28.36
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 656,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 14.61,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 656,
+          "first_rate": 12.0427,
+          "top2_rate": 30.6402,
+          "top3_rate": 54.5732,
+          "baseline_n": 3886,
+          "baseline_first_rate": 7.2311,
+          "baseline_top2_rate": 19.9949,
+          "baseline_top3_rate": 39.964,
+          "first_delta": 4.8116,
+          "top2_delta": 10.6454,
+          "top3_delta": 14.6092
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 391,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.55,
+            "triple_enabled": true,
+            "triple_n": 121,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 13.2
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 166,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 4.75,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 166,
+          "first_rate": 4.2169,
+          "top2_rate": 12.6506,
+          "top3_rate": 25.9036,
+          "baseline_n": 3886,
+          "baseline_first_rate": 1.6469,
+          "baseline_top2_rate": 7.7972,
+          "baseline_top3_rate": 21.1529,
+          "first_delta": 2.5699,
+          "top2_delta": 4.8534,
+          "top3_delta": 4.7508
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 74,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 2.47,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -25.9
+          }
+        }
+      }
+    },
+    "GMG": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1975,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.37,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1975,
+          "first_rate": 69.1139,
+          "top2_rate": 82.8861,
+          "top3_rate": 89.7215,
+          "baseline_n": 3967,
+          "baseline_first_rate": 56.97,
+          "baseline_top2_rate": 73.1535,
+          "baseline_top3_rate": 82.3544,
+          "first_delta": 12.1439,
+          "top2_delta": 9.7326,
+          "top3_delta": 7.3671
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1692,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.82,
+            "triple_enabled": true,
+            "triple_n": 967,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.38
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1596,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.19,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1596,
+          "first_rate": 16.604,
+          "top2_rate": 45.4887,
+          "top3_rate": 63.5965,
+          "baseline_n": 3967,
+          "baseline_first_rate": 11.8225,
+          "baseline_top2_rate": 36.2995,
+          "baseline_top3_rate": 55.4071,
+          "first_delta": 4.7815,
+          "top2_delta": 9.1893,
+          "top3_delta": 8.1894
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 206,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.56,
+            "triple_enabled": true,
+            "triple_n": 112,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 12.7
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 995,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.8,
+            "triple_enabled": true,
+            "triple_n": 355,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 9.79
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 934,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 13.29,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 934,
+          "first_rate": 19.0578,
+          "top2_rate": 47.6445,
+          "top3_rate": 69.379,
+          "baseline_n": 3967,
+          "baseline_first_rate": 11.9486,
+          "baseline_top2_rate": 35.2912,
+          "baseline_top3_rate": 56.0877,
+          "first_delta": 7.1092,
+          "top2_delta": 12.3534,
+          "top3_delta": 13.2913
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 189,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 6.28,
+            "triple_enabled": false,
+            "triple_n": 66,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 6.38
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 169,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 3.05,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 169,
+          "first_rate": 18.9349,
+          "top2_rate": 33.1361,
+          "top3_rate": 53.8462,
+          "baseline_n": 3967,
+          "baseline_first_rate": 11.6209,
+          "baseline_top2_rate": 29.7454,
+          "baseline_top3_rate": 50.7941,
+          "first_delta": 7.314,
+          "top2_delta": 3.3907,
+          "top3_delta": 3.0521
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 49,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 5.34,
+            "triple_enabled": false,
+            "triple_n": 35,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -5.27
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 570,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.41,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 570,
+          "first_rate": 8.0702,
+          "top2_rate": 26.6667,
+          "top3_rate": 47.5439,
+          "baseline_n": 3967,
+          "baseline_first_rate": 5.697,
+          "baseline_top2_rate": 18.7295,
+          "baseline_top3_rate": 37.1313,
+          "first_delta": 2.3732,
+          "top2_delta": 7.9371,
+          "top3_delta": 10.4125
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 322,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.01,
+            "triple_enabled": false,
+            "triple_n": 70,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 9.6
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 152,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 14.85,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 152,
+          "first_rate": 5.2632,
+          "top2_rate": 17.7632,
+          "top3_rate": 32.8947,
+          "baseline_n": 3967,
+          "baseline_first_rate": 1.941,
+          "baseline_top2_rate": 6.7809,
+          "baseline_top3_rate": 18.0489,
+          "first_delta": 3.3221,
+          "top2_delta": 10.9822,
+          "top3_delta": 14.8458
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 57,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 3.95,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -32.89
+          }
+        }
+      }
+    },
+    "TKN": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2097,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.97,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2097,
+          "first_rate": 72.0553,
+          "top2_rate": 84.597,
+          "top3_rate": 90.2718,
+          "baseline_n": 4045,
+          "baseline_first_rate": 58.7392,
+          "baseline_top2_rate": 74.2645,
+          "baseline_top3_rate": 82.2991,
+          "first_delta": 13.3161,
+          "top2_delta": 10.3325,
+          "top3_delta": 7.9727
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1871,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.91,
+            "triple_enabled": true,
+            "triple_n": 1197,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.13
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1680,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.76,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1680,
+          "first_rate": 15.7143,
+          "top2_rate": 44.5833,
+          "top3_rate": 63.8095,
+          "baseline_n": 4045,
+          "baseline_first_rate": 12.2621,
+          "baseline_top2_rate": 37.6761,
+          "baseline_top3_rate": 56.0445,
+          "first_delta": 3.4522,
+          "top2_delta": 6.9072,
+          "top3_delta": 7.765
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 173,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.1,
+            "triple_enabled": false,
+            "triple_n": 99,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 5.6
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1023,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 2.63,
+            "triple_enabled": true,
+            "triple_n": 340,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 10.27
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 941,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.05,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 941,
+          "first_rate": 16.4718,
+          "top2_rate": 42.1892,
+          "top3_rate": 63.3369,
+          "baseline_n": 4045,
+          "baseline_first_rate": 10.2101,
+          "baseline_top2_rate": 32.089,
+          "baseline_top3_rate": 52.2868,
+          "first_delta": 6.2617,
+          "top2_delta": 10.1002,
+          "top3_delta": 11.0501
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 150,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 9.33,
+            "triple_enabled": false,
+            "triple_n": 57,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 1.58
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 140,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 9.3,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 140,
+          "first_rate": 21.4286,
+          "top2_rate": 41.4286,
+          "top3_rate": 57.8571,
+          "baseline_n": 4045,
+          "baseline_first_rate": 11.0012,
+          "baseline_top2_rate": 28.356,
+          "baseline_top3_rate": 48.5538,
+          "first_delta": 10.4273,
+          "top2_delta": 13.0726,
+          "top3_delta": 9.3034
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 56,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 6.43,
+            "triple_enabled": false,
+            "triple_n": 33,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 5.78
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 690,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.78,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 690,
+          "first_rate": 10.0,
+          "top2_rate": 27.1014,
+          "top3_rate": 47.8261,
+          "baseline_n": 4045,
+          "baseline_first_rate": 5.8096,
+          "baseline_top2_rate": 19.2089,
+          "baseline_top3_rate": 38.047,
+          "first_delta": 4.1904,
+          "top2_delta": 7.8925,
+          "top3_delta": 9.7791
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 413,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.35,
+            "triple_enabled": true,
+            "triple_n": 136,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 13.94
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 140,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 12.35,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 140,
+          "first_rate": 4.2857,
+          "top2_rate": 19.2857,
+          "top3_rate": 35.0,
+          "baseline_n": 4045,
+          "baseline_first_rate": 1.9778,
+          "baseline_top2_rate": 8.4054,
+          "baseline_top3_rate": 22.6452,
+          "first_delta": 2.308,
+          "top2_delta": 10.8803,
+          "top3_delta": 12.3548
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 63,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 1.51,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -35.0
+          }
+        }
+      }
+    },
+    "TSU": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2039,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.06,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2039,
+          "first_rate": 71.2604,
+          "top2_rate": 85.0417,
+          "top3_rate": 90.5346,
+          "baseline_n": 3904,
+          "baseline_first_rate": 57.8381,
+          "baseline_top2_rate": 74.1291,
+          "baseline_top3_rate": 82.4795,
+          "first_delta": 13.4223,
+          "top2_delta": 10.9126,
+          "top3_delta": 8.0551
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1591,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.85,
+            "triple_enabled": false,
+            "triple_n": 788,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": -0.18
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1683,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.94,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1683,
+          "first_rate": 16.9935,
+          "top2_rate": 47.1182,
+          "top3_rate": 65.4189,
+          "baseline_n": 3904,
+          "baseline_first_rate": 12.7818,
+          "baseline_top2_rate": 40.3176,
+          "baseline_top3_rate": 59.4775,
+          "first_delta": 4.2117,
+          "top2_delta": 6.8006,
+          "top3_delta": 5.9414
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": false,
+            "double_n": 109,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 10.5,
+            "triple_enabled": true,
+            "triple_n": 147,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 4.83
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 995,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 2.77,
+            "triple_enabled": true,
+            "triple_n": 436,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 5.57
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 932,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.44,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 932,
+          "first_rate": 17.4893,
+          "top2_rate": 40.9871,
+          "top3_rate": 62.2318,
+          "baseline_n": 3904,
+          "baseline_first_rate": 11.4754,
+          "baseline_top2_rate": 32.249,
+          "baseline_top3_rate": 53.791,
+          "first_delta": 6.0139,
+          "top2_delta": 8.7381,
+          "top3_delta": 8.4408
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 222,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 5.79,
+            "triple_enabled": false,
+            "triple_n": 105,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 2.53
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 123,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 10.85,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 123,
+          "first_rate": 19.5122,
+          "top2_rate": 35.7724,
+          "top3_rate": 57.7236,
+          "baseline_n": 3904,
+          "baseline_first_rate": 9.7336,
+          "baseline_top2_rate": 27.0236,
+          "baseline_top3_rate": 46.875,
+          "first_delta": 9.7786,
+          "top2_delta": 8.7488,
+          "top3_delta": 10.8486
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 60,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 10.61,
+            "triple_enabled": false,
+            "triple_n": 28,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 24.42
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 691,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.52,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 691,
+          "first_rate": 11.288,
+          "top2_rate": 28.7988,
+          "top3_rate": 48.0463,
+          "baseline_n": 3904,
+          "baseline_first_rate": 6.1988,
+          "baseline_top2_rate": 18.1609,
+          "baseline_top3_rate": 36.5266,
+          "first_delta": 5.0892,
+          "top2_delta": 10.638,
+          "top3_delta": 11.5197
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 416,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 3.4,
+            "triple_enabled": true,
+            "triple_n": 164,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 3.17
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": false,
+        "primary_n": 138,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 6.81,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 138,
+          "first_rate": 5.0725,
+          "top2_rate": 11.5942,
+          "top3_rate": 27.5362,
+          "baseline_n": 3904,
+          "baseline_first_rate": 1.9723,
+          "baseline_top2_rate": 8.1199,
+          "baseline_top3_rate": 20.7223,
+          "first_delta": 3.1001,
+          "top2_delta": 3.4743,
+          "top3_delta": 6.8139
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 62,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 9.56,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -27.54
+          }
+        }
+      }
+    },
+    "MKN": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1763,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.99,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1763,
+          "first_rate": 64.5491,
+          "top2_rate": 81.3386,
+          "top3_rate": 87.975,
+          "baseline_n": 3588,
+          "baseline_first_rate": 52.8428,
+          "baseline_top2_rate": 71.0702,
+          "baseline_top3_rate": 79.9889,
+          "first_delta": 11.7063,
+          "top2_delta": 10.2684,
+          "top3_delta": 7.9862
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1537,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.57,
+            "triple_enabled": true,
+            "triple_n": 965,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.77
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1585,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.07,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1585,
+          "first_rate": 19.6215,
+          "top2_rate": 48.265,
+          "top3_rate": 66.6246,
+          "baseline_n": 3588,
+          "baseline_first_rate": 15.2453,
+          "baseline_top2_rate": 40.6912,
+          "baseline_top3_rate": 59.5596,
+          "first_delta": 4.3762,
+          "top2_delta": 7.5738,
+          "top3_delta": 7.065
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 172,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 2.32,
+            "triple_enabled": false,
+            "triple_n": 83,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 4.76
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 984,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.58,
+            "triple_enabled": true,
+            "triple_n": 338,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 7.78
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 839,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.55,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 839,
+          "first_rate": 22.4076,
+          "top2_rate": 48.9869,
+          "top3_rate": 67.8188,
+          "baseline_n": 3588,
+          "baseline_first_rate": 14.6878,
+          "baseline_top2_rate": 37.4303,
+          "baseline_top3_rate": 56.2709,
+          "first_delta": 7.7198,
+          "top2_delta": 11.5566,
+          "top3_delta": 11.5479
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 170,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 7.48,
+            "triple_enabled": false,
+            "triple_n": 59,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 10.15
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 122,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 8.61,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 122,
+          "first_rate": 21.3115,
+          "top2_rate": 42.623,
+          "top3_rate": 55.7377,
+          "baseline_n": 3588,
+          "baseline_first_rate": 9.9498,
+          "baseline_top2_rate": 26.8395,
+          "baseline_top3_rate": 47.1293,
+          "first_delta": 11.3616,
+          "top2_delta": 15.7835,
+          "top3_delta": 8.6084
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 38,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 7.42,
+            "triple_enabled": false,
+            "triple_n": 24,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 2.6
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 640,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 8.2,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 640,
+          "first_rate": 10.1562,
+          "top2_rate": 23.2812,
+          "top3_rate": 43.5938,
+          "baseline_n": 3588,
+          "baseline_first_rate": 5.6856,
+          "baseline_top2_rate": 16.6388,
+          "baseline_top3_rate": 35.3958,
+          "first_delta": 4.4706,
+          "top2_delta": 6.6425,
+          "top3_delta": 8.198
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 337,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 7.74,
+            "triple_enabled": true,
+            "triple_n": 104,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 13.14
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 177,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 15.18,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 177,
+          "first_rate": 4.5198,
+          "top2_rate": 16.9492,
+          "top3_rate": 36.7232,
+          "baseline_n": 3588,
+          "baseline_first_rate": 1.5886,
+          "baseline_top2_rate": 7.33,
+          "baseline_top3_rate": 21.544,
+          "first_delta": 2.9311,
+          "top2_delta": 9.6192,
+          "top3_delta": 15.1791
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 81,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 5.25,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -36.72
+          }
+        }
+      }
+    },
+    "BWK": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2084,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.74,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2084,
+          "first_rate": 65.8349,
+          "top2_rate": 81.382,
+          "top3_rate": 88.2438,
+          "baseline_n": 4081,
+          "baseline_first_rate": 54.0309,
+          "baseline_top2_rate": 72.2617,
+          "baseline_top3_rate": 81.4996,
+          "first_delta": 11.8041,
+          "top2_delta": 9.1203,
+          "top3_delta": 6.7441
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1752,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.51,
+            "triple_enabled": true,
+            "triple_n": 833,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 3.47
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1769,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.14,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1769,
+          "first_rate": 17.5806,
+          "top2_rate": 44.9972,
+          "top3_rate": 64.5562,
+          "baseline_n": 4081,
+          "baseline_first_rate": 13.3546,
+          "baseline_top2_rate": 38.52,
+          "baseline_top3_rate": 57.4124,
+          "first_delta": 4.226,
+          "top2_delta": 6.4772,
+          "top3_delta": 7.1438
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 188,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 5.89,
+            "triple_enabled": true,
+            "triple_n": 94,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 8.02
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1068,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.92,
+            "triple_enabled": true,
+            "triple_n": 389,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 10.06
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 964,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.95,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 964,
+          "first_rate": 19.7095,
+          "top2_rate": 46.888,
+          "top3_rate": 66.1826,
+          "baseline_n": 4081,
+          "baseline_first_rate": 13.9182,
+          "baseline_top2_rate": 35.604,
+          "baseline_top3_rate": 55.2316,
+          "first_delta": 5.7914,
+          "top2_delta": 11.2839,
+          "top3_delta": 10.951
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 206,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 7.12,
+            "triple_enabled": false,
+            "triple_n": 85,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 3.23
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 131,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 10.08,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 131,
+          "first_rate": 12.2137,
+          "top2_rate": 35.1145,
+          "top3_rate": 57.2519,
+          "baseline_n": 4081,
+          "baseline_first_rate": 10.1201,
+          "baseline_top2_rate": 26.8807,
+          "baseline_top3_rate": 47.1698,
+          "first_delta": 2.0937,
+          "top2_delta": 8.2338,
+          "top3_delta": 10.0821
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 47,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 12.96,
+            "triple_enabled": false,
+            "triple_n": 31,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 10.49
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 700,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 12.35,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 700,
+          "first_rate": 10.8571,
+          "top2_rate": 28.0,
+          "top3_rate": 49.4286,
+          "baseline_n": 4081,
+          "baseline_first_rate": 6.714,
+          "baseline_top2_rate": 18.9904,
+          "baseline_top3_rate": 37.0742,
+          "first_delta": 4.1431,
+          "top2_delta": 9.0096,
+          "top3_delta": 12.3543
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 405,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.62,
+            "triple_enabled": true,
+            "triple_n": 133,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 12.23
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 204,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.96,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 204,
+          "first_rate": 3.9216,
+          "top2_rate": 13.2353,
+          "top3_rate": 32.3529,
+          "baseline_n": 4081,
+          "baseline_first_rate": 1.8623,
+          "baseline_top2_rate": 7.7432,
+          "baseline_top3_rate": 21.3918,
+          "first_delta": 2.0593,
+          "top2_delta": 5.4921,
+          "top3_delta": 10.9611
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 97,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 6.82,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -32.35
+          }
+        }
+      }
+    },
+    "SME": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2490,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.23,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2490,
+          "first_rate": 68.9157,
+          "top2_rate": 82.8916,
+          "top3_rate": 89.1165,
+          "baseline_n": 4464,
+          "baseline_first_rate": 58.4229,
+          "baseline_top2_rate": 74.44,
+          "baseline_top3_rate": 82.8853,
+          "first_delta": 10.4927,
+          "top2_delta": 8.4516,
+          "top3_delta": 6.2312
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 2143,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.48,
+            "triple_enabled": true,
+            "triple_n": 1393,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 1.15
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 2087,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.26,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2087,
+          "first_rate": 16.0997,
+          "top2_rate": 44.3699,
+          "top3_rate": 63.0091,
+          "baseline_n": 4464,
+          "baseline_first_rate": 13.5977,
+          "baseline_top2_rate": 39.1353,
+          "baseline_top3_rate": 57.7509,
+          "first_delta": 2.502,
+          "top2_delta": 5.2346,
+          "top3_delta": 5.2582
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 223,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.32,
+            "triple_enabled": false,
+            "triple_n": 105,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 1.14
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1240,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.2,
+            "triple_enabled": true,
+            "triple_n": 445,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 7.22
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1170,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.05,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1170,
+          "first_rate": 18.0342,
+          "top2_rate": 42.9915,
+          "top3_rate": 64.359,
+          "baseline_n": 4464,
+          "baseline_first_rate": 11.6039,
+          "baseline_top2_rate": 33.9606,
+          "baseline_top3_rate": 55.3091,
+          "first_delta": 6.4302,
+          "top2_delta": 9.0309,
+          "top3_delta": 9.0498
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 221,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 1.1,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -64.06
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 167,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 5.73,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 167,
+          "first_rate": 11.976,
+          "top2_rate": 34.1317,
+          "top3_rate": 53.8922,
+          "baseline_n": 4464,
+          "baseline_first_rate": 9.655,
+          "baseline_top2_rate": 28.0466,
+          "baseline_top3_rate": 48.1631,
+          "first_delta": 2.321,
+          "top2_delta": 6.0851,
+          "top3_delta": 5.7291
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 50,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 5.74,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -52.26
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 867,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.77,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 867,
+          "first_rate": 7.9585,
+          "top2_rate": 21.9146,
+          "top3_rate": 43.1373,
+          "baseline_n": 4464,
+          "baseline_first_rate": 5.1299,
+          "baseline_top2_rate": 17.0251,
+          "baseline_top3_rate": 34.3638,
+          "first_delta": 2.8285,
+          "top2_delta": 4.8896,
+          "top3_delta": 8.7735
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 377,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.15,
+            "triple_enabled": true,
+            "triple_n": 107,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 15.57
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 211,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.26,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 211,
+          "first_rate": 3.3175,
+          "top2_rate": 9.4787,
+          "top3_rate": 32.7014,
+          "baseline_n": 4464,
+          "baseline_first_rate": 1.5905,
+          "baseline_top2_rate": 7.3925,
+          "baseline_top3_rate": 21.4382,
+          "first_delta": 1.727,
+          "top2_delta": 2.0862,
+          "top3_delta": 11.2632
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 80,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 8.91,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -32.34
+          }
+        }
+      }
+    },
+    "AMG": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2277,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.05,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2277,
+          "first_rate": 72.3759,
+          "top2_rate": 84.8046,
+          "top3_rate": 90.9969,
+          "baseline_n": 4473,
+          "baseline_first_rate": 59.222,
+          "baseline_top2_rate": 75.408,
+          "baseline_top3_rate": 83.9481,
+          "first_delta": 13.1539,
+          "top2_delta": 9.3966,
+          "top3_delta": 7.0488
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 2006,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.72,
+            "triple_enabled": true,
+            "triple_n": 1419,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.5
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1984,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.32,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1984,
+          "first_rate": 16.129,
+          "top2_rate": 44.6069,
+          "top3_rate": 63.7601,
+          "baseline_n": 4473,
+          "baseline_first_rate": 11.8712,
+          "baseline_top2_rate": 36.888,
+          "baseline_top3_rate": 55.4438,
+          "first_delta": 4.2578,
+          "top2_delta": 7.7189,
+          "top3_delta": 8.3163
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 263,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 5.77,
+            "triple_enabled": true,
+            "triple_n": 115,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 9.34
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1171,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 2.53,
+            "triple_enabled": true,
+            "triple_n": 371,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 7.09
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1165,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.62,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1165,
+          "first_rate": 17.6824,
+          "top2_rate": 44.8927,
+          "top3_rate": 64.8069,
+          "baseline_n": 4473,
+          "baseline_first_rate": 12.0054,
+          "baseline_top2_rate": 33.8475,
+          "baseline_top3_rate": 54.1918,
+          "first_delta": 5.677,
+          "top2_delta": 11.0452,
+          "top3_delta": 10.615
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 216,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 7.5,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -64.72
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 198,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 13.89,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 198,
+          "first_rate": 19.697,
+          "top2_rate": 38.8889,
+          "top3_rate": 62.6263,
+          "baseline_n": 4473,
+          "baseline_first_rate": 9.7474,
+          "baseline_top2_rate": 27.1406,
+          "baseline_top3_rate": 48.7369,
+          "first_delta": 9.9496,
+          "top2_delta": 11.7483,
+          "top3_delta": 13.8894
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 78,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 5.88,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -63.35
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 748,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.15,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 748,
+          "first_rate": 10.4278,
+          "top2_rate": 26.738,
+          "top3_rate": 46.123,
+          "baseline_n": 4473,
+          "baseline_first_rate": 5.4326,
+          "baseline_top2_rate": 18.8464,
+          "baseline_top3_rate": 36.9774,
+          "first_delta": 4.9952,
+          "top2_delta": 7.8916,
+          "top3_delta": 9.1456
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 345,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 5.34,
+            "triple_enabled": false,
+            "triple_n": 97,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 7.65
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 195,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.13,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 195,
+          "first_rate": 4.1026,
+          "top2_rate": 13.3333,
+          "top3_rate": 28.7179,
+          "baseline_n": 4473,
+          "baseline_first_rate": 1.7214,
+          "baseline_top2_rate": 7.8694,
+          "baseline_top3_rate": 20.5902,
+          "first_delta": 2.3811,
+          "top2_delta": 5.4639,
+          "top3_delta": 8.1277
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 93,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 0.31,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -28.72
+          }
+        }
+      }
+    },
+    "NRT": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1723,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.71,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1723,
+          "first_rate": 61.2304,
+          "top2_rate": 77.3651,
+          "top3_rate": 85.2583,
+          "baseline_n": 3689,
+          "baseline_first_rate": 47.8992,
+          "baseline_top2_rate": 65.3565,
+          "baseline_top3_rate": 75.5489,
+          "first_delta": 13.3313,
+          "top2_delta": 12.0086,
+          "top3_delta": 9.7093
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1573,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.25,
+            "triple_enabled": true,
+            "triple_n": 1060,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.01
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1598,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.57,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1598,
+          "first_rate": 19.0864,
+          "top2_rate": 45.3692,
+          "top3_rate": 64.2053,
+          "baseline_n": 3689,
+          "baseline_first_rate": 14.5568,
+          "baseline_top2_rate": 38.6555,
+          "baseline_top3_rate": 57.6308,
+          "first_delta": 4.5296,
+          "top2_delta": 6.7137,
+          "top3_delta": 6.5745
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 180,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 7.04,
+            "triple_enabled": true,
+            "triple_n": 91,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 5.71
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1030,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.36,
+            "triple_enabled": true,
+            "triple_n": 349,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 4.36
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 887,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.16,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 887,
+          "first_rate": 25.3664,
+          "top2_rate": 48.1398,
+          "top3_rate": 64.2616,
+          "baseline_n": 3689,
+          "baseline_first_rate": 15.614,
+          "baseline_top2_rate": 35.7007,
+          "baseline_top3_rate": 53.1038,
+          "first_delta": 9.7524,
+          "top2_delta": 12.4391,
+          "top3_delta": 11.1577
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 140,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.6,
+            "triple_enabled": false,
+            "triple_n": 50,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 1.74
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 145,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 17.48,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 145,
+          "first_rate": 19.3103,
+          "top2_rate": 41.3793,
+          "top3_rate": 66.8966,
+          "baseline_n": 3689,
+          "baseline_first_rate": 11.9274,
+          "baseline_top2_rate": 29.7371,
+          "baseline_top3_rate": 49.4172,
+          "first_delta": 7.383,
+          "top2_delta": 11.6423,
+          "top3_delta": 17.4794
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 50,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 3.1,
+            "triple_enabled": false,
+            "triple_n": 30,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -6.9
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 599,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.41,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 599,
+          "first_rate": 14.0234,
+          "top2_rate": 31.0518,
+          "top3_rate": 50.5843,
+          "baseline_n": 3689,
+          "baseline_first_rate": 7.807,
+          "baseline_top2_rate": 20.6289,
+          "baseline_top3_rate": 39.1705,
+          "first_delta": 6.2164,
+          "top2_delta": 10.4229,
+          "top3_delta": 11.4138
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 305,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 9.42,
+            "triple_enabled": false,
+            "triple_n": 80,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 9.42
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 152,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 13.74,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 152,
+          "first_rate": 6.5789,
+          "top2_rate": 17.7632,
+          "top3_rate": 38.8158,
+          "baseline_n": 3689,
+          "baseline_first_rate": 2.1957,
+          "baseline_top2_rate": 9.9214,
+          "baseline_top3_rate": 25.0745,
+          "first_delta": 4.3832,
+          "top2_delta": 7.8418,
+          "top3_delta": 13.7412
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 67,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 8.95,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -38.82
+          }
+        }
+      }
+    },
+    "MRG": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2454,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.92,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2454,
+          "first_rate": 69.0709,
+          "top2_rate": 83.8631,
+          "top3_rate": 89.9348,
+          "baseline_n": 4677,
+          "baseline_first_rate": 56.3823,
+          "baseline_top2_rate": 74.1287,
+          "baseline_top3_rate": 82.0184,
+          "first_delta": 12.6886,
+          "top2_delta": 9.7344,
+          "top3_delta": 7.9164
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 2133,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.21,
+            "triple_enabled": false,
+            "triple_n": 1404,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 0.98
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 2140,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.36,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2140,
+          "first_rate": 17.3364,
+          "top2_rate": 46.8692,
+          "top3_rate": 64.486,
+          "baseline_n": 4677,
+          "baseline_first_rate": 13.2564,
+          "baseline_top2_rate": 38.7855,
+          "baseline_top3_rate": 57.1306,
+          "first_delta": 4.0801,
+          "top2_delta": 8.0836,
+          "top3_delta": 7.3553
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 189,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 11.13,
+            "triple_enabled": true,
+            "triple_n": 118,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 13.86
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1323,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.39,
+            "triple_enabled": true,
+            "triple_n": 411,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 13.21
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1132,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.09,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1132,
+          "first_rate": 16.6961,
+          "top2_rate": 41.1661,
+          "top3_rate": 62.8975,
+          "baseline_n": 4677,
+          "baseline_first_rate": 12.4439,
+          "baseline_top2_rate": 32.9485,
+          "baseline_top3_rate": 52.8116,
+          "first_delta": 4.2522,
+          "top2_delta": 8.2176,
+          "top3_delta": 10.0859
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 171,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 18.24,
+            "triple_enabled": false,
+            "triple_n": 57,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 19.4
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 166,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 12.2,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 166,
+          "first_rate": 21.0843,
+          "top2_rate": 39.759,
+          "top3_rate": 60.241,
+          "baseline_n": 4677,
+          "baseline_first_rate": 9.4933,
+          "baseline_top2_rate": 26.6624,
+          "baseline_top3_rate": 48.0436,
+          "first_delta": 11.5911,
+          "top2_delta": 13.0966,
+          "top3_delta": 12.1973
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 56,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 15.88,
+            "triple_enabled": false,
+            "triple_n": 27,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 18.66
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 748,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.49,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 748,
+          "first_rate": 12.4332,
+          "top2_rate": 27.2727,
+          "top3_rate": 46.7914,
+          "baseline_n": 4677,
+          "baseline_first_rate": 6.3288,
+          "baseline_top2_rate": 18.3665,
+          "baseline_top3_rate": 35.3004,
+          "first_delta": 6.1043,
+          "top2_delta": 8.9063,
+          "top3_delta": 11.491
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 397,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 5.35,
+            "triple_enabled": true,
+            "triple_n": 99,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 16.59
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 189,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 6.78,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 189,
+          "first_rate": 5.8201,
+          "top2_rate": 15.873,
+          "top3_rate": 31.2169,
+          "baseline_n": 4677,
+          "baseline_first_rate": 2.0954,
+          "baseline_top2_rate": 9.1084,
+          "baseline_top3_rate": 24.4387,
+          "first_delta": 3.7247,
+          "top2_delta": 6.7646,
+          "top3_delta": 6.7782
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 58,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 10.92,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -30.46
+          }
+        }
+      }
+    },
+    "KJM": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1870,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.46,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1870,
+          "first_rate": 68.7701,
+          "top2_rate": 83.3155,
+          "top3_rate": 89.6791,
+          "baseline_n": 3768,
+          "baseline_first_rate": 56.0775,
+          "baseline_top2_rate": 73.3811,
+          "baseline_top3_rate": 82.2187,
+          "first_delta": 12.6926,
+          "top2_delta": 9.9344,
+          "top3_delta": 7.4605
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1695,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.47,
+            "triple_enabled": false,
+            "triple_n": 1103,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 0.71
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1575,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.98,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1575,
+          "first_rate": 16.5714,
+          "top2_rate": 44.6349,
+          "top3_rate": 62.7937,
+          "baseline_n": 3768,
+          "baseline_first_rate": 12.845,
+          "baseline_top2_rate": 37.7389,
+          "baseline_top3_rate": 55.8121,
+          "first_delta": 3.7264,
+          "top2_delta": 6.8961,
+          "top3_delta": 6.9815
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 149,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 9.09,
+            "triple_enabled": true,
+            "triple_n": 79,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 22.17
+          },
+          "sashi": {
+            "double_enabled": false,
+            "double_n": 1007,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 1.99,
+            "triple_enabled": true,
+            "triple_n": 311,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 13.54
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 787,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.29,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 787,
+          "first_rate": 20.7116,
+          "top2_rate": 43.3291,
+          "top3_rate": 62.2618,
+          "baseline_n": 3768,
+          "baseline_first_rate": 13.3493,
+          "baseline_top2_rate": 33.758,
+          "baseline_top3_rate": 52.9724,
+          "first_delta": 7.3623,
+          "top2_delta": 9.5711,
+          "top3_delta": 9.2894
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 125,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 12.14,
+            "triple_enabled": false,
+            "triple_n": 49,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 19.37
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 107,
+        "primary_stability_blocks": 1,
+        "primary_delta_top3": 4.74,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 107,
+          "first_rate": 12.1495,
+          "top2_rate": 34.5794,
+          "top3_rate": 54.2056,
+          "baseline_n": 3768,
+          "baseline_first_rate": 9.9522,
+          "baseline_top2_rate": 29.0074,
+          "baseline_top3_rate": 49.4692,
+          "first_delta": 2.1973,
+          "top2_delta": 5.572,
+          "top3_delta": 4.7364
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 38,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 6.32,
+            "triple_enabled": false,
+            "triple_n": 21,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 2.94
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 574,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.98,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 574,
+          "first_rate": 10.2787,
+          "top2_rate": 27.7003,
+          "top3_rate": 48.6063,
+          "baseline_n": 3768,
+          "baseline_first_rate": 5.759,
+          "baseline_top2_rate": 17.8344,
+          "baseline_top3_rate": 36.6242,
+          "first_delta": 4.5197,
+          "top2_delta": 9.866,
+          "top3_delta": 11.9821
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 345,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.5,
+            "triple_enabled": false,
+            "triple_n": 95,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 17.71
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 138,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 9.09,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 138,
+          "first_rate": 5.7971,
+          "top2_rate": 15.942,
+          "top3_rate": 31.8841,
+          "baseline_n": 3768,
+          "baseline_first_rate": 2.017,
+          "baseline_top2_rate": 8.2803,
+          "baseline_top3_rate": 22.7972,
+          "first_delta": 3.7801,
+          "top2_delta": 7.6618,
+          "top3_delta": 9.0868
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 52,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 6.58,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -31.88
+          }
+        }
+      }
+    },
+    "MYJ": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2282,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.09,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2282,
+          "first_rate": 68.142,
+          "top2_rate": 83.1288,
+          "top3_rate": 89.0009,
+          "baseline_n": 4652,
+          "baseline_first_rate": 56.0619,
+          "baseline_top2_rate": 72.6139,
+          "baseline_top3_rate": 80.9114,
+          "first_delta": 12.0801,
+          "top2_delta": 10.5149,
+          "top3_delta": 8.0894
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1806,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.79,
+            "triple_enabled": true,
+            "triple_n": 1010,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.69
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1930,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.76,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1930,
+          "first_rate": 16.8394,
+          "top2_rate": 44.6632,
+          "top3_rate": 64.0933,
+          "baseline_n": 4652,
+          "baseline_first_rate": 12.7257,
+          "baseline_top2_rate": 38.1986,
+          "baseline_top3_rate": 57.3302,
+          "first_delta": 4.1137,
+          "top2_delta": 6.4646,
+          "top3_delta": 6.7631
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 246,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 6.87,
+            "triple_enabled": true,
+            "triple_n": 118,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 10.92
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1077,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.35,
+            "triple_enabled": true,
+            "triple_n": 364,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 8.82
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1008,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.02,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1008,
+          "first_rate": 18.9484,
+          "top2_rate": 45.0397,
+          "top3_rate": 64.881,
+          "baseline_n": 4652,
+          "baseline_first_rate": 12.8332,
+          "baseline_top2_rate": 35.6836,
+          "baseline_top3_rate": 56.8573,
+          "first_delta": 6.1152,
+          "top2_delta": 9.3561,
+          "top3_delta": 8.0237
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 200,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 12.55,
+            "triple_enabled": false,
+            "triple_n": 72,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 10.55
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 144,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 11.08,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 144,
+          "first_rate": 18.0556,
+          "top2_rate": 33.3333,
+          "top3_rate": 57.6389,
+          "baseline_n": 4652,
+          "baseline_first_rate": 10.1892,
+          "baseline_top2_rate": 26.6122,
+          "baseline_top3_rate": 46.5606,
+          "first_delta": 7.8664,
+          "top2_delta": 6.7211,
+          "top3_delta": 11.0783
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 53,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 3.13,
+            "triple_enabled": false,
+            "triple_n": 35,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -0.1
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 664,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.05,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 664,
+          "first_rate": 10.6928,
+          "top2_rate": 25.753,
+          "top3_rate": 46.8373,
+          "baseline_n": 4652,
+          "baseline_first_rate": 6.4918,
+          "baseline_top2_rate": 19.0026,
+          "baseline_top3_rate": 37.7902,
+          "first_delta": 4.2009,
+          "top2_delta": 6.7504,
+          "top3_delta": 9.0472
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 379,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 4.95,
+            "triple_enabled": true,
+            "triple_n": 133,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 10.38
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 213,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.59,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 213,
+          "first_rate": 3.7559,
+          "top2_rate": 15.9624,
+          "top3_rate": 31.9249,
+          "baseline_n": 4652,
+          "baseline_first_rate": 1.6982,
+          "baseline_top2_rate": 7.8891,
+          "baseline_top3_rate": 20.3353,
+          "first_delta": 2.0577,
+          "top2_delta": 8.0734,
+          "top3_delta": 11.5895
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 90,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 1.26,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -30.96
+          }
+        }
+      }
+    },
+    "TKY": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2275,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.51,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2275,
+          "first_rate": 72.967,
+          "top2_rate": 86.5934,
+          "top3_rate": 92.2198,
+          "baseline_n": 4177,
+          "baseline_first_rate": 62.9878,
+          "baseline_top2_rate": 79.5547,
+          "baseline_top3_rate": 86.713,
+          "first_delta": 9.9792,
+          "top2_delta": 7.0387,
+          "top3_delta": 5.5068
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 2067,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.48,
+            "triple_enabled": true,
+            "triple_n": 1445,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.97
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1813,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.88,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1813,
+          "first_rate": 17.4848,
+          "top2_rate": 47.9316,
+          "top3_rate": 66.6851,
+          "baseline_n": 4177,
+          "baseline_first_rate": 12.4252,
+          "baseline_top2_rate": 41.1539,
+          "baseline_top3_rate": 59.8037,
+          "first_delta": 5.0596,
+          "top2_delta": 6.7777,
+          "top3_delta": 6.8814
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 213,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.44,
+            "triple_enabled": true,
+            "triple_n": 99,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 11.05
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1115,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.25,
+            "triple_enabled": true,
+            "triple_n": 366,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 9.18
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 902,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.01,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 902,
+          "first_rate": 16.5188,
+          "top2_rate": 40.9091,
+          "top3_rate": 61.7517,
+          "baseline_n": 4177,
+          "baseline_first_rate": 10.6536,
+          "baseline_top2_rate": 32.7987,
+          "baseline_top3_rate": 53.7467,
+          "first_delta": 5.8653,
+          "top2_delta": 8.1104,
+          "top3_delta": 8.005
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 156,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 8.12,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -61.75
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 161,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.91,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 161,
+          "first_rate": 15.528,
+          "top2_rate": 36.0248,
+          "top3_rate": 55.9006,
+          "baseline_n": 4177,
+          "baseline_first_rate": 8.4989,
+          "baseline_top2_rate": 24.8743,
+          "baseline_top3_rate": 46.9955,
+          "first_delta": 7.029,
+          "top2_delta": 11.1505,
+          "top3_delta": 8.9052
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 65,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 5.64,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -55.9
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 666,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.86,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 666,
+          "first_rate": 6.6066,
+          "top2_rate": 21.4715,
+          "top3_rate": 44.1441,
+          "baseline_n": 4177,
+          "baseline_first_rate": 4.3333,
+          "baseline_top2_rate": 15.7529,
+          "baseline_top3_rate": 34.283,
+          "first_delta": 2.2734,
+          "top2_delta": 5.7185,
+          "top3_delta": 9.8612
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 356,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.07,
+            "triple_enabled": true,
+            "triple_n": 112,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 13.83
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 150,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 20.23,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 150,
+          "first_rate": 2.6667,
+          "top2_rate": 14.6667,
+          "top3_rate": 38.6667,
+          "baseline_n": 4177,
+          "baseline_first_rate": 1.1013,
+          "baseline_top2_rate": 5.8655,
+          "baseline_top3_rate": 18.4343,
+          "first_delta": 1.5654,
+          "top2_delta": 8.8012,
+          "top3_delta": 20.2324
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 69,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 3.36,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -38.67
+          }
+        }
+      }
+    },
+    "SMS": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1881,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.92,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1881,
+          "first_rate": 72.302,
+          "top2_rate": 86.0181,
+          "top3_rate": 91.866,
+          "baseline_n": 3706,
+          "baseline_first_rate": 61.8187,
+          "baseline_top2_rate": 78.0896,
+          "baseline_top3_rate": 85.9417,
+          "first_delta": 10.4833,
+          "top2_delta": 7.9285,
+          "top3_delta": 5.9243
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1650,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.14,
+            "triple_enabled": false,
+            "triple_n": 1032,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 0.68
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1453,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.49,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1453,
+          "first_rate": 15.2099,
+          "top2_rate": 43.4274,
+          "top3_rate": 62.4226,
+          "baseline_n": 3706,
+          "baseline_first_rate": 11.4409,
+          "baseline_top2_rate": 36.6163,
+          "baseline_top3_rate": 55.9363,
+          "first_delta": 3.769,
+          "top2_delta": 6.8111,
+          "top3_delta": 6.4863
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": false,
+            "double_n": 175,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 0.09,
+            "triple_enabled": false,
+            "triple_n": 83,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 14.53
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 853,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.54,
+            "triple_enabled": true,
+            "triple_n": 268,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 9.06
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 794,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.24,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 794,
+          "first_rate": 17.0025,
+          "top2_rate": 44.5844,
+          "top3_rate": 65.3652,
+          "baseline_n": 3706,
+          "baseline_first_rate": 11.0901,
+          "baseline_top2_rate": 34.9703,
+          "baseline_top3_rate": 56.1252,
+          "first_delta": 5.9124,
+          "top2_delta": 9.6141,
+          "top3_delta": 9.24
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 147,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 10.87,
+            "triple_enabled": false,
+            "triple_n": 58,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 12.26
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 118,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 9.63,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 118,
+          "first_rate": 22.0339,
+          "top2_rate": 44.9153,
+          "top3_rate": 55.9322,
+          "baseline_n": 3706,
+          "baseline_first_rate": 9.2013,
+          "baseline_top2_rate": 25.85,
+          "baseline_top3_rate": 46.3033,
+          "first_delta": 12.8326,
+          "top2_delta": 19.0653,
+          "top3_delta": 9.6289
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 40,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 6.57,
+            "triple_enabled": false,
+            "triple_n": 27,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 14.44
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 502,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 12.15,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 502,
+          "first_rate": 8.7649,
+          "top2_rate": 25.6972,
+          "top3_rate": 47.012,
+          "baseline_n": 3706,
+          "baseline_first_rate": 4.6141,
+          "baseline_top2_rate": 16.7296,
+          "baseline_top3_rate": 34.8624,
+          "first_delta": 4.1508,
+          "top2_delta": 8.9676,
+          "top3_delta": 12.1496
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 288,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.38,
+            "triple_enabled": false,
+            "triple_n": 72,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 12.71
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 129,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 8.76,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 129,
+          "first_rate": 4.6512,
+          "top2_rate": 10.0775,
+          "top3_rate": 29.4574,
+          "baseline_n": 3706,
+          "baseline_first_rate": 1.8349,
+          "baseline_top2_rate": 7.7442,
+          "baseline_top3_rate": 20.6962,
+          "first_delta": 2.8163,
+          "top2_delta": 2.3333,
+          "top3_delta": 8.7612
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 66,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 2.36,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -29.46
+          }
+        }
+      }
+    },
+    "WKM": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2094,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.65,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2094,
+          "first_rate": 67.7173,
+          "top2_rate": 82.808,
+          "top3_rate": 90.1146,
+          "baseline_n": 3753,
+          "baseline_first_rate": 58.0336,
+          "baseline_top2_rate": 75.1132,
+          "baseline_top3_rate": 84.4658,
+          "first_delta": 9.6837,
+          "top2_delta": 7.6948,
+          "top3_delta": 5.6489
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1832,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.44,
+            "triple_enabled": true,
+            "triple_n": 1156,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 2.27
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1584,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.88,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1584,
+          "first_rate": 16.0354,
+          "top2_rate": 44.0025,
+          "top3_rate": 64.3939,
+          "baseline_n": 3753,
+          "baseline_first_rate": 12.0437,
+          "baseline_top2_rate": 36.7706,
+          "baseline_top3_rate": 56.5148,
+          "first_delta": 3.9917,
+          "top2_delta": 7.2319,
+          "top3_delta": 7.8792
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": false,
+            "double_n": 183,
+            "double_stability_blocks": 2,
+            "double_delta_top3": 1.01,
+            "triple_enabled": false,
+            "triple_n": 86,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 1.85
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 948,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.88,
+            "triple_enabled": true,
+            "triple_n": 301,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 7.71
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 800,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.94,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 800,
+          "first_rate": 17.75,
+          "top2_rate": 45.25,
+          "top3_rate": 66.75,
+          "baseline_n": 3753,
+          "baseline_first_rate": 11.6707,
+          "baseline_top2_rate": 33.6797,
+          "baseline_top3_rate": 54.8095,
+          "first_delta": 6.0793,
+          "top2_delta": 11.5703,
+          "top3_delta": 11.9405
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 140,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 9.68,
+            "triple_enabled": false,
+            "triple_n": 34,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 15.6
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 115,
+        "primary_stability_blocks": 1,
+        "primary_delta_top3": 16.38,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 115,
+          "first_rate": 19.1304,
+          "top2_rate": 39.1304,
+          "top3_rate": 62.6087,
+          "baseline_n": 3753,
+          "baseline_first_rate": 10.2318,
+          "baseline_top2_rate": 27.6312,
+          "baseline_top3_rate": 46.2297,
+          "first_delta": 8.8986,
+          "top2_delta": 11.4992,
+          "top3_delta": 16.379
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 43,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 23.44,
+            "triple_enabled": false,
+            "triple_n": 27,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 18.87
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 587,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.0,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 587,
+          "first_rate": 10.3918,
+          "top2_rate": 26.9165,
+          "top3_rate": 45.8262,
+          "baseline_n": 3753,
+          "baseline_first_rate": 5.8087,
+          "baseline_top2_rate": 18.2787,
+          "baseline_top3_rate": 34.8255,
+          "first_delta": 4.5831,
+          "top2_delta": 8.6378,
+          "top3_delta": 11.0008
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 302,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 6.49,
+            "triple_enabled": false,
+            "triple_n": 86,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 5.34
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 157,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.18,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 157,
+          "first_rate": 3.1847,
+          "top2_rate": 8.9172,
+          "top3_rate": 33.121,
+          "baseline_n": 3753,
+          "baseline_first_rate": 2.2116,
+          "baseline_top2_rate": 8.5265,
+          "baseline_top3_rate": 22.9416,
+          "first_delta": 0.9731,
+          "top2_delta": 0.3907,
+          "top3_delta": 10.1794
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 68,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 9.53,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -33.12
+          }
+        }
+      }
+    },
+    "ASY": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2291,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 4.62,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2291,
+          "first_rate": 68.2235,
+          "top2_rate": 82.0166,
+          "top3_rate": 88.5203,
+          "baseline_n": 3863,
+          "baseline_first_rate": 59.6169,
+          "baseline_top2_rate": 75.8478,
+          "baseline_top3_rate": 83.8985,
+          "first_delta": 8.6066,
+          "top2_delta": 6.1688,
+          "top3_delta": 4.6218
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 2120,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 0.02,
+            "triple_enabled": true,
+            "triple_n": 1452,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.15
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1537,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.51,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1537,
+          "first_rate": 14.3787,
+          "top2_rate": 40.9239,
+          "top3_rate": 60.8328,
+          "baseline_n": 3863,
+          "baseline_first_rate": 10.0699,
+          "baseline_top2_rate": 33.5749,
+          "baseline_top3_rate": 53.3264,
+          "first_delta": 4.3088,
+          "top2_delta": 7.3489,
+          "top3_delta": 7.5064
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 183,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.12,
+            "triple_enabled": false,
+            "triple_n": 97,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 6.89
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 907,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.32,
+            "triple_enabled": true,
+            "triple_n": 275,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 5.8
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 848,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.08,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 848,
+          "first_rate": 16.6274,
+          "top2_rate": 44.4575,
+          "top3_rate": 63.6792,
+          "baseline_n": 3863,
+          "baseline_first_rate": 10.5876,
+          "baseline_top2_rate": 33.2384,
+          "baseline_top3_rate": 52.6016,
+          "first_delta": 6.0397,
+          "top2_delta": 11.2191,
+          "top3_delta": 11.0776
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 146,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 12.35,
+            "triple_enabled": false,
+            "triple_n": 60,
+            "triple_stability_blocks": 1,
+            "triple_delta_top3": 14.65
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 126,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 17.72,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 126,
+          "first_rate": 25.3968,
+          "top2_rate": 47.619,
+          "top3_rate": 65.873,
+          "baseline_n": 3863,
+          "baseline_first_rate": 10.9759,
+          "baseline_top2_rate": 29.0189,
+          "baseline_top3_rate": 48.1491,
+          "first_delta": 14.4209,
+          "top2_delta": 18.6002,
+          "top3_delta": 17.7239
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 35,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 5.56,
+            "triple_enabled": false,
+            "triple_n": 28,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -1.59
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 521,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.54,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 521,
+          "first_rate": 12.0921,
+          "top2_rate": 29.5585,
+          "top3_rate": 51.2476,
+          "baseline_n": 3863,
+          "baseline_first_rate": 6.4717,
+          "baseline_top2_rate": 20.1916,
+          "baseline_top3_rate": 39.7101,
+          "first_delta": 5.6205,
+          "top2_delta": 9.367,
+          "top3_delta": 11.5375
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 272,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 5.37,
+            "triple_enabled": false,
+            "triple_n": 76,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 13.23
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 169,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 16.97,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 169,
+          "first_rate": 5.9172,
+          "top2_rate": 16.568,
+          "top3_rate": 39.0533,
+          "baseline_n": 3863,
+          "baseline_first_rate": 2.278,
+          "baseline_top2_rate": 8.1284,
+          "baseline_top3_rate": 22.0813,
+          "first_delta": 3.6391,
+          "top2_delta": 8.4396,
+          "top3_delta": 16.972
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 67,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 1.25,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -39.05
+          }
+        }
+      }
+    },
+    "FKO": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 1974,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.62,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1974,
+          "first_rate": 69.7062,
+          "top2_rate": 83.4347,
+          "top3_rate": 89.1591,
+          "baseline_n": 3875,
+          "baseline_first_rate": 58.7613,
+          "baseline_top2_rate": 74.9935,
+          "baseline_top3_rate": 83.5355,
+          "first_delta": 10.9449,
+          "top2_delta": 8.4411,
+          "top3_delta": 5.6236
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1711,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.7,
+            "triple_enabled": true,
+            "triple_n": 1002,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 2.27
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1627,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.4,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1627,
+          "first_rate": 17.6398,
+          "top2_rate": 46.7117,
+          "top3_rate": 67.1789,
+          "baseline_n": 3875,
+          "baseline_first_rate": 14.4258,
+          "baseline_top2_rate": 41.2129,
+          "baseline_top3_rate": 60.7742,
+          "first_delta": 3.214,
+          "top2_delta": 5.4988,
+          "top3_delta": 6.4047
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 266,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.74,
+            "triple_enabled": true,
+            "triple_n": 105,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 6.67
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1084,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 3.58,
+            "triple_enabled": true,
+            "triple_n": 385,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 6.81
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 857,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.97,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 857,
+          "first_rate": 22.4037,
+          "top2_rate": 50.0583,
+          "top3_rate": 68.2614,
+          "baseline_n": 3875,
+          "baseline_first_rate": 14.4,
+          "baseline_top2_rate": 38.1419,
+          "baseline_top3_rate": 57.2903,
+          "first_delta": 8.0037,
+          "top2_delta": 11.9164,
+          "top3_delta": 10.9711
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 205,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 10.79,
+            "triple_enabled": false,
+            "triple_n": 82,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 14.69
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 128,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 7.07,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 128,
+          "first_rate": 14.8438,
+          "top2_rate": 38.2812,
+          "top3_rate": 54.6875,
+          "baseline_n": 3875,
+          "baseline_first_rate": 7.8968,
+          "baseline_top2_rate": 24.4387,
+          "baseline_top3_rate": 47.6129,
+          "first_delta": 6.947,
+          "top2_delta": 13.8425,
+          "top3_delta": 7.0746
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 35,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 8.17,
+            "triple_enabled": false,
+            "triple_n": 26,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 14.54
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 581,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 9.83,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 581,
+          "first_rate": 7.0568,
+          "top2_rate": 22.7194,
+          "top3_rate": 44.9225,
+          "baseline_n": 3875,
+          "baseline_first_rate": 3.6129,
+          "baseline_top2_rate": 16.0258,
+          "baseline_top3_rate": 35.0968,
+          "first_delta": 3.4439,
+          "top2_delta": 6.6936,
+          "top3_delta": 9.8258
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 299,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 9.06,
+            "triple_enabled": false,
+            "triple_n": 92,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 9.98
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 151,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.51,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 151,
+          "first_rate": 1.9868,
+          "top2_rate": 12.5828,
+          "top3_rate": 27.1523,
+          "baseline_n": 3875,
+          "baseline_first_rate": 0.9032,
+          "baseline_top2_rate": 5.1871,
+          "baseline_top3_rate": 15.6387,
+          "first_delta": 1.0835,
+          "top2_delta": 7.3957,
+          "top3_delta": 11.5136
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 63,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 3.01,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -27.15
+          }
+        }
+      }
+    },
+    "KRT": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2166,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 6.61,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2166,
+          "first_rate": 69.2521,
+          "top2_rate": 84.4875,
+          "top3_rate": 89.9815,
+          "baseline_n": 4390,
+          "baseline_first_rate": 56.1959,
+          "baseline_top2_rate": 74.7153,
+          "baseline_top3_rate": 83.3713,
+          "first_delta": 13.0562,
+          "top2_delta": 9.7723,
+          "top3_delta": 6.6102
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1718,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.63,
+            "triple_enabled": true,
+            "triple_n": 927,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.93
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1972,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.13,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1972,
+          "first_rate": 19.1684,
+          "top2_rate": 48.8844,
+          "top3_rate": 67.2414,
+          "baseline_n": 4390,
+          "baseline_first_rate": 14.4191,
+          "baseline_top2_rate": 41.0023,
+          "baseline_top3_rate": 60.1139,
+          "first_delta": 4.7492,
+          "top2_delta": 7.8821,
+          "top3_delta": 7.1275
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 245,
+            "double_stability_blocks": 3,
+            "double_delta_top3": 3.16,
+            "triple_enabled": false,
+            "triple_n": 119,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 4.48
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1136,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 4.91,
+            "triple_enabled": true,
+            "triple_n": 417,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 8.07
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1082,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.48,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1082,
+          "first_rate": 18.5767,
+          "top2_rate": 44.6396,
+          "top3_rate": 65.9889,
+          "baseline_n": 4390,
+          "baseline_first_rate": 12.0957,
+          "baseline_top2_rate": 34.123,
+          "baseline_top3_rate": 55.5125,
+          "first_delta": 6.481,
+          "top2_delta": 10.5165,
+          "top3_delta": 10.4764
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 217,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 12.47,
+            "triple_enabled": true,
+            "triple_n": 103,
+            "triple_stability_blocks": 3,
+            "triple_delta_top3": 11.8
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": true,
+        "primary_n": 142,
+        "primary_stability_blocks": 3,
+        "primary_delta_top3": 12.48,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 142,
+          "first_rate": 23.9437,
+          "top2_rate": 41.5493,
+          "top3_rate": 59.1549,
+          "baseline_n": 4390,
+          "baseline_first_rate": 9.9089,
+          "baseline_top2_rate": 25.8542,
+          "baseline_top3_rate": 46.6743,
+          "first_delta": 14.0348,
+          "top2_delta": 15.6951,
+          "top3_delta": 12.4807
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 51,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 10.88,
+            "triple_enabled": false,
+            "triple_n": 28,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 8.14
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 680,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 11.09,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 680,
+          "first_rate": 10.8824,
+          "top2_rate": 27.3529,
+          "top3_rate": 47.3529,
+          "baseline_n": 4390,
+          "baseline_first_rate": 5.5125,
+          "baseline_top2_rate": 17.426,
+          "baseline_top3_rate": 36.2642,
+          "first_delta": 5.3698,
+          "top2_delta": 9.927,
+          "top3_delta": 11.0887
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 363,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.29,
+            "triple_enabled": true,
+            "triple_n": 115,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 12.85
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 167,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 16.69,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 167,
+          "first_rate": 7.7844,
+          "top2_rate": 20.9581,
+          "top3_rate": 34.7305,
+          "baseline_n": 4390,
+          "baseline_first_rate": 1.8679,
+          "baseline_top2_rate": 6.8793,
+          "baseline_top3_rate": 18.041,
+          "first_delta": 5.9165,
+          "top2_delta": 14.0788,
+          "top3_delta": 16.6895
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 66,
+            "double_stability_blocks": 1,
+            "double_delta_top3": 7.61,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -34.81
+          }
+        }
+      }
+    },
+    "OMR": {
+      "1": {
+        "primary_enabled": true,
+        "primary_n": 2221,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 5.92,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 2221,
+          "first_rate": 73.7055,
+          "top2_rate": 86.8978,
+          "top3_rate": 91.8505,
+          "baseline_n": 4336,
+          "baseline_first_rate": 61.6006,
+          "baseline_top2_rate": 78.4594,
+          "baseline_top3_rate": 85.9317,
+          "first_delta": 12.105,
+          "top2_delta": 8.4384,
+          "top3_delta": 5.9188
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 1866,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 0.75,
+            "triple_enabled": true,
+            "triple_n": 1119,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 1.8
+          }
+        }
+      },
+      "2": {
+        "primary_enabled": true,
+        "primary_n": 1885,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.99,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1885,
+          "first_rate": 16.3395,
+          "top2_rate": 47.0027,
+          "top3_rate": 65.252,
+          "baseline_n": 4336,
+          "baseline_first_rate": 12.4769,
+          "baseline_top2_rate": 38.7454,
+          "baseline_top3_rate": 57.2648,
+          "first_delta": 3.8626,
+          "top2_delta": 8.2573,
+          "top3_delta": 7.9872
+        },
+        "secondary": {
+          "makuri": {
+            "double_enabled": true,
+            "double_n": 182,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 9.21,
+            "triple_enabled": false,
+            "triple_n": 84,
+            "triple_stability_blocks": 2,
+            "triple_delta_top3": 8.75
+          },
+          "sashi": {
+            "double_enabled": true,
+            "double_n": 1075,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 5.16,
+            "triple_enabled": true,
+            "triple_n": 348,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 11.58
+          }
+        }
+      },
+      "3": {
+        "primary_enabled": true,
+        "primary_n": 1028,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 10.23,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 1028,
+          "first_rate": 16.1479,
+          "top2_rate": 43.1907,
+          "top3_rate": 65.856,
+          "baseline_n": 4336,
+          "baseline_first_rate": 10.8164,
+          "baseline_top2_rate": 34.8708,
+          "baseline_top3_rate": 55.6273,
+          "first_delta": 5.3314,
+          "top2_delta": 8.3198,
+          "top3_delta": 10.2287
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 210,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 11.29,
+            "triple_enabled": false,
+            "triple_n": 74,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 8.47
+          }
+        }
+      },
+      "4": {
+        "primary_enabled": false,
+        "primary_n": 140,
+        "primary_stability_blocks": 2,
+        "primary_delta_top3": 7.01,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 140,
+          "first_rate": 15.0,
+          "top2_rate": 37.1429,
+          "top3_rate": 51.4286,
+          "baseline_n": 4336,
+          "baseline_first_rate": 8.464,
+          "baseline_top2_rate": 23.6854,
+          "baseline_top3_rate": 44.4188,
+          "first_delta": 6.536,
+          "top2_delta": 13.4574,
+          "top3_delta": 7.0098
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": false,
+            "double_n": 47,
+            "double_stability_blocks": 0,
+            "double_delta_top3": 12.4,
+            "triple_enabled": false,
+            "triple_n": 31,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": 13.09
+          }
+        }
+      },
+      "5": {
+        "primary_enabled": true,
+        "primary_n": 670,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 13.28,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 670,
+          "first_rate": 9.5522,
+          "top2_rate": 27.1642,
+          "top3_rate": 48.6567,
+          "baseline_n": 4336,
+          "baseline_first_rate": 5.2814,
+          "baseline_top2_rate": 16.8819,
+          "baseline_top3_rate": 35.3782,
+          "first_delta": 4.2709,
+          "top2_delta": 10.2823,
+          "top3_delta": 13.2785
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 393,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 6.56,
+            "triple_enabled": true,
+            "triple_n": 132,
+            "triple_stability_blocks": 4,
+            "triple_delta_top3": 11.95
+          }
+        }
+      },
+      "6": {
+        "primary_enabled": true,
+        "primary_n": 216,
+        "primary_stability_blocks": 4,
+        "primary_delta_top3": 7.46,
+        "primary_stats": {
+          "period": "2024-09-10～2026-09-09",
+          "n": 216,
+          "first_rate": 3.2407,
+          "top2_rate": 11.1111,
+          "top3_rate": 28.7037,
+          "baseline_n": 4336,
+          "baseline_first_rate": 1.3607,
+          "baseline_top2_rate": 7.357,
+          "baseline_top3_rate": 21.2408,
+          "first_delta": 1.88,
+          "top2_delta": 3.7541,
+          "top3_delta": 7.4629
+        },
+        "secondary": {
+          "main": {
+            "double_enabled": true,
+            "double_n": 112,
+            "double_stability_blocks": 4,
+            "double_delta_top3": 10.58,
+            "triple_enabled": false,
+            "triple_n": 0,
+            "triple_stability_blocks": 0,
+            "triple_delta_top3": -28.7
+          }
+        }
+      }
+    }
+  }
+}

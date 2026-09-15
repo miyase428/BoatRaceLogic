@@ -20,6 +20,47 @@ function validDate(string $value): bool
     return $dt !== false && $dt->format('Y-m-d') === $value;
 }
 
+function placeNames(): array
+{
+    return [
+        'KRY' => '桐生', 'TDA' => '戸田', 'EDG' => '江戸川', 'HWJ' => '平和島',
+        'TMG' => '多摩川', 'HMN' => '浜名湖', 'GMG' => '蒲郡', 'TKN' => '常滑',
+        'TSU' => '津', 'MKN' => '三国', 'BWK' => 'びわこ', 'SME' => '住之江',
+        'AMG' => '尼崎', 'NRT' => '鳴門', 'MRG' => '丸亀', 'KJM' => '児島',
+        'MYJ' => '宮島', 'TKY' => '徳山', 'SMS' => '下関', 'WKM' => '若松',
+        'ASY' => '芦屋', 'FKO' => '福岡', 'KRT' => '唐津', 'OMR' => '大村',
+    ];
+}
+
+function courseSignalRules(): array
+{
+    static $rules;
+    if ($rules !== null) {
+        return $rules;
+    }
+    $path = __DIR__ . '/../config/course_signal_rules.json';
+    if (!is_file($path)) {
+        return $rules = ['places' => []];
+    }
+    $decoded = json_decode((string)file_get_contents($path), true);
+    return $rules = is_array($decoded) ? $decoded : ['places' => []];
+}
+
+function primaryEnabled(array $venueRules, int $course): bool
+{
+    return !array_key_exists((string)$course, $venueRules)
+        || !empty($venueRules[(string)$course]['primary_enabled']);
+}
+
+function secondaryEnabled(array $venueRules, int $course, string $variant, string $level, string $placeCode): bool
+{
+    // 多摩川は既存の検証済み表示を維持する。他場は場別集計で許可した条件だけ昇格。
+    if ($placeCode === 'TMG') {
+        return true;
+    }
+    return !empty($venueRules[(string)$course]['secondary'][$variant][$level . '_enabled']);
+}
+
 function termInfoForDate(DateTimeImmutable $date): string
 {
     $year = (int)$date->format('Y');
@@ -187,8 +228,16 @@ function buildSecondEval(array $rows, float $avgExhibition, string $targetPlayer
 }
 
 /** コースサインの固定検証期間（2024-09-10～2026-09-09）における実績。 */
-function laneHistoricalStats(int $course, int $level): array
+function laneHistoricalStats(int $course, int $level, string $placeCode = 'TMG'): ?array
 {
+    if ($placeCode !== 'TMG') {
+        $venueRules = courseSignalRules()['places'][$placeCode] ?? [];
+        $rule = $venueRules[(string)$course] ?? null;
+        if (!is_array($rule) || !$rule['primary_enabled'] || $level !== 1) {
+            return null;
+        }
+        return $rule['primary_stats'] ?? null;
+    }
     $baseline = [
         1 => ['n' => 3903, 'first' => 54.50, 'top2' => 70.46, 'top3' => 79.71],
         2 => ['n' => 3900, 'first' => 13.87, 'top2' => 38.64, 'top3' => 57.10],
@@ -256,10 +305,19 @@ if (!validDate($dateText)) {
     respond(['status' => 'error', 'error' => 'invalid date'], 400);
 }
 
+$placeCode = strtoupper(trim((string)($_GET['place'] ?? 'TMG')));
+$places = placeNames();
+if (!isset($places[$placeCode])) {
+    respond(['status' => 'error', 'error' => 'invalid place'], 400);
+}
+$placeName = $places[$placeCode];
+$rules = courseSignalRules();
+$venueRules = $rules['places'][$placeCode] ?? [];
+
 $date = new DateTimeImmutable($dateText);
 $historyStart = $date->modify('-12 months')->format('Y-m-d');
 $term = termInfoForDate($date);
-$datePrefix = $date->format('Ymd') . 'TMG';
+$datePrefix = $date->format('Ymd') . $placeCode;
 
 try {
     $pdo = getPDO();
@@ -309,6 +367,8 @@ SQL;
     $baseResponse = [
         'status' => 'ok',
         'date' => $dateText,
+        'place' => $placeCode,
+        'place_name' => $placeName,
         'profile_months' => 12,
         'conditions' => [
             'star' => '4コースまくり率15%以上 + 4が3より平均ST順位上',
@@ -531,7 +591,7 @@ SQL;
     $avgStmt = $pdo->prepare(
         "SELECT avg_exhibition_time_6m FROM boat_race.exhibition_avg_6m WHERE stadium_name = :stadium LIMIT 1"
     );
-    $avgStmt->execute([':stadium' => '多摩川']);
+    $avgStmt->execute([':stadium' => $placeName]);
     $avgValue = $avgStmt->fetchColumn();
     if (is_numeric($avgValue) && (float)$avgValue > 0) {
         $avgExhibition = (float)$avgValue;
@@ -574,6 +634,9 @@ SQL;
         if ($raceCode === '' || $pid1 === '') {
             continue;
         }
+        if (!primaryEnabled($venueRules, 1)) {
+            continue;
+        }
 
         $profile = $lane1Profiles[$pid1] ?? null;
         $escapeRate = is_array($profile) ? ($profile['nige_rate'] ?? null) : null;
@@ -586,9 +649,9 @@ SQL;
             $secondary = buildSecondEval($exhibitionByRace[$raceCode], $avgExhibition, $pid1);
         }
         $starLevel = 1;
-        if (is_array($secondary) && (int)$secondary['second_rank'] <= 3) {
+        if (is_array($secondary) && secondaryEnabled($venueRules, 1, 'main', 'double', $placeCode) && (int)$secondary['second_rank'] <= 3) {
             $starLevel = 2;
-            if ((int)$secondary['second_rank'] === 1) {
+            if (secondaryEnabled($venueRules, 1, 'main', 'triple', $placeCode) && (int)$secondary['second_rank'] === 1) {
                 $starLevel = 3;
             }
         }
@@ -606,7 +669,7 @@ SQL;
             'nige_rate' => round((float)$escapeRate, 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(1, $starLevel),
+            'historical_stats' => laneHistoricalStats(1, $starLevel, $placeCode),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -630,6 +693,9 @@ SQL;
         if ($raceCode === '' || $pid2 === '') {
             continue;
         }
+        if (!primaryEnabled($venueRules, 2)) {
+            continue;
+        }
         $profile = $lane2Profiles[$pid2] ?? null;
         if (!is_array($profile) || !is_numeric($profile['sashi_rate'] ?? null)) {
             continue;
@@ -643,9 +709,9 @@ SQL;
         if (is_array($secondary)) {
             $secondRank = (int)$secondary['second_rank'];
             $lapScore = (float)$secondary['lap_score'];
-            if ($secondRank <= 3 || $lapScore >= 4.0) {
+            if (secondaryEnabled($venueRules, 2, 'sashi', 'double', $placeCode) && ($secondRank <= 3 || $lapScore >= 4.0)) {
                 $starLevel = 2;
-                if ($secondRank === 1) {
+                if (secondaryEnabled($venueRules, 2, 'sashi', 'triple', $placeCode) && $secondRank === 1) {
                     $starLevel = 3;
                 }
             }
@@ -667,7 +733,7 @@ SQL;
             'sashi_rate' => round((float)$profile['sashi_rate'], 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(2, $starLevel),
+            'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -690,6 +756,9 @@ SQL;
         if ($raceCode === '' || $pid2 === '' || $pid1 === '') {
             continue;
         }
+        if (!primaryEnabled($venueRules, 2)) {
+            continue;
+        }
         $profile = $lane2Profiles[$pid2] ?? null;
         $rank1 = $ranks[$pid1][1] ?? null;
         $rank2 = $ranks[$pid2][2] ?? null;
@@ -706,9 +775,9 @@ SQL;
         if (is_array($secondary)) {
             $secondRank = (int)$secondary['second_rank'];
             $lapScore = (float)$secondary['lap_score'];
-            if ($lapScore >= 4.0) {
+            if (secondaryEnabled($venueRules, 2, 'makuri', 'double', $placeCode) && $lapScore >= 4.0) {
                 $starLevel = 2;
-                if ($secondRank === 1) {
+                if (secondaryEnabled($venueRules, 2, 'makuri', 'triple', $placeCode) && $secondRank === 1) {
                     $starLevel = 3;
                 }
             }
@@ -729,7 +798,7 @@ SQL;
             'lane2_avg_rank' => round((float)$rank2, 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(2, $starLevel),
+            'historical_stats' => laneHistoricalStats(2, $starLevel, $placeCode),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -751,6 +820,9 @@ SQL;
         $pid3 = trim((string)($row['lane3_player_id'] ?? ''));
         $pid4 = trim((string)($row['lane4_player_id'] ?? ''));
         if ($raceCode === '' || $pid3 === '' || $pid4 === '') {
+            continue;
+        }
+        if (!primaryEnabled($venueRules, 4)) {
             continue;
         }
 
@@ -782,9 +854,9 @@ SQL;
                 $gap = (float)$secondary['gap_to_top'];
                 $straightScore = (float)$secondary['straight_score'];
 
-                if ($score >= 24.0 && $gap <= 5.0) {
+                if (secondaryEnabled($venueRules, 4, 'main', 'double', $placeCode) && $score >= 24.0 && $gap <= 5.0) {
                     $starLevel = 2;
-                    if ($score >= 27.0 && $straightScore >= 4.0) {
+                    if (secondaryEnabled($venueRules, 4, 'main', 'triple', $placeCode) && $score >= 27.0 && $straightScore >= 4.0) {
                         $starLevel = 3;
                     }
                 }
@@ -805,7 +877,7 @@ SQL;
             'lane3_avg_rank' => round($rank3, 2),
             'lane4_avg_rank' => round($rank4, 2),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(4, $starLevel),
+            'historical_stats' => laneHistoricalStats(4, $starLevel, $placeCode),
         ];
 
         if (is_array($secondary)) {
@@ -827,6 +899,9 @@ SQL;
         if ($raceCode === '' || $pid3 === '') {
             continue;
         }
+        if (!primaryEnabled($venueRules, 3)) {
+            continue;
+        }
 
         $profile = $lane3Profiles[$pid3] ?? null;
         $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
@@ -845,9 +920,9 @@ SQL;
                 $straightScore = (float)$secondary['straight_score'];
                 $mawariScore = (float)$secondary['mawari_score'];
 
-                if ($score >= 30.0 && $gap <= 2.0) {
+                if (secondaryEnabled($venueRules, 3, 'main', 'double', $placeCode) && $score >= 30.0 && $gap <= 2.0) {
                     $starLevel = 2;
-                    if ($straightScore >= 5.0 && $mawariScore >= 4.0) {
+                    if (secondaryEnabled($venueRules, 3, 'main', 'triple', $placeCode) && $straightScore >= 5.0 && $mawariScore >= 4.0) {
                         $starLevel = 3;
                     }
                 }
@@ -879,7 +954,7 @@ SQL;
             ),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(3, $starLevel),
+            'historical_stats' => laneHistoricalStats(3, $starLevel, $placeCode),
         ];
 
         if (is_array($secondary)) {
@@ -902,6 +977,9 @@ SQL;
         if ($raceCode === '' || $pid5 === '') {
             continue;
         }
+        if (!primaryEnabled($venueRules, 5)) {
+            continue;
+        }
 
         $profile = $lane5Profiles[$pid5] ?? null;
         $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
@@ -917,9 +995,9 @@ SQL;
             if (is_array($secondary)) {
                 $secondRank = (int)$secondary['second_rank'];
                 $lapScore = (float)$secondary['lap_score'];
-                if ($secondRank <= 3 || $lapScore >= 4.0) {
+                if (secondaryEnabled($venueRules, 5, 'main', 'double', $placeCode) && ($secondRank <= 3 || $lapScore >= 4.0)) {
                     $starLevel = 2;
-                    if ($secondRank === 1) {
+                    if (secondaryEnabled($venueRules, 5, 'main', 'triple', $placeCode) && $secondRank === 1) {
                         $starLevel = 3;
                     }
                 }
@@ -941,7 +1019,7 @@ SQL;
             'makurizashi_rate' => round((float)($profile['makurizashi_rate'] ?? 0.0), 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(5, $starLevel),
+            'historical_stats' => laneHistoricalStats(5, $starLevel, $placeCode),
         ];
 
         if (is_array($secondary)) {
@@ -967,6 +1045,9 @@ SQL;
         if ($raceCode === '' || $pid6 === '' || $pid5 === '') {
             continue;
         }
+        if (!primaryEnabled($venueRules, 6)) {
+            continue;
+        }
 
         $profile = $lane6Profiles[$pid6] ?? null;
         $rank6 = $ranks[$pid6][6] ?? null;
@@ -982,7 +1063,7 @@ SQL;
             $secondary = buildSecondEval($exhibitionByRace[$raceCode], $avgExhibition, $pid6);
         }
         $starLevel = 1;
-        if (is_array($secondary) && (int)$secondary['second_rank'] <= 3) {
+        if (is_array($secondary) && secondaryEnabled($venueRules, 6, 'main', 'double', $placeCode) && (int)$secondary['second_rank'] <= 3) {
             $starLevel = 2;
         }
 
@@ -997,7 +1078,7 @@ SQL;
             'lane6_avg_rank' => round((float)$rank6, 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => laneHistoricalStats(6, $starLevel),
+            'historical_stats' => laneHistoricalStats(6, $starLevel, $placeCode),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];

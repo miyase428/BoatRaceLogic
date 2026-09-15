@@ -273,10 +273,11 @@
 
     function showSignal() {
         const code = currentRaceCode();
-        if (!code || code.slice(8, 11) !== 'TMG') return;
+        if (!code) return;
 
         const date = raceDateFromCode(code);
-        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
+        const place = code.slice(8, 11);
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place), {cache: 'no-store'})
             .then(function (response) {
                 return response.json().then(function (data) {
                     if (!response.ok || !data || data.status !== 'ok') {
@@ -339,7 +340,7 @@
                         badge.style.cssText = 'color:' + accent + ';font-size:17px;';
                         badge.textContent = course + 'C' + stars + ' ' + signal;
                         const name = document.createElement('span');
-                        name.textContent = '多摩川' + course + 'コースサイン' + note;
+                        name.textContent = String(data.place_name || place) + course + 'コースサイン' + note;
                         title.appendChild(badge);
                         title.appendChild(name);
                         box.appendChild(title);
