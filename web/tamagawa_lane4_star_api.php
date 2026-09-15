@@ -186,23 +186,42 @@ function buildSecondEval(array $rows, float $avgExhibition, string $targetPlayer
     return $targetEval;
 }
 
-/** 2Cサインの固定検証期間（2024-09-10～2026-09-09）における実績。 */
-function lane2HistoricalStats(string $technique, int $level): array
+/** コースサインの固定検証期間（2024-09-10～2026-09-09）における実績。 */
+function laneHistoricalStats(int $course, int $level): array
 {
-    $baseline = ['n' => 3900, 'first' => 13.87, 'top2' => 38.64, 'top3' => 57.10];
+    $baseline = [
+        2 => ['n' => 3900, 'first' => 13.87, 'top2' => 38.64, 'top3' => 57.10],
+        3 => ['n' => 3897, 'first' => 12.88, 'top2' => 34.74, 'top3' => 54.22],
+        4 => ['n' => 3907, 'first' => 10.44, 'top2' => 26.90, 'top3' => 46.66],
+        5 => ['n' => 3907, 'first' => 6.09, 'top2' => 19.96, 'top3' => 38.39],
+    ][$course] ?? null;
     $values = [
-        'sashi' => [
+        2 => [
             1 => ['n' => 1467, 'first' => 17.59, 'top2' => 46.22, 'top3' => 64.14],
             2 => ['n' => 1098, 'first' => 19.40, 'top2' => 48.82, 'top3' => 67.58],
             3 => ['n' => 381, 'first' => 25.20, 'top2' => 51.44, 'top3' => 70.08],
         ],
-        'makuri' => [
-            1 => ['n' => 415, 'first' => 22.17, 'top2' => 50.12, 'top3' => 67.71],
-            2 => ['n' => 236, 'first' => 25.42, 'top2' => 54.24, 'top3' => 71.19],
-            3 => ['n' => 100, 'first' => 34.00, 'top2' => 56.00, 'top3' => 77.00],
+        3 => [
+            1 => ['n' => 943, 'first' => 18.56, 'top2' => 45.28, 'top3' => 66.81],
+            2 => ['n' => 170, 'first' => 30.00, 'top2' => 55.29, 'top3' => 74.12],
+            3 => ['n' => 55, 'first' => 45.45, 'top2' => 65.45, 'top3' => 83.64],
+        ],
+        4 => [
+            1 => ['n' => 160, 'first' => 23.75, 'top2' => 40.63, 'top3' => 62.50],
+            2 => ['n' => 49, 'first' => 34.69, 'top2' => 55.10, 'top3' => 79.59],
+            3 => ['n' => 24, 'first' => 41.67, 'top2' => 50.00, 'top3' => 75.00],
+        ],
+        5 => [
+            1 => ['n' => 686, 'first' => 11.37, 'top2' => 30.47, 'top3' => 50.58],
+            2 => ['n' => 383, 'first' => 14.10, 'top2' => 35.77, 'top3' => 59.01],
+            3 => ['n' => 105, 'first' => 19.05, 'top2' => 42.86, 'top3' => 62.86],
         ],
     ];
-    $stat = $values[$technique][$level] ?? $values[$technique][1];
+    $courseValues = $values[$course] ?? [];
+    $stat = $courseValues[$level] ?? ($courseValues[1] ?? ['n' => 0, 'first' => 0.0, 'top2' => 0.0, 'top3' => 0.0]);
+    if ($baseline === null) {
+        $baseline = ['n' => 0, 'first' => 0.0, 'top2' => 0.0, 'top3' => 0.0];
+    }
     return [
         'period' => '2024-09-10～2026-09-09',
         'n' => $stat['n'],
@@ -545,7 +564,7 @@ SQL;
             'sashi_rate' => round((float)$profile['sashi_rate'], 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => lane2HistoricalStats('sashi', $starLevel),
+            'historical_stats' => laneHistoricalStats(2, $starLevel),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -607,7 +626,7 @@ SQL;
             'lane2_avg_rank' => round((float)$rank2, 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
-            'historical_stats' => lane2HistoricalStats('makuri', $starLevel),
+            'historical_stats' => laneHistoricalStats(2, $starLevel),
         ];
         if (is_array($secondary)) {
             $detail['second_rank'] = (int)$secondary['second_rank'];
@@ -683,6 +702,7 @@ SQL;
             'lane3_avg_rank' => round($rank3, 2),
             'lane4_avg_rank' => round($rank4, 2),
             'secondary_ready' => is_array($secondary),
+            'historical_stats' => laneHistoricalStats(4, $starLevel),
         ];
 
         if (is_array($secondary)) {
@@ -756,6 +776,7 @@ SQL;
             ),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
+            'historical_stats' => laneHistoricalStats(3, $starLevel),
         ];
 
         if (is_array($secondary)) {
@@ -817,6 +838,7 @@ SQL;
             'makurizashi_rate' => round((float)($profile['makurizashi_rate'] ?? 0.0), 2),
             'history_n' => (int)($profile['n'] ?? 0),
             'secondary_ready' => is_array($secondary),
+            'historical_stats' => laneHistoricalStats(5, $starLevel),
         ];
 
         if (is_array($secondary)) {
