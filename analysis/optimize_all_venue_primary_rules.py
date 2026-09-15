@@ -123,7 +123,7 @@ def load_feature_rows(place: str, start: date, end: date) -> list[dict]:
         if bad:
             continue
         out.append({
-            "date": race["date"], "first": race["first"], "second": race["second"], "third": race["third"],
+            "date": race["date"], "race_code": code, "first": race["first"], "second": race["second"], "third": race["third"],
             "profiles": {c: profile_rates(hist.profile(by_course[c]["player_id"], c, race["date"], 12)) for c in range(1, 7)},
             "st21": "上" if ranks[2] < ranks[1] else ("同じ" if ranks[2] == ranks[1] else "下"),
             "st43": "上" if ranks[4] < ranks[3] else ("同じ" if ranks[4] == ranks[3] else "下"),
