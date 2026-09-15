@@ -36,7 +36,7 @@ def load(path: Path):
         for raw in csv.DictReader(f):
             rows.append({
                 "date": date.fromisoformat(raw["race_date"]),
-                "sashi": num(raw["p2_12_sashi"]), "attack": num(raw["p2_12_attack"]),
+                "sashi": num(raw["p2_12_sashi"]), "makuri": num(raw["p2_12_makuri"]), "attack": num(raw["p2_12_attack"]),
                 "win": num(raw["p2_12_win"]), "n": num(raw["p2_12_n"]),
                 "score": num(raw["second_score"]), "rank": integer(raw["second_rank"]),
                 "gap": num(raw["gap"]), "st": num(raw["st_score"]),
@@ -50,7 +50,8 @@ def load(path: Path):
 
 PRIMARY = OrderedDict([
     ("S10", "差し率10%以上"), ("W15", "過去1着率15%以上"),
-    ("S10_ST", "差し率10%以上×ST上"), ("A10_ST", "攻め率10%以上×ST上"),
+    ("S10_ST", "差し率10%以上×ST上"), ("M5_ST", "まくり率5%以上×ST上"),
+    ("A10_ST", "攻め率10%以上×ST上"),
     ("A15", "攻め率15%以上"),
 ])
 SECONDARY = OrderedDict([
@@ -69,6 +70,7 @@ def primary(r, key):
     return {
         "S10": r["sashi"] >= 10, "W15": r["win"] >= 15,
         "S10_ST": r["sashi"] >= 10 and r["st21"] == "内側より上",
+        "M5_ST": r["makuri"] >= 5 and r["st21"] == "内側より上",
         "A10_ST": r["attack"] >= 10 and r["st21"] == "内側より上",
         "A15": r["attack"] >= 15,
     }[key]

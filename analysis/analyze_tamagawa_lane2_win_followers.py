@@ -37,7 +37,7 @@ def load(path: Path):
             rows.append({
                 "date": date.fromisoformat(raw["race_date"]),
                 "n": num(raw["p2_12_n"]), "win": num(raw["p2_12_win"]),
-                "sashi": num(raw["p2_12_sashi"]), "attack": num(raw["p2_12_attack"]),
+                "sashi": num(raw["p2_12_sashi"]), "makuri": num(raw["p2_12_makuri"]), "attack": num(raw["p2_12_attack"]),
                 "rank": integer(raw["second_rank"]), "lap": num(raw["lap_score"]),
                 "first": integer(raw["first"]), "second": integer(raw["second"]),
                 "third": integer(raw["third"]), "st21": raw["st21"],
@@ -48,6 +48,9 @@ def load(path: Path):
 CONDITIONS = OrderedDict([
     ("BASE", "2C履歴あり（基準）"),
     ("STAR", "2C★ 差し率10%以上"),
+    ("MAKURI_STAR", "2Cまくり★ まくり率5%以上×ST上"),
+    ("MAKURI_DOUBLE", "まくり★＋二次3位以内または周回4以上"),
+    ("MAKURI_TRIPLE", "まくり★＋二次順位1位"),
     ("W15", "過去1着率15%以上"),
     ("DOUBLE", "2C★★ ★＋二次3位以内または周回4以上"),
     ("TRIPLE", "2C★★★ ★＋二次順位1位"),
@@ -59,6 +62,9 @@ def matches(r, key):
     star = base and r["sashi"] is not None and r["sashi"] >= 10
     if key == "BASE": return base
     if key == "STAR": return star
+    if key == "MAKURI_STAR": return base and r["makuri"] is not None and r["makuri"] >= 5 and r["st21"] == "内側より上"
+    if key == "MAKURI_DOUBLE": return matches(r, "MAKURI_STAR") and r["rank"] is not None and (r["rank"] <= 3 or (r["lap"] is not None and r["lap"] >= 4))
+    if key == "MAKURI_TRIPLE": return matches(r, "MAKURI_STAR") and r["rank"] == 1
     if key == "W15": return base and r["win"] is not None and r["win"] >= 15
     if key == "DOUBLE": return star and r["rank"] is not None and (r["rank"] <= 3 or (r["lap"] is not None and r["lap"] >= 4))
     if key == "TRIPLE": return star and r["rank"] == 1
