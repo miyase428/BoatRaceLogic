@@ -56,8 +56,8 @@ def blank() -> dict:
 def add(s: dict, course: int, row: dict) -> None:
     s["n"] += 1
     s["first"] += row["first"] == course
-    s["top2"] += course in (row["first"], row["second"])
-    s["top3"] += course in (row["first"], row["second"], row["third"])
+    s["top2"] += course in (row["first"], row["second_course"])
+    s["top3"] += course in (row["first"], row["second_course"], row["third_course"])
 
 
 def summary(s: dict) -> dict:
@@ -194,7 +194,7 @@ def load_rows(place: str, start: date, end: date, config: dict) -> list[dict]:
             continue
         for c in range(1, 7):
             ranks[c] = float(racer[(term, by_course[c]["player_id"])][c]["avg_rank"])
-        base = {"date": race["date"], "first": race["first"], "second": race["second"], "third": race["third"],
+        base = {"date": race["date"], "first": race["first"], "second_course": race["second"], "third_course": race["third"],
                 "profiles": {c: profile_rates(hist.profile(by_course[c]["player_id"], c, race["date"], 12)) for c in range(1, 7)},
                 "st21": "上" if ranks[2] < ranks[1] else ("同じ" if ranks[2] == ranks[1] else "下"),
                 "st43": "上" if ranks[4] < ranks[3] else ("同じ" if ranks[4] == ranks[3] else "下"),

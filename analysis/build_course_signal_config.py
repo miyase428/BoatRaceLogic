@@ -128,6 +128,10 @@ def main() -> None:
                     course_rule["secondary"][variant][f"{level}_n"] = n
                     course_rule["secondary"][variant][f"{level}_stability_blocks"] = stable
                     course_rule["secondary"][variant][f"{level}_delta_top3"] = round(delta, 2)
+        # 多摩川は既存の検証済み★★／★★★条件を公式採用しているため、
+        # 今回の場別二次最適化を適用せず従来条件を維持する。
+        if place == "TMG":
+            optimized_secondary = {}
         for key, item in optimized_secondary.items():
             course_text, variant, level = key.split("_", 2)
             course_rule = rules[place].get(course_text)
@@ -136,6 +140,14 @@ def main() -> None:
             sec = course_rule.setdefault("secondary", {}).setdefault(variant, {})
             sec[f"{level}_optimized_enabled"] = bool(item.get("enabled"))
             sec[f"{level}_optimized"] = item
+        # ★★★は★★を経由して表示するため、★★停止時は★★★も停止する。
+        for sec in (value.get("secondary", {}).values() for value in rules[place].values()):
+            for item in sec:
+                if item.get("triple_optimized_enabled") and not item.get("double_optimized_enabled"):
+                    item["triple_optimized_enabled"] = False
+                    optimized = item.get("triple_optimized")
+                    if isinstance(optimized, dict):
+                        optimized["disabled_reason"] = "★★が停止のため★★★も停止"
 
     output = root / "config" / "course_signal_rules.json"
     output.write_text(json.dumps({
