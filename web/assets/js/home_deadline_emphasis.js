@@ -249,17 +249,7 @@
         linksByPlace[place].push({link: link, code: code});
     });
 
-    Object.keys(linksByPlace).forEach(function (place) {
-        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place), {cache: 'no-store'})
-            .then(function (response) {
-                return response.json().then(function (data) {
-                    if (!response.ok || !data || data.status !== 'ok') {
-                        throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
-                    }
-                    return data;
-                });
-            })
-            .then(function (data) {
+    function renderVenueSignals(place, data) {
             const lane1Matches = data.lane1_matches && typeof data.lane1_matches === 'object' ? data.lane1_matches : {};
             const lane2SashiMatches = data.lane2_sashi_matches && typeof data.lane2_sashi_matches === 'object' ? data.lane2_sashi_matches : {};
             const lane2MakuriMatches = data.lane2_makuri_matches && typeof data.lane2_makuri_matches === 'object' ? data.lane2_makuri_matches : {};
@@ -271,6 +261,7 @@
             linksByPlace[place].forEach(function (item) {
                 const link = item.link;
                 const code = item.code;
+                clearTamagawaStars(link);
                 const infos = [];
                 if (code && lane1Matches[code]) infos.push(addTamagawaSignal(link, lane1Matches[code], 1, placeName));
                 if (code && lane2SashiMatches[code]) infos.push(addTamagawaSignal(link, lane2SashiMatches[code], 2, placeName));
@@ -281,10 +272,31 @@
                 if (code && lane6Matches[code]) infos.push(addTamagawaSignal(link, lane6Matches[code], 6, placeName));
                 link.title = baseTitle + (infos.length ? (baseTitle ? ' / ' : '') + infos.join(' / ') : '');
             });
+    }
+
+    function loadVenueSignals(place, attempt) {
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place), {cache: 'no-store'})
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data || data.status !== 'ok') {
+                        throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+                    }
+                    return data;
+                });
+            })
+            .then(function (data) {
+                renderVenueSignals(place, data);
             })
             .catch(function () {
-                // TOP表示本体を壊さないため、場別API失敗時はその場の星を出さないだけにする。
+                // 同時に多数の場を取得するため、一時的なDB待ち・通信失敗時は最大2回再試行する。
+                if (attempt < 2) {
+                    window.setTimeout(function () { loadVenueSignals(place, attempt + 1); }, 1200 * (attempt + 1));
+                }
             });
+    }
+
+    Object.keys(linksByPlace).forEach(function (place) {
+        loadVenueSignals(place, 0);
     });
 })();
 
