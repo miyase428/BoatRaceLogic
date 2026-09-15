@@ -31,8 +31,9 @@
         '.pick-item-solid.is-deadline-next{border-left-color:#d8a94c!important}',
         '.pick-item-upset.is-deadline-next{border-left-color:#d8a94c!important}',
 
-        /* 多摩川コースサイン：2C差しは緑、2Cまくりは紫、3Cは青、4Cは橙、5Cは藤色、6Cは濃灰。 */
+        /* 多摩川コースサイン：1Cは赤系、2C差しは緑、2Cまくりは紫、3Cは青、4Cは橙、5Cは藤色、6Cは濃灰。 */
         '.race-button .tmg-course-star{display:inline-block;margin-left:3px;padding:1px 3px;border-radius:3px;font-size:10px;font-weight:1000;line-height:1.2;vertical-align:1px;text-shadow:0 1px 0 rgba(255,255,255,.7);letter-spacing:-.4px}',
+        '.race-button .tmg-lane1-star{color:#9a3f4b;background:#fff0f2;border:1px solid #e0a8b1}',
         '.race-button .tmg-lane2-sashi-star{color:#287a67;background:#e8f7f0;border:1px solid #9bd2bf}',
         '.race-button .tmg-lane2-makuri-star{color:#7042a8;background:#f3e8ff;border:1px solid #c4a7e7}',
         '.race-button .tmg-lane3-star{color:#176c9f;background:#e9f7ff;border:1px solid #9bcce7}',
@@ -46,11 +47,14 @@
         '.race-button.is-tmg-lane5-star-3 .tmg-lane5-star{color:#57228d;background:#ead7ff;border-color:#9b6aca}',
         '.race-button.is-tmg-lane6-star-2 .tmg-lane6-star{color:#35404a;background:#e1e6ea;border-color:#87939d}',
         '.race-button.is-tmg-lane6-star-3 .tmg-lane6-star{color:#25313b;background:#d5dce1;border-color:#687680}',
+        '.race-button.is-tmg-lane1-star-2 .tmg-lane1-star{color:#7f2737;background:#ffe3e7;border-color:#cc7b89}',
+        '.race-button.is-tmg-lane1-star-3 .tmg-lane1-star{color:#651b2a;background:#ffd5db;border-color:#b85a6a}',
         '.race-button.is-tmg-lane3-strong{border-color:#79b7d9!important;box-shadow:inset 0 0 0 1px rgba(41,132,181,.16)}',
         '.race-button.is-tmg-lane2-strong{border-color:#86c6b0!important;box-shadow:inset 0 0 0 1px rgba(40,122,103,.16)}',
         '.race-button.is-tmg-lane4-strong{border-color:#d8a94c!important;box-shadow:inset 0 0 0 1px rgba(216,169,76,.16)}',
         '.race-button.is-tmg-lane5-strong{border-color:#a987c9!important;box-shadow:inset 0 0 0 1px rgba(112,66,168,.18)}',
         '.race-button.is-tmg-lane6-strong{border-color:#9aa6af!important;box-shadow:inset 0 0 0 1px rgba(79,89,100,.18)}',
+        '.race-button.is-tmg-lane1-strong{border-color:#d59aa4!important;box-shadow:inset 0 0 0 1px rgba(154,63,75,.18)}',
         '.race-button.is-tmg-lane3-strong.is-tmg-lane4-strong{border-color:#8e83be!important;box-shadow:inset 0 0 0 1px rgba(93,102,184,.20)!important}',
         '.race-button.is-tmg-lane4-star-2{box-shadow:inset 0 0 0 1px rgba(197,111,0,.24)!important}',
         '.race-button.is-tmg-lane2-star-2{box-shadow:inset 0 0 0 1px rgba(52,130,104,.24)!important}',
@@ -58,7 +62,9 @@
         '.race-button.is-tmg-lane5-star-2{box-shadow:inset 0 0 0 1px rgba(112,66,168,.24)!important}',
         '.race-button.is-tmg-lane5-star-3{border-color:#8751b5!important;box-shadow:inset 0 0 0 1px rgba(112,66,168,.30)!important}',
         '.race-button.is-tmg-lane6-star-2{box-shadow:inset 0 0 0 1px rgba(79,89,100,.24)!important}',
-        '.race-button.is-tmg-lane6-star-3{border-color:#687680!important;box-shadow:inset 0 0 0 1px rgba(79,89,100,.30)!important}'
+        '.race-button.is-tmg-lane6-star-3{border-color:#687680!important;box-shadow:inset 0 0 0 1px rgba(79,89,100,.30)!important}',
+        '.race-button.is-tmg-lane1-star-2{box-shadow:inset 0 0 0 1px rgba(154,63,75,.24)!important}',
+        '.race-button.is-tmg-lane1-star-3{border-color:#b85a6a!important;box-shadow:inset 0 0 0 1px rgba(154,63,75,.30)!important}'
     ].join('');
     document.head.appendChild(style);
 
@@ -138,11 +144,16 @@
             'is-tmg-lane6-strong',
             'is-tmg-lane6-star-1',
             'is-tmg-lane6-star-2',
-            'is-tmg-lane6-star-3'
+            'is-tmg-lane6-star-3',
+            'is-tmg-lane1-strong',
+            'is-tmg-lane1-star-1',
+            'is-tmg-lane1-star-2',
+            'is-tmg-lane1-star-3'
         );
         delete link.dataset.tmgLane3Level;
         delete link.dataset.tmgLane4Level;
         delete link.dataset.tmgLane6Level;
+        delete link.dataset.tmgLane1Level;
         link.querySelectorAll('.tmg-course-star').forEach(function (star) { star.remove(); });
         if (link.dataset.tmgLane4BaseTitle !== undefined) {
             link.title = link.dataset.tmgLane4BaseTitle;
@@ -177,7 +188,9 @@
         }
 
         let info = course + 'C' + stars + ' ' + label + 'サイン';
-        if (course === 2 && detail.technique === 'makuri') {
+        if (course === 1) {
+            info += ' / 1C逃げ率 ' + Number(detail.nige_rate).toFixed(1) + '%';
+        } else if (course === 2 && detail.technique === 'makuri') {
             info += ' / 2まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
                 + ' / ST順位 2=' + Number(detail.lane2_avg_rank).toFixed(2)
                 + ' < 1=' + Number(detail.lane1_avg_rank).toFixed(2);
@@ -209,14 +222,14 @@
             } else if (course === 5) {
                 info += ' / 二次順位 ' + Number(detail.second_rank).toFixed(0)
                     + ' / 周回 ' + Number(detail.lap_score).toFixed(0);
-            } else if (course === 6) {
+            } else if (course === 6 || course === 1) {
                 info += ' / 二次順位 ' + Number(detail.second_rank).toFixed(0)
                     + ' / 周回 ' + Number(detail.lap_score).toFixed(0);
             }
         } else {
             info += ' / 展示前';
         }
-        if (level >= 3 && course !== 2 && course !== 5) info += ' / ★★★は前方検証中';
+        if (level >= 3 && course !== 1 && course !== 2 && course !== 5) info += ' / ★★★は前方検証中';
         return info;
     }
 
@@ -231,6 +244,7 @@
             });
         })
         .then(function (data) {
+            const lane1Matches = data.lane1_matches && typeof data.lane1_matches === 'object' ? data.lane1_matches : {};
             const lane2SashiMatches = data.lane2_sashi_matches && typeof data.lane2_sashi_matches === 'object' ? data.lane2_sashi_matches : {};
             const lane2MakuriMatches = data.lane2_makuri_matches && typeof data.lane2_makuri_matches === 'object' ? data.lane2_makuri_matches : {};
             const lane3Matches = data.lane3_matches && typeof data.lane3_matches === 'object' ? data.lane3_matches : {};
@@ -244,6 +258,7 @@
                 clearTamagawaStars(link);
 
                 const infos = [];
+                if (code && lane1Matches[code]) infos.push(addTamagawaSignal(link, lane1Matches[code], 1));
                 if (code && lane2SashiMatches[code]) infos.push(addTamagawaSignal(link, lane2SashiMatches[code], 2));
                 if (code && lane2MakuriMatches[code]) infos.push(addTamagawaSignal(link, lane2MakuriMatches[code], 2));
                 if (code && lane3Matches[code]) infos.push(addTamagawaSignal(link, lane3Matches[code], 3));
