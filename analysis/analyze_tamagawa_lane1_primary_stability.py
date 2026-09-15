@@ -40,6 +40,38 @@ from analyze_tamagawa_lane2_primary_stability import RollingExhibitionAverage  #
 
 PROFILE_MONTHS = 12
 
+
+class NogashiHistoryIndex:
+    """選手×2Cの過去履歴から、1Cを逃がした割合をpoint-in-timeで返す。"""
+
+    def __init__(self, rows: list[dict]):
+        grouped = {}
+        for row in rows:
+            if int(row.get("course", 0)) != 2:
+                continue
+            grouped.setdefault(str(row["player_id"]), []).append(row)
+        self.data = {}
+        for pid, items in grouped.items():
+            items.sort(key=lambda item: item["date"])
+            dates = [item["date"] for item in items]
+            prefix_n = [0]
+            prefix_nogashi = [0]
+            for item in items:
+                prefix_n.append(prefix_n[-1] + 1)
+                is_nogashi = (not item["won"]) and int(item.get("winner_course", 0)) == 1
+                prefix_nogashi.append(prefix_nogashi[-1] + (1 if is_nogashi else 0))
+            self.data[pid] = (dates, prefix_n, prefix_nogashi)
+
+    def rate(self, player_id: str, target_date: date, months: int) -> float | None:
+        item = self.data.get(str(player_id))
+        if item is None:
+            return None
+        dates, prefix_n, prefix_nogashi = item
+        lo = bisect.bisect_left(dates, months_ago(target_date, months))
+        hi = bisect.bisect_left(dates, target_date)
+        n = hi - lo
+        return pct(prefix_nogashi[hi] - prefix_nogashi[lo], n) if n else None
+
 CONDITIONS = (
     ("BASE", "1C履歴あり"),
     ("E50", "1C逃げ率50%以上"),
@@ -63,6 +95,12 @@ CONDITIONS = (
     ("LOW2_10", "2C攻め率10%未満"),
     ("LOW3_15", "3C攻め率15%未満"),
     ("E55_LOW23", "逃げ率55%以上×2C攻め10%未満×3C攻め15%未満"),
+    ("N40", "2C逃し率40%以上"),
+    ("N50", "2C逃し率50%以上"),
+    ("N60", "2C逃し率60%以上"),
+    ("E55_N50", "逃げ率55%以上×2C逃し率50%以上"),
+    ("E60_N50", "逃げ率60%以上×2C逃し率50%以上"),
+    ("E55_N60", "逃げ率55%以上×2C逃し率60%以上"),
 )
 
 
@@ -110,6 +148,7 @@ def matches(row: dict, key: str, months: int = PROFILE_MONTHS) -> bool:
     straight4 = row["straight_score"] is not None and row["straight_score"] >= 4.0
     low2 = row[f"p2_{months}"]["attack"] < 10.0
     low3 = row[f"p3_{months}"]["attack"] < 15.0
+    nogashi = row[f"p2_{months}"].get("nogashi")
     return {
         "E50": escape >= 50.0,
         "E55": escape >= 55.0,
@@ -132,6 +171,12 @@ def matches(row: dict, key: str, months: int = PROFILE_MONTHS) -> bool:
         "LOW2_10": low2,
         "LOW3_15": low3,
         "E55_LOW23": escape >= 55.0 and low2 and low3,
+        "N40": nogashi is not None and nogashi >= 40.0,
+        "N50": nogashi is not None and nogashi >= 50.0,
+        "N60": nogashi is not None and nogashi >= 60.0,
+        "E55_N50": escape >= 55.0 and nogashi is not None and nogashi >= 50.0,
+        "E60_N50": escape >= 60.0 and nogashi is not None and nogashi >= 50.0,
+        "E55_N60": escape >= 55.0 and nogashi is not None and nogashi >= 60.0,
     }.get(key, False)
 
 
@@ -187,7 +232,9 @@ def build_rows(start: date, end: date):
     print("多摩川対象レースを読み込み中...", flush=True)
     races = load_targets(start, end)
     pids = sorted({boat["player_id"] for race in races.values() for boat in race["boats"]})
-    hist = TechniqueHistoryIndex(load_history(start, end, pids))
+    history = load_history(start, end, pids)
+    hist = TechniqueHistoryIndex(history)
+    nogashi_hist = NogashiHistoryIndex(history)
     racer = load_racer_results(required_terms(start, end))
     exhibition = load_exhibition(months_ago(start, 6), end)
     rolling = RollingExhibitionAverage(exhibition)
@@ -218,6 +265,7 @@ def build_rows(start: date, end: date):
         for months in HISTORY_MONTHS:
             profiles[f"p1_{months}"] = rates(hist.profile(by_course[1]["player_id"], 1, race["date"], months))
             profiles[f"p2_{months}"] = rates(hist.profile(by_course[2]["player_id"], 2, race["date"], months))
+            profiles[f"p2_{months}"]["nogashi"] = nogashi_hist.rate(by_course[2]["player_id"], race["date"], months)
             profiles[f"p3_{months}"] = rates(hist.profile(by_course[3]["player_id"], 3, race["date"], months))
 
         avg_exhibition = rolling.value(race["date"])
@@ -258,6 +306,8 @@ def write_csv(end: date, rows: list[dict]) -> Path:
     for course in (1, 2, 3):
         for months in HISTORY_MONTHS:
             fields += [f"p{course}_{months}_{name}" for name in ("n", "escape", "attack")]
+            if course == 2:
+                fields.append(f"p{course}_{months}_nogashi")
     fields += ["second_score", "second_rank", "gap", "lap_score", "straight_score", "first", "second", "third"]
     with path.open("w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -270,6 +320,8 @@ def write_csv(end: date, rows: list[dict]) -> Path:
                     profile = row[f"p{course}_{months}"]
                     for name in ("n", "escape", "attack"):
                         out[f"p{course}_{months}_{name}"] = profile[name]
+                    if course == 2:
+                        out[f"p{course}_{months}_nogashi"] = profile.get("nogashi")
             writer.writerow(out)
     return path
 
