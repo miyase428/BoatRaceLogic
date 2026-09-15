@@ -517,22 +517,46 @@
         }
       },
       "4": {
-        "primary_enabled": false,
+        "primary_enabled": true,
         "primary_rules": {
           "main": {
-            "enabled": false,
-            "threshold": null,
-            "parameter": "makuri_rate",
+            "enabled": true,
+            "threshold": 15.0,
+            "parameter": "attack_rate",
             "optimization": {
-              "enabled": false,
-              "reason": "no_stable_candidate",
-              "baseline": {
-                "n": 4527,
-                "first": 13.297989838745305,
-                "top2": 27.722553567483985,
-                "top3": 47.18356527501657
+              "enabled": true,
+              "value": 15.0,
+              "overall": {
+                "n": 428,
+                "first": 24.299065420560748,
+                "top2": 42.52336448598131,
+                "top3": 58.177570093457945
               },
-              "disabled_reason": "改善幅1.0pt未満または安定性不足"
+              "baseline": {
+                "n": 4521,
+                "first": 13.315637248396373,
+                "top2": 27.73722627737167,
+                "top3": 47.24618491484185
+              },
+              "holdout": {
+                "n": 106,
+                "first": 21.69811320754717,
+                "top2": 39.62264150943396,
+                "top3": 53.77358490566038
+              },
+              "holdout_delta_top3": 6.78,
+              "train_delta_top3": [
+                11.77,
+                14.88,
+                10.02
+              ],
+              "holdout_delta_first": 9.93,
+              "train_delta_first": [
+                7.46,
+                12.84,
+                13.14
+              ],
+              "score": 24.98
             }
           }
         },

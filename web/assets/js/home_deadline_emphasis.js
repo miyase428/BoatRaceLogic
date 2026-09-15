@@ -199,9 +199,12 @@
         } else if (course === 3) {
             info += ' / 3攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%';
         } else if (course === 4) {
-            info += ' / 4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
+            info += ' / ' + (detail.primary_metric === 'attack_rate' ? '4攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%' : '4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%')
                 + ' / ST順位 4=' + Number(detail.lane4_avg_rank).toFixed(2)
                 + ' < 3=' + Number(detail.lane3_avg_rank).toFixed(2);
+            if (Number.isFinite(Number(detail.lane1_vulnerability_rate))) {
+                info += ' / 1C脆弱性 ' + Number(detail.lane1_vulnerability_rate).toFixed(1) + '%';
+            }
         } else if (course === 5) {
             info += ' / 5攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%';
         } else if (course === 6) {

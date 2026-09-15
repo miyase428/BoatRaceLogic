@@ -356,7 +356,17 @@
                         } else if (isLane3 && Number.isFinite(Number(detail.attack_rate))) {
                             parts.push('3攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
                         } else if (isLane4 && Number.isFinite(Number(detail.makuri_rate))) {
-                            parts.push('4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
+                            if (detail.primary_metric === 'attack_rate' && Number.isFinite(Number(detail.attack_rate))) {
+                                parts.push('4攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
+                            } else {
+                                parts.push('4まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
+                            }
+                            if (Number.isFinite(Number(detail.lane3_avg_rank)) && Number.isFinite(Number(detail.lane4_avg_rank))) {
+                                parts.push('ST順位 4=' + Number(detail.lane4_avg_rank).toFixed(2) + ' < 3=' + Number(detail.lane3_avg_rank).toFixed(2));
+                            }
+                            if (Number.isFinite(Number(detail.lane1_vulnerability_rate))) {
+                                parts.push('1C脆弱性 ' + Number(detail.lane1_vulnerability_rate).toFixed(1) + '%');
+                            }
                         } else if (course === 5 && Number.isFinite(Number(detail.attack_rate))) {
                             parts.push('5攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
                         } else if (isLane6 && Number.isFinite(Number(detail.attack_rate))) {

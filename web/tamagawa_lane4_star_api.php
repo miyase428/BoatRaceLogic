@@ -432,6 +432,9 @@ SQL;
     $threshold2Makuri = primaryThreshold($venueRules, 2, 'makuri');
     $threshold3 = primaryThreshold($venueRules, 3, 'main');
     $threshold4 = primaryThreshold($venueRules, 4, 'main');
+    $primary4Rule = $venueRules['4']['primary_rules']['main'] ?? [];
+    $primary4Parameter = is_array($primary4Rule) ? (string)($primary4Rule['parameter'] ?? 'makuri_rate') : 'makuri_rate';
+    $primary4MetricLabel = $primary4Parameter === 'attack_rate' ? '攻め率（まくり+まくり差し）' : 'まくり率';
     $threshold5 = primaryThreshold($venueRules, 5, 'main');
     $threshold6 = primaryThreshold($venueRules, 6, 'main');
     $conditionText = static function (bool $enabled, string $text): string {
@@ -444,7 +447,7 @@ SQL;
         'place_name' => $placeName,
         'profile_months' => 12,
         'conditions' => [
-            'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コースまくり率%.0f%%以上 + 4が3より平均ST順位上', $threshold4)),
+            'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コース%s%.0f%%以上 + 4が3より平均ST順位上%s', $primary4MetricLabel, $threshold4, $placeCode === 'KRY' ? '（1C脆弱性15%以上は補助目安）' : '')),
             'double_star' => sprintf('★ + 二次%.0f以上 + TOP差%.0f以内', secondaryParam($venueRules, 4, 'main', 'double', 'score_min', 24.0), secondaryParam($venueRules, 4, 'main', 'double', 'gap_max', 5.0)),
             'triple_star' => sprintf('★★ + 二次%.0f以上 + 直線評価%.0f以上', secondaryParam($venueRules, 4, 'main', 'triple', 'score_min', 27.0), secondaryParam($venueRules, 4, 'main', 'triple', 'straight_min', 4.0)),
         ],
@@ -591,6 +594,10 @@ SELECT
         WHERE w.winner_player_id = re.player_id::text
           AND w.winner_technique = '差し'
     ) AS sashi_n
+    ,COUNT(*) FILTER (
+        WHERE w.winner_player_id <> re.player_id::text
+          AND w.winner_technique IN ('まくり', 'まくり差し')
+    ) AS vulnerability_n
 FROM boat_race.race_entry re
 JOIN hr ON hr.race_code = re.race_code
 LEFT JOIN rd_map rd
@@ -614,11 +621,14 @@ SQL;
         $makurizashiN = (int)($row['makurizashi_n'] ?? 0);
         $nigeN = (int)($row['nige_n'] ?? 0);
         $sashiN = (int)($row['sashi_n'] ?? 0);
+        $vulnerabilityN = (int)($row['vulnerability_n'] ?? 0);
         if ($course === 1) {
             $lane1Profiles[$pid] = [
                 'n' => $n,
                 'nige_n' => $nigeN,
                 'nige_rate' => $n > 0 ? (100.0 * $nigeN / $n) : null,
+                'vulnerability_n' => $vulnerabilityN,
+                'vulnerability_rate' => $n > 0 ? (100.0 * $vulnerabilityN / $n) : null,
             ];
         } elseif ($course === 2) {
             $lane2Profiles[$pid] = [
@@ -639,6 +649,9 @@ SQL;
                 'n' => $n,
                 'makuri_n' => $makuriN,
                 'makuri_rate' => $n > 0 ? (100.0 * $makuriN / $n) : null,
+                'makurizashi_n' => $makurizashiN,
+                'makurizashi_rate' => $n > 0 ? (100.0 * $makurizashiN / $n) : null,
+                'attack_rate' => $n > 0 ? (100.0 * ($makuriN + $makurizashiN) / $n) : null,
             ];
         } elseif ($course === 5) {
             $lane5Profiles[$pid] = [
@@ -910,18 +923,22 @@ SQL;
         $rank4 = $ranks[$pid4][4] ?? null;
         $profile = $profiles[$pid4] ?? null;
         $makuriRate = is_array($profile) ? ($profile['makuri_rate'] ?? null) : null;
+        $makurizashiRate = is_array($profile) ? ($profile['makurizashi_rate'] ?? null) : null;
+        $attackRate = is_array($profile) ? ($profile['attack_rate'] ?? null) : null;
+        $rate4 = $primary4Parameter === 'attack_rate' ? $attackRate : $makuriRate;
 
-        if (!is_numeric($rank3) || !is_numeric($rank4) || !is_numeric($makuriRate)) {
+        if (!is_numeric($rank3) || !is_numeric($rank4) || !is_numeric($rate4)) {
             continue;
         }
         $rank3 = (float)$rank3;
         $rank4 = (float)$rank4;
         $makuriRate = (float)$makuriRate;
+        $rate4 = (float)$rate4;
         if ($rank3 < 1.0 || $rank3 > 6.0 || $rank4 < 1.0 || $rank4 > 6.0) {
             continue;
         }
 
-        if ($makuriRate < primaryThreshold($venueRules, 4, 'main') || $rank4 >= $rank3) {
+        if ($rate4 < primaryThreshold($venueRules, 4, 'main') || $rank4 >= $rank3) {
             continue;
         }
 
@@ -957,7 +974,13 @@ SQL;
                 default => '4攻め',
             },
             'makuri_rate' => round($makuriRate, 2),
+            'makurizashi_rate' => is_numeric($makurizashiRate) ? round((float)$makurizashiRate, 2) : null,
+            'attack_rate' => is_numeric($attackRate) ? round((float)$attackRate, 2) : null,
+            'primary_metric' => $primary4Parameter,
             'history_n' => (int)($profile['n'] ?? 0),
+            'lane1_vulnerability_rate' => is_array($lane1Profiles[$row['lane1_player_id'] ?? ''] ?? null)
+                ? round((float)($lane1Profiles[$row['lane1_player_id']]['vulnerability_rate'] ?? 0.0), 2)
+                : null,
             'lane3_avg_rank' => round($rank3, 2),
             'lane4_avg_rank' => round($rank4, 2),
             'secondary_ready' => is_array($secondary),
