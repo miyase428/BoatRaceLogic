@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""場別の一次★条件を候補閾値から探索する。
+"""場別の一次★条件を精度優先で候補閾値から探索する。
 
 多摩川条件を固定適用するのではなく、各場・各コースについて候補閾値を比較する。
-直近6か月をホールドアウトにし、母数・期間安定性・3連対率改善が同時に残る条件だけを採用候補にする。
+過去18か月で候補を選び、直近6か月を未使用ホールドアウトとして確認する。
+短期の偶然や表示乱立を避けるため、1着率・3連対率の改善幅を従来より厳しくする。
 """
 
 from __future__ import annotations
@@ -42,10 +43,16 @@ GRIDS = {
     "5_main": [("attack_min", x) for x in (7.0, 10.0, 12.0, 15.0)],
     "6_main": [("attack_min", x) for x in (3.0, 5.0, 7.0, 10.0)],
 }
-REVIEW_COURSES = {1, 2, 3, 4, 5}
+# 今回は全コースを同じ精度基準で見直す。6Cも攻め率＋5CとのST順位を
+# 例外扱いせず、過去18か月の期間安定性と直近ホールドアウトで判定する。
+REVIEW_COURSES = {1, 2, 3, 4, 5, 6}
 
 # 安定しているだけでなく、無条件時からの3連対率改善が実戦上も確認できる最低幅。
-MIN_DELTA_TOP3 = 1.0
+MIN_DELTA_TOP3 = 5.0
+MIN_DELTA_FIRST = 3.0
+MIN_RECENT_N = 10
+MIN_HOLDOUT_N = 30
+MIN_BLOCK_N = 20
 
 
 def pct(num: int, den: int) -> float:
@@ -162,17 +169,19 @@ def choose(rows: list[dict], key: str, end: date) -> dict:
         hold_delta = hold["top3"] - hold_base["top3"]
         hold_first_delta = hold["first"] - hold_base["first"]
         recent = evaluate(recent_rows, key, value)
-        if recent["n"] < 10:
+        if recent["n"] < MIN_RECENT_N:
             continue
-        if hold["n"] < 20 or any(n < 20 for n in train_ns):
+        if hold["n"] < MIN_HOLDOUT_N or any(n < MIN_BLOCK_N for n in train_ns):
             continue
-        if hold_delta < MIN_DELTA_TOP3 or min(train_deltas) < MIN_DELTA_TOP3 or hold_first_delta < 0.0 or min(train_first_deltas) < 0.0:
+        if hold_delta < MIN_DELTA_TOP3 or min(train_deltas) < MIN_DELTA_TOP3:
             continue
-        # 短期・中期・長期の絶対1着率を優先し、3連対率改善は補助評価とする。
+        if hold_first_delta < MIN_DELTA_FIRST or min(train_first_deltas) < MIN_DELTA_FIRST:
+            continue
+        # ホールドアウトは採否確認だけに使い、候補順位は過去18か月の訓練期間で決める。
         train_first_rates = []
         for _, st, en in blocks[1:]:
             train_first_rates.append(evaluate(rows, key, value, st, en)["first"])
-        score = min([recent["first"], hold["first"], *train_first_rates]) + 0.1 * min([hold_delta, *train_deltas])
+        score = min(train_first_rates) + 0.1 * min(train_deltas)
         candidates.append((score, value, overall, hold, recent, train_deltas, hold_delta, train_first_deltas, hold_first_delta))
     if not candidates:
         return {"enabled": False, "reason": "no_stable_candidate", "baseline": base}
