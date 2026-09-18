@@ -8,6 +8,13 @@ error_reporting(E_ALL);
 
 ob_start();
 
+// catch節でも参照できるよう、リクエストされたレースを先に保持する。
+// 外部サイトの一時的な応答不良時でも、保存済みの正しい展示を消さないために使う。
+$race_code = $_POST["race_code"]
+        ?? $_GET["race_code"]
+        ?? "";
+$pdo = null;
+
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../common/db_connect.php';
 
@@ -68,10 +75,6 @@ function toNullOrFloat($v)
 try {
     // PostgreSQL 接続
     $pdo = getPDO();
-
-    $race_code = $_POST["race_code"]
-            ?? $_GET["race_code"]
-            ?? "";
 
     if ($race_code == "") {
         throw new Exception("race_codeがありません");
@@ -250,13 +253,51 @@ try {
 
 } catch (Throwable $e) {
 
-    log_message("エラー発生: " . $e->getMessage());
+    $errorMessage = $e->getMessage();
+    log_message("エラー発生: " . $errorMessage);
+    // Apache実行ユーザーが通常ログに書き込めない環境でも、原因をサーバーログへ残す。
+    error_log("[update_exhibition] race_code={$race_code} error={$errorMessage}");
+
+    // 再取得だけが一時的に失敗した場合、すでに揃っている展示をエラー扱いにしない。
+    // DBの既存値を上書き・削除せず、そのまま画面で利用する。
+    $hasSavedExhibition = false;
+    if ($pdo instanceof PDO && $race_code !== '') {
+        try {
+            $savedStmt = $pdo->prepare("
+                SELECT
+                    COUNT(*) AS total_rows,
+                    COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL) AS exhibition_rows,
+                    COUNT(*) FILTER (WHERE start_timing IS NOT NULL) AS start_rows
+                FROM boat_race.exhibition_live
+                WHERE race_code = :race_code
+            ");
+            $savedStmt->execute([':race_code' => $race_code]);
+            $saved = $savedStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $hasSavedExhibition = (int)($saved['total_rows'] ?? 0) === 6
+                && (int)($saved['exhibition_rows'] ?? 0) === 6
+                && (int)($saved['start_rows'] ?? 0) === 6;
+        } catch (Throwable $savedCheckError) {
+            error_log("[update_exhibition] saved-data check failed for {$race_code}: " . $savedCheckError->getMessage());
+        }
+    }
 
     ob_end_clean();
     header("Content-Type: application/json; charset=UTF-8", true, 500);
+
+    if ($hasSavedExhibition) {
+        http_response_code(200);
+        echo json_encode([
+            "success" => true,
+            "race_code" => $race_code,
+            "cached" => true,
+            "message" => "展示情報の再取得はできませんでしたが、保存済みの展示情報を表示しています"
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     echo json_encode([
         "success" => false,
-        "message" => $e->getMessage()
+        "message" => $errorMessage
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
