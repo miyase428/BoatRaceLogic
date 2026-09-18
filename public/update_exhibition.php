@@ -18,6 +18,7 @@ $pdo = null;
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_source_guard.php';
+require_once __DIR__ . '/../logic/exhibition_data_quality.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -77,18 +78,21 @@ function hasSavedExhibition(PDO $pdo, string $raceCode): bool
 {
     $savedStmt = $pdo->prepare("
         SELECT
-            COUNT(*) AS total_rows,
-            COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL) AS exhibition_rows,
-            COUNT(*) FILTER (WHERE start_timing IS NOT NULL) AS start_rows
+            COUNT(DISTINCT entry_course) FILTER (
+                WHERE player_id IS NOT NULL
+                  AND exhibition_time IS NOT NULL
+                  AND start_timing IS NOT NULL
+                  AND lap_time IS NOT NULL
+                  AND around_time IS NOT NULL
+                  AND straight_time IS NOT NULL
+            ) AS complete_rows
         FROM boat_race.exhibition_live
         WHERE race_code = :race_code
     ");
     $savedStmt->execute([':race_code' => $raceCode]);
     $saved = $savedStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-    return (int)($saved['total_rows'] ?? 0) === 6
-        && (int)($saved['exhibition_rows'] ?? 0) === 6
-        && (int)($saved['start_rows'] ?? 0) === 6;
+    return (int)($saved['complete_rows'] ?? 0) === 6;
 }
 
 try {
@@ -158,23 +162,12 @@ try {
         throw new Exception("展示データが6艇分そろっていません（取得件数: " . count($data) . "）");
     }
 
-    // スクレイパーは展示未公開時に6艇分のnullを返すため、成功扱いで保存しない。
-    $hasExhibitionData = false;
-    foreach ($data as $row) {
-        if (
-            toNullOrFloat($row['exhibition_time'] ?? null) !== null
-            || convertStartTiming($row['start_timing'] ?? '') !== null
-        ) {
-            $hasExhibitionData = true;
-            break;
-        }
-    }
-    if (!$hasExhibitionData) {
-        throw new Exception("展示情報がまだ公開されていないか、取得できませんでした");
-    }
-
     // ページ取得に成功した時点で、通信異常の連続回数をリセットする。
     recordExhibitionSourceSuccess();
+
+    if (!hasCompleteExhibitionData($data)) {
+        throw new Exception("展示情報が全項目そろっていないため、保存せず次回更新対象にします");
+    }
 
     // ------------------------------------------------------------
     // 過去の場平均

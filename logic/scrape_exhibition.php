@@ -3,6 +3,7 @@ date_default_timezone_set('Asia/Tokyo');
 
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/exhibition_source_guard.php';
+require_once __DIR__ . '/exhibition_data_quality.php';
 
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
@@ -156,7 +157,14 @@ function writeErrorUrls(string $errorFile, array $urls): void
 function getRegisteredExhibitionCount(PDO $pdo, string $raceCode): int
 {
     $sql = "
-        SELECT COUNT(DISTINCT entry_course)
+        SELECT COUNT(DISTINCT entry_course) FILTER (
+            WHERE player_id IS NOT NULL
+              AND exhibition_time IS NOT NULL
+              AND start_timing IS NOT NULL
+              AND lap_time IS NOT NULL
+              AND around_time IS NOT NULL
+              AND straight_time IS NOT NULL
+        )
         FROM boat_race.exhibition_live
         WHERE race_code = :race_code
     ";
@@ -209,6 +217,13 @@ function fetchExhibitionData(string $url): array
     if (empty($data)) {
         return [
             'status' => 'empty',
+            'data' => [],
+        ];
+    }
+
+    if (!hasCompleteExhibitionData($data)) {
+        return [
+            'status' => 'partial',
             'data' => [],
         ];
     }
@@ -423,8 +438,9 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
             $remaining[] = $url;
             $consecutiveErrors++;
             waitErrorBackoff();
-        } elseif ($result['status'] === 'empty') {
-            log_message("エラー再試行 展示データなし（{$raceCode}）→ error_urls.txt から除外");
+        } elseif ($result['status'] === 'empty' || $result['status'] === 'partial') {
+            $label = $result['status'] === 'partial' ? '展示情報が未完備' : '展示データなし';
+            log_message("エラー再試行 {$label}（{$raceCode}）→ error_urls.txt から除外");
             $consecutiveErrors = 0;
             waitNormalInterval();
         } else {
@@ -625,8 +641,9 @@ foreach ($period as $dateObj) {
                     continue;
                 }
 
-                if ($result['status'] === 'empty') {
-                    log_message("展示データなし（{$race_code}）");
+                if ($result['status'] === 'empty' || $result['status'] === 'partial') {
+                    $label = $result['status'] === 'partial' ? '展示情報が未完備' : '展示データなし';
+                    log_message("{$label}（{$race_code}）");
                     $consecutive_access_errors = 0;
                     waitNormalInterval();
                     continue;
