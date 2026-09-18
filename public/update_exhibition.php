@@ -81,10 +81,14 @@ function hasSavedExhibition(PDO $pdo, string $raceCode): bool
             COUNT(DISTINCT entry_course) FILTER (
                 WHERE player_id IS NOT NULL
                   AND exhibition_time IS NOT NULL
+                  AND exhibition_time > 0
                   AND start_timing IS NOT NULL
                   AND lap_time IS NOT NULL
+                  AND lap_time > 0
                   AND around_time IS NOT NULL
+                  AND around_time > 0
                   AND straight_time IS NOT NULL
+                  AND straight_time > 0
             ) AS complete_rows
         FROM boat_race.exhibition_live
         WHERE race_code = :race_code

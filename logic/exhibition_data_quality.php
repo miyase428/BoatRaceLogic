@@ -14,6 +14,13 @@ function exhibitionDataValuePresent($value): bool
     return $text !== '' && $text !== '-' && $text !== '--';
 }
 
+function exhibitionPositiveNumberPresent($value): bool
+{
+    return exhibitionDataValuePresent($value)
+        && is_numeric((string)$value)
+        && (float)$value > 0.0;
+}
+
 function hasCompleteExhibitionData(array $data): bool
 {
     if (count($data) !== 6) {
@@ -21,15 +28,6 @@ function hasCompleteExhibitionData(array $data): bool
     }
 
     $courses = [];
-    $required = [
-        'player_id',
-        'exhibition_time',
-        'start_timing',
-        'lap_time',
-        'around_time',
-        'straight_time',
-    ];
-
     foreach ($data as $row) {
         if (!is_array($row)) {
             return false;
@@ -41,8 +39,16 @@ function hasCompleteExhibitionData(array $data): bool
         }
         $courses[$course] = true;
 
-        foreach ($required as $field) {
-            if (!exhibitionDataValuePresent($row[$field] ?? null)) {
+        if (!exhibitionDataValuePresent($row['player_id'] ?? null)) {
+            return false;
+        }
+
+        // 展示STの0.00は有効値。一方、各展示タイムの0は未取得値として扱う。
+        if (!exhibitionDataValuePresent($row['start_timing'] ?? null)) {
+            return false;
+        }
+        foreach (['exhibition_time', 'lap_time', 'around_time', 'straight_time'] as $field) {
+            if (!exhibitionPositiveNumberPresent($row[$field] ?? null)) {
                 return false;
             }
         }
