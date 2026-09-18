@@ -433,6 +433,40 @@ $config = require __DIR__ . '/../config/last_date.php';
 
 $start_date = $config['last_date'];
 $today      = date('Ymd');
+$nightly_replay_date = date('Y-m-d');
+$nightly_replay_ran = false;
+$run_nightly_replay = static function () use ($nightly_replay_date, &$nightly_replay_ran): void {
+    if ($nightly_replay_ran) {
+        return;
+    }
+    $nightly_replay_ran = true;
+
+    // 展示取得とは分離した専用プログラムで、昼間に厳密保存されなかった
+    // 当日レースだけを夜間再現する。外部の展示取得はここでは行わない。
+    $replayScript = __DIR__ . '/../analysis/replay_missing_predictions.php';
+    if (!is_file($replayScript)) {
+        log_message("夜間再現プログラムが見つかりません: {$replayScript}");
+        return;
+    }
+
+    log_message("=== 夜間再現開始: {$nightly_replay_date} ===");
+    $command = escapeshellarg(PHP_BINARY)
+        . ' ' . escapeshellarg($replayScript)
+        . ' ' . escapeshellarg($nightly_replay_date)
+        . ' 2>&1';
+    $output = [];
+    $exitCode = 0;
+    exec($command, $output, $exitCode);
+    foreach ($output as $line) {
+        log_message('[夜間再現] ' . $line);
+    }
+    log_message($exitCode === 0
+        ? '=== 夜間再現完了 ==='
+        : "=== 夜間再現エラー: exit={$exitCode} ===");
+};
+
+// アクセス保護による途中終了時も、取得済みレースだけは夜間再現へ回す。
+register_shutdown_function($run_nightly_replay);
 
 $period = new DatePeriod(
     new DateTime($start_date),
@@ -599,3 +633,4 @@ log_message("=== 通常取得の全日付処理完了 ===");
 retryErrorUrls($pdo, $placeMap, $error_file, $limit_time);
 
 log_message("=== 全処理完了 ===");
+$run_nightly_replay();

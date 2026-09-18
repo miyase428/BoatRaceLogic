@@ -46,6 +46,12 @@ class ApiClientProduction extends ApiClient
      */
     public function fetchTenjiTest(string $race_code, array $tenji_list): array
     {
+        // 夜間再現ではラズパイ側の現行APIを呼ばず、対象レース未満だけを
+        // ローカルDBから集計する。結果確定後の再計算でも対象着順は混入しない。
+        if (getenv('BOATRACE_LATE_REPLAY') === '1') {
+            return $this->fetchTenjiTestAsOfRace($race_code, $tenji_list);
+        }
+
         $courseToBoat = [];
         $seenBoats = [];
 
@@ -86,6 +92,83 @@ class ApiClientProduction extends ApiClient
         }
 
         return parent::fetchTenjiTest($race_code, $proxy);
+    }
+
+    private function fetchTenjiTestAsOfRace(string $raceCode, array $tenjiList): array
+    {
+        if (preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $raceCode) !== 1) {
+            return [];
+        }
+
+        $courseToBoat = [];
+        foreach ($tenjiList as $index => $row) {
+            if (!is_array($row)) {
+                return [];
+            }
+            $boat = (int)($row['teiban'] ?? ($index + 1));
+            $course = (int)($row['tenji_course'] ?? 0);
+            if ($boat < 1 || $boat > 6 || $course < 1 || $course > 6 || isset($courseToBoat[$course])) {
+                return [];
+            }
+            $courseToBoat[$course] = $boat;
+        }
+        ksort($courseToBoat);
+        if (array_keys($courseToBoat) !== [1, 2, 3, 4, 5, 6]) {
+            return [];
+        }
+
+        $pdo = getPDO();
+        $entryStmt = $pdo->prepare(<<<'SQL'
+SELECT lane_number, player_id::text AS player_id
+FROM boat_race.race_entry
+WHERE race_code = :race_code
+ORDER BY lane_number
+SQL);
+        $entryStmt->execute([':race_code' => $raceCode]);
+        $playerByBoat = [];
+        foreach ($entryStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $entry) {
+            $playerByBoat[(int)$entry['lane_number']] = trim((string)$entry['player_id']);
+        }
+        if (count($playerByBoat) !== 6) {
+            return [];
+        }
+
+        $values = [];
+        $params = [':race_code' => $raceCode];
+        for ($course = 1; $course <= 6; $course++) {
+            $key = ':player_' . $course;
+            $values[] = '(' . $course . ', ' . $key . ')';
+            $params[$key] = $playerByBoat[$courseToBoat[$course]] ?? '';
+        }
+
+        $sql = <<<SQL
+WITH target(wakuban, player_id) AS (
+    VALUES %s
+)
+SELECT
+    t.wakuban,
+    t.player_id,
+    COUNT(*) FILTER (
+        WHERE r.rank IN ('1','2','3')
+          AND r.race_code >= TO_CHAR(TO_DATE(SUBSTRING(:race_code, 1, 8), 'YYYYMMDD') - INTERVAL '6 months', 'YYYYMMDD')
+    )::float / NULLIF(COUNT(r.rank), 0) AS three_in_rate_6m,
+    COUNT(*) FILTER (
+        WHERE r.rank IN ('1','2','3')
+          AND r.race_code >= TO_CHAR(TO_DATE(SUBSTRING(:race_code, 1, 8), 'YYYYMMDD') - INTERVAL '3 months', 'YYYYMMDD')
+    )::float / NULLIF(COUNT(r.rank) FILTER (
+        WHERE r.race_code >= TO_CHAR(TO_DATE(SUBSTRING(:race_code, 1, 8), 'YYYYMMDD') - INTERVAL '3 months', 'YYYYMMDD')
+    ), 0) AS three_in_rate_3m
+FROM target t
+LEFT JOIN boat_race.race_result_detail r
+  ON r.player_id::text = t.player_id
+ AND r.race_code >= TO_CHAR(TO_DATE(SUBSTRING(:race_code, 1, 8), 'YYYYMMDD') - INTERVAL '6 months', 'YYYYMMDD')
+ AND r.race_code < :race_code
+GROUP BY t.wakuban, t.player_id
+ORDER BY t.wakuban
+SQL;
+        $stmt = $pdo->prepare(sprintf($sql, implode(', ', $values)));
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     /**

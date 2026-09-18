@@ -19,6 +19,7 @@ declare(strict_types=1);
  *
  * Usage:
  *   php analysis/list_payout_signal_hole_predictions.php 2026-09-07
+ *   php analysis/list_payout_signal_hole_predictions.php 2026-09-07 20260907OMR04,20260907SME04
  */
 
 require_once __DIR__ . '/../web/controllers/IndexController.php';
@@ -194,6 +195,34 @@ function targetsHolePred(DateTimeImmutable $dt): array
     return $targets;
 }
 
+/** @return array<int,array<string,mixed>> */
+function filteredTargetsHolePred(DateTimeImmutable $dt, array $raceFilter): array
+{
+    $placeNames = [
+        'KRY'=>'桐生','TDA'=>'戸田','EDG'=>'江戸川','HWJ'=>'平和島','TMG'=>'多摩川','HMN'=>'浜名湖',
+        'GMG'=>'蒲郡','TKN'=>'常滑','TSU'=>'津','MKN'=>'三国','BWK'=>'びわこ','SME'=>'住之江',
+        'AMG'=>'尼崎','NRT'=>'鳴門','MRG'=>'丸亀','KJM'=>'児島','MYJ'=>'宮島','TKY'=>'徳山',
+        'SMS'=>'下関','WKM'=>'若松','ASY'=>'芦屋','FKO'=>'福岡','KRT'=>'唐津','OMR'=>'大村',
+    ];
+    $prefix = $dt->format('Ymd');
+    $targets = [];
+    foreach (array_keys($raceFilter) as $raceCode) {
+        if (substr($raceCode, 0, 8) !== $prefix) continue;
+        $placeCode = substr($raceCode, 8, 3);
+        $raceNo = (int)substr($raceCode, 11, 2);
+        if (!isset($placeNames[$placeCode]) || $raceNo < 1 || $raceNo > 12) continue;
+        $targets[] = [
+            'date' => $dt->format('Y-m-d'),
+            'place' => $placeNames[$placeCode],
+            'place_code' => $placeCode,
+            'race_no' => $raceNo,
+            'race_code' => $raceCode,
+        ];
+    }
+    usort($targets, static fn(array $a, array $b): int => strcmp((string)$a['race_code'], (string)$b['race_code']));
+    return $targets;
+}
+
 /** @return array<string,mixed> */
 function evaluateHolePred(array $target): array
 {
@@ -315,14 +344,26 @@ function compactBetsHolePred(array $bets): string
 }
 
 $dateText = trim((string)($argv[1] ?? ''));
+$raceFilterText = strtoupper(trim((string)($argv[2] ?? '')));
 $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $dateText);
 if ($dt === false || $dt->format('Y-m-d') !== $dateText) {
-    failHolePred('Usage: php analysis/list_payout_signal_hole_predictions.php YYYY-MM-DD');
+    failHolePred('Usage: php analysis/list_payout_signal_hole_predictions.php YYYY-MM-DD [RACE_CODE,...]');
 }
 
-$targets = targetsHolePred($dt);
+$raceFilter = [];
+if ($raceFilterText !== '') {
+    foreach (explode(',', $raceFilterText) as $raceCode) {
+        $raceCode = trim($raceCode);
+        if (preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $raceCode) === 1) {
+            $raceFilter[$raceCode] = true;
+        }
+    }
+}
+$targets = $raceFilter === [] ? targetsHolePred($dt) : filteredTargetsHolePred($dt, $raceFilter);
 if ($targets === []) {
-    echo "対象日のイン崩壊候補はありません。\n";
+    echo $raceFilter === []
+        ? "対象日のイン崩壊候補はありません。\n"
+        : "指定レースにイン崩壊候補はありません。\n";
     exit(0);
 }
 
@@ -334,9 +375,17 @@ foreach ($targets as $idx => $target) {
     try {
         $rows[] = evaluateHolePred($target);
     } catch (Throwable $e) {
+        if ($raceFilter !== [] && $e->getMessage() === 'current classification changed') {
+            continue;
+        }
         $errors++;
         $rows[] = [...$target, 'error'=>$e->getMessage()];
     }
+}
+
+if ($rows === [] && $raceFilter !== []) {
+    echo "指定レースにイン崩壊候補はありません。\n";
+    exit(0);
 }
 
 $stamp = (new DateTimeImmutable('now'))->format('Ymd_His');

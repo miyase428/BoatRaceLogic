@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../web/logic/PredictionForwardSnapshotStore.php';
+
 /**
  * 穴目予想の前方検証用スナップショットを、レース単位・段階単位で不変保存する。
  *
@@ -21,6 +23,7 @@ declare(strict_types=1);
  * Usage:
  *   php analysis/freeze_payout_signal_hole_forward.php 2026-09-08 provisional
  *   php analysis/freeze_payout_signal_hole_forward.php 2026-09-08 exhibition
+ *   php analysis/freeze_payout_signal_hole_forward.php 2026-09-08 exhibition 20260908OMR04,20260908SME04
  */
 
 date_default_timezone_set('Asia/Tokyo');
@@ -203,15 +206,22 @@ function sourceSnapshotTimeHoleForward(string $text): DateTimeImmutable
     return new DateTimeImmutable('now');
 }
 
-function runPredictionGeneratorHoleForward(string $dateText): array
+function runPredictionGeneratorHoleForward(string $dateText, string $raceFilterText = ''): array
 {
     $script = __DIR__ . '/list_payout_signal_hole_predictions.php';
     if (!is_file($script)) failHoleForward('予想生成スクリプトが見つかりません: ' . $script);
 
     $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($script) . ' ' . escapeshellarg($dateText);
+    if ($raceFilterText !== '') {
+        $cmd .= ' ' . escapeshellarg($raceFilterText);
+    }
     $out = shell_exec($cmd . ' 2>/dev/null');
     if (!is_string($out) || trim($out) === '') {
         failHoleForward('穴目予想の生成に失敗しました');
+    }
+    if (str_contains($out, 'イン崩壊候補はありません')) {
+        echo trim($out) . PHP_EOL;
+        exit(0);
     }
 
     if (!preg_match('/^保存:\s+(.+)$/mu', $out, $m)) {
@@ -233,17 +243,23 @@ function runPredictionGeneratorHoleForward(string $dateText): array
 
 $dateText = trim((string)($argv[1] ?? ''));
 $stage = strtolower(trim((string)($argv[2] ?? '')));
+$raceFilterText = strtoupper(trim((string)($argv[3] ?? '')));
 
 $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $dateText);
-if ($dt === false || $dt->format('Y-m-d') !== $dateText || !in_array($stage, ['provisional', 'exhibition'], true)) {
-    failHoleForward('Usage: php analysis/freeze_payout_signal_hole_forward.php YYYY-MM-DD provisional|exhibition');
+if ($dt === false || $dt->format('Y-m-d') !== $dateText || !in_array($stage, ['provisional', 'exhibition', 'late_replay'], true)) {
+    failHoleForward('Usage: php analysis/freeze_payout_signal_hole_forward.php YYYY-MM-DD provisional|exhibition|late_replay [RACE_CODE,...]');
 }
 
 $wantMode = $stage === 'provisional' ? '暫定' : '展示反映済';
-$stageLabel = $stage === 'provisional' ? '暫定' : '展示反映済';
+$lateReplay = $stage === 'late_replay';
+$stageLabel = match ($stage) {
+    'provisional' => '暫定',
+    'late_replay' => '夜間再現',
+    default => '展示反映済',
+};
 $ymd = $dt->format('Ymd');
 
-[$sourcePath, $sourceText] = runPredictionGeneratorHoleForward($dateText);
+[$sourcePath, $sourceText] = runPredictionGeneratorHoleForward($dateText, $raceFilterText);
 $sourceAt = sourceSnapshotTimeHoleForward($sourceText);
 $rows = parsePredictionBlocksHoleForward($sourceText);
 if ($rows === []) failHoleForward('生成スナップショットから予想レースを抽出できませんでした');
@@ -303,7 +319,7 @@ foreach ($rows as $row) {
     }
 
     // 予想ファイル全体の作成時刻を保守的に採用。締切以後なら前方保存しない。
-    if ($sourceAt >= $deadline) {
+    if (!$lateReplay && $sourceAt >= $deadline) {
         $deadlineSkipped++;
         continue;
     }
@@ -319,7 +335,7 @@ foreach ($rows as $row) {
         'schema_version' => 1,
         'logic_version' => 'hole-s3t3-ab-forward-v1-20260907',
         'target_date' => $dateText,
-        'stage' => $stage,
+        'stage' => $lateReplay ? 'exhibition' : $stage,
         'stage_label' => $stageLabel,
         'mode' => (string)$row['mode'],
         'snapshot_at' => $sourceAt->format(DATE_ATOM),
@@ -377,6 +393,13 @@ foreach ($rows as $row) {
     fclose($fp);
     @chmod($savePath, 0664);
 
+    // ファイルによる不変保存に加え、本命・対抗と共通の自動採点基盤へ登録する。
+    if ($lateReplay) {
+        PredictionForwardSnapshotStore::captureLateReplayHolePrediction($record);
+    } else {
+        PredictionForwardSnapshotStore::captureFrozenHolePrediction($record);
+    }
+
     $newRows[] = [
         'deadline' => $time,
         'place' => $place,
@@ -405,7 +428,9 @@ echo '対象日     : ' . $dateText . PHP_EOL;
 echo '保存段階   : ' . $stage . ' / ' . $stageLabel . PHP_EOL;
 echo '元予想時刻 : ' . $sourceAt->format('Y-m-d H:i:s T') . PHP_EOL;
 echo '保存先     : ' . $outDir . PHP_EOL;
-echo '重要       : 締切前・段階一致のレースだけを初回1回のみ保存。結果・払戻は参照しません' . PHP_EOL;
+echo '重要       : ' . ($lateReplay
+    ? '対象レース以降の結果を遮断した夜間再現です。結果・払戻は参照しません'
+    : '締切前・段階一致のレースだけを初回1回のみ保存。結果・払戻は参照しません') . PHP_EOL;
 echo $line . PHP_EOL;
 
 foreach ($newRows as $r) {

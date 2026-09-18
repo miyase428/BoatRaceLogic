@@ -309,7 +309,11 @@ class AiTrioRateLogic
     private function loadCoursePrior(PDO $pdo, string $raceCode, string $targetDate, string $placeCode): array
     {
         // 6コースへのCROSS JOINをやめ、Factを1回だけ走査して全コースを集計する。
-        // race_code固定形式のため旧日付条件と race_code < target は完全一致する。
+        // 夜間再現時は他場の同日後続レースがrace_code辞書順で混ざらないよう、
+        // 安全側に倒して対象日当日の結果をすべて除外する。
+        $historyCutoff = getenv('BOATRACE_LATE_REPLAY') === '1'
+            ? 'AND race_date < ?::date'
+            : 'AND race_code < ?';
         $sql = <<<SQL
             SELECT
                 COUNT(*) AS global_n,
@@ -328,14 +332,14 @@ class AiTrioRateLogic
                 COUNT(*) FILTER (WHERE place_code = ? AND 6 IN (c1, c2, c3)) AS venue_top3_6
             FROM boat_race.race_history_fact
             WHERE course_valid
-              AND race_code < ?
+              {$historyCutoff}
         SQL;
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             $placeCode,
             $placeCode, $placeCode, $placeCode, $placeCode, $placeCode, $placeCode,
-            $raceCode,
+            getenv('BOATRACE_LATE_REPLAY') === '1' ? $targetDate : $raceCode,
         ]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 

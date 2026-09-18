@@ -2,6 +2,7 @@
 require_once __DIR__ . '/controllers/IndexController.php';
 require_once __DIR__ . '/logic/Lane1EscapeFollowerLogic.php';
 require_once __DIR__ . '/logic/Lane1DecisionSignalLogic.php';
+require_once __DIR__ . '/logic/PredictionForwardSnapshotStore.php';
 
 $controller = new IndexController();
 $viewData   = $controller->handle();
@@ -26,6 +27,10 @@ $viewData = $lane1FollowerLogic->apply(
     $viewData['entry_course_by_boat'] ?? [],
     !empty($viewData['entry_map_ready']) && empty($viewData['simulation_active'])
 );
+
+// 実際に画面へ出す、場別1逃げ相手補正後の本命・対抗を前向き保存する。
+// 展示未取得・仮想進入・結果確定後はStore側で自動的に除外する。
+PredictionForwardSnapshotStore::captureDisplayedPrediction($viewData, 'web');
 
 extract($viewData); // $selected_date, $selected_place, $race_code などを展開
 

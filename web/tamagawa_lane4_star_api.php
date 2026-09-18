@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../common/db_connect.php';
+require_once __DIR__ . '/logic/PredictionForwardSnapshotStore.php';
 
 date_default_timezone_set('Asia/Tokyo');
 header('Content-Type: application/json; charset=utf-8');
@@ -12,13 +13,30 @@ header('Cache-Control: no-store, max-age=0');
 $courseSignalCacheFile = null;
 $courseSignalCacheWrite = true;
 $courseSignalCacheConfigMtime = 0;
+$courseSignalCachePhase = 'live';
 
-function writeCourseSignalCache(string $path, array $data, int $configMtime): void
+function responseHasSecondary(array $data): bool
+{
+    foreach (['lane1_matches', 'lane2_sashi_matches', 'lane2_makuri_matches', 'matches', 'lane3_matches', 'lane5_matches', 'lane6_matches'] as $key) {
+        $rows = $data[$key] ?? [];
+        if (!is_array($rows)) continue;
+        foreach ($rows as $detail) {
+            if (is_array($detail) && !empty($detail['secondary_ready'])) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function writeCourseSignalCache(string $path, array $data, int $configMtime, string $phase): void
 {
     $payload = $data;
     $payload['_course_signal_cache'] = [
         'created_at' => time(),
         'config_mtime' => $configMtime,
+        'phase' => $phase,
+        'has_secondary' => responseHasSecondary($data),
     ];
     $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if (!is_string($json)) {
@@ -32,15 +50,37 @@ function writeCourseSignalCache(string $path, array $data, int $configMtime): vo
 
 function respond(array $data, int $status = 200): never
 {
-    global $courseSignalCacheFile, $courseSignalCacheWrite, $courseSignalCacheConfigMtime;
+    global $courseSignalCacheFile, $courseSignalCacheWrite, $courseSignalCacheConfigMtime, $courseSignalCachePhase, $pdo;
+    if (
+        $status === 200
+        && ($data['status'] ?? '') === 'ok'
+        && (!empty($data['_snapshot_race_codes']) || !empty($data['_snapshot_ready_race_codes']))
+    ) {
+        // 実際に返すサインを結果確定前だけ前向き保存する。
+        // 保存失敗はStore内で握り、API表示へ影響させない。
+        if (defined('BOATRACE_LATE_REPLAY_CAPTURE') && BOATRACE_LATE_REPLAY_CAPTURE === true) {
+            PredictionForwardSnapshotStore::captureLateReplayCourseSignals(
+                $data,
+                isset($pdo) && $pdo instanceof PDO ? $pdo : null
+            );
+        } else {
+            PredictionForwardSnapshotStore::captureDisplayedCourseSignals(
+                $data,
+                isset($pdo) && $pdo instanceof PDO ? $pdo : null
+            );
+        }
+    }
     if (
         $status === 200
         && $courseSignalCacheWrite
         && is_string($courseSignalCacheFile)
         && ($data['status'] ?? '') === 'ok'
     ) {
-        writeCourseSignalCache($courseSignalCacheFile, $data, $courseSignalCacheConfigMtime);
+        writeCourseSignalCache($courseSignalCacheFile, $data, $courseSignalCacheConfigMtime, $courseSignalCachePhase);
     }
+    // 内部の保存対象一覧はサーバーキャッシュには残すが、ブラウザへは返さない。
+    // これによりキャッシュ命中時にも「実際に返した内容」を保存できる。
+    unset($data['_snapshot_race_codes'], $data['_snapshot_ready_race_codes']);
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
@@ -112,10 +152,27 @@ function primaryVulnerabilityThreshold(array $venueRules, int $course, string $v
     return is_numeric($configured) ? (float)$configured : null;
 }
 
-function primaryStRelation(array $venueRules, int $course, string $variant = 'main'): string
+function primaryHistoryNMin(array $venueRules, int $course, string $variant = 'main', string $key = 'history_n_min'): int
+{
+    $configured = $venueRules[(string)$course]['primary_rules'][$variant][$key] ?? null;
+    return is_numeric($configured) ? max(0, (int)$configured) : 0;
+}
+
+function primaryLane1NigeRateMax(array $venueRules, int $course, string $variant = 'main'): ?float
+{
+    $configured = $venueRules[(string)$course]['primary_rules'][$variant]['lane1_nige_rate_max'] ?? null;
+    return is_numeric($configured) ? (float)$configured : null;
+}
+
+function configuredPrimaryStRelation(array $venueRules, int $course, string $variant = 'main'): ?string
 {
     $configured = $venueRules[(string)$course]['primary_rules'][$variant]['st_relation'] ?? null;
-    return in_array($configured, ['up', 'same_or_better'], true) ? $configured : 'up';
+    return in_array($configured, ['up', 'same_or_better'], true) ? $configured : null;
+}
+
+function primaryStRelation(array $venueRules, int $course, string $variant = 'main'): string
+{
+    return configuredPrimaryStRelation($venueRules, $course, $variant) ?? 'up';
 }
 
 function primaryStRelationMatches(float $innerRank, float $outerRank, string $relation): bool
@@ -427,6 +484,12 @@ $places = placeNames();
 if (!isset($places[$placeCode])) {
     respond(['status' => 'error', 'error' => 'invalid place'], 400);
 }
+$signalPhase = strtolower(trim((string)($_GET['phase'] ?? 'live')));
+if (!in_array($signalPhase, ['live', 'base'], true)) {
+    respond(['status' => 'error', 'error' => 'invalid phase'], 400);
+}
+$baseOnly = $signalPhase === 'base';
+$courseSignalCachePhase = $signalPhase;
 $placeName = $places[$placeCode];
 $rules = courseSignalRules();
 $venueRules = $rules['places'][$placeCode] ?? [];
@@ -435,23 +498,35 @@ $date = new DateTimeImmutable($dateText);
 $courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
 $courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
 $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v3_' . $date->format('Ymd') . '_' . $placeCode . '.json';
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v3_' . $date->format('Ymd') . '_' . $placeCode
+    . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
 $today = new DateTimeImmutable('today');
 $cacheTtl = $date >= $today ? 300 : 30 * 86400;
+$recentCutoff = $today->modify('-7 days');
 
 if (!$forceCourseSignalRefresh && is_file($courseSignalCacheFile)) {
     $cached = json_decode((string)@file_get_contents($courseSignalCacheFile), true);
     $cacheMeta = is_array($cached) ? ($cached['_course_signal_cache'] ?? []) : [];
     $cacheAge = is_array($cacheMeta) ? time() - (int)($cacheMeta['created_at'] ?? 0) : PHP_INT_MAX;
+    // 展示取得前に作られたキャッシュは、展示取得後も「展示前」を返し続ける。
+    // 直近7日分で二次評価なしのキャッシュだけ短いTTLにして、展示反映を待たず再集計する。
+    $cacheHasSecondary = array_key_exists('has_secondary', $cacheMeta)
+        ? (bool)$cacheMeta['has_secondary']
+        : null;
+    $effectiveCacheTtl = $cacheTtl;
+    if ($date >= $recentCutoff && $cacheHasSecondary !== true) {
+        $effectiveCacheTtl = 5;
+    }
     if (
         is_array($cached)
         && ($cached['status'] ?? '') === 'ok'
         && ($cached['date'] ?? '') === $dateText
         && ($cached['place'] ?? '') === $placeCode
+        && (($cacheMeta['phase'] ?? 'live') === $signalPhase)
         && (int)($cacheMeta['config_mtime'] ?? -1) === $courseSignalCacheConfigMtime
         && $cacheAge >= 0
-        && $cacheAge <= $cacheTtl
+        && $cacheAge <= $effectiveCacheTtl
     ) {
         unset($cached['_course_signal_cache']);
         $cached['cache'] = ['used' => true, 'scope' => 'date_place'];
@@ -468,7 +543,21 @@ try {
     $pdo = getPDO();
 
     // 当日の進入は展示進入を優先し、展示前は枠番を仮コースとして使う。
-    $targetSql = <<<'SQL'
+    $targetSql = $baseOnly ? <<<'SQL'
+SELECT
+    re.race_code,
+    MAX(re.player_id::text) FILTER (WHERE re.lane_number = 1) AS lane1_player_id,
+    MAX(re.player_id::text) FILTER (WHERE re.lane_number = 2) AS lane2_player_id,
+    MAX(re.player_id::text) FILTER (WHERE re.lane_number = 3) AS lane3_player_id,
+    MAX(re.player_id::text) FILTER (WHERE re.lane_number = 4) AS lane4_player_id,
+    MAX(re.player_id::text) FILTER (WHERE re.lane_number = 5) AS lane5_player_id,
+    MAX(re.player_id::text) FILTER (WHERE re.lane_number = 6) AS lane6_player_id
+FROM boat_race.race_entry re
+WHERE re.race_code LIKE :prefix_entry
+GROUP BY re.race_code
+ORDER BY re.race_code
+SQL
+    : <<<'SQL'
 WITH ex_map AS (
     SELECT DISTINCT ON (el.race_code, el.player_id)
         el.race_code,
@@ -503,10 +592,11 @@ ORDER BY race_code
 SQL;
 
     $stmt = $pdo->prepare($targetSql);
-    $stmt->execute([
-        ':prefix_ex' => $datePrefix . '%',
-        ':prefix_entry' => $datePrefix . '%',
-    ]);
+    $targetParams = [':prefix_entry' => $datePrefix . '%'];
+    if (!$baseOnly) {
+        $targetParams[':prefix_ex'] = $datePrefix . '%';
+    }
+    $stmt->execute($targetParams);
     $targets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $threshold1 = primaryThreshold($venueRules, 1, 'main');
@@ -514,6 +604,24 @@ SQL;
     $threshold2Makuri = primaryThreshold($venueRules, 2, 'makuri');
     $threshold3 = primaryThreshold($venueRules, 3, 'main');
     $threshold4 = primaryThreshold($venueRules, 4, 'main');
+    $primary2SashiStRelation = configuredPrimaryStRelation($venueRules, 2, 'sashi');
+    $primary2SashiNigeRateMax = primaryLane1NigeRateMax($venueRules, 2, 'sashi');
+    $primary2SashiVulnerabilityThreshold = primaryVulnerabilityThreshold($venueRules, 2, 'sashi');
+    $primary2SashiHistoryNMin = primaryHistoryNMin($venueRules, 2, 'sashi');
+    $primary2SashiLane1HistoryNMin = primaryHistoryNMin($venueRules, 2, 'sashi', 'lane1_history_n_min');
+    $primary2SashiCondition = sprintf('2コース差し率%.0f%%以上', $threshold2Sashi);
+    if ($primary2SashiStRelation !== null) {
+        $primary2SashiCondition .= sprintf(' + 2が1より平均ST順位%s', primaryStRelationText($primary2SashiStRelation));
+    }
+    if ($primary2SashiNigeRateMax !== null) {
+        $primary2SashiCondition .= sprintf(' + 1C逃げ率%.0f%%以下', $primary2SashiNigeRateMax);
+    }
+    if ($primary2SashiVulnerabilityThreshold !== null) {
+        $primary2SashiCondition .= sprintf(' + 1C脆弱性%.0f%%以上', $primary2SashiVulnerabilityThreshold);
+    }
+    if ($primary2SashiHistoryNMin > 0 || $primary2SashiLane1HistoryNMin > 0) {
+        $primary2SashiCondition .= sprintf('（履歴各%d走以上）', max($primary2SashiHistoryNMin, $primary2SashiLane1HistoryNMin));
+    }
     $primary2MakuriStRelation = primaryStRelation($venueRules, 2, 'makuri');
     $primary2MakuriVulnerabilityThreshold = primaryVulnerabilityThreshold($venueRules, 2, 'makuri');
     $primary2MakuriStText = primaryStRelationText($primary2MakuriStRelation);
@@ -537,6 +645,7 @@ SQL;
         'date' => $dateText,
         'place' => $placeCode,
         'place_name' => $placeName,
+        'signal_phase' => $signalPhase,
         'profile_months' => 12,
         'conditions' => [
             'star' => $conditionText(primaryEnabled($venueRules, 4), sprintf('4コース%s%.0f%%以上 + 4が3より平均ST順位上%s', $primary4MetricLabel, $threshold4, $primary4VulnerabilityText)),
@@ -559,7 +668,7 @@ SQL;
             'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 1, 'main', 'triple', 'rank_max', 1.0)),
         ],
         'lane2_sashi_conditions' => [
-            'star' => $conditionText(primaryEnabled($venueRules, 2, 'sashi'), sprintf('2コース差し率%.0f%%以上', $threshold2Sashi)),
+            'star' => $conditionText(primaryEnabled($venueRules, 2, 'sashi'), $primary2SashiCondition),
             'double_star' => sprintf('★ + 二次評価%.0f位以内 または 周回評価%.1f以上', secondaryParam($venueRules, 2, 'sashi', 'double', 'rank_max', 3.0), secondaryParam($venueRules, 2, 'sashi', 'double', 'lap_min', 4.0)),
             'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 2, 'sashi', 'triple', 'rank_max', 1.0)),
         ],
@@ -580,6 +689,10 @@ SQL;
             'double_star' => sprintf('★ + 二次評価%.0f位以内 または 周回評価%.1f以上', secondaryParam($venueRules, 5, 'main', 'double', 'rank_max', 3.0), secondaryParam($venueRules, 5, 'main', 'double', 'lap_min', 4.0)),
             'triple_star' => sprintf('★ + 二次評価%.0f位以内', secondaryParam($venueRules, 5, 'main', 'triple', 'rank_max', 1.0)),
         ],
+        '_snapshot_race_codes' => array_values(array_filter(array_map(
+            static fn(array $row): string => trim((string)($row['race_code'] ?? '')),
+            $targets
+        ))),
     ];
 
     if (!$targets) {
@@ -766,17 +879,19 @@ SQL;
 
     // 展示取得済みレースだけ★★/★★★へ昇格判定する。
     $avgExhibition = null;
-    $avgStmt = $pdo->prepare(
-        "SELECT avg_exhibition_time_6m FROM boat_race.exhibition_avg_6m WHERE stadium_name = :stadium LIMIT 1"
-    );
-    $avgStmt->execute([':stadium' => $placeName]);
-    $avgValue = $avgStmt->fetchColumn();
-    if (is_numeric($avgValue) && (float)$avgValue > 0) {
-        $avgExhibition = (float)$avgValue;
+    $exhibitionByRace = [];
+    if (!$baseOnly) {
+        $avgStmt = $pdo->prepare(
+            "SELECT avg_exhibition_time_6m FROM boat_race.exhibition_avg_6m WHERE stadium_name = :stadium LIMIT 1"
+        );
+        $avgStmt->execute([':stadium' => $placeName]);
+        $avgValue = $avgStmt->fetchColumn();
+        if (is_numeric($avgValue) && (float)$avgValue > 0) {
+            $avgExhibition = (float)$avgValue;
+        }
     }
 
-    $exhibitionByRace = [];
-    if ($avgExhibition !== null) {
+    if (!$baseOnly && $avgExhibition !== null) {
         $exSql = <<<'SQL'
 WITH latest AS (
     SELECT DISTINCT ON (el.race_code, el.player_id)
@@ -802,6 +917,22 @@ SQL;
         foreach ($exStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $raceCode = trim((string)$row['race_code']);
             $exhibitionByRace[$raceCode][] = $row;
+        }
+    }
+
+    $baseResponse['_snapshot_ready_race_codes'] = [];
+    if (!$baseOnly) {
+        foreach ($exhibitionByRace as $raceCode => $rows) {
+            $courses = [];
+            foreach ($rows as $row) {
+                $course = (int)($row['entry_course'] ?? 0);
+                if ($course >= 1 && $course <= 6) {
+                    $courses[$course] = true;
+                }
+            }
+            if (count($courses) === 6) {
+                $baseResponse['_snapshot_ready_race_codes'][] = $raceCode;
+            }
         }
     }
 
@@ -842,6 +973,7 @@ SQL;
 
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid1,
             'course' => 1,
             'star_level' => $starLevel,
             'star_text' => str_repeat('★', $starLevel),
@@ -909,6 +1041,7 @@ SQL;
         }
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid2,
             'course' => 2,
             'technique' => 'sashi',
             'star_level' => $starLevel,
@@ -986,6 +1119,7 @@ SQL;
         }
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid2,
             'course' => 2,
             'technique' => 'makuri',
             'star_level' => $starLevel,
@@ -1090,6 +1224,8 @@ SQL;
 
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid4,
+            'course' => 4,
             'star_level' => $starLevel,
             'star_text' => str_repeat('★', $starLevel),
             'signal' => match ($starLevel) {
@@ -1168,6 +1304,7 @@ SQL;
 
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid3,
             'course' => 3,
             'star_level' => $starLevel,
             'star_text' => str_repeat('★', $starLevel),
@@ -1247,6 +1384,7 @@ SQL;
 
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid5,
             'course' => 5,
             'star_level' => $starLevel,
             'star_text' => str_repeat('★', $starLevel),
@@ -1311,6 +1449,7 @@ SQL;
 
         $detail = [
             'race_code' => $raceCode,
+            'player_id' => $pid6,
             'course' => 6,
             'star_level' => $starLevel,
             'star_text' => str_repeat('★', $starLevel),
