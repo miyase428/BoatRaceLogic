@@ -251,7 +251,8 @@ SQL;
 
     /**
      * 展示更新は同一Ubuntuサーバ内の処理なので、LAN IPではなくlocalhost経由で呼ぶ。
-     * Playwright側のページ待機より短い30秒タイムアウトで先に諦めないよう90秒まで待つ。
+     * 展示元へのアクセスは1回だけ。Playwrightの60秒待機後にJSONの結果を受け取れるよう、
+     * 呼び出し側は75秒まで待つ。
      * update_exhibition.php が返すJSONの成功/失敗内容を画面メッセージへ反映する。
      */
     public function updateExhibition(string $race_code): array
@@ -268,7 +269,7 @@ SQL;
             'race_code' => $race_code,
         ]));
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 90);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 75);
 
         $response = curl_exec($ch);
         $curlErrno = curl_errno($ch);

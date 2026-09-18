@@ -17,6 +17,7 @@ $pdo = null;
 
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../common/db_connect.php';
+require_once __DIR__ . '/../logic/exhibition_source_guard.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -72,12 +73,49 @@ function toNullOrFloat($v)
     return ($v === "-" || $v === "" || $v === null) ? null : floatval($v);
 }
 
+function hasSavedExhibition(PDO $pdo, string $raceCode): bool
+{
+    $savedStmt = $pdo->prepare("
+        SELECT
+            COUNT(*) AS total_rows,
+            COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL) AS exhibition_rows,
+            COUNT(*) FILTER (WHERE start_timing IS NOT NULL) AS start_rows
+        FROM boat_race.exhibition_live
+        WHERE race_code = :race_code
+    ");
+    $savedStmt->execute([':race_code' => $raceCode]);
+    $saved = $savedStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return (int)($saved['total_rows'] ?? 0) === 6
+        && (int)($saved['exhibition_rows'] ?? 0) === 6
+        && (int)($saved['start_rows'] ?? 0) === 6;
+}
+
 try {
     // PostgreSQL 接続
     $pdo = getPDO();
 
     if ($race_code == "") {
         throw new Exception("race_codeがありません");
+    }
+
+    // 正しい展示を持つレースでは再スクレイピングしない。
+    // 表示のためのボタン操作が取得元への追加アクセスにならないようにする。
+    if (hasSavedExhibition($pdo, $race_code)) {
+        ob_end_clean();
+        header("Content-Type: application/json; charset=UTF-8");
+        echo json_encode([
+            "success" => true,
+            "race_code" => $race_code,
+            "cached" => true,
+            "message" => "展示情報は保存済みのため、再取得せず表示しています"
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
+    $cooldownRemaining = exhibitionSourceCooldownRemaining();
+    if ($cooldownRemaining > 0) {
+        throw new Exception(exhibitionSourceCooldownMessage($cooldownRemaining));
     }
 
     $place_code = substr($race_code, 8, 3);
@@ -102,7 +140,11 @@ try {
 
     if ($return_var !== 0) {
         $node_error = implode("\n", $output);
-        throw new Exception("Playwright 実行エラー (コード: {$return_var})\n詳細: {$node_error}");
+        $guard = recordExhibitionSourceFailure();
+        $suffix = $guard['cooldown_remaining'] > 0
+            ? "\n" . exhibitionSourceCooldownMessage($guard['cooldown_remaining'])
+            : '';
+        throw new Exception("Playwright 実行エラー (コード: {$return_var})\n詳細: {$node_error}{$suffix}");
     }
 
     $json = implode("\n", $output);
@@ -130,6 +172,9 @@ try {
     if (!$hasExhibitionData) {
         throw new Exception("展示情報がまだ公開されていないか、取得できませんでした");
     }
+
+    // ページ取得に成功した時点で、通信異常の連続回数をリセットする。
+    recordExhibitionSourceSuccess();
 
     // ------------------------------------------------------------
     // 過去の場平均
@@ -263,19 +308,7 @@ try {
     $hasSavedExhibition = false;
     if ($pdo instanceof PDO && $race_code !== '') {
         try {
-            $savedStmt = $pdo->prepare("
-                SELECT
-                    COUNT(*) AS total_rows,
-                    COUNT(*) FILTER (WHERE exhibition_time IS NOT NULL) AS exhibition_rows,
-                    COUNT(*) FILTER (WHERE start_timing IS NOT NULL) AS start_rows
-                FROM boat_race.exhibition_live
-                WHERE race_code = :race_code
-            ");
-            $savedStmt->execute([':race_code' => $race_code]);
-            $saved = $savedStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-            $hasSavedExhibition = (int)($saved['total_rows'] ?? 0) === 6
-                && (int)($saved['exhibition_rows'] ?? 0) === 6
-                && (int)($saved['start_rows'] ?? 0) === 6;
+            $hasSavedExhibition = hasSavedExhibition($pdo, $race_code);
         } catch (Throwable $savedCheckError) {
             error_log("[update_exhibition] saved-data check failed for {$race_code}: " . $savedCheckError->getMessage());
         }

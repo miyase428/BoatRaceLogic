@@ -41,22 +41,8 @@ const { chromium } = require('playwright');
     }
 
     async function safeGoto(targetUrl) {
-      try {
-        await gotoOnce(targetUrl);
-      } catch (e) {
-        // stdout は最終JSON専用。リトライ通知は stderr へ出す。
-        console.error(`retry: ${e.message}`);
-
-        // 接続不調時に即時再アクセスしない。
-        await page.waitForTimeout(5000);
-
-        try {
-          await gotoOnce(targetUrl);
-        } catch (e2) {
-          console.error(`goto failed twice: ${e2.message}`);
-          process.exit(1);
-        }
-      }
+      // 取得元へのアクセスは1回だけ。失敗時の即時リトライは行わない。
+      await gotoOnce(targetUrl);
     }
 
     await safeGoto(url);

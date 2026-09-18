@@ -2,6 +2,7 @@
 date_default_timezone_set('Asia/Tokyo');
 
 require_once __DIR__ . '/../common/db_connect.php';
+require_once __DIR__ . '/exhibition_source_guard.php';
 
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
@@ -166,7 +167,17 @@ function getRegisteredExhibitionCount(PDO $pdo, string $raceCode): int
 
 function fetchExhibitionData(string $url): array
 {
-    $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js " . escapeshellarg($url);
+    $cooldownRemaining = exhibitionSourceCooldownRemaining();
+    if ($cooldownRemaining > 0) {
+        return [
+            'status' => 'cooldown',
+            'cooldown_remaining' => $cooldownRemaining,
+            'data' => [],
+        ];
+    }
+
+    $cmd = "/usr/bin/node /var/www/html/boatrace/playwright/exhibition_live_scraper.js "
+        . escapeshellarg($url) . " 2>&1";
 
     $output = [];
     exec($cmd, $output, $returnVar);
@@ -175,9 +186,14 @@ function fetchExhibitionData(string $url): array
         return [
             'status' => 'playwright_error',
             'return_var' => $returnVar,
+            'error' => implode("\n", $output),
+            'cooldown_remaining' => recordExhibitionSourceFailure()['cooldown_remaining'],
             'data' => [],
         ];
     }
+
+    // 展示未公開（empty）を含め、ページ応答を受け取れたら通信異常は解消とみなす。
+    recordExhibitionSourceSuccess();
 
     $json = implode("\n", $output);
     $data = json_decode($json, true);
@@ -386,10 +402,21 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
 
         $result = fetchExhibitionData($url);
 
-        if ($result['status'] === 'playwright_error') {
+        if ($result['status'] === 'cooldown') {
+            $remaining[] = $url;
+            $remaining = array_merge($remaining, array_slice($urls, $i + 1));
+            log_message("エラー再試行を停止: " . exhibitionSourceCooldownMessage((int)$result['cooldown_remaining']));
+            break;
+        } elseif ($result['status'] === 'playwright_error') {
             log_message("エラー再試行 Playwright error: {$result['return_var']}（{$placeCode} {$raceNo}R）");
             $remaining[] = $url;
             $consecutiveErrors++;
+
+            if ((int)($result['cooldown_remaining'] ?? 0) > 0) {
+                $remaining = array_merge($remaining, array_slice($urls, $i + 1));
+                log_message("エラー再試行を停止: " . exhibitionSourceCooldownMessage((int)$result['cooldown_remaining']));
+                break;
+            }
             waitErrorBackoff();
         } elseif ($result['status'] === 'json_error') {
             log_message("エラー再試行 JSON解析エラー（{$raceCode}）: {$result['error']}");
@@ -556,11 +583,21 @@ foreach ($period as $dateObj) {
 
                 $result = fetchExhibitionData($url);
 
+                if ($result['status'] === 'cooldown') {
+                    log_message("通常取得を停止: " . exhibitionSourceCooldownMessage((int)$result['cooldown_remaining']));
+                    exit;
+                }
+
                 if ($result['status'] === 'playwright_error') {
                     log_message("Playwright error: {$result['return_var']}（{$place_code} {$race_no}R）");
                     $date_error_count++;
                     $consecutive_access_errors++;
                     appendErrorUrl($error_file, $url);
+
+                    if ((int)($result['cooldown_remaining'] ?? 0) > 0) {
+                        log_message("通常取得を停止: " . exhibitionSourceCooldownMessage((int)$result['cooldown_remaining']));
+                        exit;
+                    }
                     waitErrorBackoff();
 
                     if ($consecutive_access_errors >= $max_consecutive_access_errors) {
