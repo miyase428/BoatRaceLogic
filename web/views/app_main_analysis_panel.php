@@ -1,20 +1,27 @@
 <?php
 require_once __DIR__ . '/../logic/CommonSecondRuntimeBridge.php';
+require_once __DIR__ . '/../logic/AiThirdCandidatePruneLogic.php';
 
 // アプリでもPC版と同じ共通2着確率エンジンを使う。
-// app.phpで作成済みの120通り出目確率を再利用し、
-// 1C頭2連単表示と本命買い目の2着候補を同じ③ AI_FINALへ揃える。
+// 本命買い目の2着候補はAI着順率v1を優先し、利用できない時だけ従来版へ戻す。
 if (is_array($trifectaData ?? null) && is_array($viewData ?? null)) {
+    $formalSecondTrifectaData = is_array($appFinalSecondTrifectaData ?? null)
+        ? $appFinalSecondTrifectaData
+        : $trifectaData;
     $commonSecondBridge = new CommonSecondRuntimeBridge();
     $commonSecondBridgeResult = $commonSecondBridge->apply(
         $viewData,
         is_array($final_predictions ?? null) ? $final_predictions : [],
-        $trifectaData
+        $formalSecondTrifectaData
     );
 
     $viewData = is_array($commonSecondBridgeResult['view_data'] ?? null)
         ? $commonSecondBridgeResult['view_data']
         : $viewData;
+    $viewData = (new AiThirdCandidatePruneLogic())->apply(
+        $viewData,
+        is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+    );
     extract($viewData, EXTR_OVERWRITE);
 
     $head1CommonData = is_array($commonSecondBridgeResult['head1'] ?? null)
@@ -41,6 +48,13 @@ for ($course = 1; $course <= 6; $course++) {
     }
 }
 ksort($appMainBoatOrder);
+
+$appAiWinApplied = (string)($aiWinStatus ?? '') === 'ok' && count($aiWinBoats ?? []) === 6;
+$appAiPlaceApplied = (string)($aiPlaceStatus ?? '') === 'ok' && count($aiPlaceBoats ?? []) === 6;
+$appAiTrioApplied = (string)($aiTrioDisplaySource ?? '') === 'ai_place_v1_joint120';
+$appAiWinLabel = 'AI1着率' . ($appAiWinApplied ? ' v5' : '');
+$appAiPlaceLabel = 'AI2連対率' . ($appAiPlaceApplied ? ' v1' : '');
+$appAiTrioLabel = 'AI3連対率' . ($appAiTrioApplied ? ' v1' : '');
 
 $appMainRenderRow = static function (string $label, callable $valueFn, string $extraClass = '') use ($appMainBoatOrder): void {
     echo '<div class="app-basic-label ' . htmlspecialchars($extraClass, ENT_QUOTES, 'UTF-8') . '">' . $label . '</div>';
@@ -72,23 +86,25 @@ $appMainRenderRow = static function (string $label, callable $valueFn, string $e
             $rate = $correctedWinBoats[(string)$boat]['corrected_rate'] ?? $correctedWinBoats[$boat]['corrected_rate'] ?? null;
             return '<strong>' . $appBasicPct($rate, 1) . '</strong>';
         }, 'app-basic-rate-gold'); ?>
-
-        <div class="app-basic-section">🎯 1号艇1着時の2着率</div>
-        <?php $appMainRenderRow('場2着率', static function (int $boat) use ($head1SecondBoats, $appBasicPct): string {
-            if ($boat === 1) return '-';
-            return $appBasicPct($head1SecondBoats[$boat]['venue_rate'] ?? null, 1);
-        }); ?>
-        <?php $appMainRenderRow('基本2着率', static function (int $boat) use ($head1SecondBoats, $appBasicPct): string {
-            if ($boat === 1) return '-';
-            return '<strong>' . $appBasicPct($head1SecondBoats[$boat]['basic_rate'] ?? null, 1) . '</strong>';
+        <?php $appMainRenderRow($appAiWinLabel, static function (int $boat) use ($aiWinBoats, $appBasicPct): string {
+            $rate = $aiWinBoats[(string)$boat]['ai_rate'] ?? $aiWinBoats[$boat]['ai_rate'] ?? null;
+            return '<strong>' . $appBasicPct($rate, 1) . '</strong>';
         }, 'app-basic-rate-purple'); ?>
 
-        <div class="app-basic-section">🤖 AI3連対率</div>
+        <div class="app-basic-section">🤖 <?= htmlspecialchars($appAiPlaceLabel, ENT_QUOTES, 'UTF-8') ?></div>
+        <?php $appMainRenderRow($appAiPlaceLabel, static function (int $boat) use ($aiPlaceBoats, $appBasicPct): string {
+            $rate = $aiPlaceBoats[(string)$boat]['ai_top2_rate'] ?? $aiPlaceBoats[$boat]['ai_top2_rate'] ?? null;
+            $rank = (int)($aiPlaceBoats[(string)$boat]['ai_top2_rank'] ?? $aiPlaceBoats[$boat]['ai_top2_rank'] ?? 0);
+            $rankHtml = $rank > 0 ? '<span class="app-basic-rank">AI ' . $rank . '位</span>' : '';
+            return '<strong>' . $appBasicPct($rate, 1) . '</strong>' . $rankHtml;
+        }, 'app-basic-rate-blue'); ?>
+
+        <div class="app-basic-section">🤖 <?= htmlspecialchars($appAiTrioLabel, ENT_QUOTES, 'UTF-8') ?><?= $appAiTrioApplied ? '（機械学習）' : '（従来値）' ?></div>
         <?php $appMainRenderRow('基礎3連対率', static function (int $boat) use ($aiTrioBoats, $appBasicPct): string {
             return $appBasicPct($aiTrioBoats[$boat]['base_rate'] ?? $aiTrioBoats[(string)$boat]['base_rate'] ?? null, 1);
         }); ?>
-        <?php $appMainRenderRow('AI3連対率', static function (int $boat) use ($aiTrioBoats, $appBasicPct): string {
-            $row = $aiTrioBoats[$boat] ?? $aiTrioBoats[(string)$boat] ?? [];
+        <?php $appMainRenderRow($appAiTrioLabel, static function (int $boat) use ($aiTrioDisplayBoats, $appBasicPct): string {
+            $row = $aiTrioDisplayBoats[$boat] ?? $aiTrioDisplayBoats[(string)$boat] ?? [];
             $rate = $row['ai_rate'] ?? null;
             $rank = (int)($row['ai_rank'] ?? 0);
             $rankHtml = $rank > 0 ? '<span class="app-basic-rank">AI ' . $rank . '位</span>' : '';
@@ -175,6 +191,12 @@ $appMainRenderRow = static function (string $label, callable $valueFn, string $e
 
     <?php if ($correctedWinStatus !== 'ok'): ?>
         <div class="app-basic-status">補正後1着率：<?= htmlspecialchars($correctedWinError ?: '展示情報待ち', ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if ($aiWinStatus !== 'ok'): ?>
+        <div class="app-basic-status">AI1着率：<?= htmlspecialchars($aiWinError ?: '展示情報待ち', ENT_QUOTES, 'UTF-8') ?></div>
+    <?php endif; ?>
+    <?php if ($aiPlaceStatus !== 'ok'): ?>
+        <div class="app-basic-status">AI2・3着率：<?= htmlspecialchars($aiPlaceError ?: '計算待ち', ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
 </section>
 

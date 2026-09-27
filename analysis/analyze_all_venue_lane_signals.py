@@ -96,6 +96,65 @@ ORDER BY tr.race_date, tr.race_code, entry_course NULLS LAST
     return races
 
 
+def load_prerace_targets(start: date, end: date, places: tuple[str, ...]):
+    """展示進入を優先し、無い場合は枠番で対象艇を決める。
+
+    レース結果の実進入は着順ラベルのためだけに使う。サインAPIが当日使う
+    ``exhibition_live -> race_entry.lane_number`` と同じ事前情報で、履歴検証を
+    行いたい場合に使う。
+    """
+    sql = """
+WITH target_races AS (
+    SELECT race_code, race_date
+    FROM boat_race.race_master
+    WHERE race_date BETWEEN %s::date AND %s::date
+      AND SUBSTRING(race_code, 9, 3) = ANY(%s)
+), ex_map AS (
+    SELECT DISTINCT ON (el.race_code, el.player_id)
+        el.race_code, el.player_id, el.entry_course::integer AS entry_course
+    FROM boat_race.exhibition_live el
+    JOIN target_races tr ON tr.race_code = el.race_code
+    WHERE el.entry_course BETWEEN 1 AND 6
+    ORDER BY el.race_code, el.player_id, el.created_date DESC NULLS LAST
+), finish AS (
+    SELECT
+        rrd.race_code,
+        MAX(rrd.entry_course::integer) FILTER (WHERE TRIM(rrd.rank::text) = '1') AS first_course,
+        MAX(rrd.entry_course::integer) FILTER (WHERE TRIM(rrd.rank::text) = '2') AS second_course,
+        MAX(rrd.entry_course::integer) FILTER (WHERE TRIM(rrd.rank::text) = '3') AS third_course
+    FROM boat_race.race_result_detail rrd
+    JOIN target_races tr ON tr.race_code = rrd.race_code
+    GROUP BY rrd.race_code
+)
+SELECT tr.race_code, tr.race_date, re.player_id::text,
+       COALESCE(ex.entry_course, re.lane_number::integer) AS entry_course,
+       f.first_course, f.second_course, f.third_course
+FROM target_races tr
+JOIN boat_race.race_entry re ON re.race_code = tr.race_code
+LEFT JOIN ex_map ex ON ex.race_code = re.race_code AND ex.player_id = re.player_id
+JOIN finish f ON f.race_code = tr.race_code
+WHERE f.first_course BETWEEN 1 AND 6 AND f.second_course BETWEEN 1 AND 6
+ORDER BY tr.race_date, tr.race_code, entry_course NULLS LAST
+"""
+    races = {}
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (start, end, list(places)))
+            for code, race_date, pid, course, first, second, third in cur.fetchall():
+                race = races.setdefault(str(code), {
+                    "date": race_date,
+                    "boats": [],
+                    "first": int(first),
+                    "second": int(second),
+                    "third": int(third) if third is not None else None,
+                })
+                race["boats"].append({
+                    "player_id": str(pid).strip(),
+                    "course": int(course) if course is not None else None,
+                })
+    return races
+
+
 def profile_rates(profile: dict) -> dict[str, float]:
     n = int(profile.get("n", 0))
     tech = profile.get("tech", {})

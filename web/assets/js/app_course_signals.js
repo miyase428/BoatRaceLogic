@@ -63,6 +63,7 @@
         const isLane3 = course === 3;
         const isLane4 = course === 4;
         const isLane6 = course === 6;
+        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1';
         const palette = isLane1 ? colors.lane1
             : (isLane2Makuri ? colors.lane2makuri
                 : (isLane2 ? colors.lane2sashi
@@ -72,7 +73,8 @@
         const level = Math.max(1, Math.min(3, Number(detail.star_level || 1)));
         const stars = '★'.repeat(level);
         const signal = String(detail.signal || (course + (level >= 2 ? '軸' : '攻め')));
-        const note = (course === 1 || course === 2 || course === 5 || course === 6)
+        const note = isCenterMl ? ' v1'
+            : (course === 1 || course === 2 || course === 5 || course === 6)
             ? ''
             : (level >= 3 ? '（検証中）' : '');
 
@@ -96,7 +98,14 @@
         box.appendChild(title);
 
         const parts = [];
-        if (isLane1 && finite(detail.nige_rate)) {
+        if (isCenterMl) {
+            const target = String(detail.selected_target || '');
+            const targetLabel = target === 'first' ? 'AI1着' : (target === 'top2' ? 'AI2連' : 'AI3連');
+            const targetValue = target === 'first' ? detail.ai_first_rate : (target === 'top2' ? detail.ai_top2_rate : detail.ai_top3_rate);
+            if (finite(targetValue)) parts.push(targetLabel + ' ' + number(targetValue, 1) + '%');
+            if (finite(detail.selected_threshold)) parts.push('判定基準 ' + number(detail.selected_threshold, 1) + '%');
+            parts.push(String(detail.phase || (detail.secondary_ready ? '展示反映' : '展示前')));
+        } else if (isLane1 && finite(detail.nige_rate)) {
             parts.push('1C逃げ率 ' + number(detail.nige_rate, 1) + '%');
         } else if (isLane2Makuri && finite(detail.makuri_rate)) {
             parts.push('2まくり率 ' + number(detail.makuri_rate, 1) + '%');
@@ -111,7 +120,7 @@
             parts.push('2差し率 ' + number(detail.sashi_rate, 1) + '%');
         } else if (isLane3 && finite(detail.attack_rate)) {
             parts.push('3攻め率 ' + number(detail.attack_rate, 1) + '%');
-        } else if (isLane4) {
+        } else if (isLane4 && (finite(detail.attack_rate) || finite(detail.makuri_rate))) {
             if (detail.primary_metric === 'attack_rate' && finite(detail.attack_rate)) {
                 parts.push('4攻め率 ' + number(detail.attack_rate, 1) + '%');
             } else if (finite(detail.makuri_rate)) {
@@ -132,7 +141,9 @@
             }
         }
 
-        if (detail.secondary_ready) {
+        if (isCenterMl) {
+            // 改善版は上のAI確率がそのまま表示条件なので、旧二次点は表示しない。
+        } else if (detail.secondary_ready) {
             parts.push('二次 ' + number(detail.second_score, 0));
             parts.push('TOP差 ' + number(detail.gap_to_top, 0));
             parts.push('直線 ' + number(detail.straight_score, 0));
@@ -148,7 +159,18 @@
         appendText(box, 'app-course-signal-meta', parts.join(' / ')).style.color = palette.meta;
 
         const performance = detail.historical_stats;
-        if (performance && finite(performance.first_rate)) {
+        if (isCenterMl && performance && finite(performance.n)) {
+            const rateParts = [];
+            if (finite(performance.first_rate)) rateParts.push('1着率 ' + number(performance.first_rate, 1) + '%');
+            if (finite(performance.top2_rate)) rateParts.push('2連対率 ' + number(performance.top2_rate, 1) + '%');
+            if (finite(performance.top3_rate)) rateParts.push('3連対率 ' + number(performance.top3_rate, 1) + '%');
+            appendText(
+                box,
+                'app-course-signal-history',
+                String(performance.period || '最終未使用テスト') + '実績 N=' + Number(performance.n).toLocaleString()
+                    + (rateParts.length ? ' / ' + rateParts.join(' / ') : '')
+            );
+        } else if (performance && finite(performance.first_rate)) {
             const period = performance.period ? String(performance.period) : '過去24か月';
             appendText(
                 box,
@@ -189,7 +211,9 @@
     }
 
     function load(attempt) {
-        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place), {cache: 'no-store'})
+        const forceRefresh = !!document.querySelector('.exhibition-update-message');
+        const refreshQuery = forceRefresh ? '&refresh=1' : '';
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place) + refreshQuery, {cache: 'no-store'})
             .then(function (response) {
                 return response.json().then(function (data) {
                     if (!response.ok || !data || data.status !== 'ok') {

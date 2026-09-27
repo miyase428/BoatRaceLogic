@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="BoatRace">
 
     <!-- CSS 分離版 -->
-    <link rel="stylesheet" href="/web/assets/css/style.css">
+    <link rel="stylesheet" href="/web/assets/css/style.css?v=20260921-8point-ref">
 </head>
 
 <body>
@@ -68,7 +68,10 @@
     <div class="code-box">
         <div class="code-label">生成されたレースコード</div>
         <div class="code-value"><?= htmlspecialchars($race_code) ?></div>
+        <time class="race-deadline" data-race-deadline data-date="<?= htmlspecialchars((string)$selected_date, ENT_QUOTES, 'UTF-8') ?>" data-place="<?= htmlspecialchars((string)$selected_place, ENT_QUOTES, 'UTF-8') ?>" data-race="<?= (int)$selected_race ?>">締切予定 取得中…</time>
     </div>
+
+    <?php include __DIR__ . '/air_prediction_panel.php'; ?>
 
     <!-- ■ 総合出走・展示マトリクス -->
     <div class="matrix-header-area" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -85,7 +88,7 @@
 
     <!-- 更新完了メッセージ -->
     <?php if (!empty($update_message)): ?>
-        <div style="background-color: #065f46; color: #a7f3d0; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+        <div class="exhibition-update-message" style="background-color: #065f46; color: #a7f3d0; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
             <?= htmlspecialchars($update_message) ?>
         </div>
     <?php endif; ?>
@@ -408,8 +411,8 @@
         <div class="no-data"><?= htmlspecialchars($api_error ?: 'データが存在しません。') ?></div>
     <?php endif; ?>
     
-    <!-- ■ 最終予想（Excel完全一致） -->
-    <h2>📊 最終予想（Excel完全一致）</h2>
+    <!-- ■ 最終予想 -->
+    <h2>📊 最終予想</h2>
 
     <?php if (!empty($final_predictions)): ?>
         <div class="table-container">
@@ -496,7 +499,9 @@
 
                 <tbody>
                     <tr>
-                        <td style="font-weight:bold; color:#38bdf8;">本命</td>
+                        <td style="font-weight:bold; color:#38bdf8;">
+                            本命（AI1着 v5<?= (string)($common_second_probability_source ?? '') === 'ai_place_v1_joint120' ? '・AI2着 v1' : '・従来2着' ?><?= !empty($honmei_ai_second_cut_rescue_applied) ? '・AI2着救済 v1' : '' ?><?= !empty($honmei_ai_third_prune_applied) ? '・AI3着絞り v1' : '' ?>）
+                        </td>
                         <td><?= $honmei_head ?></td>
                         <td><?= htmlspecialchars($honmei_aite_str) ?></td>
                         <td><?= htmlspecialchars($kiru_str) ?></td>
@@ -506,7 +511,9 @@
                     </tr>
 
                     <tr>
-                        <td style="font-weight:bold; color:#f59e0b;">対抗</td>
+                        <td style="font-weight:bold; color:#f59e0b;">
+                            対抗（AI1着 v5<?= (string)($taikou_common_second_probability_source ?? '') === 'ai_place_v1_joint120' ? '・AI2着 v1' : '・従来2着' ?><?= !empty($taikou_ai_second_cut_rescue_applied) ? '・AI2着救済 v1' : '' ?><?= !empty($taikou_ai_third_prune_applied) ? '・AI3着絞り v1' : '' ?>）
+                        </td>
                         <td><?= $taikou_head ?></td>
                         <td><?= htmlspecialchars($taikou_aite_str) ?></td>
                         <td><?= htmlspecialchars($kiru_str) ?></td>
@@ -600,6 +607,10 @@
             </table>
         </div>
     <?php endif; ?>
+
+    <?php include __DIR__ . '/lane1_lap_relative_note.php'; ?>
+
+    <?php include __DIR__ . '/exhibition_alert_panel.php'; ?>
 
     <h2>📐 サム理論（コース・区間別マスタ）</h2>
     <button id="toggle-sam" class="btn btn-primary">サム理論を非表示にする</button>
@@ -789,6 +800,7 @@
 
 </div> <!-- container -->
 
+<script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

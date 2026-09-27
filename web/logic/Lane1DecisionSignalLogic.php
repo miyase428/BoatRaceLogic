@@ -5,25 +5,29 @@ declare(strict_types=1);
 require_once __DIR__ . '/HomeBackLinkInjector.php';
 
 /**
- * 前方2期間で固定条件の再現を確認した「1号艇判断シグナル」を表示専用で返す。
+ * AI1着率 v5を基準に、①の信頼度を表示専用で返す。
  *
- * RESCUE:
- *   現行Web本命 != 1号艇 × 1号艇一次順位1位
- *
- * DANGER:
- *   現行Web本命 = 1号艇 × 1号艇一次順位4位以下 × 1号艇二次順位1位
- *
- * どちらもPredictionLogic・本命/対抗・cut・買い目には接続しない。
+ * 2026-09-11～09-21の前方検証で、AI本命が①でも
+ * 「AI1着率50%未満」「2位との差10pt未満」は①勝率低下を再現。
+ * 旧一次1位による①レスキューは発生数が少なく不安定なため廃止する。
+ * PredictionLogic・本命/対抗・cut・買い目には接続しない。
  */
 class Lane1DecisionSignalLogic
 {
-    public function evaluate(array $finalPredictions, int $currentHead): array
+    public function evaluate(
+        array $finalPredictions,
+        int $currentHead,
+        array $aiWinRateData = []
+    ): array
     {
         $base = [
             'ready' => false,
             'current_head' => $currentHead,
             'lane1_primary_rank' => 0,
             'lane1_secondary_rank' => 0,
+            'lane1_ai_rate' => null,
+            'ai_head_rate' => null,
+            'ai_margin' => null,
             'rescue' => false,
             'danger' => false,
             'status' => 'waiting',
@@ -31,7 +35,12 @@ class Lane1DecisionSignalLogic
             'detail' => '最終予想データ待ち',
         ];
 
-        if (count($finalPredictions) !== 6 || $currentHead < 1 || $currentHead > 6) {
+        if (
+            count($finalPredictions) !== 6
+            || $currentHead < 1
+            || $currentHead > 6
+            || (string)($aiWinRateData['status'] ?? '') !== 'ok'
+        ) {
             return $base;
         }
 
@@ -51,31 +60,74 @@ class Lane1DecisionSignalLogic
             return $base;
         }
 
-        $rescue = $currentHead !== 1 && $lane1PrimaryRank === 1;
-        $danger = $currentHead === 1 && $lane1PrimaryRank >= 4 && $lane1SecondaryRank === 1;
+        $rates = [];
+        $aiBoats = is_array($aiWinRateData['boats'] ?? null)
+            ? $aiWinRateData['boats']
+            : [];
+        foreach (range(1, 6) as $boat) {
+            $row = $aiBoats[$boat] ?? $aiBoats[(string)$boat] ?? null;
+            $rate = is_array($row) ? ($row['ai_rate'] ?? null) : null;
+            if (!is_numeric($rate) || !is_finite((float)$rate)) {
+                return $base;
+            }
+            $rates[$boat] = max(0.0, (float)$rate);
+        }
+
+        $order = range(1, 6);
+        usort($order, static function (int $a, int $b) use ($rates): int {
+            $cmp = $rates[$b] <=> $rates[$a];
+            return $cmp !== 0 ? $cmp : ($a <=> $b);
+        });
+        $aiHead = (int)$order[0];
+        $currentHead = $aiHead;
+        $lane1Rate = $rates[1];
+        $runnerUpRate = $rates[(int)$order[1]];
+        $margin = $aiHead === 1
+            ? $lane1Rate - $runnerUpRate
+            : $rates[$aiHead] - $lane1Rate;
 
         $status = 'normal';
         $label = '通常';
         $detail = sprintf(
-            '①一次%d位 / 二次%d位 / 現行本命%d号艇',
+            '① AI1着率 %.1f%%・首位差 %.1fpt（一次%d位 / 二次%d位）',
+            $lane1Rate,
+            $margin,
             $lane1PrimaryRank,
-            $lane1SecondaryRank,
-            $currentHead
+            $lane1SecondaryRank
         );
 
-        if ($rescue) {
-            $status = 'rescue';
-            $label = '①レスキュー候補';
+        if ($aiHead !== 1) {
+            $status = 'away';
+            $label = '①はAI非本命';
             $detail = sprintf(
-                '現行本命%d号艇ですが①は一次1位。①を強く再確認する精度シグナルです。',
-                $currentHead
+                'AI本命は%d号艇 %.1f%%。①は%.1f%%で、差は%.1fptです。',
+                $aiHead,
+                $rates[$aiHead],
+                $lane1Rate,
+                $margin
             );
-        } elseif ($danger) {
+        } elseif ($lane1Rate < 40.0 || $margin < 10.0) {
             $status = 'danger';
-            $label = '①1着注意';
+            $label = '①警戒：高';
             $detail = sprintf(
-                '①は一次%d位・二次1位。①1着固定を慎重に見る危険シグナルです。',
-                $lane1PrimaryRank
+                '①はAI本命ですが1着率%.1f%%・2位との差%.1fpt。①1着固定は慎重に。',
+                $lane1Rate,
+                $margin
+            );
+        } elseif ($lane1Rate < 50.0) {
+            $status = 'caution';
+            $label = '①警戒：中';
+            $detail = sprintf(
+                '①はAI本命ですが1着率%.1f%%。イン逃げの信頼は中位です。',
+                $lane1Rate
+            );
+        } elseif ($lane1Rate >= 60.0 && $margin >= 15.0) {
+            $status = 'strong';
+            $label = '①信頼：高';
+            $detail = sprintf(
+                '①はAI1着率%.1f%%・2位との差%.1fpt。AI上は明確な本命です。',
+                $lane1Rate,
+                $margin
             );
         }
 
@@ -84,8 +136,11 @@ class Lane1DecisionSignalLogic
             'current_head' => $currentHead,
             'lane1_primary_rank' => $lane1PrimaryRank,
             'lane1_secondary_rank' => $lane1SecondaryRank,
-            'rescue' => $rescue,
-            'danger' => $danger,
+            'lane1_ai_rate' => $lane1Rate,
+            'ai_head_rate' => $rates[$aiHead],
+            'ai_margin' => $margin,
+            'rescue' => false,
+            'danger' => $status === 'danger',
             'status' => $status,
             'label' => $label,
             'detail' => $detail,
@@ -100,12 +155,26 @@ class Lane1DecisionSignalLogic
         $detail = (string)($signal['detail'] ?? '最終予想データ待ち');
 
         $palette = [
-            'rescue' => [
+            'away' => [
                 'bg' => '#e8f2fb',
                 'border' => '#92bddd',
                 'title' => '#2f789f',
                 'badge_bg' => '#d8ebf8',
                 'badge_text' => '#245f7d',
+            ],
+            'caution' => [
+                'bg' => '#fff7df',
+                'border' => '#e2c46b',
+                'title' => '#8a6500',
+                'badge_bg' => '#f5e5a9',
+                'badge_text' => '#725400',
+            ],
+            'strong' => [
+                'bg' => '#e9f5ec',
+                'border' => '#8cc59a',
+                'title' => '#317342',
+                'badge_bg' => '#d5ecd9',
+                'badge_text' => '#286238',
             ],
             'danger' => [
                 'bg' => '#f8eadf',
@@ -134,12 +203,8 @@ class Lane1DecisionSignalLogic
         $escLabel = htmlspecialchars($label, ENT_QUOTES, 'UTF-8');
         $escDetail = htmlspecialchars($detail, ENT_QUOTES, 'UTF-8');
 
-        $note = '参考表示 / 現行本命・買い目は変更しません';
-        if ($status === 'rescue') {
-            $note = '前方2期間で的中改善を再現 / ROIは期間差ありのため自動変更なし';
-        } elseif ($status === 'danger') {
-            $note = '前方2期間で①失敗率上昇を再現 / 危険度表示のみ';
-        } elseif (!$ready) {
+        $note = 'AI1着率 v5基準 / 表示専用・本命と買い目は変更しません';
+        if (!$ready) {
             $note = '最終予想がそろうと判定します';
         }
 
@@ -147,7 +212,7 @@ class Lane1DecisionSignalLogic
             . '; border:1px solid ' . $colors['border']
             . '; border-radius:8px; padding:10px 12px; color:#3f4b5a;">'
             . '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">'
-            . '<div style="font-size:13px; font-weight:bold; color:' . $colors['title'] . ';">🧭 ①判断シグナル</div>'
+            . '<div style="font-size:13px; font-weight:bold; color:' . $colors['title'] . ';">🧭 ①判断シグナル v2</div>'
             . '<span style="display:inline-block; padding:3px 8px; border-radius:999px; background:' . $colors['badge_bg']
             . '; color:' . $colors['badge_text'] . '; font-size:11px; font-weight:bold;">' . $escLabel . '</span>'
             . '</div>'

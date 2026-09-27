@@ -2,7 +2,8 @@
 // STEP C2/C2-2/C3/E1 + 穴目追加検証で採用した表示専用レイヤー。
 // 最終予想・本命/対抗・cut・買い目ロジックには接続しない。
 //
-// イン飛び警報（AI本命=1C かつ 現行本命!=1C のとき）
+// イン飛び警報（補正後1着率本命=1C かつ 旧ロジック本命!=1C のとき）
+// ※AI1着率 v5への本番移行後も、過去検証と同じ定義を保つ参考表示。
 //   非常に高: イン補正後1着率 < 40%
 //   高      : 40% <= イン補正後1着率 < 50%
 //   注意    : 50% <= イン補正後1着率 < 55%
@@ -38,7 +39,7 @@ $upsetAlertHigh = false;
 $upsetAlertError = '';
 $upsetInBoat = 0;
 $upsetAiHead = 0;
-$upsetCurrentHead = (int)($honmei_head ?? 0);
+$upsetCurrentHead = (int)($ai_win_legacy_honmei_head ?? $honmei_head ?? 0);
 $upsetHoleHead = 0;
 $upsetHoleSecondHead = 0;
 $upsetInWinRate = null;
@@ -286,7 +287,7 @@ if (
 
     $upsetAlertStatus = 'ok';
 } else {
-    $upsetAlertError = '補正後1着率・AI3連対率・進入・最終予想がそろうと判定します';
+    $upsetAlertError = '補正後1着率・警報用旧AI3連対率・進入・最終予想がそろうと判定します';
 }
 
 $upsetBoatBadge = static function (int $boat) use ($lane_colors): string {
@@ -341,16 +342,16 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                     <?= htmlspecialchars($upsetMeta['label'], ENT_QUOTES, 'UTF-8') ?>
                 </div>
                 <div style="font-size:12px; color:#6b7785; margin-top:3px;">
-                    AI本命=1C / 現行本命≠1C / イン補正後1着率 <?= number_format((float)$upsetInWinRate, 1) ?>%
+                    補正本命=1C / 旧ロジック本命≠1C / イン補正後1着率 <?= number_format((float)$upsetInWinRate, 1) ?>%
                     （<?= $upsetAlertLevel === 'very_high' ? '40%未満' : '40〜50%未満' ?>）
                 </div>
             </div>
-            <div style="font-size:11px; color:#6b7785; white-space:nowrap;">表示専用 / 買い目へ未接続</div>
+            <div style="font-size:11px; color:#6b7785; white-space:nowrap;">旧検証の参考表示 / 買い目へ未接続</div>
         </div>
 
         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:11px;">
             <div style="flex:1 1 170px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
-                <div style="font-size:11px; color:#6b7785;">AI本命（補正後1着率）</div>
+                <div style="font-size:11px; color:#6b7785;">補正後1着率の本命</div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <?= $upsetBoatBadge($upsetAiHead) ?>
                     <strong><?= (int)($upsetCourseByBoat[$upsetAiHead] ?? 0) ?>C</strong>
@@ -359,7 +360,7 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
             </div>
 
             <div style="flex:1 1 150px; background:#f2ece2; border:1px solid #d8cdbc; border-radius:6px; padding:9px 10px;">
-                <div style="font-size:11px; color:#6b7785;">現行本命</div>
+                <div style="font-size:11px; color:#6b7785;">旧ロジック本命（移行前）</div>
                 <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <?= $upsetBoatBadge($upsetCurrentHead) ?>
                     <strong><?= (int)($upsetCourseByBoat[$upsetCurrentHead] ?? 0) ?>C</strong>
@@ -375,15 +376,15 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                     <?= $upsetBoatBadge($upsetHoleHead) ?>
                     <strong><?= $upsetHoleCourse ?>C</strong>
                     <?php if ($upsetHoleTrioRate !== null): ?>
-                        <strong style="color:#75659b;">AI3連対 <?= number_format($upsetHoleTrioRate, 1) ?>%</strong>
+                        <strong style="color:#75659b;">警報用旧AI3連対 <?= number_format($upsetHoleTrioRate, 1) ?>%</strong>
                     <?php endif; ?>
                 </div>
                 <?php if ($upsetHoleHead === $upsetCurrentHead): ?>
-                    <div style="font-size:11px; color:#7b6640; margin-top:4px;">現行本命と一致</div>
+                    <div style="font-size:11px; color:#7b6640; margin-top:4px;">旧ロジック本命と一致</div>
                 <?php endif; ?>
                 <?php if ($upsetHoleTrioGap !== null): ?>
                     <div style="font-size:11px; color:#6b7785; margin-top:4px;">
-                        AI3連対率 対抗差 <?= number_format($upsetHoleTrioGap, 1) ?>pt
+                        警報用旧AI3連対率 対抗差 <?= number_format($upsetHoleTrioGap, 1) ?>pt
                     </div>
                 <?php endif; ?>
             </div>
@@ -394,7 +395,7 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                     <?= $upsetBoatBadge($upsetHoleSecondHead) ?>
                     <strong><?= $upsetHoleSecondCourse ?>C</strong>
                     <?php if ($upsetHoleSecondTrioRate !== null): ?>
-                        <strong style="color:#75659b;">AI3連対 <?= number_format($upsetHoleSecondTrioRate, 1) ?>%</strong>
+                        <strong style="color:#75659b;">警報用旧AI3連対 <?= number_format($upsetHoleSecondTrioRate, 1) ?>%</strong>
                     <?php endif; ?>
                 </div>
             </div>
@@ -425,7 +426,7 @@ $upsetMeta = $upsetAlertMeta[$upsetAlertLevel] ?? $upsetAlertMeta['normal'];
                 <?php if ($upsetRemain !== null && $upsetInTrioRate !== null): ?>
                     <div style="margin-top:5px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                         <span style="display:inline-block;padding:3px 9px;border-radius:999px;background:<?= htmlspecialchars($upsetRemain['bg'], ENT_QUOTES, 'UTF-8') ?>;border:1px solid <?= htmlspecialchars($upsetRemain['border'], ENT_QUOTES, 'UTF-8') ?>;color:<?= htmlspecialchars($upsetRemain['color'], ENT_QUOTES, 'UTF-8') ?>;font-weight:bold;">①残り：<?= htmlspecialchars($upsetRemain['label'], ENT_QUOTES, 'UTF-8') ?></span>
-                        <strong style="color:#75659b;">AI3連対 <?= number_format($upsetInTrioRate, 1) ?>%</strong>
+                        <strong style="color:#75659b;">警報用旧AI3連対 <?= number_format($upsetInTrioRate, 1) ?>%</strong>
                     </div>
                     <div style="font-size:11px; color:#6b7785; margin-top:4px;">1着を逃した場合の2・3着残りやすさ</div>
                 <?php else: ?>

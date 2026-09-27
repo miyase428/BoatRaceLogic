@@ -36,20 +36,32 @@ $force = (string)($_GET['force'] ?? '') === '1';
 $datePrefix = str_replace('-', '', $dateText);
 
 try {
-    $pdo = getPDO();
-    $stmt = $pdo->prepare(<<<SQL
+    $requestedPlace = strtoupper(trim((string)($_GET['place'] ?? '')));
+    $placeMap = require __DIR__ . '/../config/place_map.php';
+    $knownPlaces = array_values(array_unique(array_map(
+        static fn($place): string => strtoupper(trim((string)$place)),
+        $placeMap
+    )));
+
+    if ($requestedPlace !== '' && in_array($requestedPlace, $knownPlaces, true)) {
+        // 詳細画面は選択中の1場だけを取得し、全場取得の待ち時間を避ける。
+        $places = [$requestedPlace];
+    } else {
+        $pdo = getPDO();
+        $stmt = $pdo->prepare(<<<SQL
         SELECT DISTINCT SUBSTRING(race_code FROM 9 FOR 3) AS place
         FROM boat_race.race_entry
         WHERE race_code LIKE :prefix
         ORDER BY place
-    SQL);
-    $stmt->execute([':prefix' => $datePrefix . '%']);
+SQL);
+        $stmt->execute([':prefix' => $datePrefix . '%']);
 
-    $places = [];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $place = strtoupper(trim((string)($row['place'] ?? '')));
-        if ($place !== '') {
-            $places[] = $place;
+        $places = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $place = strtoupper(trim((string)($row['place'] ?? '')));
+            if ($place !== '') {
+                $places[] = $place;
+            }
         }
     }
 

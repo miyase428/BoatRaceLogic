@@ -324,7 +324,7 @@
 (function loadExactaTabScript() {
     if (document.querySelector('script[data-app-exacta-loader="1"]')) return;
     const script = document.createElement('script');
-    script.src = '/web/assets/js/app_exacta_tab.js?v=20260901a';
+    script.src = '/web/assets/js/app_exacta_tab.js?v=20260926-exacta-odds-snapshot-v1';
     script.dataset.appExactaLoader = '1';
     script.async = false;
     document.head.appendChild(script);
@@ -333,7 +333,7 @@
 (function loadBetSimulatorScript() {
     if (document.querySelector('script[data-app-bet-simulator-loader="1"]')) return;
     const script = document.createElement('script');
-    script.src = '/web/assets/js/app_bet_simulator_v3.js?v=20260901a';
+    script.src = '/web/assets/js/app_bet_simulator_v3.js?v=20260926-exacta-odds-snapshot-v1';
     script.dataset.appBetSimulatorLoader = '1';
     script.async = false;
     document.head.appendChild(script);

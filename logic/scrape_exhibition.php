@@ -166,8 +166,10 @@ function getRegisteredExhibitionCount(PDO $pdo, string $raceCode): int
               AND lap_time > 0
               AND around_time IS NOT NULL
               AND around_time > 0
-              AND straight_time IS NOT NULL
-              AND straight_time > 0
+              AND (
+                  SUBSTRING(race_code FROM 9 FOR 3) IN ('AMG', 'TKY', 'SME')
+                  OR (straight_time IS NOT NULL AND straight_time > 0)
+              )
         )
         FROM boat_race.exhibition_live
         WHERE race_code = :race_code
@@ -177,7 +179,7 @@ function getRegisteredExhibitionCount(PDO $pdo, string $raceCode): int
     return (int)$stmt->fetchColumn();
 }
 
-function fetchExhibitionData(string $url): array
+function fetchExhibitionData(string $url, string $placeCode): array
 {
     $cooldownRemaining = exhibitionSourceCooldownRemaining();
     if ($cooldownRemaining > 0) {
@@ -225,7 +227,7 @@ function fetchExhibitionData(string $url): array
         ];
     }
 
-    if (!hasCompleteExhibitionData($data)) {
+    if (!hasCompleteExhibitionData($data, $placeCode)) {
         return [
             'status' => 'partial',
             'data' => [],
@@ -419,7 +421,7 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
         log_message("=== エラー再試行 {$raceCode} ===");
         log_message("URL: {$url}");
 
-        $result = fetchExhibitionData($url);
+        $result = fetchExhibitionData($url, $placeCode);
 
         if ($result['status'] === 'cooldown') {
             $remaining[] = $url;
@@ -601,7 +603,7 @@ foreach ($period as $dateObj) {
 
                 log_message("URL: {$url}");
 
-                $result = fetchExhibitionData($url);
+                $result = fetchExhibitionData($url, $place_code);
 
                 if ($result['status'] === 'cooldown') {
                     log_message("通常取得を停止: " . exhibitionSourceCooldownMessage((int)$result['cooldown_remaining']));

@@ -1,12 +1,13 @@
 <?php
 require_once __DIR__ . '/../logic/SecondPlaceProbabilityLogic.php';
+require_once __DIR__ . '/../logic/ThirdPlaceProbabilityLogic.php';
 
 // 3連単の計算・表示ヘルパーだけを共通ランタイムで準備する。
 include __DIR__ . '/trifecta_probability_runtime.php';
 
 $head1SecondLogic = new SecondPlaceProbabilityLogic();
 $head1SecondData = $head1SecondLogic->calculate(
-    is_array($trifectaData ?? null) ? $trifectaData : [],
+    is_array($trifectaDisplayData ?? null) ? $trifectaDisplayData : [],
     1
 );
 
@@ -19,16 +20,63 @@ $head1ExactaRows = (
 
 $head1SecondError = (string)($head1SecondData['error'] ?? '');
 $head1SecondCount = count($head1ExactaRows);
+
+// 頭を選べる「AI条件付き2着率」用に、全コースを同じ120通りから集約する。
+// ここでは表示データだけを作り、既存の買い目・候補選定ロジックは変更しない。
+$conditionalSecondByHead = [];
+$thirdPlaceLogic = new ThirdPlaceProbabilityLogic();
+for ($headCourse = 1; $headCourse <= 6; $headCourse++) {
+    $conditional = $head1SecondLogic->calculate(
+        is_array($trifectaDisplayData ?? null) ? $trifectaDisplayData : [],
+        $headCourse
+    );
+    if ((string)($conditional['status'] ?? '') !== 'ok') {
+        continue;
+    }
+
+    $thirdBySecondCourse = [];
+    foreach ((array)($conditional['rows'] ?? []) as $secondRow) {
+        $secondCourse = (int)($secondRow['second_course'] ?? 0);
+        $third = $thirdPlaceLogic->calculate(
+            is_array($trifectaDisplayData ?? null) ? $trifectaDisplayData : [],
+            $headCourse,
+            $secondCourse
+        );
+        if ((string)($third['status'] ?? '') === 'ok') {
+            $thirdBySecondCourse[(string)$secondCourse] = is_array($third['rows'] ?? null) ? $third['rows'] : [];
+        }
+    }
+    $conditionalSecondByHead[(string)$headCourse] = [
+        'head_course' => (int)($conditional['head_course'] ?? $headCourse),
+        'head_boat' => (int)($conditional['head_boat'] ?? 0),
+        'rows' => is_array($conditional['rows'] ?? null) ? $conditional['rows'] : [],
+        'third_by_second_course' => $thirdBySecondCourse,
+    ];
+}
+$conditionalSecondJson = json_encode(
+    $conditionalSecondByHead,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if (!is_string($conditionalSecondJson)) {
+    $conditionalSecondJson = '{}';
+}
 ?>
 <!-- メイン表示：イン1着時の2連単。DOM読込後に最終予想の買い目直下へ移動する。 -->
-<div id="head1-exacta-panel" style="margin:0 0 10px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; padding:14px; color:#3f4b5a;">
+<div id="head1-exacta-panel"
+     data-probability-source="<?= htmlspecialchars((string)($trifectaDisplaySource ?? 'legacy_trifecta'), ENT_QUOTES, 'UTF-8') ?>"
+     data-conditional-second="<?= htmlspecialchars($conditionalSecondJson, ENT_QUOTES, 'UTF-8') ?>"
+     style="margin:0 0 10px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; padding:14px; color:#3f4b5a;">
     <div style="margin-bottom:10px;">
         <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎯 イン1着時 2連単</div>
         <div style="font-size:12px; color:#6b7785; margin-top:3px;">
             1コースが1着になった場合の2着分布 / <?= $head1SecondCount > 0 ? $head1SecondCount : '候補' ?>通りを100%化
         </div>
         <div style="font-size:12px; color:#6b7785; margin-top:2px;">
-            場平均：VENUE_K3000 / AI予想：補正後1着率＋AI3連対率＋2着3着順序補正を反映
+            <?php if ((string)($trifectaDisplaySource ?? '') === 'ai_place_v1_joint120'): ?>
+                場基準：VENUE_K3000 / AI予想 v1：AI1着率 v5 × AI2着LambdaRank × AI3着LambdaRank
+            <?php else: ?>
+                場基準：VENUE_K3000 / AI予想：従来出目確率
+            <?php endif; ?>
         </div>
         <div style="font-size:11px; color:#6b7785; margin-top:3px;">
             ※検証条件は「1Cが1着」。公式決まり手の「逃げ」だけに限定した値ではありません。
@@ -98,7 +146,10 @@ $head1SecondCount = count($head1ExactaRows);
             </table>
         </div>
         <div style="margin-top:8px; font-size:11px; color:#6b7785;">
-            場平均<?= $head1SecondCount ?>通り=100% / AI予想<?= $head1SecondCount ?>通り=100% / 共通2着確率エンジン③ AI_FINALを使用
+            場基準<?= $head1SecondCount ?>通り=100% / AI予想<?= $head1SecondCount ?>通り=100%
+            <?php if ((string)($trifectaDisplaySource ?? '') === 'ai_place_v1_joint120'): ?>
+                / 機械学習版 v1
+            <?php endif; ?>
         </div>
     <?php else: ?>
         <div style="padding:8px 10px; background-color:#f2ece2; border-radius:5px; color:#a33f32; font-size:13px;">

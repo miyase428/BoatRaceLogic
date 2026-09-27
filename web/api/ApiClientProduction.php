@@ -141,6 +141,8 @@ SQL);
             $params[$key] = $playerByBoat[$courseToBoat[$course]] ?? '';
         }
 
+        // 同日他場の後続レースも、過去再現では未確定として除外する。
+        $historyCutoff = "r.race_code < TO_CHAR(TO_DATE(SUBSTRING(:race_code, 1, 8), 'YYYYMMDD'), 'YYYYMMDD')";
         $sql = <<<SQL
 WITH target(wakuban, player_id) AS (
     VALUES %s
@@ -162,7 +164,7 @@ FROM target t
 LEFT JOIN boat_race.race_result_detail r
   ON r.player_id::text = t.player_id
  AND r.race_code >= TO_CHAR(TO_DATE(SUBSTRING(:race_code, 1, 8), 'YYYYMMDD') - INTERVAL '6 months', 'YYYYMMDD')
- AND r.race_code < :race_code
+ AND {$historyCutoff}
 GROUP BY t.wakuban, t.player_id
 ORDER BY t.wakuban
 SQL;

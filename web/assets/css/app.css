@@ -52,6 +52,16 @@ body {
 .app-race-label {
     color: var(--app-muted);
     font-size: 12px;
+    text-align: right;
+}
+
+.app-race-deadline {
+    display: block;
+    margin-top: 2px;
+    color: var(--app-accent);
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 800;
     white-space: nowrap;
 }
 
@@ -349,6 +359,85 @@ body {
     margin-bottom: 10px !important;
 }
 
+.eight-point-formation {
+    margin: 0 0 10px;
+    padding: 11px;
+    border: 1px solid #aebfd0;
+    border-radius: 10px;
+    background: #f4f8fb;
+    color: #334155;
+}
+
+.eight-point-formation-app { background: var(--app-card); }
+
+.eight-point-header,
+.eight-point-variant-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.eight-point-header strong { font-size: 14px; }
+
+.eight-point-header span,
+.eight-point-variant-title b {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #e8d9a8;
+    color: #675016;
+    font-size: 10px;
+}
+
+.eight-point-header small,
+.eight-point-variant small,
+.eight-point-odds small { color: #6b7785; font-size: 10px; }
+
+.eight-point-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 9px;
+}
+
+.eight-point-variant {
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #cbd5df;
+    border-radius: 7px;
+    background: #fff;
+}
+
+.eight-point-variant.is-recommended {
+    border-color: #2f789f;
+    box-shadow: inset 0 0 0 1px #2f789f;
+}
+
+.eight-point-bet {
+    margin: 7px 0 3px;
+    color: #1d5f85;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: .03em;
+    overflow-wrap: anywhere;
+}
+
+.eight-point-reason,
+.eight-point-odds { margin-top: 8px; font-size: 11px; line-height: 1.45; }
+
+.eight-point-reference { margin-top: 8px; font-size: 11px; }
+.eight-point-reference summary { cursor: pointer; color: #516b7f; font-weight: 700; }
+.eight-point-reference-row { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 6px; align-items: baseline; margin-top: 6px; padding: 6px; border-radius: 5px; background: #eaf1f6; }
+.eight-point-reference-row span { color: #355f7d; font-weight: 700; overflow-wrap: anywhere; }
+.eight-point-reference-row b { color: #9a6530; }
+.eight-point-reference-row small { grid-column: 1 / -1; color: #64748b; }
+
+.eight-point-odds { padding: 6px 8px; border-radius: 6px; background: #e7f0f7; color: #35586e; }
+.eight-point-odds.is-skip { background: #f8eadf; color: #a05c2e; font-weight: 800; }
+.eight-point-odds.is-waiting { background: #f0f1f3; color: #6b7280; }
+
 @media (max-width: 430px) {
     .app-shell {
         padding-left: 7px;
@@ -465,4 +554,6 @@ body {
         min-width: 28px;
         font-size: 10px;
     }
+
+    .eight-point-grid { grid-template-columns: 1fr; }
 }

@@ -17,6 +17,79 @@
     --accent-soft: #dfeef7;
 }
 
+/* 試験運用: 既存の本命/対抗買い目の直下に置く8点フォーメーション。 */
+.eight-point-formation {
+    margin: 14px 0;
+    padding: 13px;
+    border: 1px solid #7799b5;
+    border-radius: 8px;
+    background: #f3f8fc;
+    color: #334155;
+}
+
+.eight-point-header,
+.eight-point-variant-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.eight-point-header strong { font-size: 16px; }
+.eight-point-header small,
+.eight-point-variant small,
+.eight-point-odds small { color: #64748b; font-size: 11px; }
+
+.eight-point-header span,
+.eight-point-variant-title b {
+    margin-left: 7px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #e8d9a8;
+    color: #675016;
+    font-size: 11px;
+}
+
+.eight-point-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.eight-point-variant {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid #bfd0df;
+    border-radius: 7px;
+    background: #fff;
+}
+
+.eight-point-variant.is-recommended {
+    border-color: #1774a6;
+    box-shadow: inset 0 0 0 1px #1774a6;
+}
+
+.eight-point-bet {
+    margin: 8px 0 4px;
+    color: #135f8c;
+    font-size: 21px;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+.eight-point-reason,
+.eight-point-odds { margin-top: 9px; font-size: 12px; line-height: 1.5; }
+.eight-point-reference { margin-top: 9px; font-size: 12px; }
+.eight-point-reference summary { cursor: pointer; color: #516b7f; font-weight: 700; }
+.eight-point-reference-row { display: grid; grid-template-columns: auto 1fr auto; gap: 5px 8px; align-items: baseline; margin-top: 7px; padding: 7px; border-radius: 5px; background: #eaf1f6; }
+.eight-point-reference-row span { color: #355f7d; font-weight: 700; }
+.eight-point-reference-row b { color: #9a6530; }
+.eight-point-reference-row small { grid-column: 1 / -1; color: #64748b; }
+.eight-point-odds { padding: 7px 9px; border-radius: 5px; background: #e5f0f8; color: #35586e; }
+.eight-point-odds.is-skip { background: #f8eadf; color: #a05c2e; font-weight: 800; }
+.eight-point-odds.is-waiting { background: #eef0f2; color: #64748b; }
+
 body {
     font-family: 'Helvetica Neue', Arial, sans-serif;
     background-color: var(--page-bg);
@@ -125,6 +198,8 @@ button:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
     margin-bottom: 25px;
 }
 
@@ -139,6 +214,14 @@ button:hover {
     color: var(--accent);
     letter-spacing: 2px;
     font-family: monospace;
+}
+
+.race-deadline {
+    color: var(--accent);
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 800;
+    white-space: nowrap;
 }
 
 /* ===============================
@@ -630,4 +713,6 @@ tr:hover > td {
         font-size: 7.5px !important;
         border-left: none !important;
     }
+
+    .eight-point-grid { grid-template-columns: 1fr; }
 }

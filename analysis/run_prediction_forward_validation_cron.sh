@@ -22,6 +22,7 @@ fi
     printf '[%s] 自動前向き検証開始\n' "$(date '+%Y-%m-%d %H:%M:%S')"
     cd "$ROOT_DIR"
     /usr/bin/php analysis/grade_prediction_forward_snapshots.php --through "$THROUGH_DATE"
+    /usr/bin/php analysis/report_ai_bet_strategy_forward.php
     /usr/bin/php analysis/prewarm_home_course_signals.php "$TODAY_DATE"
     printf '[%s] 自動前向き検証完了\n' "$(date '+%Y-%m-%d %H:%M:%S')"
 } >> "$LOG_FILE" 2>&1

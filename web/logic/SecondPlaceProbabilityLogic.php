@@ -12,6 +12,8 @@ class SecondPlaceProbabilityLogic
         $empty = [
             'status' => 'error',
             'error' => '',
+            'probability_source' => (string)($trifectaData['probability_source'] ?? 'legacy_trifecta'),
+            'model_version' => (string)($trifectaData['model_version'] ?? ''),
             'head_course' => $headCourse,
             'head_boat' => 0,
             'base_mass' => 0.0,
@@ -173,6 +175,8 @@ class SecondPlaceProbabilityLogic
         return [
             'status' => 'ok',
             'error' => '',
+            'probability_source' => (string)($trifectaData['probability_source'] ?? 'legacy_trifecta'),
+            'model_version' => (string)($trifectaData['model_version'] ?? ''),
             'head_course' => $headCourse,
             'head_boat' => $headBoat,
             'base_mass' => $baseMass,

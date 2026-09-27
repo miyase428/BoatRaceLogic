@@ -7,12 +7,13 @@ require_once __DIR__ . '/logic/PredictionForwardSnapshotStore.php';
 $controller = new IndexController();
 $viewData   = $controller->handle();
 
-// 前方2期間で固定条件の再現を確認した1号艇判断シグナル。
+// AI1着率 v5の確率と首位差で①の信頼度を表示する。
 // PredictionLogicや既存買い目は変更せず、表示専用で評価する。
 $lane1DecisionSignalLogic = new Lane1DecisionSignalLogic();
 $lane1DecisionSignal = $lane1DecisionSignalLogic->evaluate(
     $viewData['final_predictions'] ?? [],
-    (int)($viewData['honmei_head'] ?? 0)
+    (int)($viewData['honmei_head'] ?? 0),
+    is_array($viewData['ai_win_rate_data'] ?? null) ? $viewData['ai_win_rate_data'] : []
 );
 $lane1DecisionSignalPanel = $lane1DecisionSignalLogic->render($lane1DecisionSignal, false);
 
@@ -28,10 +29,6 @@ $viewData = $lane1FollowerLogic->apply(
     !empty($viewData['entry_map_ready']) && empty($viewData['simulation_active'])
 );
 
-// 実際に画面へ出す、場別1逃げ相手補正後の本命・対抗を前向き保存する。
-// 展示未取得・仮想進入・結果確定後はStore側で自動的に除外する。
-PredictionForwardSnapshotStore::captureDisplayedPrediction($viewData, 'web');
-
 extract($viewData); // $selected_date, $selected_place, $race_code などを展開
 
 // 基本1着率パネルを独立ビューとして生成
@@ -44,6 +41,10 @@ $baseWinRatePanel = ob_get_clean();
 ob_start();
 include __DIR__ . '/views/ai_trio_rate_panel.php';
 $aiTrioRatePanel = ob_get_clean();
+
+// 画面に出す本命・対抗・8点型をまとめて締切前に保存する。
+// 展示未取得・仮想進入・結果確定後はStore側で自動的に除外する。
+PredictionForwardSnapshotStore::captureDisplayedPrediction($viewData, 'web');
 
 // 既存ビューはそのまま保ち、総合マトリクス直前へ確率パネルを差し込む
 ob_start();
@@ -71,7 +72,7 @@ if (strpos($html, $marker) !== false) {
 // 最終予想の先頭列を「コース | 艇番」に整理する。
 // コースは通常文字、艇番だけ横長の色付きバッジで表示する。
 // 進入変更時も展示進入マップを使うが、最終予想の計算値・本命対抗・買い目は変更しない。
-$finalMarker = '<!-- ■ 最終予想（Excel完全一致） -->';
+$finalMarker = '<!-- ■ 最終予想 -->';
 $finalPos = strpos($html, $finalMarker);
 $finalEndMarker = '<!-- ■ 展示サム理論マスタデータ -->';
 $finalEndPos = $finalPos !== false ? strpos($html, $finalEndMarker, $finalPos) : false;
@@ -125,37 +126,10 @@ if ($finalPos !== false && $finalEndPos !== false) {
     $html = $beforeFinal . $finalHtml . $afterFinal;
 }
 
-// 場別1逃げ相手補正の適用状況を最終予想の直後に表示する。
-// 判定値を表示するだけで、予想内容には影響させない。
-$followerApplied = !empty($lane1_escape_follower_applied);
-$followerReason = (string)($lane1_escape_follower_reason ?? '');
-$followerLabel = $followerApplied ? '適用' : '未適用';
-$followerExtra = '';
-
-if ($followerApplied) {
-    $stadiumLabel = trim((string)($lane1_escape_follower_stadium ?? ''));
-    $sampleN = (int)($lane1_escape_follower_sample_n ?? 0);
-    if ($stadiumLabel !== '') {
-        $followerExtra .= ' / ' . $stadiumLabel;
-    }
-    if ($sampleN > 0) {
-        $followerExtra .= ' N=' . number_format($sampleN);
-    }
-} elseif ($followerReason !== '') {
-    $followerExtra = '（' . $followerReason . '）';
-}
-
-$followerDiagnostic = '<div style="margin:8px 0 14px; padding:8px 12px; border:1px solid #d6d3d1; border-radius:8px; background:#fafaf9; font-size:12px; color:#57534e;">'
-    . '場別1逃げ相手補正：<strong>'
-    . htmlspecialchars($followerLabel, ENT_QUOTES, 'UTF-8')
-    . '</strong>'
-    . htmlspecialchars($followerExtra, ENT_QUOTES, 'UTF-8')
-    . '</div>';
-
 if (strpos($html, $finalEndMarker) !== false) {
     $html = str_replace(
         $finalEndMarker,
-        $lane1DecisionSignalPanel . "\n" . $followerDiagnostic . "\n" . $finalEndMarker,
+        $lane1DecisionSignalPanel . "\n" . $finalEndMarker,
         $html
     );
 }

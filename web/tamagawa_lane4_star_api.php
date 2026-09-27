@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/logic/PredictionForwardSnapshotStore.php';
+require_once __DIR__ . '/logic/TamagawaCenterSignalLogic.php';
 
 date_default_timezone_set('Asia/Tokyo');
 header('Content-Type: application/json; charset=utf-8');
@@ -498,7 +499,7 @@ $date = new DateTimeImmutable($dateText);
 $courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
 $courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
 $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v3_' . $date->format('Ymd') . '_' . $placeCode
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v4_' . $date->format('Ymd') . '_' . $placeCode
     . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
 $today = new DateTimeImmutable('today');
@@ -1473,6 +1474,50 @@ SQL;
             $detail['attack_potential'] = round((float)$secondary['attack_potential'], 2);
         }
         $lane6Matches[$raceCode] = $detail;
+    }
+
+    // 多摩川3C・4Cだけは、未使用テストで現行条件を上回った改善版へ置き換える。
+    // 推論失敗時はこの直前までに作った従来サインを返し、画面を欠損させない。
+    if ($placeCode === 'TMG') {
+        try {
+            $centerMl = (new TamagawaCenterSignalLogic())->calculate($dateText, $baseOnly);
+            $centerMaps = $centerMl['matches'] ?? null;
+            if (($centerMl['status'] ?? '') === 'ok' && is_array($centerMaps)) {
+                $mlLane3 = $centerMaps['3'] ?? [];
+                $mlLane4 = $centerMaps['4'] ?? [];
+                if (is_array($mlLane3) && is_array($mlLane4)) {
+                    $lane3Matches = $mlLane3;
+                    $matches = $mlLane4;
+                    $baseResponse['center_ml'] = [
+                        'applied' => true,
+                        'version' => (string)($centerMl['version'] ?? 'tamagawa_center_signal_v1'),
+                        'fallback' => false,
+                    ];
+                    $baseResponse['lane3_conditions'] = [
+                        'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                        'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                        'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                    ];
+                    $baseResponse['conditions'] = [
+                        'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                        'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                        'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                    ];
+                }
+            } else {
+                $baseResponse['center_ml'] = [
+                    'applied' => false,
+                    'version' => 'tamagawa_center_signal_v1',
+                    'fallback' => true,
+                ];
+            }
+        } catch (Throwable) {
+            $baseResponse['center_ml'] = [
+                'applied' => false,
+                'version' => 'tamagawa_center_signal_v1',
+                'fallback' => true,
+            ];
+        }
     }
 
     $baseResponse['matches'] = $matches;

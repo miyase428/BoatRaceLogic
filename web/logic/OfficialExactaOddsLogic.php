@@ -10,7 +10,7 @@ declare(strict_types=1);
  * - 初回表示: キャッシュがなければ1回だけ公式サイトへ取得
  * - 以後: 正常キャッシュを再利用
  * - 手動更新: force=true の時だけ再取得
- * - DBには保存しない
+ * - DBへの前方検証記録は呼び出しAPI側が担当する
  */
 class OfficialExactaOddsLogic
 {

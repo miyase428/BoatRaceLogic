@@ -1,0 +1,13 @@
+{
+  "version": "tamagawa_center_signal_v1",
+  "path": "/var/www/html/boatrace/forecast/models/tamagawa_center_signal_v1.joblib",
+  "sha256": "08abbacd48a976cd3dd5c128069ee9002b1bb85f48dbf8860e97d4bfd2117d29",
+  "period": {
+    "start": "2023-09-27",
+    "train_end": "2025-09-26",
+    "valid_start": "2025-09-27",
+    "valid_end": "2026-03-26",
+    "test_start": "2026-03-27",
+    "test_end": "2026-09-26"
+  }
+}

@@ -38,6 +38,7 @@ if (!empty($raceCompatVenue) && !empty($raceCompatRows)):
     $rcLabel = (string)($raceCompatMeta['label'] ?? '過去データ');
     $rcStart = (string)($raceCompatMeta['start_date'] ?? '');
     $rcEnd = (string)($raceCompatMeta['end_date'] ?? '');
+    $rcGeneratedAt = (string)($raceCompatMeta['generated_at'] ?? '');
 
     $rcColors = [
         'A' => ['bg' => '#dcfce7', 'text' => '#166534', 'border' => '#86efac'],
@@ -100,6 +101,9 @@ if (!empty($raceCompatVenue) && !empty($raceCompatRows)):
             <div style="margin-top:6px; font-size:10px; color:#475569;">A/B候補: <?= $rcEsc(implode('・', $rcGoodRaces)) ?></div>
         <?php endif; ?>
         <div style="margin-top:4px; font-size:9px; line-height:1.4; color:#7c8795;">A/Bは現行Webとの噛み合いやすさ。回収率とは別の参考指標。</div>
+        <?php if ($rcStart !== '' && $rcEnd !== ''): ?>
+            <div style="margin-top:2px; font-size:9px; color:#7c8795;">集計 <?= $rcEsc($rcStart) ?>〜<?= $rcEsc($rcEnd) ?><?php if ($rcGeneratedAt !== ''): ?> / 更新 <?= $rcEsc(substr($rcGeneratedAt, 0, 10)) ?><?php endif; ?></div>
+        <?php endif; ?>
     </div>
 <?php else: ?>
     <div style="margin:-4px 0 14px; padding:12px 14px; background:var(--surface-soft); border:1px solid var(--border); border-radius:8px; color:var(--text);">

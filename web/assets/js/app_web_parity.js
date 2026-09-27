@@ -257,9 +257,9 @@
 
     function parseLegacyExacta() {
         const grid = document.querySelector('.app-main-exacta .app-exacta-grid');
-        if (!grid) return {headBoat: 1, bySecondBoat: {}};
+        if (!grid) return {headBoat: 1, bySecondBoat: {}, isMlV1: false};
         const cells = Array.from(grid.children);
-        if (cells.length < 24) return {headBoat: 1, bySecondBoat: {}};
+        if (cells.length < 24) return {headBoat: 1, bySecondBoat: {}, isMlV1: false};
         const bySecondBoat = {};
         let headBoat = 1;
         for (let i = 1; i <= 5; i++) {
@@ -269,12 +269,15 @@
             headBoat = Number(match[1]);
             const second = Number(match[2]);
             bySecondBoat[second] = {
-                base: String(cells[6 + i].textContent || '').trim(),
-                ai: String(cells[12 + i].textContent || '').trim(),
-                delta: String(cells[18 + i].textContent || '').trim()
+                ai: String(cells[12 + i].textContent || '').trim()
             };
         }
-        return {headBoat: headBoat, bySecondBoat: bySecondBoat};
+        const panel = grid.closest('.app-main-exacta');
+        return {
+            headBoat: headBoat,
+            bySecondBoat: bySecondBoat,
+            isMlV1: !!panel && panel.dataset.aiPlaceV1 === '1'
+        };
     }
 
     function headerBoatOrder(grid) {
@@ -303,34 +306,136 @@
         });
     }
 
-    function buildHead1Card(sourceGrid) {
-        const built = createGridFromRows(sourceGrid, '🎯 1号艇1着時の2着率', ['場2着率', '基本2着率']);
-        const exacta = parseLegacyExacta();
-        const boatOrder = headerBoatOrder(sourceGrid);
-        if (Object.keys(exacta.bySecondBoat).length) {
-            const band = document.createElement('div');
-            band.className = 'app-basic-section app-parity-ai-second-section';
-            band.textContent = '今回AI（イン1Cが1着の場合）';
-            built.grid.appendChild(band);
+    function buildConditionalSecondCard(sourceGrid) {
+        const isMlV1 = window.boatraceConditionalSecondIsMlV1 === true;
+        const card = createCard('🤖 AI条件付き2着率' + (isMlV1 ? ' v1' : ''));
+        const intro = document.createElement('div');
+        intro.className = 'app-parity-note';
+        intro.textContent = '頭を選ぶと、その艇が1着になった場合の2着率を120通りから100%で表示します。';
+        card.appendChild(intro);
 
-            function valuesFor(key) {
-                return boatOrder.map(function (boat) {
-                    const row = exacta.bySecondBoat[boat];
-                    return row ? row[key] : '-';
-                });
-            }
-            appendCustomRow(built.grid, 'AI場平均', valuesFor('base'));
-            appendCustomRow(built.grid, '今回AI2着率', valuesFor('ai'), function () { return 'app-parity-ai-rate'; });
-            appendCustomRow(built.grid, '場平均との差', valuesFor('delta'), function (value) {
-                return String(value).trim().startsWith('+') ? 'app-parity-delta-plus' : 'app-parity-delta-minus';
+        const data = window.boatraceConditionalSecondByHead
+            && typeof window.boatraceConditionalSecondByHead === 'object'
+            ? window.boatraceConditionalSecondByHead
+            : {};
+        const heads = Object.keys(data).map(Number).filter(function (course) {
+            return course >= 1 && course <= 6;
+        }).sort(function (a, b) { return a - b; });
+        if (!heads.length) {
+            const waiting = document.createElement('div');
+            waiting.className = 'app-parity-note';
+            waiting.textContent = '展示情報がそろうと条件付き2着率を表示します。';
+            card.appendChild(waiting);
+            return card;
+        }
+
+        const boatOrder = headerBoatOrder(sourceGrid);
+        let selected = heads.indexOf(1) >= 0 ? 1 : heads[0];
+        let selectedSecond = 0;
+        const controls = document.createElement('div');
+        controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 9px;';
+        const grid = document.createElement('div');
+        grid.className = 'app-basic-grid';
+        const thirdShell = document.createElement('div');
+        thirdShell.style.cssText = 'margin-top:10px;border-top:1px solid var(--app-border);padding-top:10px;';
+        const note = document.createElement('div');
+        note.className = 'app-parity-note';
+        card.appendChild(controls);
+        card.appendChild(grid);
+        card.appendChild(thirdShell);
+        card.appendChild(note);
+
+        function draw() {
+            const block = data[String(selected)] || {};
+            const byCourse = {};
+            (Array.isArray(block.rows) ? block.rows : []).forEach(function (row) {
+                byCourse[Number(row.second_course)] = row;
             });
 
-            const note = document.createElement('div');
-            note.className = 'app-parity-note';
-            note.textContent = '今回AI2着率：最終3連単出目確率から P(2着 | 1C頭) を集約。AI場平均・差は従来の「イン1着時 2連単」と同じ値。';
-            built.card.appendChild(note);
+            controls.innerHTML = '';
+            heads.forEach(function (course) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = course + 'C ' + String(boatOrder[course - 1] || course) + '号艇';
+                button.style.cssText = 'border:1px solid ' + (course === selected ? '#75659b' : '#cfc2ad')
+                    + ';background:' + (course === selected ? '#eee8f7' : '#fffaf2')
+                    + ';color:' + (course === selected ? '#5e4c87' : '#4b5866')
+                    + ';border-radius:5px;padding:6px 8px;font-size:12px;font-weight:800;';
+                button.addEventListener('click', function () {
+                    selected = course;
+                    selectedSecond = 0;
+                    draw();
+                });
+                controls.appendChild(button);
+            });
+
+            grid.innerHTML = '';
+            appendClones(grid, headerRow(sourceGrid));
+            appendCustomRow(
+                grid,
+                'AI条件付き2着率' + (isMlV1 ? ' v1' : ''),
+                [1, 2, 3, 4, 5, 6].map(function (course) {
+                    if (course === selected) return '-';
+                    const row = byCourse[course];
+                    if (!row || !Number.isFinite(Number(row.ai))) return '-';
+                    const rank = Number(row.ai_rank || 0);
+                    return (Number(row.ai) * 100).toFixed(1) + '%' + (rank > 0 ? '（' + rank + '位）' : '');
+                }),
+                function () { return 'app-parity-ai-rate'; }
+            );
+            const secondCourses = Object.keys(byCourse).map(Number).sort(function (a, b) { return a - b; });
+            if (!byCourse[selectedSecond]) {
+                selectedSecond = secondCourses.slice().sort(function (a, b) {
+                    return Number(byCourse[b].ai) - Number(byCourse[a].ai);
+                })[0] || 0;
+            }
+            thirdShell.innerHTML = '';
+            if (selectedSecond > 0) {
+                const selectTitle = document.createElement('div');
+                selectTitle.className = 'app-parity-note';
+                selectTitle.textContent = '2着を選択して3着候補を見る';
+                thirdShell.appendChild(selectTitle);
+                const secondControls = document.createElement('div');
+                secondControls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 9px;';
+                secondCourses.forEach(function (course) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = selected + '-' + course + '（' + String(boatOrder[course - 1] || course) + '号艇）';
+                    button.style.cssText = 'border:1px solid ' + (course === selectedSecond ? '#4fb8a9' : '#cfc2ad')
+                        + ';background:' + (course === selectedSecond ? '#e4f5f1' : '#fffaf2')
+                        + ';color:#356f67;border-radius:5px;padding:6px 8px;font-size:12px;font-weight:800;';
+                    button.addEventListener('click', function () {
+                        selectedSecond = course;
+                        draw();
+                    });
+                    secondControls.appendChild(button);
+                });
+                thirdShell.appendChild(secondControls);
+                const thirdGrid = document.createElement('div');
+                thirdGrid.className = 'app-basic-grid';
+                appendClones(thirdGrid, headerRow(sourceGrid));
+                const thirdRows = (block.third_by_second_course || {})[String(selectedSecond)] || [];
+                const thirdByCourse = {};
+                thirdRows.forEach(function (row) { thirdByCourse[Number(row.third_course)] = row; });
+                appendCustomRow(
+                    thirdGrid,
+                    'AI条件付き3着率' + (isMlV1 ? ' v1' : ''),
+                    [1, 2, 3, 4, 5, 6].map(function (course) {
+                        const row = thirdByCourse[course];
+                        if (!row || !Number.isFinite(Number(row.ai))) return '-';
+                        return (Number(row.ai) * 100).toFixed(1) + '%（' + Number(row.ai_rank || 0) + '位）';
+                    }),
+                    function () { return 'app-parity-ai-rate'; }
+                );
+                thirdShell.appendChild(thirdGrid);
+            }
+            note.textContent = 'P（2着 | ' + selected + 'Cが1着）。'
+                + ' 3着率は P（3着 | ' + selected + 'C-選択2着）。'
+                + (isMlV1 ? ' 展示情報反映後は機械学習120通り v1 を使用。' : ' 展示情報取得前は従来の出目確率を使用。');
         }
-        return built.card;
+
+        draw();
+        return card;
     }
 
     function sectionRange(grid, title) {
@@ -366,6 +471,61 @@
         sectionRange(sourceGrid, title).forEach(function (node) { node.remove(); });
     }
 
+    // メイン情報側に残っている基本／展示ブロックを、既存の基本情報グリッドへ
+    // 移動する。複製や新しい見出しの追加は行わず、Web版と同じ一つの表へ統合する。
+    function moveRowsToBasic(sourceGrid, targetGrid, sourceAliases, targetAliases) {
+        const children = directGridChildren(sourceGrid);
+        const sourceTitle = children.find(function (node) {
+            if (!node.classList || !node.classList.contains('app-basic-section')) return false;
+            const text = normalizeText(node.textContent);
+            return sourceAliases.some(function (alias) { return text === normalizeText(alias); });
+        });
+        if (!sourceTitle) return false;
+
+        const start = children.indexOf(sourceTitle);
+        let end = children.length;
+        for (let i = start + 1; i < children.length; i++) {
+            if (children[i].classList && children[i].classList.contains('app-basic-section')) {
+                end = i;
+                break;
+            }
+        }
+        const block = children.slice(start, end);
+        const sourceHeader = new Set(rowByLabel(sourceGrid, '進入'));
+        const targetChildren = directGridChildren(targetGrid);
+        const targetTitle = targetChildren.find(function (node) {
+            if (!node.classList || !node.classList.contains('app-basic-section')) return false;
+            const text = normalizeText(node.textContent);
+            return targetAliases.some(function (alias) { return text === normalizeText(alias); });
+        });
+
+        if (!targetTitle) {
+            block.forEach(function (node) {
+                if (!sourceHeader.has(node)) targetGrid.appendChild(node);
+            });
+            sourceTitle.remove();
+            return true;
+        }
+
+        let targetEnd = null;
+        const refreshed = directGridChildren(targetGrid);
+        const targetIndex = refreshed.indexOf(targetTitle);
+        for (let i = targetIndex + 1; i < refreshed.length; i++) {
+            if (refreshed[i].classList && refreshed[i].classList.contains('app-basic-section')) {
+                targetEnd = refreshed[i];
+                break;
+            }
+        }
+        // 見出しは既存のWeb準拠見出しを使い、内容行だけを末尾へ移す。
+        block.slice(1).forEach(function (node) {
+            if (sourceHeader.has(node)) return;
+            if (targetEnd) targetGrid.insertBefore(node, targetEnd);
+            else targetGrid.appendChild(node);
+        });
+        sourceTitle.remove();
+        return true;
+    }
+
     function addOtherTitle(card) {
         if (!card || card.querySelector('.app-parity-other-title')) return;
         const head = document.createElement('div');
@@ -381,29 +541,65 @@
         const legacyExacta = mainPanel.querySelector('.app-main-exacta');
         if (!sourceCard || !sourceGrid || !legacyExacta) return false;
 
+        const basicGrid = basicPanel.querySelector('.app-basic-grid');
+        if (basicGrid) {
+            moveRowsToBasic(
+                sourceGrid,
+                basicGrid,
+                ['🚤 艇番・進入', '📋 出走表・基本情報', '📋 出走表・取得情報'],
+                ['📋 出走表・基本情報', '📋 出走表・取得情報']
+            );
+            moveRowsToBasic(
+                sourceGrid,
+                basicGrid,
+                ['📊 一次評価'],
+                ['📋 出走表・基本情報', '📋 出走表・取得情報']
+            );
+            moveRowsToBasic(
+                sourceGrid,
+                basicGrid,
+                ['⏱️ 展示・評価情報', '⏱ 展示・評価情報', '⏱ 展示・取得情報', '⏱ 展示・加工評価'],
+                ['⏱️ 展示・評価情報', '⏱ 展示・評価情報', '⏱ 展示・取得情報']
+            );
+        }
+
         const rate = createGridFromRows(
             sourceGrid,
             '📊 連対率・勝率',
-            ['基本1着率', '補正後1着率', '基礎3連対率', 'AI3連対率']
-        ).card;
-        playerPanel.appendChild(rate);
-        playerPanel.appendChild(buildHead1Card(sourceGrid));
+            ['基本1着率', '補正後1着率', 'AI1着率 v5', 'AI1着率', 'AI2連対率 v1', 'AI2連対率', '基礎3連対率', 'AI3連対率 v1', 'AI3連対率']
+        );
+        const rateNote = document.createElement('div');
+        rateNote.className = 'app-note';
+        rateNote.textContent = 'v表記は機械学習の適用中だけ表示。AI2連対率は1着＋2着、AI3連対率は1着＋2着＋3着です。';
+        rate.card.appendChild(rateNote);
+        playerPanel.appendChild(rate.card);
+        playerPanel.appendChild(buildConditionalSecondCard(sourceGrid));
         playerPanel.appendChild(buildKimariteCard(sourceGrid));
 
         const aiTenkai = document.getElementById('ai-tenkai-trial-panel');
         if (aiTenkai) playerPanel.appendChild(aiTenkai);
 
-        ['🎯 1着率', '🎯 1号艇1着時の2着率', '🤖 AI3連対率', '決まり手'].forEach(function (title) {
+        ['🎯 1着率', '🤖 AI着順率 v1', '🤖 AI2連対率', '🤖 AI2連対率 v1', '🎯 1号艇1着時の2着率', '🤖 AI条件付き2着率', '🤖 AI3連対率', '🤖 AI3連対率（従来値）', '🤖 AI3連対率（機械学習）', '🤖 AI3連対率 v1（機械学習）', '決まり手'].forEach(function (title) {
             removeSection(sourceGrid, title);
         });
         const status = sourceCard.querySelector('.app-basic-status');
         if (status) status.remove();
-        addOtherTitle(sourceCard);
-        otherPanel.appendChild(sourceCard);
+        if (sourceGrid.querySelector('.app-basic-section')) {
+            addOtherTitle(sourceCard);
+            otherPanel.appendChild(sourceCard);
+        } else {
+            sourceCard.remove();
+        }
 
         const forwardInput = basicPanel.querySelector('input[name="fv_race_code"]');
         const forwardRoot = forwardInput ? directChildUnder(basicPanel, forwardInput) : null;
         if (forwardRoot) otherPanel.insertBefore(forwardRoot, otherPanel.firstChild);
+
+        // PC版と同じく、エア予想は「その他」にまとめる。
+        const airPrediction = document.getElementById('air-prediction-panel');
+        if (airPrediction && airPrediction.parentElement !== otherPanel) {
+            otherPanel.insertBefore(airPrediction, otherPanel.firstChild);
+        }
 
         const playerSam = document.getElementById('player-sam-panel');
         const cross = document.getElementById('player-sam-cross-panel');

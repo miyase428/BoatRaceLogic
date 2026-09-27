@@ -22,7 +22,7 @@ class TrifectaProbabilityLogic
 
     public function calculate(
         string $raceCode,
-        array $correctedWinBoats,
+        array $winRateBoats,
         array $aiTrioBoats,
         array $courseByBoat
     ): array {
@@ -44,16 +44,21 @@ class TrifectaProbabilityLogic
 
             $winProb = [];
             $trioProb = [];
+            $winRateSource = 'corrected_winrate';
             for ($boat = 1; $boat <= 6; $boat++) {
-                $winRate = $correctedWinBoats[(string)$boat]['corrected_rate']
-                    ?? $correctedWinBoats[$boat]['corrected_rate']
+                $row = $winRateBoats[(string)$boat] ?? $winRateBoats[$boat] ?? [];
+                $winRate = $row['ai_rate']
+                    ?? $row['corrected_rate']
                     ?? null;
+                if (isset($row['ai_rate']) && is_numeric($row['ai_rate'])) {
+                    $winRateSource = 'ai_winrate_v5';
+                }
                 $trioRate = $aiTrioBoats[(string)$boat]['ai_rate']
                     ?? $aiTrioBoats[$boat]['ai_rate']
                     ?? null;
 
                 if ($winRate === null || $trioRate === null) {
-                    throw new RuntimeException('出目確率: 補正後1着率またはAI3連対率が6艇分ありません');
+                    throw new RuntimeException('出目確率: 1着率またはAI3連対率が6艇分ありません');
                 }
 
                 $winProb[$boat] = $this->clip((float)$winRate / 100.0);
@@ -224,6 +229,8 @@ class TrifectaProbabilityLogic
                 'marginals' => [
                     'base_win' => $qWin,
                     'base_trio' => $qTrio,
+                    'win' => $winProb,
+                    // 旧参照名は既存の分析・表示との互換用に残す。
                     'corrected_win' => $winProb,
                     'ai_trio' => $trioProb,
                     'win_ratio' => $winRatio,
@@ -231,6 +238,7 @@ class TrifectaProbabilityLogic
                 ],
                 'method' => [
                     'base' => 'VENUE_K3000',
+                    'win_rate_source' => $winRateSource,
                     'venue_k' => self::VENUE_K,
                     'win_alpha' => self::WIN_ALPHA,
                     'trio_beta' => self::TRIO_BETA,
@@ -260,7 +268,13 @@ class TrifectaProbabilityLogic
         string $placeCode
     ): array {
         // 現行巨大JOINと同一条件で事前集約した1レース1行のFactを参照する。
+        // 夜間・過去再現では、同日他場の後続結果まで混ざる余地をなくすため
+        // 対象日の結果を丸ごと除外する。通常表示では当該レース直前までを使う。
         // 20260820OMR01で旧母集団662,570Rと一致確認済み。
+        $lateReplay = getenv('BOATRACE_LATE_REPLAY') === '1';
+        $cutoff = $lateReplay
+            ? 'race_date < ?::date'
+            : '(race_date < ?::date OR (race_date = ?::date AND race_code < ?))';
         $sql = <<<SQL
             SELECT
                 c1,
@@ -270,16 +284,18 @@ class TrifectaProbabilityLogic
                 COUNT(*) FILTER (WHERE place_code = ?) AS venue_n
             FROM boat_race.race_history_fact
             WHERE trifecta_valid
-              AND (
-                    race_date < ?::date
-                    OR (race_date = ?::date AND race_code < ?)
-                  )
+              AND {$cutoff}
             GROUP BY c1, c2, c3
             ORDER BY c1, c2, c3
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$placeCode, $targetDate, $targetDate, $targetRaceCode]);
+        $params = [$placeCode, $targetDate];
+        if (!$lateReplay) {
+            $params[] = $targetDate;
+            $params[] = $targetRaceCode;
+        }
+        $stmt->execute($params);
 
         $global = [];
         $venue = [];

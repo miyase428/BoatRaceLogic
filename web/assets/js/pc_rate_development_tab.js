@@ -45,7 +45,7 @@
 
         const note = document.createElement('div');
         note.style.cssText = 'font-size:11px;color:#6b7785;margin-bottom:10px;line-height:1.6;';
-        note.textContent = '既存の1着率・AI3連対率を、連対率を見るための一覧に集約。表示整理のみで予想ロジックは変更していません。';
+        note.textContent = 'v表記は機械学習の適用中だけ表示。AI2連対率は1着＋2着、AI3連対率は1着＋2着＋3着です。';
         card.appendChild(note);
 
         const scroll = document.createElement('div');
@@ -57,8 +57,19 @@
         if (sourceHead) table.appendChild(sourceHead.cloneNode(true));
 
         const tbody = document.createElement('tbody');
-        ['基本1着率', '補正後1着率', '基礎3連対率', 'AI3連対率'].forEach(function (label) {
-            const row = cloneRowByLabel(label);
+        [
+            ['基本1着率'],
+            ['補正後1着率'],
+            ['AI1着率 v5', 'AI1着率'],
+            ['AI2連対率 v1', 'AI2連対率'],
+            ['基礎3連対率'],
+            ['AI3連対率 v1', 'AI3連対率']
+        ].forEach(function (aliases) {
+            let row = null;
+            aliases.some(function (label) {
+                row = cloneRowByLabel(label);
+                return !!row;
+            });
             if (row) tbody.appendChild(row);
         });
         if (!tbody.children.length) return null;
@@ -172,19 +183,16 @@
         if (!panel) return false;
 
         const rateCard = buildRateSummary(panel);
-        const head1Card = findCardByExactTitle('🎯 1号艇1着時の2着率');
+        const head1Card = document.getElementById('conditional-second-rate-panel');
         const head1ExactaCard = document.getElementById('head1-exacta-panel');
         const kimariteCard = buildKimariteSummary(panel);
         const aiTenkaiCard = document.getElementById('ai-tenkai-trial-panel');
 
-        // 「連対率 → 1号艇1着時2着率 → イン1着時2連単 → 決まり手 → AI展開予想」の順。
-        // 基本2着率と今回AIの2着分布を続けて比較できるよう、2連単カードを直下へ置く。
+        // 「連対率 → 条件付き2着率 → 決まり手 → AI展開予想」の順。
+        // 旧イン1着時2連単は条件付き2着率のデータ供給元としてDOMに残し、画面では重複させない。
         if (rateCard) panel.appendChild(rateCard);
         if (head1Card) panel.appendChild(head1Card);
-        if (head1ExactaCard) {
-            head1ExactaCard.style.marginTop = '0';
-            panel.appendChild(head1ExactaCard);
-        }
+        if (head1ExactaCard) head1ExactaCard.style.display = 'none';
         if (kimariteCard) panel.appendChild(kimariteCard);
         if (aiTenkaiCard) panel.appendChild(aiTenkaiCard);
 

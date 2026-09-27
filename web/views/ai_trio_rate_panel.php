@@ -1,7 +1,10 @@
 <?php
 require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
+require_once __DIR__ . '/../logic/AiTrioDisplayLogic.php';
 require_once __DIR__ . '/../logic/RecentCourseTrioRateLogic.php';
 require_once __DIR__ . '/../logic/CommonSecondRuntimeBridge.php';
+require_once __DIR__ . '/../logic/EightPointFormationLogic.php';
+require_once __DIR__ . '/../logic/AiThirdCandidatePruneLogic.php';
 
 $aiTrioCourseByBoat = [];
 if (!empty($simulation_active) && is_array($prediction_course_by_boat ?? null)) {
@@ -25,6 +28,24 @@ $aiTrioBoats = is_array($aiTrioData['boats'] ?? null) ? $aiTrioData['boats'] : [
 $aiTrioTotals = is_array($aiTrioData['totals'] ?? null) ? $aiTrioData['totals'] : [];
 $aiTrioMethod = is_array($aiTrioData['method'] ?? null) ? $aiTrioData['method'] : [];
 
+// 画面表示だけ、AI着順モデルの120通りから集計した3連対率へ変更する。
+// 既存$aiTrioBoatsは買い目・警報・基礎出目の従来計算用に保持する。
+$aiTrioDisplayLogic = new AiTrioDisplayLogic();
+$aiTrioDisplayData = $aiTrioDisplayLogic->apply(
+    $aiTrioData,
+    is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+);
+$aiTrioDisplayStatus = (string)($aiTrioDisplayData['status'] ?? 'error');
+$aiTrioDisplayError = (string)($aiTrioDisplayData['error'] ?? '');
+$aiTrioDisplayBoats = is_array($aiTrioDisplayData['boats'] ?? null)
+    ? $aiTrioDisplayData['boats']
+    : [];
+$aiTrioDisplayTotals = is_array($aiTrioDisplayData['totals'] ?? null)
+    ? $aiTrioDisplayData['totals']
+    : [];
+$aiTrioDisplaySource = (string)($aiTrioDisplayData['display_source'] ?? 'legacy_ai_trio');
+$aiTrioDisplayIsV1 = $aiTrioDisplaySource === 'ai_place_v1_joint120';
+
 // 最終予想テーブルの6ヶ月/3ヶ月は表示専用。
 // 「その選手 × 今回の進入コース」で対象レース日時点から集計する。
 // 過去実コースはresult_detail優先、欠損時のみ展示で補完し、完了レースだけを分母にする。
@@ -41,7 +62,7 @@ $recentCourseTrioBoats = is_array($recentCourseTrioData['boats'] ?? null)
 
 // 1着率・2着率と同じく、予想進入のコース順（1C→6C）で表示する。
 $aiTrioCourseToBoat = [];
-foreach ($aiTrioBoats as $boatKey => $row) {
+foreach ($aiTrioDisplayBoats as $boatKey => $row) {
     $boat = (int)($row['lane'] ?? $boatKey);
     $course = (int)($row['course'] ?? 0);
     if ($boat >= 1 && $boat <= 6 && $course >= 1 && $course <= 6) {
@@ -64,20 +85,31 @@ if (count($aiTrioCourseToBoat) !== 6) {
     $aiTrioCourseToBoat = array_combine(range(1, 6), range(1, 6));
 }
 ksort($aiTrioCourseToBoat);
+
+// AI3連対率の詳細表は「連対率・展開」タブへ集約したため、
+// AI予想タブでは重複表示しない。下の最終予想連携処理は引き続き実行する。
+$showAiTrioStandalonePanel = false;
 ?>
 
+<?php if ($showAiTrioStandalonePanel): ?>
 <div style="margin: 0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
     <div style="margin-bottom:10px;">
-        <div style="font-size:16px; font-weight:bold; color:#a78bfa;">🤖 AI3連対率</div>
+        <div style="font-size:16px; font-weight:bold; color:#a78bfa;">🤖 AI3連対率<?= $aiTrioDisplayIsV1 ? ' v1（機械学習）' : '' ?></div>
         <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
             基礎3連対率：場×進入コース → 選手×進入コース → 選手×場×進入コース / BB_MEDIUM RAW（K=20・10）
         </div>
-        <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
-            AI：基礎3連対率 + 一次評価Z + 二次評価Z / ENTRY_MODEをP1学習 → P2完全ホールドアウト検証済み
-        </div>
-        <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
-            ※6艇300%への強制正規化なし / SUM・スリットは追加効果が小さいため未採用
-        </div>
+        <?php if ($aiTrioDisplayIsV1): ?>
+            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                AI：AI1着率 v5 × AI2着・AI3着モデルが作る3連単120通りから、各艇の1〜3着確率を集計
+            </div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                ※6艇合計300% / 2連単・120通りタブも同じ機械学習版へ統一
+            </div>
+        <?php else: ?>
+            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                従来AI3連対率を表示中 / 機械学習版は展示情報取得後に切り替え
+            </div>
+        <?php endif; ?>
         <?php if (!empty($simulation_active)): ?>
             <div style="font-size:12px; color:#aa741f; margin-top:3px;">
                 ※仮想進入 <?= htmlspecialchars((string)($prediction_entry_order ?? '')) ?> をAI3連対率にも反映した試算値
@@ -89,7 +121,7 @@ ksort($aiTrioCourseToBoat);
         <?php endif; ?>
     </div>
 
-    <?php if ($aiTrioStatus === 'ok' && count($aiTrioBoats) === 6): ?>
+    <?php if ($aiTrioDisplayStatus === 'ok' && count($aiTrioDisplayBoats) === 6): ?>
         <div style="overflow-x:auto;">
             <table style="width:100%; min-width:760px; border-collapse:collapse;">
                 <thead>
@@ -120,7 +152,7 @@ ksort($aiTrioCourseToBoat);
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($aiTrioCourseToBoat[$course] ?? $course);
-                                $rate = $aiTrioBoats[$boat]['base_rate'] ?? null;
+                                $rate = $aiTrioDisplayBoats[$boat]['base_rate'] ?? null;
                             ?>
                             <td style="padding:10px 8px; text-align:center; font-size:16px; font-weight:bold; color:#2f789f;">
                                 <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
@@ -128,11 +160,11 @@ ksort($aiTrioCourseToBoat);
                         <?php endfor; ?>
                     </tr>
                     <tr style="border-top:1px solid #334155;">
-                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">AI3連対率</td>
+                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">AI3連対率<?= $aiTrioDisplayIsV1 ? ' <span style="font-size:11px; color:#c4b5fd;">v1</span>' : '' ?></td>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($aiTrioCourseToBoat[$course] ?? $course);
-                                $row = $aiTrioBoats[$boat] ?? [];
+                                $row = $aiTrioDisplayBoats[$boat] ?? [];
                                 $rate = $row['ai_rate'] ?? null;
                                 $rank = (int)($row['ai_rank'] ?? 0);
                                 $tip = sprintf(
@@ -160,23 +192,23 @@ ksort($aiTrioCourseToBoat);
         </div>
 
         <div style="margin-top:8px; font-size:12px; color:#94a3b8;">
-            基礎6艇合計 <?= number_format((float)($aiTrioTotals['base'] ?? 0), 2) ?>%
-            / AI6艇合計 <?= number_format((float)($aiTrioTotals['ai'] ?? 0), 2) ?>%
-            / ENTRY_MODE本番係数を固定
-            <?= (($aiTrioMethod['entry_source'] ?? '') === 'virtual') ? ' / 仮想進入試算' : '' ?>
+            基礎6艇合計 <?= number_format((float)($aiTrioDisplayTotals['base'] ?? 0), 2) ?>%
+            / 機械学習AI6艇合計 <?= number_format((float)($aiTrioDisplayTotals['ai'] ?? 0), 2) ?>%
+            / <?= $aiTrioDisplaySource === 'ai_place_v1_joint120' ? 'AI着順率 v1' : '従来値へフォールバック' ?>
         </div>
     <?php else: ?>
         <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
-            AI3連対率：<?= htmlspecialchars($aiTrioError !== '' ? $aiTrioError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
+            AI3連対率：<?= htmlspecialchars($aiTrioDisplayError !== '' ? $aiTrioDisplayError : '計算待ち', ENT_QUOTES, 'UTF-8') ?>
         </div>
     <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const aiRates = <?= json_encode(array_map(
         static fn(array $row) => isset($row['ai_rate']) ? (float)$row['ai_rate'] : null,
-        $aiTrioBoats
+        $aiTrioDisplayBoats
     ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
     const recentRates = <?= json_encode(array_map(
@@ -261,26 +293,49 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <?php
 // AI3連対率まで計算済みの同一スコープを利用し、出目確率をその直後へ表示する。
-// 2連単表示はラッパー側でSecondPlaceProbabilityLogicへ差し替え、
-// 120通り表示は既存パネルをそのまま維持する。
+// 2連単・120通りタブは、ラッパー側でAI着順率 v1の同時120通りへ差し替える。
 include __DIR__ . '/trifecta_probability_panel_common.php';
 
-// PC版もアプリと同じ共通2着確率ブリッジへ接続する。
-// trifecta_probability_panel_common.php で作成した同じ120通りを再利用し、
-// 現在の本命頭に対する2着候補だけを③ AI_FINAL順位へ置き換える。
+// PC版の本命2着候補を、画面と同じAI着順率v1へ接続する。
+// AI版が使えない時だけ従来の120通りへ安全にフォールバックする。
 // 頭・kiru・3着候補は既存summaryを維持する。
+// AI2着救済 v1が発動した場合だけ、2着候補の入れ替えにより点数が変わることがある。
 if (is_array($trifectaData ?? null) && is_array($viewData ?? null)) {
+    $formalSecondTrifectaData = (
+        (string)($trifectaDisplayData['probability_source'] ?? '') === 'ai_place_v1_joint120'
+        && is_array($trifectaDisplayData ?? null)
+    ) ? $trifectaDisplayData : $trifectaData;
+
     $commonSecondBridge = new CommonSecondRuntimeBridge();
     $commonSecondBridgeResult = $commonSecondBridge->apply(
         $viewData,
         is_array($final_predictions ?? null) ? $final_predictions : [],
-        $trifectaData
+        $formalSecondTrifectaData
     );
 
     $viewData = is_array($commonSecondBridgeResult['view_data'] ?? null)
         ? $commonSecondBridgeResult['view_data']
         : $viewData;
+    $viewData = (new AiThirdCandidatePruneLogic())->apply(
+        $viewData,
+        is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+    );
     extract($viewData, EXTR_OVERWRITE);
+}
+
+// 本命・対抗の確定後に、試験運用の8点型を別レイヤーで作る。
+// 既存の買い目や2着候補には一切書き戻さない。
+if (is_array($viewData ?? null)) {
+    $eightPointFormationLogic = new EightPointFormationLogic();
+    $viewData = $eightPointFormationLogic->apply(
+        $viewData,
+        is_array($final_predictions ?? null) ? $final_predictions : [],
+        is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [],
+        is_array($recentCourseTrioBoats ?? null) ? $recentCourseTrioBoats : []
+    );
+    extract($viewData, EXTR_OVERWRITE);
+    $eight_point_panel_mode = 'web';
+    include __DIR__ . '/eight_point_formation_panel.php';
 }
 
 // C2/C3で検証した穴警戒HIGH + TRIO_OUTERを表示専用で追加する。
@@ -290,4 +345,12 @@ include __DIR__ . '/upset_alert_panel.php';
 // 最終前方検証で採用したTRIO1_OUTCOMEを、参考買い目候補としてのみ表示する。
 // 既存穴目パネルの計算済み変数を使い、本番買い目には接続しない。
 include __DIR__ . '/upset_reference_bet_panel.php';
+
+// AI1着率 v5を起点とする固定8点・大穴6点を、現行穴目と並べて比較表示する。
+$upsetV1PanelMode = 'web';
+include __DIR__ . '/upset_v1_comparison_panel.php';
+
+// AI120通りを、目的別4方式の参考買い目として表示する。
+$aiBetStrategyPanelMode = 'web';
+include __DIR__ . '/ai_bet_strategy_modes_panel.php';
 ?>

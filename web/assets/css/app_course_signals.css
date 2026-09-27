@@ -1,0 +1,52 @@
+.app-course-signals {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.app-course-signals[hidden] {
+    display: none;
+}
+
+.app-course-signals-title {
+    color: #176c9f;
+    font-size: 15px;
+    font-weight: 800;
+    margin: 0 0 1px;
+}
+
+.app-course-signal {
+    border-radius: 8px;
+    box-shadow: 0 1px 5px rgba(50, 70, 80, .07);
+    padding: 10px 13px;
+}
+
+.app-course-signal-title {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 14px;
+    font-weight: 800;
+    gap: 8px;
+}
+
+.app-course-signal-badge {
+    font-size: 17px;
+}
+
+.app-course-signal-meta {
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.app-course-signal-history {
+    color: #6f767b;
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.app-course-signal-error {
+    color: #7b6960;
+    font-size: 11px;
+    margin-top: 3px;
+}

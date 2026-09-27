@@ -8,21 +8,32 @@ $trifectaExactaCount = (int)($trifectaExactaCount ?? (count($trifectaActiveBoats
 $trifectaExcludedBoats = is_array($trifectaExcludedBoats ?? null)
     ? array_values(array_unique(array_filter(array_map('intval', $trifectaExcludedBoats), static fn(int $b): bool => $b >= 1 && $b <= 6)))
     : [];
+$trifectaDisplayIsMlV1 = (string)($trifectaDisplaySource ?? '') === 'ai_place_v1_joint120';
+$trifectaVersionLabel = $trifectaDisplayIsMlV1 ? ' v1' : '';
 ?>
 <!-- 参考情報：3連単出目確率。通常6艇=120通り、実質5艇立て=60通り。 -->
-<details id="trifecta-reference-panel" style="margin:0 0 14px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; overflow:hidden; color:#3f4b5a;">
+<details id="trifecta-reference-panel" data-probability-version="<?= $trifectaDisplayIsMlV1 ? 'v1' : '' ?>" style="margin:0 0 14px; background-color:#f8f4ec; border:1px solid #d8cdbc; border-radius:8px; overflow:hidden; color:#3f4b5a;">
     <summary style="cursor:pointer; padding:12px 14px; color:#3f4b5a; font-size:14px; font-weight:bold; background:#e8dfd2;">
-        📚 参考情報：3連単<?= $trifectaOutcomeCount ?>通り 出目確率
+        📚 参考情報：3連単<?= $trifectaOutcomeCount ?>通り 出目確率<?= $trifectaVersionLabel ?><?= $trifectaDisplayIsMlV1 ? '（機械学習）' : '' ?>
     </summary>
     <div style="padding:14px;">
         <div style="margin-bottom:10px;">
-            <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎲 出目確率</div>
-            <div style="font-size:12px; color:#6b7785; margin-top:3px;">
-                基礎：場×1着C-2着C-3着C / VENUE_K3000 → 補正後1着率 α=1.00 → AI3連対率 β=1.25
-            </div>
-            <div style="font-size:12px; color:#6b7785; margin-top:2px;">
-                2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
-            </div>
+            <div style="font-size:16px; font-weight:bold; color:#aa741f;">🎲 出目確率<?= $trifectaVersionLabel ?></div>
+            <?php if ($trifectaDisplayIsMlV1): ?>
+                <div style="font-size:12px; color:#6b7785; margin-top:3px;">
+                    最終出目確率 v1：AI1着率 v5 × AI2着LambdaRank × AI3着LambdaRank
+                </div>
+                <div style="font-size:12px; color:#6b7785; margin-top:2px;">
+                    基礎出目：場×1着C-2着C-3着C / VENUE_K3000（比較用。最終出目確率には不使用）
+                </div>
+            <?php else: ?>
+                <div style="font-size:12px; color:#6b7785; margin-top:3px;">
+                    基礎：場×1着C-2着C-3着C / VENUE_K3000 → 補正後1着率 α=1.00 → 従来AI3連対率（買い目用） β=1.25
+                </div>
+                <div style="font-size:12px; color:#6b7785; margin-top:2px;">
+                    2着/3着順序：同一3艇のペア合計を維持し、trio δ=0.25 + win γ=0.25 で条件付き補正
+                </div>
+            <?php endif; ?>
             <?php if (!empty($trifectaExcludedBoats)): ?>
                 <div style="font-size:12px; color:#a36a18; margin-top:3px; font-weight:bold;">
                     欠場扱い <?= htmlspecialchars(implode('・', array_map(static fn(int $b): string => $b . '号艇', $trifectaExcludedBoats)), ENT_QUOTES, 'UTF-8') ?> を除外し、残り<?= count($trifectaActiveBoats) ?>艇で100%へ再正規化
@@ -89,7 +100,7 @@ $trifectaExcludedBoats = is_array($trifectaExcludedBoats ?? null)
 
             <div style="margin-top:8px; font-size:12px; color:#6b7785;">
                 <?= $trifectaOutcomeCount ?>通り合計 <?= number_format((float)($trifectaTotals['final'] ?? 0.0) * 100.0, 6) ?>%
-                / P1選択 → P2完全ホールドアウト検証済み
+                / <?= $trifectaDisplayIsMlV1 ? 'AI着順率 v1（条件付きLambdaRank）' : 'P1選択 → P2完全ホールドアウト検証済み' ?>
                 <?= !empty($simulation_active) ? ' / 仮想進入試算' : '' ?>
             </div>
         <?php else: ?>

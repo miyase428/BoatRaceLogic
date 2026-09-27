@@ -1,6 +1,4 @@
 <?php
-require_once __DIR__ . '/../logic/OfficialCurrentMeetLogic.php';
-
 $appBasicEntries = [];
 foreach (is_array($entries ?? null) ? $entries : [] as $row) {
     $boat = (int)($row['lane_number'] ?? 0);
@@ -25,19 +23,9 @@ foreach (is_array($tenji_list ?? null) ? $tenji_list : [] as $row) {
     }
 }
 
-// BOAT RACE公式の今節成績。表示専用で、予想ロジックには未接続。
-$appCurrentMeetData = [
-    'status' => 'error',
-    'error' => '',
-    'boats' => [],
-];
-if (!empty($race_code)) {
-    $appCurrentMeetData = (new OfficialCurrentMeetLogic())->load((string)$race_code);
-}
-$appCurrentMeetStatus = (string)($appCurrentMeetData['status'] ?? 'error');
-$appCurrentMeetBoats = is_array($appCurrentMeetData['boats'] ?? null)
-    ? $appCurrentMeetData['boats']
-    : [];
+// BOAT RACE公式の今節成績は表示専用のため、初期HTMLでは取得しない。
+// 公式サイトへの通信待ちでアプリ全体の表示が止まらないよう、基本情報タブが
+// 組み立てられた後に app_current_meet.js が非同期で取得・表示する。
 
 $appBasicCourseByBoat = [];
 for ($boat = 1; $boat <= 6; $boat++) {
@@ -145,7 +133,7 @@ $appBasicRenderRow = static function (string $label, callable $valueFn, string $
 
 <section class="app-card app-basic-card">
     <div class="app-basic-grid">
-        <div class="app-basic-section">📋 出走表・取得情報</div>
+        <div class="app-basic-section">📋 出走表・基本情報</div>
         <div class="app-basic-label app-basic-head-label">艇</div>
         <?php for ($boat = 1; $boat <= 6; $boat++): ?>
             <div class="app-basic-value app-basic-head-cell"><?= $appBasicBoatHeader($boat) ?></div>
@@ -183,7 +171,7 @@ $appBasicRenderRow = static function (string $label, callable $valueFn, string $
             return $appBasicNum($appBasicEntries[$boat]['average_start'] ?? null, 2);
         }); ?>
 
-        <div class="app-basic-section">⏱ 展示・取得情報</div>
+        <div class="app-basic-section">⏱️ 展示・評価情報</div>
         <?php $appBasicRenderRow('展示タイム', static function (int $boat) use ($appBasicTenji, $appBasicNum): string {
             return $appBasicNum($appBasicTenji[$boat]['exhibition'] ?? null, 2);
         }); ?>
@@ -204,49 +192,9 @@ $appBasicRenderRow = static function (string $label, callable $valueFn, string $
             return $appBasicNum($appBasicTenji[$boat]['st'] ?? null, 2);
         }); ?>
 
-        <?php if ($appCurrentMeetStatus === 'ok' && count($appCurrentMeetBoats) === 6): ?>
-            <div class="app-basic-section">📈 今節成績（公式）</div>
-            <div class="app-basic-label app-current-meet-label">今節</div>
-            <?php for ($boat = 1; $boat <= 6; $boat++): ?>
-                <?php
-                    $meet = is_array($appCurrentMeetBoats[$boat] ?? null)
-                        ? $appCurrentMeetBoats[$boat]
-                        : [];
-                    $records = is_array($meet['records'] ?? null) ? $meet['records'] : [];
-                    $runCount = (int)($meet['run_count'] ?? count($records));
-                    $avgSt = $meet['average_st'] ?? null;
-                    $laneColor = $lane_colors[$boat] ?? $lane_colors[1];
-                ?>
-                <div class="app-basic-value app-current-meet-column"
-                     style="--meet-lane-bg:<?= htmlspecialchars((string)($laneColor['bg'] ?? '#94a3b8'), ENT_QUOTES, 'UTF-8') ?>;--meet-lane-border:<?= htmlspecialchars((string)($laneColor['border'] ?? '#94a3b8'), ENT_QUOTES, 'UTF-8') ?>;">
-                    <div class="app-current-meet-summary">
-                        <span><?= $runCount > 0 ? $runCount . '走' : '-' ?></span>
-                        <span>平均ST <?= is_numeric($avgSt) ? number_format((float)$avgSt, 2) : '-' ?></span>
-                    </div>
-                    <?php if (!$records): ?>
-                        <div class="app-current-meet-empty">-</div>
-                    <?php else: ?>
-                        <?php foreach ($records as $record): ?>
-                            <?php
-                                $raceNo = (int)($record['race_no'] ?? 0);
-                                $finishRaw = trim((string)($record['finish'] ?? ''));
-                                $finishText = $finishRaw !== ''
-                                    ? (preg_match('/^\d+$/', $finishRaw) ? $finishRaw . '着' : $finishRaw)
-                                    : '-';
-                                $course = (int)($record['course'] ?? 0);
-                                $courseText = ($course >= 1 && $course <= 6) ? $course . 'C' : '-';
-                                $stRaw = trim((string)($record['st_raw'] ?? ''));
-                            ?>
-                            <div class="app-current-meet-run">
-                                <div class="app-current-meet-race"><?= $raceNo > 0 ? $raceNo . 'R' : '-' ?></div>
-                                <div class="app-current-meet-result"><?= htmlspecialchars($finishText, ENT_QUOTES, 'UTF-8') ?>（<?= htmlspecialchars($courseText, ENT_QUOTES, 'UTF-8') ?>）</div>
-                                <div class="app-current-meet-st"><?= $stRaw !== '' ? htmlspecialchars($stRaw, ENT_QUOTES, 'UTF-8') : '-' ?></div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            <?php endfor; ?>
-        <?php endif; ?>
+        <div id="app-current-meet"
+             data-race-code="<?= htmlspecialchars((string)($race_code ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+             hidden></div>
     </div>
 
     <div class="app-basic-status">基本情報は取得値のみ表示。加工・評価結果は「メイン情報」に集約します。</div>

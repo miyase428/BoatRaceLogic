@@ -105,6 +105,11 @@ body {
     display: none !important;
 }
 
+/* 複数の後付けタブ処理が同時にhiddenを触っても、選択中パネルを優先する。 */
+.pc-main-tab-panel.is-active {
+    display: block !important;
+}
+
 /* style.css の全button width:100% を、2連単タブ内の操作ボタンだけ解除する。
  * フィルタは3連単120通りと同じく横一列へ並べ、クリアも右端の小ボタンに戻す。
  */

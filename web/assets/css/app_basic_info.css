@@ -232,6 +232,13 @@
     padding: 5px 2px 7px !important;
 }
 
+/* Web版の「概要」行と同じく、走数・平均STを1行で示す。 */
+.app-current-meet-summary-cell {
+    min-height: 38px !important;
+    justify-content: center !important;
+    padding: 4px 2px !important;
+}
+
 .app-current-meet-summary {
     width: 100%;
     min-height: 30px;
@@ -244,6 +251,7 @@
     font-size: 7px;
     font-weight: 800;
     line-height: 1.15;
+    white-space: nowrap;
 }
 
 .app-current-meet-run {

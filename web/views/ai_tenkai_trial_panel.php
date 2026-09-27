@@ -16,9 +16,10 @@ try {
         getPDO(),
         (string)($selected_date ?? date('Y-m-d')),
         (string)($selected_place ?? ''),
-        is_array($corrected_win_rate_data ?? null) ? $corrected_win_rate_data : [],
+        is_array($ai_win_rate_data ?? null) ? $ai_win_rate_data : [],
         is_array($kimarite_data ?? null) ? $kimarite_data : [],
-        is_array($prediction_course_by_boat ?? null) ? $prediction_course_by_boat : []
+        is_array($prediction_course_by_boat ?? null) ? $prediction_course_by_boat : [],
+        (string)($race_code ?? '')
     );
 } catch (Throwable $e) {
     $aiTenkaiTrial = [
@@ -32,16 +33,24 @@ try {
 $aiTenkaiStatus = (string)($aiTenkaiTrial['status'] ?? 'waiting');
 $aiTenkaiTop5 = is_array($aiTenkaiTrial['top5'] ?? null) ? $aiTenkaiTrial['top5'] : [];
 $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
+$aiTenkaiIsV1 = (string)($aiTenkaiTrial['probability_source'] ?? '') === 'ai_tenkai_v1';
 ?>
 <div id="ai-tenkai-trial-panel" style="margin:12px 0 14px;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:14px;color:#334155;">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-        <div style="font-size:16px;font-weight:800;color:#75659b;">🧭 AI展開予想</div>
-        <span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;background:#eee8f7;color:#75659b;border:1px solid #d7cbe8;">試験</span>
+        <div style="font-size:16px;font-weight:800;color:#75659b;">🧭 AI展開予想<?= $aiTenkaiIsV1 ? ' v1' : '' ?></div>
+        <?php if (!$aiTenkaiIsV1): ?>
+            <span style="font-size:10px;font-weight:800;padding:2px 6px;border-radius:999px;background:#eee8f7;color:#75659b;border:1px solid #d7cbe8;">補完表示</span>
+        <?php endif; ?>
     </div>
 
     <?php if ($aiTenkaiStatus === 'ok' && $aiTenkaiTop5): ?>
         <div style="font-size:11px;color:#6b7785;margin-bottom:10px;line-height:1.6;">
-            展示後の補正後1着率 × 選手の6ヶ月/1年決まり手を平滑化。場平均は対象日前日まで直近1年<?= $aiTenkaiVenueRaces > 0 ? '（' . number_format($aiTenkaiVenueRaces) . 'R）' : '' ?>。
+            <?php if ($aiTenkaiIsV1): ?>
+                AI1着率 v5 × 決まり手の条件付き機械学習。選手履歴・場傾向・展示/ST・6艇の並びを使用。
+            <?php else: ?>
+                AIモデルを利用できないため、検証済みの重み最適化式で補完表示。
+            <?php endif; ?>
+            場平均は対象日前日まで直近1年<?= $aiTenkaiVenueRaces > 0 ? '（' . number_format($aiTenkaiVenueRaces) . 'R）' : '' ?>。
         </div>
         <div style="overflow-x:auto;">
             <table style="width:100%;min-width:<?= $aiTenkaiAppCompact ? '0' : '620px' ?>;border-collapse:collapse;font-size:<?= $aiTenkaiAppCompact ? '11px' : '12px' ?>;<?= $aiTenkaiAppCompact ? 'table-layout:fixed;' : '' ?>">
@@ -88,7 +97,7 @@ $aiTenkaiVenueRaces = (int)($aiTenkaiTrial['venue_races'] ?? 0);
             </table>
         </div>
         <div style="font-size:10px;color:#8a939f;margin-top:8px;line-height:1.5;">
-            ※ 試験表示です。現在は主要決まり手（逃げ・差し・まくり・まくり差し）の上位5展開を表示しています。
+            ※ 主要決まり手（逃げ・差し・まくり・まくり差し）の上位5展開を表示しています。「その他」は確率計算に含みますが一覧では省略しています。
         </div>
     <?php else: ?>
         <div style="font-size:12px;color:#6b7785;padding:8px 0 2px;">

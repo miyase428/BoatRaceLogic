@@ -23,6 +23,17 @@ $correctedWinBoats = $corrected_win_rate_data['boats'] ?? [];
 $correctedWinStatus = $corrected_win_rate_data['status'] ?? 'error';
 $correctedWinError = $corrected_win_rate_data['error'] ?? '';
 $correctedMethod = $corrected_win_rate_data['method'] ?? [];
+$aiWinBoats = $ai_win_rate_data['boats'] ?? [];
+$aiWinStatus = $ai_win_rate_data['status'] ?? 'error';
+$aiWinError = $ai_win_rate_data['error'] ?? '';
+$aiWinMethod = $ai_win_rate_data['method']['name'] ?? 'AI1着率 v5';
+$aiPlaceBoats = $ai_place_rate_data['boats'] ?? [];
+$aiPlaceStatus = $ai_place_rate_data['status'] ?? 'error';
+$aiPlaceError = $ai_place_rate_data['error'] ?? '';
+$aiWinApplied = $aiWinStatus === 'ok' && count($aiWinBoats) === 6;
+$aiPlaceApplied = $aiPlaceStatus === 'ok' && count($aiPlaceBoats) === 6;
+$aiWinRowLabel = 'AI1着率' . ($aiWinApplied ? ' v5' : '');
+$aiPlaceRowLabel = 'AI2連対率' . ($aiPlaceApplied ? ' v1' : '');
 $correctedExLabel = in_array($selected_place ?? '', ['AMG', 'TKY'], true)
     ? 'EX_TOTAL3（展示＋周回＋周り足）'
     : 'EX_TOTAL';
@@ -76,6 +87,9 @@ for ($course = 1; $course <= 6; $course++) {
             </div>
             <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
                 補正後：展示進入 → <?= htmlspecialchars($correctedExLabel) ?> β=0.10 → SUM_RAW γ=2.0 → スリット α=0.25 / 各段階6艇100%正規化
+            </div>
+            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                AI：<?= $aiWinApplied ? htmlspecialchars((string)$aiWinMethod) : '展示情報取得後に機械学習を計算' ?> / 展示5指標・進入変化・実戦ST・公式選手成績・場/コース/モーター履歴から学習
             </div>
             <?php if (!empty($simulation_active)): ?>
                 <div style="font-size:12px; color:#93c5fd; margin-top:3px;">
@@ -157,6 +171,40 @@ for ($course = 1; $course <= 6; $course++) {
                             </td>
                         <?php endfor; ?>
                     </tr>
+                    <tr style="border-top:1px solid #334155; background:rgba(167,139,250,.06);">
+                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">AI1着率<?= $aiWinApplied ? ' <span style="font-size:11px; color:#c4b5fd;">v5</span>' : '' ?></td>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
+                                $rate = $aiWinBoats[(string)$boat]['ai_rate']
+                                    ?? $aiWinBoats[$boat]['ai_rate']
+                                    ?? null;
+                            ?>
+                            <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#c4b5fd;">
+                                <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
+                            </td>
+                        <?php endfor; ?>
+                    </tr>
+                    <tr style="border-top:1px solid #334155; background:rgba(56,189,248,.05);">
+                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">AI2連対率<?= $aiPlaceApplied ? ' <span style="font-size:11px; color:#7dd3fc;">v1</span>' : '' ?></td>
+                        <?php for ($course = 1; $course <= 6; $course++): ?>
+                            <?php
+                                $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
+                                $rate = $aiPlaceBoats[(string)$boat]['ai_top2_rate']
+                                    ?? $aiPlaceBoats[$boat]['ai_top2_rate']
+                                    ?? null;
+                                $rank = (int)($aiPlaceBoats[(string)$boat]['ai_top2_rank']
+                                    ?? $aiPlaceBoats[$boat]['ai_top2_rank']
+                                    ?? 0);
+                            ?>
+                            <td style="padding:10px 8px; text-align:center; font-size:17px; font-weight:bold; color:#7dd3fc;">
+                                <div><?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?></div>
+                                <?php if ($rank >= 1 && $rank <= 6): ?>
+                                    <div style="margin-top:2px; font-size:11px; color:#6b7785;">AI <?= $rank ?>位</div>
+                                <?php endif; ?>
+                            </td>
+                        <?php endfor; ?>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -171,6 +219,25 @@ for ($course = 1; $course <= 6; $course++) {
         <?php else: ?>
             <div style="margin-top:8px; font-size:12px; color:#fca5a5;">
                 補正後1着率：<?= htmlspecialchars($correctedWinError !== '' ? $correctedWinError : '展示情報待ち') ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($aiWinStatus === 'ok'): ?>
+            <div style="margin-top:4px; font-size:12px; color:#a78bfa;">
+                AI1着率 6艇合計 <?= number_format((float)($ai_win_rate_data['totals']['ai'] ?? 0), 2) ?>%
+                / 本命・対抗の頭と3連単確率へ反映
+            </div>
+        <?php else: ?>
+            <div style="margin-top:4px; font-size:12px; color:#fca5a5;">
+                AI1着率：<?= htmlspecialchars($aiWinError !== '' ? $aiWinError : '展示情報待ち') ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($aiPlaceStatus === 'ok'): ?>
+            <div style="margin-top:4px; font-size:12px; color:#7dd3fc;">
+                AI2連対率：1着率＋2着率 / 6艇合計 <?= number_format((float)($ai_place_rate_data['totals']['top2'] ?? 0), 2) ?>%
+            </div>
+        <?php else: ?>
+            <div style="margin-top:4px; font-size:12px; color:#fca5a5;">
+                AI2連対率：<?= htmlspecialchars($aiPlaceError !== '' ? $aiPlaceError : '計算待ち') ?>
             </div>
         <?php endif; ?>
     <?php else: ?>

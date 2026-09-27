@@ -96,7 +96,31 @@ function sourceDateRange(string $path): array
 {
     $base = basename($path);
     if (preg_match('/_(\d{8})_(\d{8})\.csv$/', $base, $m) !== 1) {
-        return ['', ''];
+        // ローリング更新用の固定ファイル名では、CSVのrace_dateから期間を求める。
+        $fp = fopen($path, 'rb');
+        if ($fp === false) return ['', ''];
+        $header = fgetcsv($fp);
+        if (!is_array($header)) {
+            fclose($fp);
+            return ['', ''];
+        }
+        $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$header[0]);
+        $map = array_flip($header);
+        $dateIndex = $map['race_date'] ?? null;
+        if (!is_int($dateIndex)) {
+            fclose($fp);
+            return ['', ''];
+        }
+        $start = null;
+        $end = null;
+        while (($row = fgetcsv($fp)) !== false) {
+            $date = trim((string)($row[$dateIndex] ?? ''));
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) continue;
+            $start = $start === null || $date < $start ? $date : $start;
+            $end = $end === null || $date > $end ? $date : $end;
+        }
+        fclose($fp);
+        return [$start ?? '', $end ?? ''];
     }
 
     $format = static function (string $yyyymmdd): string {
@@ -231,7 +255,10 @@ if (!is_string($json)) {
     throw new RuntimeException('JSON生成に失敗しました。');
 }
 
-if (file_put_contents($outputPath, $json . PHP_EOL) === false) {
+// 読み込み中の画面へ不完全なJSONを返さないよう、同一ディレクトリで原子的に置換する。
+$tmpPath = $outputPath . '.tmp.' . getmypid();
+if (file_put_contents($tmpPath, $json . PHP_EOL) === false || !rename($tmpPath, $outputPath)) {
+    @unlink($tmpPath);
     throw new RuntimeException("JSONを書き込めません: {$outputPath}");
 }
 

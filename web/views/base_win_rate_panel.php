@@ -22,19 +22,19 @@ include __DIR__ . '/player_sam_ui_enhancements.php';
 include __DIR__ . '/recent_prediction_history_panel.php';
 ?>
 <link rel="stylesheet" href="/web/assets/css/pc_trifecta_tools.css?v=20260826c">
-<script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260901a"></script>
+<script src="/web/assets/js/pc_trifecta_cleanup.js?v=20260918a" defer></script>
 
 <!-- PC Webは役割別タブへ段階的に再整理する。 -->
-<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260912a">
-<script src="/web/assets/js/pc_main_tabs.js?v=20260915f"></script>
-<script src="/web/assets/js/pc_rate_development_tab.js?v=20260913c"></script>
-<script src="/web/assets/js/pc_head1_second_merge.js?v=20260913c"></script>
-<script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260913c"></script>
-<script src="/web/assets/js/pc_player_sam_modal.js?v=20260913c"></script>
-<script src="/web/assets/js/pc_exacta_tab.js?v=20260901a"></script>
-<script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260901a"></script>
-<script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260901b"></script>
-<script src="/web/assets/js/pc_tab_order.js?v=20260915c"></script>
+<link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260925-panel-visible-v1">
+<script src="/web/assets/js/pc_main_tabs.js?v=20260927-center-ml-v1" defer></script>
+<script src="/web/assets/js/pc_rate_development_tab.js?v=20260925-dynamic-ai-version-v1" defer></script>
+<script src="/web/assets/js/pc_head1_second_merge.js?v=20260926-conditional-third-v1" defer></script>
+<script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260918a" defer></script>
+<script src="/web/assets/js/pc_player_sam_modal.js?v=20260918a" defer></script>
+<script src="/web/assets/js/pc_exacta_tab.js?v=20260926-exacta-odds-snapshot-v1" defer></script>
+<script src="/web/assets/js/pc_bet_simulator_v3.js?v=20260926-exacta-odds-snapshot-v1" defer></script>
+<script src="/web/assets/js/live_trifecta_top2_strategy.js?v=20260918a" defer></script>
+<script src="/web/assets/js/pc_tab_order.js?v=20260918a" defer></script>
 
 <script>
 // BOATERSのように「何を見るタブか」が分かる大分類へ、まずPC Webだけ段階的に整理する。

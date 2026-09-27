@@ -400,7 +400,12 @@ class AiTrioRateLogic
 
     private function loadLast100(PDO $pdo, string $playerId, string $targetDate, string $targetRaceCode): array
     {
-        // player_id×race_code indexを直接使える形にし、旧条件・並び順を維持する。
+        // 通常時は当該レース直前まで。過去再現では同日他場の後続結果も
+        // 未確定として扱い、対象日より前だけに限定する。
+        $lateReplay = getenv('BOATRACE_LATE_REPLAY') === '1';
+        $cutoff = $lateReplay
+            ? "re.race_code < TO_CHAR(?::date, 'YYYYMMDD')"
+            : 're.race_code < ?';
         $sql = <<<SQL
             SELECT
                 re.race_code,
@@ -420,13 +425,13 @@ class AiTrioRateLogic
                 LIMIT 1
             ) el ON TRUE
             WHERE re.player_id::text = ?
-              AND re.race_code < ?
+              AND {$cutoff}
             ORDER BY re.race_code DESC
             LIMIT 100
         SQL;
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$playerId, $targetRaceCode]);
+        $stmt->execute([$playerId, $lateReplay ? $targetDate : $targetRaceCode]);
 
         $history = [];
         while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {

@@ -1,21 +1,28 @@
 <?php
 require_once __DIR__ . '/controllers/IndexController.php';
 require_once __DIR__ . '/logic/AiTrioRateLogic.php';
+require_once __DIR__ . '/logic/AiTrioDisplayLogic.php';
 require_once __DIR__ . '/logic/Head1SecondPlaceLogic.php';
 require_once __DIR__ . '/logic/TrifectaProbabilityLogic.php';
+require_once __DIR__ . '/logic/AiPlaceTrifectaDisplayLogic.php';
 require_once __DIR__ . '/logic/Lane1EscapeFollowerLogic.php';
 require_once __DIR__ . '/logic/Lane1DecisionSignalLogic.php';
 require_once __DIR__ . '/logic/PredictionForwardSnapshotStore.php';
+require_once __DIR__ . '/logic/EightPointFormationLogic.php';
+require_once __DIR__ . '/logic/RecentCourseTrioRateLogic.php';
+require_once __DIR__ . '/logic/SecondPlaceProbabilityLogic.php';
+require_once __DIR__ . '/logic/ThirdPlaceProbabilityLogic.php';
 
 $controller = new IndexController();
 $viewData = $controller->handle();
 
-// 前方2期間で固定条件の再現を確認した1号艇判断シグナル。
+// AI1着率 v5の確率と首位差で①の信頼度を表示する。
 // PredictionLogicや既存買い目は変更せず、表示専用で評価する。
 $lane1DecisionSignalLogic = new Lane1DecisionSignalLogic();
 $lane1DecisionSignal = $lane1DecisionSignalLogic->evaluate(
     $viewData['final_predictions'] ?? [],
-    (int)($viewData['honmei_head'] ?? 0)
+    (int)($viewData['honmei_head'] ?? 0),
+    is_array($viewData['ai_win_rate_data'] ?? null) ? $viewData['ai_win_rate_data'] : []
 );
 $lane1DecisionSignalPanel = $lane1DecisionSignalLogic->render($lane1DecisionSignal, true);
 
@@ -29,10 +36,6 @@ $viewData = $lane1FollowerLogic->apply(
     $viewData['entry_course_by_boat'] ?? [],
     !empty($viewData['entry_map_ready']) && empty($viewData['simulation_active'])
 );
-
-// 実際に画面へ出す、場別1逃げ相手補正後の本命・対抗を前向き保存する。
-// 展示未取得・仮想進入・結果確定後はStore側で自動的に除外する。
-PredictionForwardSnapshotStore::captureDisplayedPrediction($viewData, 'app');
 
 extract($viewData);
 
@@ -63,6 +66,21 @@ $correctedWinBoats = is_array($corrected_win_rate_data['boats'] ?? null)
 $correctedWinStatus = (string)($corrected_win_rate_data['status'] ?? 'error');
 $correctedWinError = (string)($corrected_win_rate_data['error'] ?? '');
 
+// 学習済みAI1着率 v5。本命頭・120通り・表示で共用する。
+$aiWinBoats = is_array($ai_win_rate_data['boats'] ?? null)
+    ? $ai_win_rate_data['boats']
+    : [];
+$aiWinStatus = (string)($ai_win_rate_data['status'] ?? 'error');
+$aiWinError = (string)($ai_win_rate_data['error'] ?? '');
+$aiPlaceBoats = is_array($ai_place_rate_data['boats'] ?? null)
+    ? $ai_place_rate_data['boats']
+    : [];
+$aiPlaceStatus = (string)($ai_place_rate_data['status'] ?? 'error');
+$aiPlaceError = (string)($ai_place_rate_data['error'] ?? '');
+$productionWinBoats = $aiWinStatus === 'ok' && count($aiWinBoats) === 6
+    ? $aiWinBoats
+    : $correctedWinBoats;
+
 // AI3連対率。計算ロジックはPC版と共通で、アプリ側では表示だけ変える。
 $aiTrioCourseByBoat = [];
 if (!empty($simulation_active) && is_array($prediction_course_by_boat ?? null)) {
@@ -83,6 +101,29 @@ $aiTrioStatus = (string)($aiTrioData['status'] ?? 'error');
 $aiTrioError = (string)($aiTrioData['error'] ?? '');
 $aiTrioBoats = is_array($aiTrioData['boats'] ?? null) ? $aiTrioData['boats'] : [];
 
+// 表示だけは、AI着順モデルが作る120通りから集計した3連対率へ差し替える。
+// $aiTrioBoatsは既存の買い目・従来出目計算用として変更せず保持する。
+$aiTrioDisplayLogic = new AiTrioDisplayLogic();
+$aiTrioDisplayData = $aiTrioDisplayLogic->apply(
+    $aiTrioData,
+    is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+);
+$aiTrioDisplayBoats = is_array($aiTrioDisplayData['boats'] ?? null)
+    ? $aiTrioDisplayData['boats']
+    : $aiTrioBoats;
+$aiTrioDisplayStatus = (string)($aiTrioDisplayData['status'] ?? 'error');
+$aiTrioDisplaySource = (string)($aiTrioDisplayData['display_source'] ?? 'legacy_ai_trio');
+
+// 8点型の3着候補は、今回の展示進入に対応する直近3/6ヶ月3連対率を使う。
+$recentCourseTrioLogic = new RecentCourseTrioRateLogic();
+$recentCourseTrioData = $recentCourseTrioLogic->calculate(
+    (string)($race_code ?? ''),
+    $aiTrioCourseByBoat
+);
+$recentCourseTrioBoats = is_array($recentCourseTrioData['boats'] ?? null)
+    ? $recentCourseTrioData['boats']
+    : [];
+
 // 1号艇1着時の2着率。こちらもPC版と同じロジックを共用する。
 $head1SecondLogic = new Head1SecondPlaceLogic();
 $head1SecondData = $head1SecondLogic->calculate(
@@ -97,7 +138,7 @@ $head1SecondBoats = is_array($head1SecondData['boats'] ?? null)
 
 // 120通り出目確率を1度だけ計算する。
 // 2着分布の集計はここでは行わず、app_main_analysis_panel.php 内の
-// CommonSecondRuntimeBridge → SecondPlaceProbabilityLogic（③ AI_FINAL）に一本化する。
+// CommonSecondRuntimeBridge → AI着順率v1へ一本化する。
 $outcomeCourseByBoat = [];
 if (count($aiTrioCourseByBoat) === 6) {
     $outcomeCourseByBoat = $aiTrioCourseByBoat;
@@ -108,7 +149,7 @@ if (count($aiTrioCourseByBoat) === 6) {
 $trifectaLogic = new TrifectaProbabilityLogic();
 $trifectaData = $trifectaLogic->calculate(
     (string)($race_code ?? ''),
-    $correctedWinBoats,
+    $productionWinBoats,
     $aiTrioBoats,
     $outcomeCourseByBoat
 );
@@ -116,8 +157,19 @@ $trifectaStatus = (string)($trifectaData['status'] ?? 'error');
 $trifectaError = (string)($trifectaData['error'] ?? '');
 $trifectaRows = is_array($trifectaData['rows'] ?? null) ? $trifectaData['rows'] : [];
 
+// 本命買い目の2着候補はAI着順率v1を正式採用する。
+// 頭・切る艇・3着候補・点数は変えず、AI版が使えない場合だけ従来値へ戻す。
+$appFinalSecondTrifectaData = (new AiPlaceTrifectaDisplayLogic())->apply(
+    $trifectaData,
+    is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+);
+if ((string)($appFinalSecondTrifectaData['probability_source'] ?? '') !== 'ai_place_v1_joint120') {
+    $appFinalSecondTrifectaData = $trifectaData;
+}
+
 // app_main_analysis_panel.php の共通ブリッジで5通りへ上書きされる。
 $appHead1ExactaRows = [];
+$appHead1ExactaV1 = false;
 
 // 基本情報は取得値だけに限定する。
 // 加工・評価結果はメイン情報へ集約し、計算ロジック自体は共用する。
@@ -129,8 +181,22 @@ ob_start();
 include __DIR__ . '/views/app_main_analysis_panel.php';
 $appMainAnalysisHtml = ob_get_clean();
 
-// 2連単・120通りタブだけは、展示前でも暫定表示できるようにする。
-// 既存のメイン予想・共通2着ロジックへは暫定値を流さず、アプリ表示専用で分離する。
+// app_main_analysis_panel.php がAI版の本命2着候補を反映した後に、
+// 8点型を別レイヤーで作る。
+$eightPointFormationLogic = new EightPointFormationLogic();
+$viewData = $eightPointFormationLogic->apply(
+    $viewData,
+    is_array($final_predictions ?? null) ? $final_predictions : [],
+    is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [],
+    $recentCourseTrioBoats
+);
+extract($viewData, EXTR_OVERWRITE);
+
+// 実際に画面へ出す本命・対抗・8点型を、締切前にまとめて保存する。
+PredictionForwardSnapshotStore::captureDisplayedPrediction($viewData, 'app');
+
+// 2連単・120通りタブは、展示前でも暫定表示できるようにする。
+// 暫定値は正式な本命2着候補へ流さず、アプリ表示専用で分離する。
 $appTrifectaDisplayMode = 'exhibition';
 $appTrifectaData = $trifectaData;
 $appTrifectaStatus = $trifectaStatus;
@@ -212,6 +278,56 @@ if ($appTrifectaStatus !== 'ok' || count($appTrifectaRows) !== 120) {
         : [];
 }
 
+// 2連単・120通りタブの最終確率を、AI着順率 v1 の同時120通りへ統一する。
+// 本命2着候補も同じAI版を使うが、ここではタブ表示用データを組み立てる。
+$appAiPlaceTrifectaDisplayLogic = new AiPlaceTrifectaDisplayLogic();
+$appTrifectaData = $appAiPlaceTrifectaDisplayLogic->apply(
+    $appTrifectaData,
+    is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+);
+$appTrifectaStatus = (string)($appTrifectaData['status'] ?? 'error');
+$appTrifectaError = (string)($appTrifectaData['error'] ?? '');
+$appTrifectaRows = is_array($appTrifectaData['rows'] ?? null)
+    ? $appTrifectaData['rows']
+    : [];
+
+// 「1C頭時の今回AI2着率」は、画面の2連単・120通りと同じ表示用確率から集約する。
+// 本命2着候補と同じ機械学習確率を、1C頭の表示にも集約する。
+$appDisplaySecondLogic = new SecondPlaceProbabilityLogic();
+$appDisplayHead1Data = $appDisplaySecondLogic->calculate($appTrifectaData, 1);
+$appHead1ExactaRows = (
+    (string)($appDisplayHead1Data['status'] ?? '') === 'ok'
+    && is_array($appDisplayHead1Data['rows'] ?? null)
+)
+    ? $appDisplayHead1Data['rows']
+    : [];
+$appHead1ExactaV1 = (string)($appTrifectaData['probability_source'] ?? '') === 'ai_place_v1_joint120';
+
+// アプリの「AI条件付き2着率」でも、PCと同じ120通りから全頭コースを集約する。
+// 表示専用で、既存の本命・対抗・買い目ロジックには書き戻さない。
+$appConditionalSecondByHead = [];
+$appThirdPlaceLogic = new ThirdPlaceProbabilityLogic();
+for ($appHeadCourse = 1; $appHeadCourse <= 6; $appHeadCourse++) {
+    $appConditionalSecond = $appDisplaySecondLogic->calculate($appTrifectaData, $appHeadCourse);
+    if ((string)($appConditionalSecond['status'] ?? '') !== 'ok') {
+        continue;
+    }
+    $appThirdBySecondCourse = [];
+    foreach ((array)($appConditionalSecond['rows'] ?? []) as $appSecondRow) {
+        $appSecondCourse = (int)($appSecondRow['second_course'] ?? 0);
+        $appThird = $appThirdPlaceLogic->calculate($appTrifectaData, $appHeadCourse, $appSecondCourse);
+        if ((string)($appThird['status'] ?? '') === 'ok') {
+            $appThirdBySecondCourse[(string)$appSecondCourse] = is_array($appThird['rows'] ?? null) ? $appThird['rows'] : [];
+        }
+    }
+    $appConditionalSecondByHead[(string)$appHeadCourse] = [
+        'head_course' => (int)($appConditionalSecond['head_course'] ?? $appHeadCourse),
+        'head_boat' => (int)($appConditionalSecond['head_boat'] ?? 0),
+        'rows' => is_array($appConditionalSecond['rows'] ?? null) ? $appConditionalSecond['rows'] : [],
+        'third_by_second_course' => $appThirdBySecondCourse,
+    ];
+}
+
 // 既存アプリViewは土台として維持し、DOM上で「基本情報 / メイン情報」の2タブへ整理する。
 ob_start();
 include __DIR__ . '/views/app_view.php';
@@ -221,7 +337,7 @@ $html = ob_get_clean();
 $html = str_replace(
     '</head>',
     '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css?v=20260822-0835">' . "\n"
-        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css?v=20260822-0835">' . "\n</head>",
+        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css?v=20260917-0915">' . "\n</head>",
     $html
 );
 
@@ -231,6 +347,14 @@ $exactaJson = json_encode(
 );
 if (!is_string($exactaJson)) {
     $exactaJson = '[]';
+}
+$exactaV1Json = $appHead1ExactaV1 ? 'true' : 'false';
+$conditionalSecondJson = json_encode(
+    $appConditionalSecondByHead,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+if (!is_string($conditionalSecondJson)) {
+    $conditionalSecondJson = '{}';
 }
 
 $basicInfoJson = json_encode(
@@ -261,6 +385,10 @@ $tabsScript = <<<'HTML'
 <script>
 (function () {
     const exactaRows = __EXACTA_JSON__;
+    const exactaV1 = __EXACTA_V1__;
+    const conditionalSecondByHead = __CONDITIONAL_SECOND_JSON__;
+    window.boatraceConditionalSecondByHead = conditionalSecondByHead;
+    window.boatraceConditionalSecondIsMlV1 = exactaV1;
     const basicInfoHtml = __BASIC_INFO_JSON__;
     const mainAnalysisHtml = __MAIN_ANALYSIS_JSON__;
     const lane1DecisionSignalHtml = __LANE1_DECISION_SIGNAL_JSON__;
@@ -268,6 +396,7 @@ $tabsScript = <<<'HTML'
     function buildExactaCard() {
         const section = document.createElement('section');
         section.className = 'app-card app-main-exacta';
+        section.dataset.aiPlaceV1 = exactaV1 ? '1' : '0';
 
         const title = document.createElement('div');
         title.className = 'app-card-body app-main-exacta-title';
@@ -365,6 +494,7 @@ $tabsScript = <<<'HTML'
 
         // 基本情報は直接取得した出走表・展示値だけ。
         basicPanel.innerHTML = basicInfoHtml || '';
+        document.dispatchEvent(new CustomEvent('boatrace:app-basic-panel-ready'));
         quickCard.remove();
         if (detailCard) detailCard.remove();
 
@@ -431,6 +561,9 @@ $tabsScript = <<<'HTML'
             }
         }
 
+        // コースサインは表示専用なので、取得完了を初期画面の表示条件にしない。
+        // 本体を先に操作可能にし、サインは取得でき次第追加表示する。
+
         document.querySelectorAll('.app-shell form').forEach(function (form) {
             form.addEventListener('submit', function (event) {
                 const exhibition = !!form.querySelector('button[name="update_exhibition"]');
@@ -465,6 +598,8 @@ $tabsScript = <<<'HTML'
 HTML;
 
 $tabsScript = str_replace('__EXACTA_JSON__', $exactaJson, $tabsScript);
+$tabsScript = str_replace('__EXACTA_V1__', $exactaV1Json, $tabsScript);
+$tabsScript = str_replace('__CONDITIONAL_SECOND_JSON__', $conditionalSecondJson, $tabsScript);
 $tabsScript = str_replace('__BASIC_INFO_JSON__', $basicInfoJson, $tabsScript);
 $tabsScript = str_replace('__MAIN_ANALYSIS_JSON__', $mainAnalysisJson, $tabsScript);
 $tabsScript = str_replace('__LANE1_DECISION_SIGNAL_JSON__', $lane1DecisionSignalJson, $tabsScript);

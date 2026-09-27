@@ -49,6 +49,10 @@
         if (codeIndex < 0) return;
         const sourceNodes = children.slice(codeIndex + 1);
         const trifectaCount = detectTrifectaCount();
+        const trifectaReferenceForVersion = document.getElementById('trifecta-reference-panel');
+        const trifectaVersion = trifectaReferenceForVersion
+            ? String(trifectaReferenceForVersion.dataset.probabilityVersion || '')
+            : '';
 
         const tabs = document.createElement('nav');
         tabs.className = 'pc-main-tabs';
@@ -57,7 +61,7 @@
             + '<button type="button" class="pc-main-tab is-active" data-pc-main-tab="basic">基本情報</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="main">メイン情報</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="other">その他</button>'
-            + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">' + trifectaCount + '通り</button>'
+            + '<button type="button" class="pc-main-tab" data-pc-main-tab="trifecta">' + trifectaCount + '通り' + (trifectaVersion === 'v1' ? ' v1' : '') + '</button>'
             + '<button type="button" class="pc-main-tab" data-pc-main-tab="recent">直近60R</button>';
 
         const basicPanel = document.createElement('div');
@@ -105,6 +109,8 @@
             if (String(node.id || '').startsWith('stadium-characteristics-tabs-pc-')) {
                 basicNodes.add(node);
             } else if (isForwardValidationNode(node)) {
+                otherNodes.add(node);
+            } else if (String(node.id || '') === 'air-prediction-panel') {
                 otherNodes.add(node);
             } else if (String(node.id || '') === 'sam-block') {
                 otherNodes.add(node);
@@ -204,8 +210,23 @@
         const buttons = Array.from(tabs.querySelectorAll('.pc-main-tab'));
         const validTabs = ['basic', 'main', 'other', 'trifecta', 'recent'];
 
+        // 既存の出目確率側にもDOM移動処理があるため、実行順によっては
+        // referenceパネルが大タブ外へ戻される。表示時に必ず専用パネルへ回収する。
+        function ensureTrifectaContent() {
+            const reference = document.getElementById('trifecta-reference-panel');
+            if (!reference) return false;
+            if (reference.parentElement !== trifectaPanel) {
+                trifectaPanel.appendChild(reference);
+            }
+            reference.open = true;
+            reference.hidden = false;
+            reference.style.display = 'block';
+            return true;
+        }
+
         function activate(name) {
             if (!validTabs.includes(name)) name = 'basic';
+            if (name === 'trifecta') ensureTrifectaContent();
 
             // 2連単・買い目など後から追加される大タブも含め、
             // 現在存在する全タブのactive状態を毎回整理する。
@@ -222,6 +243,8 @@
                 panel.classList.toggle('is-active', active);
                 panel.hidden = !active;
             });
+
+            if (name === 'trifecta') ensureTrifectaContent();
 
             try {
                 sessionStorage.setItem(STORAGE_KEY, name);
@@ -243,6 +266,11 @@
         } catch (e) {}
 
         activate(initial);
+
+        // 後発のDOMContentLoaded・タイマー処理に移動されても回収する。
+        [0, 100, 500, 1500].forEach(function (delay) {
+            window.setTimeout(ensureTrifectaContent, delay);
+        });
     }
 
     function scheduleSetup() {
@@ -277,7 +305,9 @@
 
         const date = raceDateFromCode(code);
         const place = code.slice(8, 11);
-        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place), {cache: 'no-store'})
+        const forceRefresh = !!document.querySelector('.exhibition-update-message');
+        const refreshQuery = forceRefresh ? '&refresh=1' : '';
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place) + refreshQuery, {cache: 'no-store'})
             .then(function (response) {
                 return response.json().then(function (data) {
                     if (!response.ok || !data || data.status !== 'ok') {
@@ -312,10 +342,11 @@
                         const isLane3 = course === 3;
                         const isLane4 = course === 4;
                         const isLane6 = course === 6;
+                        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1';
                         const level = Math.max(1, Math.min(3, Number(detail.star_level || 1)));
                         const stars = '★'.repeat(level);
                         const signal = String(detail.signal || (course + (level >= 2 ? '軸' : '攻め')));
-                        const note = (course === 1 || course === 2 || course === 5 || course === 6) ? '' : (level >= 3 ? '（検証中）' : '');
+                        const note = isCenterMl ? ' v1' : ((course === 1 || course === 2 || course === 5 || course === 6) ? '' : (level >= 3 ? '（検証中）' : ''));
                         const accent = isLane1 ? '#9a3f4b' : (isLane2Makuri ? '#7042a8' : (isLane2 ? '#287a67' : (isLane3 ? '#176c9f' : (isLane4 ? '#b87500' : (isLane6 ? '#4f5964' : '#7042a8')))));
 
                         const box = document.createElement('div');
@@ -346,12 +377,21 @@
                         box.appendChild(title);
 
                         const parts = [];
-                        if (isLane1 && Number.isFinite(Number(detail.nige_rate))) {
+                        if (isCenterMl) {
+                            const target = String(detail.selected_target || '');
+                            const targetLabel = target === 'first' ? 'AI1着' : (target === 'top2' ? 'AI2連' : 'AI3連');
+                            const targetValue = target === 'first' ? detail.ai_first_rate : (target === 'top2' ? detail.ai_top2_rate : detail.ai_top3_rate);
+                            if (Number.isFinite(Number(targetValue))) parts.push(targetLabel + ' ' + Number(targetValue).toFixed(1) + '%');
+                            if (Number.isFinite(Number(detail.selected_threshold))) parts.push('判定基準 ' + Number(detail.selected_threshold).toFixed(1) + '%');
+                            parts.push(String(detail.phase || (detail.secondary_ready ? '展示反映' : '展示前')));
+                        } else if (isLane1 && Number.isFinite(Number(detail.nige_rate))) {
                             parts.push('1C逃げ率 ' + Number(detail.nige_rate).toFixed(1) + '%');
                         } else if (isLane2Makuri && Number.isFinite(Number(detail.makuri_rate))) {
                             parts.push('2まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%');
-                            const stOperator = detail.st_relation === 'same_or_better' ? ' ≤ ' : ' < ';
-                            parts.push('ST順位 2=' + Number(detail.lane2_avg_rank).toFixed(2) + stOperator + '1=' + Number(detail.lane1_avg_rank).toFixed(2));
+                            if (Number.isFinite(Number(detail.lane2_avg_rank)) && Number.isFinite(Number(detail.lane1_avg_rank))) {
+                                const stOperator = detail.st_relation === 'same_or_better' ? ' ≤ ' : ' < ';
+                                parts.push('ST順位 2=' + Number(detail.lane2_avg_rank).toFixed(2) + stOperator + '1=' + Number(detail.lane1_avg_rank).toFixed(2));
+                            }
                             if (Number.isFinite(Number(detail.lane1_vulnerability_rate))) {
                                 parts.push('1C脆弱性 ' + Number(detail.lane1_vulnerability_rate).toFixed(1) + '%');
                             }
@@ -359,7 +399,7 @@
                             parts.push('2差し率 ' + Number(detail.sashi_rate).toFixed(1) + '%');
                         } else if (isLane3 && Number.isFinite(Number(detail.attack_rate))) {
                             parts.push('3攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
-                        } else if (isLane4 && Number.isFinite(Number(detail.makuri_rate))) {
+                        } else if (isLane4 && (Number.isFinite(Number(detail.attack_rate)) || Number.isFinite(Number(detail.makuri_rate)))) {
                             if (detail.primary_metric === 'attack_rate' && Number.isFinite(Number(detail.attack_rate))) {
                                 parts.push('4攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
                             } else {
@@ -375,9 +415,13 @@
                             parts.push('5攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
                         } else if (isLane6 && Number.isFinite(Number(detail.attack_rate))) {
                             parts.push('6攻め率 ' + Number(detail.attack_rate).toFixed(1) + '%');
-                            parts.push('ST順位 6=' + Number(detail.lane6_avg_rank).toFixed(2) + ' < 5=' + Number(detail.lane5_avg_rank).toFixed(2));
+                            if (Number.isFinite(Number(detail.lane6_avg_rank)) && Number.isFinite(Number(detail.lane5_avg_rank))) {
+                                parts.push('ST順位 6=' + Number(detail.lane6_avg_rank).toFixed(2) + ' < 5=' + Number(detail.lane5_avg_rank).toFixed(2));
+                            }
                         }
-                        if (detail.secondary_ready) {
+                        if (isCenterMl) {
+                            // 改善版はAI確率を直接表示する。
+                        } else if (detail.secondary_ready) {
                             parts.push('二次 ' + Number(detail.second_score).toFixed(0));
                             parts.push('TOP差 ' + Number(detail.gap_to_top).toFixed(0));
                             parts.push('直線 ' + Number(detail.straight_score).toFixed(0));
@@ -403,7 +447,17 @@
                         box.appendChild(sub);
 
                         const performance = detail.historical_stats;
-                        if (performance && Number.isFinite(Number(performance.first_rate))) {
+                        if (isCenterMl && performance && Number.isFinite(Number(performance.n))) {
+                            const history = document.createElement('div');
+                            history.style.cssText = 'margin-top:3px;font-size:11px;color:#6f767b;';
+                            const rateParts = [];
+                            if (Number.isFinite(Number(performance.first_rate))) rateParts.push('1着率 ' + Number(performance.first_rate).toFixed(1) + '%');
+                            if (Number.isFinite(Number(performance.top2_rate))) rateParts.push('2連対率 ' + Number(performance.top2_rate).toFixed(1) + '%');
+                            if (Number.isFinite(Number(performance.top3_rate))) rateParts.push('3連対率 ' + Number(performance.top3_rate).toFixed(1) + '%');
+                            history.textContent = String(performance.period || '最終未使用テスト') + '実績 N=' + Number(performance.n).toLocaleString()
+                                + (rateParts.length ? ' / ' + rateParts.join(' / ') : '');
+                            box.appendChild(history);
+                        } else if (performance && Number.isFinite(Number(performance.first_rate))) {
                             const signed = function (value) {
                                 const n = Number(value);
                                 return (n >= 0 ? '+' : '') + n.toFixed(1) + 'pt';

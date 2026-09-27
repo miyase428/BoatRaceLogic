@@ -2,8 +2,13 @@
 
 /**
  * 展示情報を「完備」とみなすための共通判定。
- * 一部項目だけ取得できた6艇分は完備扱いにせず、次回取得対象として残す。
+ * 直線タイムを公表しないAMG/TKY/SMEでは、直線を除く4項目で判定する。
  */
+function exhibitionRequiresStraight(?string $placeCode): bool
+{
+    return !in_array(strtoupper(trim((string)$placeCode)), ['AMG', 'TKY', 'SME'], true);
+}
+
 function exhibitionDataValuePresent($value): bool
 {
     if (!is_scalar($value)) {
@@ -21,7 +26,7 @@ function exhibitionPositiveNumberPresent($value): bool
         && (float)$value > 0.0;
 }
 
-function hasCompleteExhibitionData(array $data): bool
+function hasCompleteExhibitionData(array $data, ?string $placeCode = null): bool
 {
     if (count($data) !== 6) {
         return false;
@@ -47,10 +52,14 @@ function hasCompleteExhibitionData(array $data): bool
         if (!exhibitionDataValuePresent($row['start_timing'] ?? null)) {
             return false;
         }
-        foreach (['exhibition_time', 'lap_time', 'around_time', 'straight_time'] as $field) {
+        foreach (['exhibition_time', 'lap_time', 'around_time'] as $field) {
             if (!exhibitionPositiveNumberPresent($row[$field] ?? null)) {
                 return false;
             }
+        }
+        if (exhibitionRequiresStraight($placeCode)
+            && !exhibitionPositiveNumberPresent($row['straight_time'] ?? null)) {
+            return false;
         }
     }
 

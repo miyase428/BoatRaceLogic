@@ -117,4 +117,8 @@ $appSamColor = static function ($value): string {
     <?php else: ?>
         <div class="app-card-body app-note">展示サム理論：計算待ち、または場マスタ未取得です。</div>
     <?php endif; ?>
+
+    <?php include __DIR__ . '/lane1_lap_relative_note.php'; ?>
 </section>
+
+<?php include __DIR__ . '/exhibition_alert_panel.php'; ?>

@@ -49,6 +49,147 @@ final class PredictionForwardSnapshotStore
         }
     }
 
+    /**
+     * 締切前の公式3連単オッズと、その時点の本命・対抗買い目を固定保存する。
+     * 表示用の/tmpキャッシュとは別の、検証用の永続記録。
+     */
+    public static function captureDisplayedTrifectaOdds(
+        array $viewData,
+        array $trifectaRows,
+        array $oddsData,
+        string $source,
+        ?PDO $pdo = null
+    ): void {
+        try {
+            (new self($pdo))->captureTrifectaOdds(
+                $viewData,
+                $trifectaRows,
+                $oddsData,
+                $source,
+                false,
+                false,
+                'strict'
+            );
+        } catch (Throwable $e) {
+            error_log('trifecta odds forward snapshot failed: ' . $e->getMessage());
+        }
+    }
+
+    /** 公式に残る確定オッズを過去検証用として保存する。締切前記録とは混ぜない。 */
+    public static function captureHistoricalTrifectaOdds(
+        string $raceCode,
+        string $raceDate,
+        array $oddsData,
+        string $source = 'official_historical_final',
+        ?PDO $pdo = null
+    ): void {
+        try {
+            (new self($pdo))->captureTrifectaOdds(
+                ['race_code' => $raceCode, 'selected_date' => $raceDate],
+                [],
+                $oddsData,
+                $source,
+                true,
+                false,
+                'late_replay'
+            );
+        } catch (Throwable $e) {
+            error_log('trifecta historical odds snapshot failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * ユーザーが当日画面で確認したオッズを、初回表示時刻で一度だけ保存する。
+     * 画面表示そのものの取得頻度は変えず、検証用の記録だけを追加する。
+     */
+    public static function captureCurrentTrifectaOdds(
+        string $raceCode,
+        array $oddsData,
+        array $trifectaRows = [],
+        string $honmeiKai = '',
+        string $taikouKai = '',
+        string $source = 'user_display_v2',
+        ?PDO $pdo = null,
+        bool $holeAlert = false
+    ): void {
+        $raceCode = strtoupper(trim($raceCode));
+        if (!preg_match('/^(\d{4})(\d{2})(\d{2})[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $raceCode, $m)) {
+            return;
+        }
+        try {
+            (new self($pdo))->captureTrifectaOdds(
+                [
+                    'race_code' => $raceCode,
+                    'selected_date' => $m[1] . '-' . $m[2] . '-' . $m[3],
+                    'honmei_kai' => $honmeiKai,
+                    'taikou_kai' => $taikouKai,
+                ],
+                $trifectaRows,
+                $oddsData,
+                $source,
+                false,
+                $holeAlert,
+                'strict'
+            );
+        } catch (Throwable $e) {
+            error_log('trifecta current odds snapshot failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * ユーザーが当日画面で確認した2連単オッズを、初回表示時刻で一度だけ保存する。
+     * 3連単と同じく、締切後や結果確定後の値は前方検証記録へ混ぜない。
+     */
+    public static function captureCurrentExactaOdds(
+        string $raceCode,
+        array $oddsData,
+        array $exactaRows = [],
+        string $source = 'user_display_v1',
+        ?PDO $pdo = null
+    ): void {
+        $raceCode = strtoupper(trim($raceCode));
+        if (!preg_match('/^(\d{4})(\d{2})(\d{2})[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $raceCode, $m)) {
+            return;
+        }
+        try {
+            (new self($pdo))->captureExactaOdds(
+                [
+                    'race_code' => $raceCode,
+                    'selected_date' => $m[1] . '-' . $m[2] . '-' . $m[3],
+                ],
+                $exactaRows,
+                $oddsData,
+                $source,
+                false,
+                'strict'
+            );
+        } catch (Throwable $e) {
+            error_log('exacta current odds snapshot failed: ' . $e->getMessage());
+        }
+    }
+
+    /** 公式に残る確定2連単オッズを、締切前記録とは分けて保存する。 */
+    public static function captureHistoricalExactaOdds(
+        string $raceCode,
+        string $raceDate,
+        array $oddsData,
+        string $source = 'official_historical_final',
+        ?PDO $pdo = null
+    ): void {
+        try {
+            (new self($pdo))->captureExactaOdds(
+                ['race_code' => $raceCode, 'selected_date' => $raceDate],
+                [],
+                $oddsData,
+                $source,
+                true,
+                'late_replay'
+            );
+        } catch (Throwable $e) {
+            error_log('exacta historical odds snapshot failed: ' . $e->getMessage());
+        }
+    }
+
     /** 23時取得の展示履歴から再現したコースサインを保存する。 */
     public static function captureLateReplayCourseSignals(array $response, ?PDO $pdo = null): void
     {
@@ -138,6 +279,11 @@ final class PredictionForwardSnapshotStore
             'exhibition_entry_order' => (string)($viewData['exhibition_entry_order'] ?? ''),
             'lane1_escape_follower_applied' => !empty($viewData['lane1_escape_follower_applied']),
             'lane1_escape_follower_reason' => (string)($viewData['lane1_escape_follower_reason'] ?? ''),
+            // 8点型は既存買い目と独立した試験運用値。表示された時だけ同じ締切前
+            // スナップショットに固定し、将来の型別的中率・回収率に使えるようにする。
+            'eight_point_formation' => is_array($viewData['eight_point_formation'] ?? null)
+                ? $viewData['eight_point_formation']
+                : ['visible' => false],
             'validation_mode' => $validationMode,
             'result_cutoff' => $lateReplay ? 'before_target_race' : 'captured_before_deadline',
         ];
@@ -151,6 +297,302 @@ final class PredictionForwardSnapshotStore
             self::predictionLogicVersion(),
             $validationMode
         );
+    }
+
+    private function captureTrifectaOdds(
+        array $viewData,
+        array $trifectaRows,
+        array $oddsData,
+        string $source,
+        bool $allowHistorical,
+        bool $holeAlert,
+        string $validationMode
+    ): void {
+        if (!$this->isReady()) {
+            return;
+        }
+
+        $raceCode = strtoupper(trim((string)($viewData['race_code'] ?? '')));
+        $raceDate = trim((string)($viewData['selected_date'] ?? ''));
+        if (!$this->validRaceForDate($raceCode, $raceDate)
+            || (!$allowHistorical && (!$this->validCurrentRace($raceCode, $raceDate)
+                || !$this->isBeforeCachedOfficialDeadline($raceCode)
+                || $this->hasCompletedResult($raceCode)))) {
+            return;
+        }
+
+        // 通常表示は同じレースを何度開いても、最初に確認した時点だけを残す。
+        // 手動更新で都合のよいオッズに差し替わるのを防ぐため。
+        if (!$allowHistorical && $this->hasTrifectaOddsSource($raceCode, $source, $validationMode)) {
+            return;
+        }
+
+        $odds = is_array($oddsData['odds'] ?? null) ? $oddsData['odds'] : [];
+        $oddsCount = count($odds);
+        if ((string)($oddsData['status'] ?? '') !== 'ok' || !in_array($oddsCount, [60, 120], true)) {
+            return;
+        }
+        $cleanOdds = [];
+        foreach ($odds as $combo => $oddsValue) {
+            $combo = trim((string)$combo);
+            $value = (float)$oddsValue;
+            if (preg_match('/^[1-6]-[1-6]-[1-6]$/', $combo) === 1 && $value > 0.0) {
+                $cleanOdds[$combo] = $value;
+            }
+        }
+        ksort($cleanOdds, SORT_NATURAL);
+        if (!in_array(count($cleanOdds), [60, 120], true)) {
+            return;
+        }
+
+        $probabilities = self::trifectaProbabilityMap($trifectaRows);
+        $honmei = self::expandTrifecta((string)($viewData['honmei_kai'] ?? ''));
+        $taikou = self::expandTrifecta((string)($viewData['taikou_kai'] ?? ''));
+        $combined = array_values(array_unique(array_merge($honmei, $taikou)));
+        $payload = [
+            'source' => $source,
+            'odds_kind' => $allowHistorical ? 'official_final_historical' : 'official_pre_deadline',
+            'official_odds_fetched_at' => (string)($oddsData['fetched_at'] ?? ''),
+            'official_odds_cache_used' => !empty($oddsData['cache']['used']),
+            'official_odds_source_url' => (string)($oddsData['source_url'] ?? ''),
+            'odds' => $cleanOdds,
+            'probabilities' => $probabilities,
+            'honmei_kai' => (string)($viewData['honmei_kai'] ?? ''),
+            'taikou_kai' => (string)($viewData['taikou_kai'] ?? ''),
+            'selection_metrics' => [
+                'honmei' => self::trifectaSelectionMetrics($honmei, $probabilities, $cleanOdds),
+                'taikou' => self::trifectaSelectionMetrics($taikou, $probabilities, $cleanOdds),
+                'combined' => self::trifectaSelectionMetrics($combined, $probabilities, $cleanOdds),
+            ],
+            'validation_mode' => $validationMode,
+            'result_cutoff' => $allowHistorical ? 'official_historical_final_odds' : 'captured_before_deadline',
+        ];
+
+        // AI買い方タイプは、確率・オッズ・荒れ判定を同じ締切前時点で固定する。
+        // 通常のオッズ表示スナップショットとはsourceを分け、画面閲覧順に左右されない。
+        if ($source === 'ai_bet_modes_v1' && count($probabilities) === count($cleanOdds)) {
+            $payload['ai_bet_modes'] = self::aiBetStrategyModes($probabilities, $cleanOdds, $holeAlert);
+        }
+
+        $this->insertSnapshot(
+            $raceCode,
+            $raceDate,
+            'exhibition',
+            'trifecta_odds',
+            $payload,
+            $source === 'ai_bet_modes_v1' ? 'ai-bet-modes-forward-v1' : 'trifecta-odds-forward-v1',
+            $validationMode
+        );
+    }
+
+    /** @param array<int,array<string,mixed>> $exactaRows */
+    private function captureExactaOdds(
+        array $viewData,
+        array $exactaRows,
+        array $oddsData,
+        string $source,
+        bool $allowHistorical,
+        string $validationMode
+    ): void {
+        if (!$this->isReady()) {
+            return;
+        }
+
+        $raceCode = strtoupper(trim((string)($viewData['race_code'] ?? '')));
+        $raceDate = trim((string)($viewData['selected_date'] ?? ''));
+        if (!$this->validRaceForDate($raceCode, $raceDate)
+            || (!$allowHistorical && (!$this->validCurrentRace($raceCode, $raceDate)
+                || !$this->isBeforeCachedOfficialDeadline($raceCode)
+                || $this->hasCompletedResult($raceCode)))) {
+            return;
+        }
+        if (!$allowHistorical && $this->hasExactaOddsSource($raceCode, $source, $validationMode)) {
+            return;
+        }
+
+        $odds = is_array($oddsData['odds'] ?? null) ? $oddsData['odds'] : [];
+        $oddsCount = count($odds);
+        if ((string)($oddsData['status'] ?? '') !== 'ok' || !in_array($oddsCount, [20, 30], true)) {
+            return;
+        }
+        $cleanOdds = [];
+        foreach ($odds as $combo => $oddsValue) {
+            $combo = trim((string)$combo);
+            $value = (float)$oddsValue;
+            [$first, $second] = array_pad(explode('-', $combo, 2), 2, '');
+            if (preg_match('/^[1-6]$/', $first) === 1
+                && preg_match('/^[1-6]$/', $second) === 1
+                && $first !== $second && $value > 0.0) {
+                $cleanOdds[$combo] = $value;
+            }
+        }
+        ksort($cleanOdds, SORT_NATURAL);
+        if (!in_array(count($cleanOdds), [20, 30], true)) {
+            return;
+        }
+
+        $payload = [
+            'source' => $source,
+            'odds_kind' => $allowHistorical ? 'official_final_historical' : 'official_pre_deadline',
+            'official_odds_fetched_at' => (string)($oddsData['fetched_at'] ?? ''),
+            'official_odds_cache_used' => !empty($oddsData['cache']['used']),
+            'official_odds_source_url' => (string)($oddsData['source_url'] ?? ''),
+            'odds' => $cleanOdds,
+            'probabilities' => self::exactaProbabilityMap($exactaRows),
+            'validation_mode' => $validationMode,
+            'result_cutoff' => $allowHistorical ? 'official_historical_final_odds' : 'captured_before_deadline',
+        ];
+
+        $this->insertSnapshot(
+            $raceCode,
+            $raceDate,
+            'exhibition',
+            'exacta_odds',
+            $payload,
+            'exacta-odds-forward-v1',
+            $validationMode
+        );
+    }
+
+    /** @return array<string,float> */
+    private static function trifectaProbabilityMap(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $boats = array_values(array_map('intval', (array)($row['boats'] ?? [])));
+            if (count($boats) !== 3 || count(array_unique($boats)) !== 3
+                || min($boats) < 1 || max($boats) > 6) {
+                continue;
+            }
+            $probability = (float)($row['probability'] ?? 0.0);
+            if ($probability < 0.0 || $probability > 1.0) {
+                continue;
+            }
+            $out[implode('-', $boats)] = $probability;
+        }
+        ksort($out, SORT_NATURAL);
+        return $out;
+    }
+
+    /** @return array<string,float> */
+    private static function exactaProbabilityMap(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $first = (int)($row['first'] ?? 0);
+            $second = (int)($row['second'] ?? 0);
+            $probability = (float)($row['probability'] ?? 0.0);
+            if ($first < 1 || $first > 6 || $second < 1 || $second > 6 || $first === $second
+                || $probability < 0.0 || $probability > 1.0) {
+                continue;
+            }
+            $out[$first . '-' . $second] = $probability;
+        }
+        ksort($out, SORT_NATURAL);
+        return $out;
+    }
+
+    private static function trifectaSelectionMetrics(array $bets, array $probabilities, array $odds): array
+    {
+        $bets = array_values(array_unique(array_filter($bets, static fn($v): bool => is_string($v) && $v !== '')));
+        $probabilitySum = 0.0;
+        $inverseOdds = 0.0;
+        $modelReturnSum = 0.0;
+        $oddsReady = $bets !== [];
+        foreach ($bets as $bet) {
+            $probabilitySum += (float)($probabilities[$bet] ?? 0.0);
+            $value = (float)($odds[$bet] ?? 0.0);
+            if ($value <= 0.0) {
+                $oddsReady = false;
+                continue;
+            }
+            $inverseOdds += 1.0 / $value;
+            $modelReturnSum += (float)($probabilities[$bet] ?? 0.0) * $value;
+        }
+        return [
+            'bets' => $bets,
+            'points' => count($bets),
+            'probability_sum' => $probabilitySum,
+            'combined_odds' => $oddsReady && $inverseOdds > 0.0 ? 1.0 / $inverseOdds : null,
+            // 各点を均等購入した場合の、モデル上の期待回収率。
+            'equal_stake_model_expected_roi' => $oddsReady && $bets !== [] ? $modelReturnSum / count($bets) : null,
+            'odds_ready' => $oddsReady,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private static function aiBetStrategyModes(array $probabilities, array $odds, bool $holeAlert): array
+    {
+        $rows = [];
+        foreach ($probabilities as $bet => $probability) {
+            $value = (float)($odds[$bet] ?? 0.0);
+            if ($value <= 0.0) {
+                continue;
+            }
+            $rows[] = [
+                'bet' => (string)$bet,
+                'probability' => (float)$probability,
+                'odds' => $value,
+            ];
+        }
+        usort($rows, static function (array $a, array $b): int {
+            $cmp = (float)$b['probability'] <=> (float)$a['probability'];
+            return $cmp !== 0 ? $cmp : strcmp((string)$a['bet'], (string)$b['bet']);
+        });
+
+        $bets = static fn(array $selected): array => array_values(array_map(
+            static fn(array $row): string => (string)$row['bet'],
+            $selected
+        ));
+        $hitFocus = $bets(array_slice($rows, 0, 20));
+        $balance = $bets(array_slice($rows, 0, 12));
+        $top6Rows = array_slice($rows, 0, 6);
+        $top6Mass = array_sum(array_map(
+            static fn(array $row): float => (float)$row['probability'],
+            $top6Rows
+        ));
+        $selective = $top6Mass >= 0.35 ? $bets($top6Rows) : [];
+
+        $longshots = array_values(array_filter(
+            $rows,
+            static fn(array $row): bool => (float)$row['odds'] >= 100.0
+        ));
+        $aiManshuRate = array_sum(array_map(
+            static fn(array $row): float => (float)$row['probability'],
+            $longshots
+        ));
+        $oneShotRows = $holeAlert
+            ? array_values(array_filter(
+                $longshots,
+                static fn(array $row): bool => (float)$row['probability'] >= 0.002
+            ))
+            : [];
+        $oneShot = $bets(array_slice($oneShotRows, 0, 6));
+
+        return [
+            'version' => 'v1',
+            'rules_frozen' => true,
+            'hole_alert' => $holeAlert,
+            'ai_manshu_probability' => $aiManshuRate,
+            'modes' => [
+                'HIT_FOCUS' => self::trifectaSelectionMetrics($hitFocus, $probabilities, $odds),
+                'BALANCE' => self::trifectaSelectionMetrics($balance, $probabilities, $odds),
+                'ONE_SHOT' => self::trifectaSelectionMetrics($oneShot, $probabilities, $odds),
+                'SELECTIVE' => self::trifectaSelectionMetrics($selective, $probabilities, $odds),
+            ],
+            'selection_context' => [
+                'top6_probability_mass' => $top6Mass,
+                'selective_threshold' => 0.35,
+                'one_shot_min_odds' => 100.0,
+                'one_shot_min_probability' => 0.002,
+            ],
+        ];
     }
 
     private function captureCourseSignals(array $response, string $validationMode): void
@@ -353,6 +795,48 @@ SQL);
         return (bool)$stmt->fetchColumn();
     }
 
+    private function hasTrifectaOddsSource(string $raceCode, string $source, string $validationMode): bool
+    {
+        $stmt = $this->pdo->prepare(<<<'SQL'
+SELECT EXISTS (
+    SELECT 1
+    FROM boat_race.prediction_forward_snapshots
+    WHERE race_code = :race_code
+      AND stage = 'exhibition'
+      AND component = 'trifecta_odds'
+      AND validation_mode = :validation_mode
+      AND payload->>'source' = :source
+)
+SQL);
+        $stmt->execute([
+            ':race_code' => $raceCode,
+            ':validation_mode' => $validationMode,
+            ':source' => $source,
+        ]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    private function hasExactaOddsSource(string $raceCode, string $source, string $validationMode): bool
+    {
+        $stmt = $this->pdo->prepare(<<<'SQL'
+SELECT EXISTS (
+    SELECT 1
+    FROM boat_race.prediction_forward_snapshots
+    WHERE race_code = :race_code
+      AND stage = 'exhibition'
+      AND component = 'exacta_odds'
+      AND validation_mode = :validation_mode
+      AND payload->>'source' = :source
+)
+SQL);
+        $stmt->execute([
+            ':race_code' => $raceCode,
+            ':validation_mode' => $validationMode,
+            ':source' => $source,
+        ]);
+        return (bool)$stmt->fetchColumn();
+    }
+
     private function hasCompletedResult(string $raceCode): bool
     {
         $stmt = $this->pdo->prepare(<<<'SQL'
@@ -466,6 +950,7 @@ SQL);
             __DIR__ . '/PredictionLogic.php',
             __DIR__ . '/PredictionLogicProduction.php',
             __DIR__ . '/Lane1EscapeFollowerLogic.php',
+            __DIR__ . '/EightPointFormationLogic.php',
             __DIR__ . '/../../config/lane1_escape_follower_model.php',
         ]);
     }
@@ -474,6 +959,9 @@ SQL);
     {
         return self::filesVersion([
             __DIR__ . '/../tamagawa_lane4_star_api.php',
+            __DIR__ . '/TamagawaCenterSignalLogic.php',
+            __DIR__ . '/../../forecast/tamagawa_center_signal_live_v1.py',
+            __DIR__ . '/../../forecast/models/tamagawa_center_signal_v1.joblib',
             __DIR__ . '/../../config/course_signal_rules.json',
         ]);
     }

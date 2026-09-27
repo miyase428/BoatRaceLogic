@@ -47,6 +47,16 @@ $appCurrentQuery = http_build_query([
 ]);
 $appPcUrl = '/web/index.php?' . $appCurrentQuery;
 $appPostUrl = '/web/app.php?' . $appCurrentQuery;
+$appAiWinVersionActive = (string)($aiWinStatus ?? '') === 'ok' && count($aiWinBoats ?? []) === 6;
+$appAiTrioVersionActive = (string)($aiTrioDisplaySource ?? '') === 'ai_place_v1_joint120';
+$appAiSecondVersionActive = (string)($common_second_probability_source ?? '') === 'ai_place_v1_joint120';
+$appTaikouAiSecondVersionActive = (string)($taikou_common_second_probability_source ?? '') === 'ai_place_v1_joint120';
+$appAllAiSecondVersionActive = $appAiSecondVersionActive && $appTaikouAiSecondVersionActive;
+$appHonmeiAiThirdPruned = !empty($honmei_ai_third_prune_applied);
+$appTaikouAiThirdPruned = !empty($taikou_ai_third_prune_applied);
+$appHonmeiAiSecondCutRescued = !empty($honmei_ai_second_cut_rescue_applied);
+$appTaikouAiSecondCutRescued = !empty($taikou_ai_second_cut_rescue_applied);
+$appAnyAiThirdPruned = $appHonmeiAiThirdPruned || $appTaikouAiThirdPruned;
 
 // PC版の3連単120通りと同じ計算結果を、アプリ専用タブへ渡す。
 // 展示前だけはapp.phpで作った表示専用の暫定値へ切り替える。
@@ -63,6 +73,11 @@ $appTrifectaPayload = [
     'totals' => is_array($appTrifectaData['totals'] ?? null)
         ? $appTrifectaData['totals']
         : (is_array($trifectaData['totals'] ?? null) ? $trifectaData['totals'] : []),
+    'probability_source' => (string)($appTrifectaData['probability_source'] ?? 'legacy_trifecta'),
+    'model_version' => (string)($appTrifectaData['model_version'] ?? ''),
+    // オッズ確認時に、本命＋対抗の2軸検証へ同じ表示時点の確率を渡す。
+    'honmei_kai' => (string)($honmei_kai ?? ''),
+    'taikou_kai' => (string)($taikou_kai ?? ''),
 ];
 $appTrifectaJson = json_encode(
     $appTrifectaPayload,
@@ -88,8 +103,9 @@ if (!is_string($appTrifectaJson)) {
     <meta name="apple-mobile-web-app-title" content="BoatRace">
     <title>BoatRace</title>
     <link rel="manifest" href="/web/manifest.webmanifest">
-    <link rel="stylesheet" href="/web/assets/css/app.css">
+    <link rel="stylesheet" href="/web/assets/css/app.css?v=20260921-8point-ref">
     <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20260826a">
+    <link rel="stylesheet" href="/web/assets/css/app_course_signals.css?v=20260917-0915">
 </head>
 <body>
 <div class="app-shell">
@@ -98,6 +114,7 @@ if (!is_string($appTrifectaJson)) {
         <div class="app-race-label">
             <?= htmlspecialchars((string)($place_names[$selected_place] ?? $selected_place), ENT_QUOTES, 'UTF-8') ?>
             <?= (int)$selected_race ?>R
+            <time class="app-race-deadline" data-race-deadline data-date="<?= htmlspecialchars((string)$selected_date, ENT_QUOTES, 'UTF-8') ?>" data-place="<?= htmlspecialchars((string)$selected_place, ENT_QUOTES, 'UTF-8') ?>" data-race="<?= (int)$selected_race ?>">締切予定 取得中…</time>
         </div>
     </header>
 
@@ -154,12 +171,21 @@ if (!is_string($appTrifectaJson)) {
             </form>
 
             <?php if (!empty($update_message)): ?>
-                <div class="app-note"><?= htmlspecialchars((string)$update_message, ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="app-note exhibition-update-message"><?= htmlspecialchars((string)$update_message, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
             <?php if (!empty($virtual_entry_error)): ?>
                 <div class="app-note" style="color:#a74932;"><?= htmlspecialchars((string)$virtual_entry_error, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
             <div class="app-code"><?= htmlspecialchars((string)$race_code, ENT_QUOTES, 'UTF-8') ?></div>
+            <div
+                id="app-course-signals"
+                class="app-course-signals"
+                data-race-code="<?= htmlspecialchars((string)$race_code, ENT_QUOTES, 'UTF-8') ?>"
+                data-date="<?= htmlspecialchars((string)$selected_date, ENT_QUOTES, 'UTF-8') ?>"
+                data-place="<?= htmlspecialchars((string)$selected_place, ENT_QUOTES, 'UTF-8') ?>"
+                hidden
+                aria-live="polite"
+            ></div>
         </div>
     </section>
 
@@ -198,11 +224,11 @@ if (!is_string($appTrifectaJson)) {
                 <div><span class="app-rate app-rate-win"><?= $appRate($rate) ?></span></div>
             <?php endfor; ?>
 
-            <div class="app-compare-label">AI<br>3連</div>
+            <div class="app-compare-label">AI<br>3連<?= $appAiTrioVersionActive ? 'v1' : '' ?></div>
             <?php for ($course = 1; $course <= 6; $course++): ?>
                 <?php
                     $boat = (int)($appCourseToBoat[$course] ?? $course);
-                    $row = $aiTrioBoats[$boat] ?? $aiTrioBoats[(string)$boat] ?? [];
+                    $row = $aiTrioDisplayBoats[$boat] ?? $aiTrioDisplayBoats[(string)$boat] ?? [];
                     $rate = $row['ai_rate'] ?? null;
                     $rank = (int)($row['ai_rank'] ?? 0);
                 ?>
@@ -246,21 +272,21 @@ if (!is_string($appTrifectaJson)) {
             <h2 class="app-section-title">📊 最終予想</h2>
             <div class="app-summary-grid">
                 <div class="app-summary-item">
-                    <div class="app-summary-label">本命</div>
+                    <div class="app-summary-label">本命（<?= $appAiWinVersionActive ? 'AI1着 v5' : '従来1着' ?>・<?= $appAiSecondVersionActive ? 'AI2着 v1' : '従来2着' ?><?= $appHonmeiAiSecondCutRescued ? '・AI2着救済 v1' : '' ?><?= $appHonmeiAiThirdPruned ? '・AI3着絞り v1' : '' ?>）</div>
                     <div class="app-summary-main">
                         <?= $appBoatBadge((int)($honmei_head ?? 1)) ?>
                         <span>相手 <?= htmlspecialchars((string)($honmei_aite_str ?? '-'), ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                 </div>
                 <div class="app-summary-item">
-                    <div class="app-summary-label">対抗</div>
+                    <div class="app-summary-label">対抗（<?= $appAiWinVersionActive ? 'AI1着 v5' : '従来1着' ?>・<?= $appTaikouAiSecondVersionActive ? 'AI2着 v1' : '従来2着' ?><?= $appTaikouAiSecondCutRescued ? '・AI2着救済 v1' : '' ?><?= $appTaikouAiThirdPruned ? '・AI3着絞り v1' : '' ?>）</div>
                     <div class="app-summary-main">
                         <?= $appBoatBadge((int)($taikou_head ?? 2)) ?>
                         <span>相手 <?= htmlspecialchars((string)($taikou_aite_str ?? '-'), ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                 </div>
                 <div class="app-summary-item app-buy">
-                    <div class="app-summary-label">買い目候補（現行ロジック）</div>
+                    <div class="app-summary-label">買い目候補（<?= $appAiWinVersionActive ? 'AI1着率 v5' : '従来1着率' ?>＋<?= $appAllAiSecondVersionActive ? 'AI2着率 v1' : '従来2着率' ?>＋<?= $appAnyAiThirdPruned ? 'AI3着絞り v1' : '既存3着' ?>）</div>
                     <div class="app-buy-line"><span>本命</span><strong><?= htmlspecialchars((string)($honmei_kai ?? '-'), ENT_QUOTES, 'UTF-8') ?></strong></div>
                     <div class="app-buy-line"><span>対抗</span><strong><?= htmlspecialchars((string)($taikou_kai ?? '-'), ENT_QUOTES, 'UTF-8') ?></strong></div>
                     <?php if (!empty($kiru_str)): ?>
@@ -271,8 +297,11 @@ if (!is_string($appTrifectaJson)) {
         </div>
     </section>
 
+    <?php $eight_point_panel_mode = 'app'; include __DIR__ . '/eight_point_formation_panel.php'; ?>
     <?php include __DIR__ . '/upset_alert_panel.php'; ?>
     <?php include __DIR__ . '/upset_reference_bet_panel.php'; ?>
+    <?php $upsetV1PanelMode = 'app'; include __DIR__ . '/upset_v1_comparison_panel.php'; ?>
+    <?php $aiBetStrategyPanelMode = 'app'; include __DIR__ . '/ai_bet_strategy_modes_panel.php'; ?>
 
     <details class="app-card app-details">
         <summary>展示・選手の詳細</summary>
@@ -302,16 +331,21 @@ if (!is_string($appTrifectaJson)) {
             <a class="app-pc-link" href="<?= htmlspecialchars($appPcUrl, ENT_QUOTES, 'UTF-8') ?>">PC版の詳細画面を開く</a>
         </div>
     </details>
+
+    <?php include __DIR__ . '/air_prediction_panel.php'; ?>
 </div>
 
 <script id="app-trifecta-data" type="application/json"><?= $appTrifectaJson ?></script>
-<script src="/web/assets/js/app_trifecta_tab.js"></script>
+<script src="/web/assets/js/app_trifecta_tab.js?v=20260926-conditional-third-v1"></script>
 <script id="app-recent-history-config" type="application/json"><?= json_encode([
     'place' => (string)$selected_place,
     'date' => (string)$selected_date,
     'venue' => (string)($place_names[$selected_place] ?? $selected_place),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
-<script src="/web/assets/js/app_recent_prediction_history.js?v=20260826a"></script>
+<script src="/web/assets/js/app_recent_prediction_history.js?v=20260926-conditional-third-v1"></script>
+<script src="/web/assets/js/app_course_signals.js?v=20260927-center-ml-v1"></script>
+<script src="/web/assets/js/app_current_meet.js?v=20260918a"></script>
+<script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
 <script>
 (function () {
     const payloadNode = document.getElementById('app-trifecta-data');

@@ -6,9 +6,14 @@ require_once __DIR__ . '/../api/ApiClientProduction.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
 require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
+require_once __DIR__ . '/../logic/ExhibitionAlertLogic.php';
+require_once __DIR__ . '/../logic/Lane1LapRelativeLogic.php';
 require_once __DIR__ . '/../logic/SlitLogic.php';
 require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
 require_once __DIR__ . '/../logic/CorrectedWinRateLogic.php';
+require_once __DIR__ . '/../logic/AiWinRateLogic.php';
+require_once __DIR__ . '/../logic/AiWinHeadLogic.php';
+require_once __DIR__ . '/../logic/AiPlaceRateLogic.php';
 
 class IndexController
 {
@@ -67,9 +72,14 @@ class IndexController
         $exhibitionLogic       = new ExhibitionLogic();
         $predictionLogic       = new PredictionLogicProduction();
         $samLogic              = new SamLogic();
+        $exhibitionAlertLogic  = new ExhibitionAlertLogic();
+        $lane1LapRelativeLogic = new Lane1LapRelativeLogic();
         $slitLogic             = new SlitLogic();
         $baseWinRateLogic      = new BaseWinRateLogic();
         $correctedWinRateLogic = new CorrectedWinRateLogic();
+        $aiWinRateLogic        = new AiWinRateLogic();
+        $aiWinHeadLogic        = new AiWinHeadLogic();
+        $aiPlaceRateLogic      = new AiPlaceRateLogic();
 
         // 1. 出走表データ
         [$entries, $results, $api_error] = $apiClient->fetchCalcScores($race_code);
@@ -225,6 +235,9 @@ class IndexController
             $prediction_tenji_list,
             $sam_master_data
         );
+        // 展示タイム差はAI確率へ二重に加算せず、SUM直下の表示専用サインとして使う。
+        $exhibition_alert_data = $exhibitionAlertLogic->evaluate($prediction_tenji_list);
+        $lane1_lap_relative_data = $lane1LapRelativeLogic->evaluate($prediction_tenji_list);
 
         // -------------------------------------------------------------
         // 7. スリット体系
@@ -264,10 +277,10 @@ class IndexController
         }
 
         // 7-2. 補正後1着率
-        // 通常22場は展示5項目完備、AMG/TKYは検証済みEX_TOTAL3のためstraight不要。
+        // 直線タイム非公表のAMG/TKY/SMEは、検証済みEX_TOTAL3のためstraight不要。
         $correctedReady = count($tenji_list) === 6;
         $seenCourses = [];
-        $requiresStraight = !in_array($selected_place, ['AMG', 'TKY'], true);
+        $requiresStraight = !in_array($selected_place, ['AMG', 'TKY', 'SME'], true);
 
         if ($correctedReady) {
             foreach ($tenji_list as $t) {
@@ -300,6 +313,71 @@ class IndexController
                 'status' => 'waiting',
                 'boats' => [],
                 'error' => '展示情報待ち',
+            ];
+        }
+
+        // 7-3. 学習済みAI1着率 v5。
+        // 直線タイム非公表場はモデルへ欠損として渡せるため、他の展示4指標で判定する。
+        $aiWinReady = count($tenji_list) === 6;
+        $aiSeenCourses = [];
+        if ($aiWinReady) {
+            foreach ($tenji_list as $t) {
+                $course = (int)($t['tenji_course'] ?? 0);
+                if (
+                    $course < 1 || $course > 6
+                    || isset($aiSeenCourses[$course])
+                    || !is_numeric($t['exhibition'] ?? null)
+                    || !is_numeric($t['st'] ?? null)
+                    || !is_numeric($t['lap'] ?? null)
+                    || !is_numeric($t['mawari'] ?? null)
+                ) {
+                    $aiWinReady = false;
+                    break;
+                }
+                $aiSeenCourses[$course] = true;
+            }
+        }
+
+        if ($aiWinReady && count($aiSeenCourses) === 6) {
+            $ai_win_rate_data = $aiWinRateLogic->calculate(
+                $race_code,
+                $simulation_active ? $effective_in_course : null
+            );
+        } else {
+            $ai_win_rate_data = [
+                'status' => 'waiting',
+                'boats' => [],
+                'error' => '展示情報待ち',
+            ];
+        }
+
+        // 1着の頭だけv5へ移行する。2着・3着順位と切る艇は既存ロジックを維持する。
+        // v5が未計算の場合はAiWinHeadLogic内で従来summaryへ安全に戻す。
+        $summary = $aiWinHeadLogic->apply(
+            $summary,
+            $final_predictions,
+            $ai_win_rate_data
+        );
+
+        // v5を1着条件に、残り艇の2着・3着を専用LambdaRankで推論する。
+        if (
+            (string)($ai_win_rate_data['status'] ?? '') === 'ok'
+            && count($ai_win_rate_data['boats'] ?? []) === 6
+            && count($final_predictions) === 6
+        ) {
+            $ai_place_rate_data = $aiPlaceRateLogic->calculate(
+                $race_code,
+                (array)$ai_win_rate_data['boats'],
+                $final_predictions,
+                $prediction_course_by_boat,
+                (array)($summary['rank_boats'] ?? [])
+            );
+        } else {
+            $ai_place_rate_data = [
+                'status' => 'waiting',
+                'boats' => [],
+                'combinations' => [],
+                'error' => 'AI1着率 v5の計算待ち',
             ];
         }
 
@@ -358,6 +436,8 @@ class IndexController
             'api_error'       => $api_error,
             'base_win_rate_data' => $base_win_rate_data,
             'corrected_win_rate_data' => $corrected_win_rate_data,
+            'ai_win_rate_data' => $ai_win_rate_data,
+            'ai_place_rate_data' => $ai_place_rate_data,
             'kimarite_data'   => $kimarite_data,
             'kimarite_error'  => $kimarite_error,
             'tenji_list'      => $tenji_list,
@@ -367,6 +447,8 @@ class IndexController
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
             'overall_avg'       => $overall_avg,
+            'exhibition_alert_data' => $exhibition_alert_data,
+            'lane1_lap_relative_data' => $lane1_lap_relative_data,
             'sam_master_data'   => $sam_master_data,
             'sam_error'         => $sam_error,
             'sam_intervals'     => SamLogic::INTERVALS,

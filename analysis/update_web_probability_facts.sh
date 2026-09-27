@@ -17,19 +17,23 @@ echo "root     : $ROOT_DIR"
 echo "lookback : ${LOOKBACK_DAYS}日"
 echo
 
-echo "[1/3] race_history_fact"
+echo "[1/4] race_history_fact"
 php analysis/update_race_history_fact.php "$LOOKBACK_DAYS"
 
 echo
-echo "[2/3] sum_history_fact"
+echo "[2/4] sum_history_fact"
 # 住之江(SME)を直線タイム欠損許可で扱う運用設定ラッパーを使用する。
 python3 analysis/update_sum_history_fact_configured.py "$LOOKBACK_DAYS"
 
 echo
-echo "[3/3] SUMマスタ stats_*.json"
+echo "[3/4] SUMマスタ stats_*.json"
 # public/sum_api.php が最初のWebアクセス時に行っていた日次再生成をcron側へ前倒しする。
 # 当日更新済みの場はSKIPされる。
 python3 analysis/update_sum_master_stats.py
+
+echo
+echo "[4/4] 場別・R別予想相性（前日確定分まで）"
+php analysis/update_stadium_compatibility.php
 
 echo
 echo "================================================================================"

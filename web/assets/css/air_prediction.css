@@ -1,0 +1,24 @@
+.air-prediction-panel { margin:0 0 14px; overflow:hidden; border:1px solid #bcd6e5; border-radius:10px; background:#f8fcff; color:#334155; box-shadow:0 3px 12px rgba(22,131,189,.08); }
+.air-prediction-heading { padding:13px 15px 10px; border-bottom:1px solid #d6e5ee; background:#edf8fd; }
+.air-prediction-heading h2 { margin:0; color:#176a93; font-size:16px; }
+.air-prediction-heading p { margin:5px 0 0; color:#587080; font-size:12px; line-height:1.5; }
+.air-prediction-body { padding:13px 15px 15px; }
+.air-prediction-inputs { display:grid; grid-template-columns:minmax(0,1.8fr) minmax(0,.6fr) minmax(0,1fr); align-items:end; gap:10px; }
+.air-prediction-inputs label { display:grid; min-width:0; gap:4px; color:#526777; font-size:12px; font-weight:700; }
+.air-prediction-inputs input,.air-prediction-inputs select { box-sizing:border-box; width:100%; min-width:0; min-height:37px; margin:0; padding:7px 9px; border:1px solid #b8cedb; border-radius:6px; background:#fff; color:#263949; font:inherit; font-weight:400; }
+.air-prediction-actions,.air-prediction-result-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.air-prediction-actions { margin-top:10px; }
+.air-prediction-actions button,.air-prediction-fetch { min-height:35px; padding:7px 12px; border:1px solid #1683bd; border-radius:6px; background:#1683bd; color:#fff; font-size:13px; font-weight:800; cursor:pointer; }
+.air-prediction-actions button,.air-prediction-result-actions button { width:auto !important; flex:0 0 auto; }
+.air-prediction-clear { border-color:#b7c5cd !important; background:#fff !important; color:#526777 !important; }
+.air-prediction-fetch:disabled { opacity:.55; cursor:wait; }
+.air-prediction-save-message { color:#2f7655; font-size:12px; font-weight:700; }
+.air-prediction-result { margin-top:13px; padding:11px; border:1px solid #d6e5ee; border-radius:7px; background:#fff; }
+.air-prediction-result-status { color:#526777; font-size:13px; font-weight:700; }
+.air-prediction-result-details { margin-top:7px; color:#334155; font-size:13px; line-height:1.65; }
+.air-prediction-result-details strong { color:#176a93; font-size:16px; }
+.air-prediction-result-actions { margin-top:9px; }
+.air-prediction-official-link { color:#176a93; font-size:12px; font-weight:700; }
+.air-prediction-hit { color:#16734a; font-weight:800; }.air-prediction-miss { color:#a74932; font-weight:800; }
+@media (max-width:620px) { .air-prediction-inputs { grid-template-columns:1fr 104px; }.air-prediction-memo-label { grid-column:1/-1; } }
+@media (max-width:390px) { .air-prediction-heading,.air-prediction-body { padding-left:11px; padding-right:11px; }.air-prediction-inputs { grid-template-columns:1fr; }.air-prediction-memo-label { grid-column:auto; } }

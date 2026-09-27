@@ -124,7 +124,7 @@ try {
 
         $component = (string)$snapshot['component'];
         $payout = $payouts[$raceCode] ?? null;
-        if (in_array($component, ['prediction', 'hole_prediction'], true) && $payout === null) {
+        if (in_array($component, ['prediction', 'hole_prediction', 'trifecta_odds'], true) && $payout === null) {
             $waitingPayout++;
             continue;
         }
@@ -172,6 +172,23 @@ try {
             $honmeiHit = in_array($actual, $honmei, true);
             $taikouHit = in_array($actual, $taikou, true);
             $combinedHit = in_array($actual, $combined, true);
+            $eightPoint = (array)($payload['eight_point_formation'] ?? []);
+            $eightPointGrade = [];
+            if (!empty($eightPoint['visible']) && is_array($eightPoint['variants'] ?? null)) {
+                foreach ($eightPoint['variants'] as $type => $variant) {
+                    $bets = normalizeExplicitBets((array)($variant['bets'] ?? []));
+                    if (count($bets) !== 8) {
+                        continue;
+                    }
+                    $eightPointGrade[(string)$type] = selfGradeBet(
+                        $bets,
+                        in_array($actual, $bets, true),
+                        (int)$payout
+                    );
+                    $eightPointGrade[(string)$type]['recommended'] = (string)$type
+                        === (string)($eightPoint['recommended_type'] ?? '');
+                }
+            }
             $grade = [
                 'actual_first' => (int)$laneByRank[1],
                 'honmei_head_first' => (int)($payload['honmei_head'] ?? 0) === (int)$laneByRank[1],
@@ -179,6 +196,12 @@ try {
                 'honmei' => selfGradeBet($honmei, $honmeiHit, (int)$payout),
                 'taikou' => selfGradeBet($taikou, $taikouHit, (int)$payout),
                 'combined' => selfGradeBet($combined, $combinedHit, (int)$payout),
+                'eight_point_formation' => [
+                    'recommended_type' => (string)($eightPoint['recommended_type'] ?? ''),
+                    'recommendation_reason' => (string)($eightPoint['recommendation_reason'] ?? ''),
+                    'odds' => (array)($eightPoint['odds'] ?? []),
+                    'variants' => $eightPointGrade,
+                ],
             ];
         } elseif ($component === 'hole_prediction') {
             $aPayload = (array)($payload['A'] ?? []);
@@ -193,6 +216,46 @@ try {
                 'A' => selfGradeBet($aBets, in_array($actual, $aBets, true), (int)$payout),
                 'B' => selfGradeBet($bBets, in_array($actual, $bBets, true), (int)$payout),
                 'combined' => selfGradeBet($combined, in_array($actual, $combined, true), (int)$payout),
+            ];
+        } elseif ($component === 'trifecta_odds') {
+            $selectionGrades = [];
+            foreach ((array)($payload['selection_metrics'] ?? []) as $name => $metric) {
+                if (!is_array($metric)) continue;
+                $bets = normalizeExplicitBets((array)($metric['bets'] ?? []));
+                $selectionGrades[(string)$name] = selfGradeBet(
+                    $bets,
+                    in_array($actual, $bets, true),
+                    (int)$payout
+                );
+            }
+
+            $modeGrades = [];
+            $aiBetModes = is_array($payload['ai_bet_modes'] ?? null)
+                ? $payload['ai_bet_modes']
+                : [];
+            foreach ((array)($aiBetModes['modes'] ?? []) as $name => $metric) {
+                if (!is_array($metric)) continue;
+                $bets = normalizeExplicitBets((array)($metric['bets'] ?? []));
+                $modeGrades[(string)$name] = selfGradeBet(
+                    $bets,
+                    in_array($actual, $bets, true),
+                    (int)$payout
+                );
+                $modeGrades[(string)$name]['bet'] = $bets !== [];
+                $modeGrades[(string)$name]['manshu_hit'] = $bets !== []
+                    && in_array($actual, $bets, true)
+                    && (int)$payout >= 10000;
+            }
+            $grade = [
+                'odds_kind' => (string)($payload['odds_kind'] ?? ''),
+                'source' => (string)($payload['source'] ?? ''),
+                'selection_metrics' => $selectionGrades,
+                'ai_bet_modes' => [
+                    'version' => (string)($aiBetModes['version'] ?? ''),
+                    'hole_alert' => !empty($aiBetModes['hole_alert']),
+                    'ai_manshu_probability' => $aiBetModes['ai_manshu_probability'] ?? null,
+                    'modes' => $modeGrades,
+                ],
             ];
         } else {
             continue;

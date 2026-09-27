@@ -38,6 +38,7 @@ if (!empty($stadiumAffinity)):
     $periodLabel = (string)($stadiumAffinityMeta['label'] ?? '暫定');
     $startDate = (string)($stadiumAffinityMeta['start_date'] ?? '');
     $endDate = (string)($stadiumAffinityMeta['end_date'] ?? '');
+    $generatedAt = (string)($stadiumAffinityMeta['generated_at'] ?? '');
     $venueName = (string)($stadiumAffinity['name'] ?? ($place_names[$selected_place] ?? $selected_place ?? ''));
     $rate = (float)($stadiumAffinity['honmei_first_rate'] ?? 0.0);
     $rank = (int)($stadiumAffinity['rank'] ?? 0);
@@ -60,6 +61,7 @@ if (!empty($stadiumAffinity)):
         </div>
         <div style="margin-top:5px; font-size:10px; color:#6b7785;">
             <?= $affinityEsc($startDate) ?>〜<?= $affinityEsc($endDate) ?> / <?= number_format($races) ?>R / 月差 <?= number_format($gap, 1) ?>pt
+            <?php if ($generatedAt !== ''): ?> / 更新 <?= $affinityEsc(substr($generatedAt, 0, 10)) ?><?php endif; ?>
         </div>
     </div>
 <?php else: ?>

@@ -8,6 +8,10 @@
         return Number.isFinite(n) ? n : 0;
     }
 
+    function isMlV1(payload) {
+        return String(payload && payload.probability_source || '') === 'ai_place_v1_joint120';
+    }
+
     function parsePayload() {
         const node = document.getElementById('app-trifecta-data');
         if (!node) return null;
@@ -95,9 +99,9 @@
                 ? context.active_boats.map(Number).filter(function (boat) { return boat >= 1 && boat <= 6; })
                 : rangeBoats();
 
-            // 実質5艇立ては、クライアント側で120通りを単に切るのではなく、
-            // 5艇専用の展示補正済みAPIを優先する。失敗時だけ従来の暫定表示へフォールバック。
-            if (activeBoats.length === 5) {
+            // 実質5艇立ての機械学習 v1 は、同じ120通りから欠場艇を除外して再正規化する。
+            // 従来確率の場合だけ、5艇専用の展示補正済みAPIを優先する。
+            if (activeBoats.length === 5 && !isMlV1(payload)) {
                 try {
                     const formalResponse = await fetch(
                         '/web/effective_five_boat_trifecta_api.php?race_code=' + encodeURIComponent(code),
@@ -234,9 +238,12 @@
             if (!map.has(secondBoat)) map.set(secondBoat, {head_boat: boats[0], second_boat: secondBoat, base: 0, ai: 0});
             const item = map.get(secondBoat);
             item.base += Math.max(0, number(row.base_probability));
-            item.ai += Math.max(0, number(row.probability));
+            const mainProbability = isMlV1(payload) && Number.isFinite(Number(row.legacy_probability))
+                ? number(row.legacy_probability)
+                : number(row.probability);
+            item.ai += Math.max(0, mainProbability);
             baseMass += Math.max(0, number(row.base_probability));
-            aiMass += Math.max(0, number(row.probability));
+            aiMass += Math.max(0, mainProbability);
         });
         const exactaRows = Array.from(map.values()).map(function (row) {
             row.base = baseMass > 0 ? row.base / baseMass : 0;
@@ -278,12 +285,13 @@
             : activeFromRows(rows);
         const history = payload.history && typeof payload.history === 'object' ? payload.history : {};
         const totals = payload.totals && typeof payload.totals === 'object' ? payload.totals : {};
+        const versionLabel = isMlV1(payload) ? ' v1' : '';
 
         const card = document.createElement('section');
         card.className = 'app-card app-trifecta-card';
         card.innerHTML = '<div class="app-card-body app-trifecta-heading">'
-            + '<h2 class="app-section-title">🎲 3連単' + totalCount + '通り 出目確率</h2>'
-            + '<div class="app-note">順位・3連単・基礎出目・最終出目確率・公式オッズ・基礎差・累計を表示します。</div>'
+            + '<h2 class="app-section-title">🎲 3連単' + totalCount + '通り 出目確率' + versionLabel + (isMlV1(payload) ? '（機械学習）' : '') + '</h2>'
+            + '<div class="app-note">' + (isMlV1(payload) ? '最終出目確率 v1＝AI1着率 v5 × AI2着LambdaRank × AI3着LambdaRank。' : '') + '順位・3連単・基礎出目・最終出目確率・公式オッズ・基礎差・累計を表示します。</div>'
             + '<div class="app-trifecta-odds-bar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:8px;padding:7px 8px;border:1px solid #d6d3cd;border-radius:6px;background:#fffaf2;">'
             + '<span class="app-trifecta-odds-status" style="font-size:11px;color:#6b7785;">公式3連単オッズ：取得中…</span>'
             + '<button type="button" class="app-trifecta-odds-refresh" style="padding:5px 9px;border:1px solid #1683bd;border-radius:5px;background:#fff;color:#1683bd;font-weight:bold;">更新</button>'
@@ -294,7 +302,7 @@
             + '<div class="app-trifecta-position-filters"></div>'
             + '<div class="app-trifecta-control-row"><span class="app-trifecta-count"></span><button type="button" class="app-trifecta-clear">クリア</button></div>'
             + '<div class="app-trifecta-selection-summary" title="合成オッズ = 1 ÷ Σ(1 ÷ 各買い目オッズ)" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;padding:8px;border:1px solid #d6d3cd;border-radius:6px;background:#fffdf9;font-size:11px;color:#5f6873;">'
-            + '<span>最終出目確率合計：<strong class="app-trifecta-probability-sum">--</strong></span><span>合成オッズ：<strong class="app-trifecta-combined-odds">--</strong></span></div></div>'
+            + '<span>最終出目確率合計：<strong class="app-trifecta-probability-sum">--</strong></span><span>モデル期待回収率：<strong class="app-trifecta-expected-roi">--</strong></span><span>合成オッズ：<strong class="app-trifecta-combined-odds">--</strong></span></div></div>'
             + '<div class="app-trifecta-table-wrap"><table class="app-trifecta-table"><thead><tr>'
             + '<th><button type="button" data-sort="rank">順位</button></th><th><button type="button" data-sort="combination">3連単</button></th>'
             + '<th><button type="button" data-sort="base">基礎出目</button></th><th><button type="button" data-sort="final">最終出目確率</button></th>'
@@ -341,6 +349,7 @@
         const oddsStatus = card.querySelector('.app-trifecta-odds-status');
         const oddsRefresh = card.querySelector('.app-trifecta-odds-refresh');
         const probabilitySumNode = card.querySelector('.app-trifecta-probability-sum');
+        const expectedRoiNode = card.querySelector('.app-trifecta-expected-roi');
         const combinedOddsNode = card.querySelector('.app-trifecta-combined-odds');
         let sortKey = 'rank';
         let sortDirection = 1;
@@ -420,14 +429,21 @@
             });
             const probabilitySum = current.reduce(function (sum, row) { return sum + number(row.probability); }, 0);
             let inv = 0;
+            let expectedReturn = 0;
             let oddsReady = current.length > 0;
             current.forEach(function (row) {
                 const odds = officialOdds(row);
                 if (odds === null) oddsReady = false;
-                else inv += 1 / odds;
+                else {
+                    inv += 1 / odds;
+                    expectedReturn += number(row.probability) * odds;
+                }
             });
             if (count) count.textContent = '表示中：' + current.length + ' / ' + totalCount + '通り';
             if (probabilitySumNode) probabilitySumNode.textContent = (probabilitySum * 100).toFixed(2) + '%';
+            if (expectedRoiNode) expectedRoiNode.textContent = oddsReady && current.length
+                ? (expectedReturn / current.length * 100).toFixed(1) + '%'
+                : '取得待ち';
             if (combinedOddsNode) combinedOddsNode.textContent = oddsReady && inv > 0 ? (1 / inv).toFixed(2) + '倍' : '取得待ち';
             updateSortLabels();
         }
@@ -450,6 +466,13 @@
                 const body = new URLSearchParams();
                 body.set('race_code', raceCodeValue);
                 body.set('refresh', force ? '1' : '0');
+                // 画面に出ている最終確率を同じ取得時点のオッズと一緒に固定する。
+                // 買い目の判定はサーバー側で本命＋対抗フォーメーションから行う。
+                body.set('trifecta_rows', JSON.stringify(rows.map(function (row) {
+                    return {boats: row.boats, probability: number(row.probability)};
+                })));
+                body.set('honmei_kai', String(payload.honmei_kai || ''));
+                body.set('taikou_kai', String(payload.taikou_kai || ''));
                 const response = await fetch('/web/official_odds_api.php', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
@@ -506,7 +529,7 @@
             });
         });
         if (oddsRefresh) oddsRefresh.addEventListener('click', function () { loadOdds(true); });
-        if (foot) foot.textContent = totalCount + '通り合計 ' + (number(totals.final || 1) * 100).toFixed(6) + '% / P1選択 → P2完全ホールドアウト検証済み';
+        if (foot) foot.textContent = totalCount + '通り合計 ' + (number(totals.final || 1) * 100).toFixed(6) + '% / ' + (isMlV1(payload) ? 'AI着順率 v1（条件付きLambdaRank）' : 'P1選択 → P2完全ホールドアウト検証済み');
         render();
         loadOdds(false);
     }
@@ -524,7 +547,7 @@
         button.type = 'button';
         button.className = 'app-tab';
         button.dataset.tab = 'trifecta';
-        button.textContent = totalCount + '通り';
+        button.textContent = totalCount + '通り' + (isMlV1(payload) ? ' v1' : '');
         tabs.appendChild(button);
 
         const panel = document.createElement('div');
@@ -573,7 +596,7 @@
 
     if (!document.querySelector('script[data-app-exacta-loader="1"]')) {
         const script = document.createElement('script');
-        script.src = '/web/assets/js/app_exacta_tab.js?v=20260905b';
+        script.src = '/web/assets/js/app_exacta_tab.js?v=20260926-exacta-odds-snapshot-v1';
         script.dataset.appExactaLoader = '1';
         script.async = false;
         document.head.appendChild(script);

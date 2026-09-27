@@ -17,14 +17,17 @@ from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analyze_all_venue_lane_signals import PLACE_CODES, load_targets, profile_rates, windows  # noqa: E402
+from analyze_all_venue_lane_signals import (  # noqa: E402
+    PLACE_CODES,
+    load_prerace_targets,
+    profile_rates,
+    windows,
+)
 from analyze_tamagawa_boaters_hypothesis import (  # noqa: E402
     TechniqueHistoryIndex, load_history, load_racer_results, months_ago,
     parse_date, required_terms, term_info_for_date,
 )
-from analyze_all_venue_secondary_signals import (  # noqa: E402
-    build_second_scores, connect_db, load_avg_exhibition, load_exhibition,
-)
+from analyze_all_venue_secondary_signals import build_second_scores, load_avg_exhibition, load_exhibition  # noqa: E402
 from analyze_tamagawa_lane4_makurizashi_vulnerability import (  # noqa: E402
     VulnerabilityIndex, load_lane1_vulnerability_history,
 )
@@ -92,8 +95,13 @@ def configured_rule(place: str, course: int, variant: str, config: dict) -> dict
 
 
 def primary_st_relation(place: str, course: int, variant: str, config: dict) -> str:
+    relation = primary_optional_st_relation(place, course, variant, config)
+    return relation if relation is not None else "up"
+
+
+def primary_optional_st_relation(place: str, course: int, variant: str, config: dict) -> str | None:
     relation = configured_rule(place, course, variant, config).get("st_relation")
-    return str(relation) if relation in {"up", "same_or_better"} else "up"
+    return str(relation) if relation in {"up", "same_or_better"} else None
 
 
 def relation_matches(outer_rank: float, inner_rank: float, relation: str) -> bool:
@@ -108,7 +116,26 @@ def primary_match(row: dict, place: str, course: int, variant: str, config: dict
     if course == 1:
         return p["nige"] >= threshold
     if course == 2 and variant == "sashi":
-        return p["sashi"] >= threshold
+        rule = configured_rule(place, course, variant, config)
+        if p["sashi"] < threshold or p["n"] < int(rule.get("history_n_min") or 0):
+            return False
+        relation = primary_optional_st_relation(place, course, variant, config)
+        if relation is not None and not relation_matches(row["st_rank"][2], row["st_rank"][1], relation):
+            return False
+        lane1 = row["profiles"][1]
+        lane1_min_n = int(rule.get("lane1_history_n_min") or 0)
+        nige_max = rule.get("lane1_nige_rate_max")
+        if lane1["n"] < lane1_min_n:
+            return False
+        if isinstance(nige_max, (int, float)) and lane1["nige"] > float(nige_max):
+            return False
+        vuln = rule.get("vulnerability_threshold")
+        if vuln is not None:
+            if row.get("lane1_vulnerability_n", 0) < lane1_min_n:
+                return False
+            if row.get("lane1_vulnerability_rate") is None or row["lane1_vulnerability_rate"] < float(vuln):
+                return False
+        return True
     if course == 2 and variant == "makuri":
         if p["makuri"] < threshold:
             return False
@@ -215,7 +242,7 @@ def summary_stat(rows: list[dict], course: int, start: date | None = None, end: 
 
 
 def load_rows(place: str, start: date, end: date, config: dict) -> list[dict]:
-    races = load_targets(start, end, (place,))
+    races = load_prerace_targets(start, end, (place,))
     pids = sorted({b["player_id"] for r in races.values() for b in r["boats"]})
     racer = load_racer_results(required_terms(start, end))
     hist = TechniqueHistoryIndex(load_history(start, end, pids))
@@ -244,8 +271,10 @@ def load_rows(place: str, start: date, end: date, config: dict) -> list[dict]:
                 "st21": "上" if ranks[2] < ranks[1] else ("同じ" if ranks[2] == ranks[1] else "下"),
                 "st43": "上" if ranks[4] < ranks[3] else ("同じ" if ranks[4] == ranks[3] else "下"),
                 "st65": "上" if ranks[6] < ranks[5] else ("同じ" if ranks[6] == ranks[5] else "下"),
-                "lane1_vulnerability_rate": None}
+                "lane1_vulnerability_rate": None,
+                "lane1_vulnerability_n": 0}
         p1 = vuln.profile(by_course[1]["player_id"], race["date"], 12)
+        base["lane1_vulnerability_n"] = int(p1["n"])
         if p1["n"]:
             base["lane1_vulnerability_rate"] = 100.0 * (p1["makurare"] + p1["makurarezashi"]) / p1["n"]
         for c in range(1, 7):

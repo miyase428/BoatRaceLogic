@@ -3,6 +3,7 @@ require_once __DIR__ . '/../logic/TrifectaProbabilityLogic.php';
 require_once __DIR__ . '/../logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/../logic/BaseWinRateLogic.php';
 require_once __DIR__ . '/../logic/EffectiveRaceOutcomeFilter.php';
+require_once __DIR__ . '/../logic/AiPlaceTrifectaDisplayLogic.php';
 
 $outcomeCourseByBoat = [];
 if (is_array($aiTrioBoats ?? null) && count($aiTrioBoats) === 6) {
@@ -26,9 +27,16 @@ if (count($outcomeCourseByBoat) !== 6 && is_array($prediction_course_by_boat ?? 
 
 $trifectaLogic = new TrifectaProbabilityLogic();
 $effectiveOutcomeFilter = new EffectiveRaceOutcomeFilter();
+$productionWinBoats = (
+    (string)($aiWinStatus ?? '') === 'ok'
+    && is_array($aiWinBoats ?? null)
+    && count($aiWinBoats) === 6
+)
+    ? $aiWinBoats
+    : (is_array($correctedWinBoats ?? null) ? $correctedWinBoats : []);
 $trifectaData = $trifectaLogic->calculate(
     (string)($race_code ?? ''),
-    is_array($correctedWinBoats ?? null) ? $correctedWinBoats : [],
+    $productionWinBoats,
     is_array($aiTrioBoats ?? null) ? $aiTrioBoats : [],
     $outcomeCourseByBoat
 );
@@ -128,6 +136,15 @@ if ($trifectaStatus !== 'ok' || $expectedOutcomeCount <= 0 || count($trifectaRow
     );
     $trifectaDisplayData = $effectiveOutcomeFilter->apply((string)($race_code ?? ''), $trifectaDisplayData);
 }
+
+// 2連単・3連単タブの最終確率を、AI着順率 v1 の同時120通りへ統一する。
+// $trifectaDataはフォールバック用に保持し、本命2着候補には後段でAI版を優先する。
+$aiPlaceTrifectaDisplayLogic = new AiPlaceTrifectaDisplayLogic();
+$trifectaDisplayData = $aiPlaceTrifectaDisplayLogic->apply(
+    $trifectaDisplayData,
+    is_array($ai_place_rate_data ?? null) ? $ai_place_rate_data : []
+);
+$trifectaDisplaySource = (string)($trifectaDisplayData['probability_source'] ?? 'legacy_trifecta');
 
 $trifectaDisplayStatus = (string)($trifectaDisplayData['status'] ?? 'error');
 $trifectaDisplayError = (string)($trifectaDisplayData['error'] ?? '');

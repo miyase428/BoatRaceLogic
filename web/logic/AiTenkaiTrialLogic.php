@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/AiTenkaiRateLogic.php';
+
 /**
- * AI展開予想（試験）
+ * AI展開予想 v1
  *
- * prototype_ai_tenkai_v3.php の考え方をWeb表示用に切り出す。
- * - 展示後の補正後1着率を勝者確率として使用
- * - 選手×今回コースの6ヶ月/1年決まり手を平滑化
- * - 場×コース直近1年の勝ち方構成を弱い事前分布(K=5)として使用
+ * 展示後のAI1着率 v5と条件付き決まり手モデルを組み合わせる。
+ * - 選手履歴、場傾向、展示/ST、6艇の並びをLightGBMで評価
  * - 場平均は「全レース中、その展開が実際に起きた割合」
- *
- * 予想本体のロジックには組み込まず、表示用の試験機能として扱う。
+ * - 学習済みモデルを利用できない場合のみ、検証済みの重み式へ戻す
  */
 class AiTenkaiTrialLogic
 {
     private const RECENT_WEIGHT = 2.0;
-    private const PRIOR_K = 5.0;
+    // 学習済みモデルが使えない場合は、検証2位の重み最適化版へ戻す。
+    private const PRIOR_K = 50.0;
 
     private const LABELS = [
         'nige' => '逃げ',
@@ -30,16 +30,17 @@ class AiTenkaiTrialLogic
         PDO $pdo,
         string $targetDate,
         string $place,
-        array $correctedWinRateData,
+        array $aiWinRateData,
         array $kimariteData,
-        array $courseByBoat
+        array $courseByBoat,
+        string $raceCode = ''
     ): array {
-        $corrected = is_array($correctedWinRateData['boats'] ?? null)
-            ? $correctedWinRateData['boats']
+        $aiWin = is_array($aiWinRateData['boats'] ?? null)
+            ? $aiWinRateData['boats']
             : [];
 
-        // AI展開予想は展示後限定。補正後1着率が6艇揃わない場合は出さない。
-        if (count($corrected) !== 6) {
+        // AI展開予想は展示後限定。AI1着率 v5が6艇揃わない場合は出さない。
+        if (count($aiWin) !== 6) {
             return [
                 'status' => 'waiting',
                 'message' => '展示情報が揃うとAI展開予想を表示します。',
@@ -49,14 +50,27 @@ class AiTenkaiTrialLogic
         }
 
         for ($boat = 1; $boat <= 6; $boat++) {
-            $row = $this->boatRow($corrected, $boat);
-            if (!isset($row['corrected_rate']) || !is_numeric($row['corrected_rate'])) {
+            $row = $this->boatRow($aiWin, $boat);
+            if (!isset($row['ai_rate']) || !is_numeric($row['ai_rate'])) {
                 return [
                     'status' => 'waiting',
                     'message' => '展示情報が揃うとAI展開予想を表示します。',
                     'events' => [],
                     'venue_races' => 0,
                 ];
+            }
+        }
+
+        // 本番は条件付きLightGBM版を優先する。失敗時だけ下の最適化式へ戻す。
+        if ($raceCode !== '') {
+            $machineLearning = (new AiTenkaiRateLogic())->calculate(
+                $raceCode,
+                $aiWin,
+                $kimariteData,
+                $courseByBoat
+            );
+            if ((string)($machineLearning['status'] ?? '') === 'ok') {
+                return $machineLearning;
             }
         }
 
@@ -70,8 +84,8 @@ class AiTenkaiTrialLogic
                 $course = $boat;
             }
 
-            $correctedRow = $this->boatRow($corrected, $boat);
-            $pWin = max(0.0, (float)($correctedRow['corrected_rate'] ?? 0.0));
+            $aiWinRow = $this->boatRow($aiWin, $boat);
+            $pWin = max(0.0, (float)($aiWinRow['ai_rate'] ?? 0.0));
 
             $row6 = $this->periodRow($kimariteData, $course, '6month');
             $row12 = $this->periodRow($kimariteData, $course, '1year');
@@ -155,6 +169,8 @@ class AiTenkaiTrialLogic
             'venue_races' => (int)($venue['race_count'] ?? 0),
             'recent_weight' => self::RECENT_WEIGHT,
             'prior_k' => self::PRIOR_K,
+            'probability_source' => 'optimized_formula_fallback',
+            'model_version' => '',
         ];
     }
 

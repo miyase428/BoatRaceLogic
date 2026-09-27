@@ -612,8 +612,26 @@
 
             function renderAll() { renderTickets(); renderSummary(); renderOutcomes(); }
 
+            function exactaSnapshotRows() {
+                const probabilities = {};
+                outcomes.forEach(function (outcome) {
+                    const boats = String(outcome.key || '').split('-');
+                    if (boats.length !== 3) return;
+                    const key = boats[0] + '-' + boats[1];
+                    probabilities[key] = (probabilities[key] || 0) + Number(outcome.probability || 0);
+                });
+                return Object.keys(probabilities).sort().map(function (key) {
+                    const boats = key.split('-');
+                    return {first: Number(boats[0]), second: Number(boats[1]), probability: probabilities[key]};
+                });
+            }
+
             async function fetchOdds(url, force) {
                 const body = new URLSearchParams(); body.set('race_code', raceCode); body.set('refresh', force ? '1' : '0');
+                if (url.indexOf('official_exacta_odds_api.php') !== -1) {
+                    body.set('exacta_rows', JSON.stringify(exactaSnapshotRows()));
+                    body.set('snapshot_source', 'bet_simulator_v1');
+                }
                 const response = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}, body: body.toString(), cache: 'no-store'});
                 return response.json();
             }
@@ -624,9 +642,9 @@
                 try {
                     const values = await Promise.all([fetchOdds('/web/official_exacta_odds_api.php', force), fetchOdds('/web/official_odds_api.php', force)]);
                     const exacta = values[0] || {}; const trifecta = values[1] || {};
-                    if (exacta.status === 'ok' && Number(exacta.count) === 30) exactaOdds = exacta.odds || {};
+                    if (exacta.status === 'ok' && [20, 30].indexOf(Number(exacta.count)) !== -1) exactaOdds = exacta.odds || {};
                     if (trifecta.status === 'ok' && Number(trifecta.count) === 120) trifectaOdds = trifecta.odds || {};
-                    oddsStatus.textContent = '公式オッズ：2連単 ' + Object.keys(exactaOdds).length + '/30 / 3連単 ' + Object.keys(trifectaOdds).length + '/120' + (force ? '（更新済み）' : '（キャッシュ利用）');
+                    oddsStatus.textContent = '公式オッズ：2連単 ' + Object.keys(exactaOdds).length + '/' + (Number(exacta.count) || 30) + ' / 3連単 ' + Object.keys(trifectaOdds).length + '/120' + (force ? '（更新済み）' : '（キャッシュ利用）');
                     tickets = tickets.map(function (ticket) { const copy = makeTicket(ticket.type, ticket.key); copy.stake = ticket.stake; return copy; });
                     renderCandidates(); renderAll();
                 } catch (e) {

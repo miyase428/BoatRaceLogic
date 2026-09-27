@@ -172,6 +172,7 @@
         const stars = '★'.repeat(level);
         const label = String(detail.signal || levelLabel(course, level));
         const classPrefix = 'is-tmg-lane' + course;
+        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1';
 
         link.classList.add(classPrefix + '-strong', classPrefix + '-star-' + level);
         link.dataset['tmgLane' + course + 'Level'] = String(level);
@@ -188,7 +189,14 @@
         }
 
         let info = course + 'C' + stars + ' ' + label + 'サイン';
-        if (course === 1) {
+        if (isCenterMl) {
+            const target = String(detail.selected_target || '');
+            const targetLabel = target === 'first' ? 'AI1着' : (target === 'top2' ? 'AI2連' : 'AI3連');
+            const targetValue = target === 'first' ? detail.ai_first_rate : (target === 'top2' ? detail.ai_top2_rate : detail.ai_top3_rate);
+            if (Number.isFinite(Number(targetValue))) info += ' / ' + targetLabel + ' ' + Number(targetValue).toFixed(1) + '%';
+            if (Number.isFinite(Number(detail.selected_threshold))) info += ' / 判定基準 ' + Number(detail.selected_threshold).toFixed(1) + '%';
+            info += ' / ' + String(detail.phase || (detail.secondary_ready ? '展示反映' : '展示前')) + ' / 機械学習 v1';
+        } else if (course === 1) {
             info += ' / 1C逃げ率 ' + Number(detail.nige_rate).toFixed(1) + '%';
         } else if (course === 2 && detail.technique === 'makuri') {
             info += ' / 2まくり率 ' + Number(detail.makuri_rate).toFixed(1) + '%'
@@ -213,7 +221,9 @@
                 + ' < 5=' + Number(detail.lane5_avg_rank).toFixed(2);
         }
 
-        if (detail.secondary_ready) {
+        if (isCenterMl) {
+            // 改善版はAI確率を直接表示する。
+        } else if (detail.secondary_ready) {
             info += ' / 二次 ' + Number(detail.second_score).toFixed(0)
                 + ' / TOP差 ' + Number(detail.gap_to_top).toFixed(0)
                 + ' / 直線 ' + Number(detail.straight_score).toFixed(0);
@@ -232,7 +242,7 @@
         } else {
             info += ' / 展示前';
         }
-        if (level >= 3 && course !== 1 && course !== 2 && course !== 5) info += ' / ★★★は前方検証中';
+        if (!isCenterMl && level >= 3 && course !== 1 && course !== 2 && course !== 5) info += ' / ★★★は前方検証中';
         return info;
     }
 
@@ -296,9 +306,52 @@
             });
     }
 
-    Object.keys(linksByPlace).forEach(function (place) {
-        loadVenueSignals(place, 0);
-    });
+    function snapshotForPlace(snapshot, place) {
+        const data = snapshot && snapshot.places && snapshot.places[place];
+        const savedCodes = snapshot && snapshot.race_codes && snapshot.race_codes[place];
+        const currentCodes = (linksByPlace[place] || []).map(function (item) { return item.code; }).sort();
+        const normalizedSavedCodes = Array.isArray(savedCodes)
+            ? savedCodes.map(function (code) { return String(code).toUpperCase(); }).sort()
+            : [];
+
+        if (!data || data.status !== 'ok' || data.signal_phase !== 'base') return null;
+        if (!currentCodes.length || currentCodes.length !== normalizedSavedCodes.length) return null;
+        for (let i = 0; i < currentCodes.length; i++) {
+            if (currentCodes[i] !== normalizedSavedCodes[i]) return null;
+        }
+        return data;
+    }
+
+    // 朝に保存した展示前の一次サインを1回だけ読む。場ごとの重い12か月集計を
+    // TOP表示時に繰り返さない。スナップショットがない場だけ従来APIへフォールバックする。
+    function loadPrewarmedVenueSignals() {
+        fetch('/web/home_course_signal_snapshot_api.php?date=' + encodeURIComponent(date), {cache: 'no-store'})
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data || data.status !== 'ok') {
+                        throw new Error(String((data && data.error) || ('HTTP ' + response.status)));
+                    }
+                    return data;
+                });
+            })
+            .then(function (snapshot) {
+                Object.keys(linksByPlace).forEach(function (place) {
+                    const data = snapshotForPlace(snapshot, place);
+                    if (data) {
+                        renderVenueSignals(place, data);
+                    } else {
+                        loadVenueSignals(place, 0);
+                    }
+                });
+            })
+            .catch(function () {
+                Object.keys(linksByPlace).forEach(function (place) {
+                    loadVenueSignals(place, 0);
+                });
+            });
+    }
+
+    loadPrewarmedVenueSignals();
 })();
 
 // 開催一覧の「開催場のみ / 全場表示」切替は独立ファイルで管理する。

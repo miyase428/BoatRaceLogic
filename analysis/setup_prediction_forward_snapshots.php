@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS boat_race.prediction_forward_snapshots (
     CONSTRAINT prediction_forward_stage_chk
         CHECK (stage IN ('morning', 'exhibition')),
     CONSTRAINT prediction_forward_component_chk
-        CHECK (component IN ('course_signals', 'prediction', 'hole_prediction')),
+        CHECK (component IN ('course_signals', 'prediction', 'hole_prediction', 'trifecta_odds')),
     CONSTRAINT prediction_forward_race_no_chk
         CHECK (race_no BETWEEN 1 AND 12),
     CONSTRAINT prediction_forward_validation_mode_chk
@@ -62,12 +62,12 @@ ADD CONSTRAINT prediction_forward_snapshot_unique
 UNIQUE (race_code, stage, component, validation_mode, snapshot_hash)
 SQL);
 
-// 既存テーブルにも新しい大穴予想componentを適用する。
+// 既存テーブルにも新しい前向き検証componentを適用する。
 $pdo->exec('ALTER TABLE boat_race.prediction_forward_snapshots DROP CONSTRAINT IF EXISTS prediction_forward_component_chk');
 $pdo->exec(<<<'SQL'
 ALTER TABLE boat_race.prediction_forward_snapshots
 ADD CONSTRAINT prediction_forward_component_chk
-CHECK (component IN ('course_signals', 'prediction', 'hole_prediction'))
+CHECK (component IN ('course_signals', 'prediction', 'hole_prediction', 'trifecta_odds'))
 SQL);
 
 $pdo->exec(<<<'SQL'

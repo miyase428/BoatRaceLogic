@@ -146,13 +146,16 @@
             const activeBoats = activeBoatsFromRows(rows);
             const exactaCount = rows.length;
             const trifectaCount = trifectaCountFromDom();
+            const reference = document.getElementById('trifecta-reference-panel');
+            const isMlV1 = !!(reference && String(reference.dataset.probabilityVersion || '') === 'v1');
+            const versionLabel = isMlV1 ? ' v1' : '';
 
             const recentButton = tabs.querySelector('[data-pc-main-tab="recent"]');
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'pc-main-tab';
             button.dataset.pcMainTab = 'exacta';
-            button.textContent = '2連単';
+            button.textContent = '2連単' + versionLabel;
             if (recentButton) {
                 tabs.insertBefore(button, tabs.querySelector('[data-pc-main-tab="trifecta"]') || recentButton);
             } else {
@@ -173,8 +176,8 @@
             panel.innerHTML = ''
                 + '<div style="margin:0 0 14px;background:#f8f4ec;border:1px solid #d8cdbc;border-radius:8px;overflow:hidden;color:#3f4b5a;">'
                 + '  <div style="padding:14px;">'
-                + '    <div style="font-size:16px;font-weight:bold;color:#aa741f;">🎯 2連単' + exactaCount + '通り 出目確率</div>'
-                + '    <div style="font-size:12px;color:#6b7785;margin-top:3px;">3連単' + trifectaCount + '通りの最終出目確率を1着-2着ごとに合算して' + exactaCount + '通りへ集約。</div>'
+                + '    <div style="font-size:16px;font-weight:bold;color:#aa741f;">🎯 2連単' + exactaCount + '通り 出目確率' + versionLabel + (isMlV1 ? '（機械学習）' : '') + '</div>'
+                + '    <div style="font-size:12px;color:#6b7785;margin-top:3px;">3連単' + trifectaCount + '通り' + versionLabel + 'の最終出目確率を1着-2着ごとに合算して' + exactaCount + '通りへ集約。</div>'
                 + '    <div class="pc-exacta-odds-bar" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:10px 0;padding:8px 10px;border:1px solid #cbbda9;border-radius:6px;background:#fffaf2;">'
                 + '      <span class="pc-exacta-odds-status" style="font-size:12px;color:#4b5866;">公式2連単オッズ：取得中…</span>'
                 + '      <button type="button" class="pc-exacta-refresh" style="padding:5px 10px;border:1px solid #1683bd;border-radius:5px;background:#fff;color:#1683bd;font-weight:bold;cursor:pointer;">更新</button>'
@@ -413,6 +416,10 @@
                     const body = new URLSearchParams();
                     body.set('race_code', raceCode);
                     body.set('refresh', force ? '1' : '0');
+                    body.set('exacta_rows', JSON.stringify(rows.map(function (row) {
+                        return {first: row.first, second: row.second, probability: row.probability};
+                    })));
+                    body.set('snapshot_source', 'user_display_v1');
                     const response = await fetch('/web/official_exacta_odds_api.php', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},

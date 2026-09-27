@@ -87,8 +87,10 @@ function hasSavedExhibition(PDO $pdo, string $raceCode): bool
                   AND lap_time > 0
                   AND around_time IS NOT NULL
                   AND around_time > 0
-                  AND straight_time IS NOT NULL
-                  AND straight_time > 0
+                  AND (
+                      SUBSTRING(race_code FROM 9 FOR 3) IN ('AMG', 'TKY', 'SME')
+                      OR (straight_time IS NOT NULL AND straight_time > 0)
+                  )
             ) AS complete_rows
         FROM boat_race.exhibition_live
         WHERE race_code = :race_code
@@ -169,7 +171,7 @@ try {
     // ページ取得に成功した時点で、通信異常の連続回数をリセットする。
     recordExhibitionSourceSuccess();
 
-    if (!hasCompleteExhibitionData($data)) {
+    if (!hasCompleteExhibitionData($data, $place_code)) {
         throw new Exception("展示情報が全項目そろっていないため、保存せず次回更新対象にします");
     }
 
