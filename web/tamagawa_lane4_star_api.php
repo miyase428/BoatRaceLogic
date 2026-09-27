@@ -499,7 +499,7 @@ $date = new DateTimeImmutable($dateText);
 $courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
 $courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
 $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v6_' . $date->format('Ymd') . '_' . $placeCode
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v7_' . $date->format('Ymd') . '_' . $placeCode
     . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
 $today = new DateTimeImmutable('today');
@@ -1477,9 +1477,14 @@ SQL;
     }
 
     // 検証済みの場別コースMLサインを適用する。推論できない場合は従来サインを返す。
-    // 多摩川は上位段階の従来サインを残す移行仕様、戸田は採用した評価段階をMLで置換する。
+    // 場ごとに採用した評価段階だけをMLへ置換し、未採用段階は従来サインを維持する。
     // 推論失敗時はこの直前までに作った従来サインを返し、画面を欠損させない。
-    if (in_array($placeCode, ['TMG', 'TDA'], true)) {
+    if (in_array($placeCode, ['TMG', 'TDA', 'OMR'], true)) {
+        $venueMlVersion = match ($placeCode) {
+            'TDA' => 'toda_course_signal_v1',
+            'OMR' => 'omura_course_signal_v1',
+            default => 'tamagawa_course_signal_v1',
+        };
         try {
             $centerMl = (new TamagawaCenterSignalLogic())->calculate($dateText, $baseOnly, $placeCode);
             $centerMaps = $centerMl['matches'] ?? null;
@@ -1525,7 +1530,7 @@ SQL;
                     $lane6Matches = $mlLane6;
                     $baseResponse['center_ml'] = [
                         'applied' => true,
-                        'version' => (string)($centerMl['version'] ?? ($placeCode === 'TDA' ? 'toda_course_signal_v1' : 'tamagawa_course_signal_v1')),
+                        'version' => (string)($centerMl['version'] ?? $venueMlVersion),
                         'fallback' => false,
                     ];
                     $baseResponse['lane2_sashi_conditions'] = [
@@ -1558,7 +1563,7 @@ SQL;
                         'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
                         'triple_star' => '未採用',
                     ];
-                    } else {
+                    } elseif ($placeCode === 'TDA') {
                         // 戸田は、未使用期間で採用した段階をMLに置換する。
                         // 1C/3CのML未採用上位段階と展示未取得時は従来の強サインを残す。
                         $legacyLane1Strong = [];
@@ -1624,19 +1629,82 @@ SQL;
                             'version' => (string)($centerMl['version'] ?? 'toda_course_signal_v1'),
                             'fallback' => false,
                         ];
+                    } else {
+                        // 大村1CはAI2連対だけを採用。従来の★/★★★を残し、選択時だけ★★へ更新する。
+                        $legacyLane1Strong = [];
+                        foreach ($lane1Matches as $raceCode => $detail) {
+                            if (is_array($detail) && (int)($detail['star_level'] ?? 0) >= 3) {
+                                $legacyLane1Strong[$raceCode] = $detail;
+                            }
+                        }
+                        $lane1Matches = array_replace($lane1Matches, $mlLane1, $legacyLane1Strong);
+
+                        // 2Cは展示を使うため、展示前・展示欠損レースだけ従来サインを維持する。
+                        $legacyLane2BeforeExhibition = [];
+                        foreach (array_replace($lane2SashiMatches, $lane2MakuriMatches) as $raceCode => $detail) {
+                            if (is_array($detail) && ($baseOnly || !isset($exhibitionByRace[$raceCode]))) {
+                                $legacyLane2BeforeExhibition[$raceCode] = $detail;
+                            }
+                        }
+                        $lane2SashiMatches = [];
+                        $lane2MakuriMatches = array_replace($mlLane2, $legacyLane2BeforeExhibition);
+                        $lane3Matches = $mlLane3;
+                        $matches = $mlLane4;
+                        $lane5Matches = $mlLane5;
+                        $lane6Matches = $mlLane6;
+                        $baseResponse['lane1_conditions'] = [
+                            'star' => '従来サインを維持',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['lane2_sashi_conditions'] = [
+                            'star' => '機械学習v1へ統合',
+                            'double_star' => '機械学習v1へ統合',
+                            'triple_star' => '機械学習v1へ統合',
+                        ];
+                        $baseResponse['lane2_makuri_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['lane3_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['lane5_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['lane6_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => '未採用',
+                            'triple_star' => 'AI1着率は未採用',
+                        ];
+                        $baseResponse['center_ml'] = [
+                            'applied' => true,
+                            'version' => (string)($centerMl['version'] ?? 'omura_course_signal_v1'),
+                            'fallback' => false,
+                        ];
                     }
                 }
             } else {
                 $baseResponse['center_ml'] = [
                     'applied' => false,
-                    'version' => $placeCode === 'TDA' ? 'toda_course_signal_v1' : 'tamagawa_course_signal_v1',
+                    'version' => $venueMlVersion,
                     'fallback' => true,
                 ];
             }
         } catch (Throwable) {
             $baseResponse['center_ml'] = [
                 'applied' => false,
-                'version' => $placeCode === 'TDA' ? 'toda_course_signal_v1' : 'tamagawa_course_signal_v1',
+                'version' => $venueMlVersion,
                 'fallback' => true,
             ];
         }

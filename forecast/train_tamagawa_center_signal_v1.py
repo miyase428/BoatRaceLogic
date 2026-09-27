@@ -32,6 +32,7 @@ TEST_START = date(2026, 3, 27)
 MODEL_PATHS = {
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
+    "OMR": ROOT / "forecast" / "models" / "omura_course_signal_v1.joblib",
 }
 
 # 特徴群とアルゴリズムは、特徴選択用期間だけで決めた候補を固定する。
@@ -83,7 +84,40 @@ TDA_SPECS = {
         "top3": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
     },
 }
-SPECS_BY_PLACE = {"TMG": TMG_SPECS, "TDA": TDA_SPECS}
+OMR_SPECS = {
+    1: {
+        "top2": {"model": "hist_gradient", "groups": ("st", "technique", "exhibition")},
+    },
+    2: {
+        "first": {"model": "hist_gradient", "groups": ("motor_boat", "technique", "exhibition")},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "technique", "exhibition")},
+        "top3": {"model": "logistic", "groups": ("player_strength", "exhibition")},
+    },
+    3: {
+        "first": {"model": "logistic", "groups": ("player_strength", "motor_boat", "st")},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "technique", "exhibition")},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "st", "technique", "exhibition")},
+    },
+    4: {
+        "first": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+    },
+    5: {
+        "first": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+    },
+    6: {
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+    },
+}
+SPECS_BY_PLACE = {"TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS}
+VERSION_BY_PLACE = {
+    "TMG": "tamagawa_course_signal_v1",
+    "TDA": "toda_course_signal_v1",
+    "OMR": "omura_course_signal_v1",
+}
 GROUP_ORDER = ("player_strength", "motor_boat", "st", "technique", "exhibition")
 
 
@@ -121,7 +155,7 @@ def main() -> int:
     records, pre_features, post_features = audit.build_dataset(START, END, config)
     groups = feature_groups(pre_features, post_features)
     artifact = {
-        "version": f"{'tamagawa' if place == 'TMG' else 'toda'}_course_signal_v1",
+        "version": VERSION_BY_PLACE[place],
         "place": place,
         "trained_at": date.today().isoformat(),
         "period": {
