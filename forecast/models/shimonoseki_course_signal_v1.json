@@ -1,0 +1,13 @@
+{
+  "version": "shimonoseki_course_signal_v1",
+  "path": "/var/www/html/boatrace/forecast/models/shimonoseki_course_signal_v1.joblib",
+  "sha256": "913521e46a1a9020454698c8fa4dd55256d8cc284b7ff4a0fa1d8956ae774eed",
+  "period": {
+    "start": "2023-09-27",
+    "train_end": "2025-09-26",
+    "valid_start": "2025-09-27",
+    "valid_end": "2026-03-26",
+    "test_start": "2026-03-27",
+    "test_end": "2026-09-26"
+  }
+}

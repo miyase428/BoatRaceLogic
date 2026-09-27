@@ -33,6 +33,7 @@ MODEL_PATHS = {
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
     "OMR": ROOT / "forecast" / "models" / "omura_course_signal_v1.joblib",
+    "SMS": ROOT / "forecast" / "models" / "shimonoseki_course_signal_v1.joblib",
 }
 
 # 特徴群とアルゴリズムは、特徴選択用期間だけで決めた候補を固定する。
@@ -112,11 +113,32 @@ OMR_SPECS = {
         "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
     },
 }
-SPECS_BY_PLACE = {"TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS}
+SMS_SPECS = {
+    2: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "technique")},
+    },
+    3: {
+        "first": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.15},
+        "top2": {"model": "logistic", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+    },
+    4: {
+        "top3": {"model": "logistic", "groups": ("player_strength", "exhibition")},
+    },
+    5: {
+        "top2": {"model": "logistic", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "st", "exhibition"), "coverage": 0.15},
+    },
+    6: {
+        "top3": {"model": "logistic", "groups": ("player_strength", "st", "technique"), "coverage": 0.15},
+    },
+}
+SPECS_BY_PLACE = {"TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS}
 VERSION_BY_PLACE = {
     "TMG": "tamagawa_course_signal_v1",
     "TDA": "toda_course_signal_v1",
     "OMR": "omura_course_signal_v1",
+    "SMS": "shimonoseki_course_signal_v1",
 }
 GROUP_ORDER = ("player_strength", "motor_boat", "st", "technique", "exhibition")
 
