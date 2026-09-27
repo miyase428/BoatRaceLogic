@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""多摩川コースサイン v1 を指定日の出走表へ適用する。"""
+"""場別コースサイン v1 を指定日の出走表へ適用する。"""
 
 from __future__ import annotations
 
@@ -41,7 +41,10 @@ from slit_validate_v2 import connect_db  # noqa: E402
 
 
 PLACE = "TMG"
-MODEL_PATH = ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib"
+MODEL_PATHS = {
+    "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
+    "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
+}
 
 
 def load_entries(target_date) -> dict[str, dict]:
@@ -112,15 +115,19 @@ def historical_stats(model_item: dict) -> dict:
 
 
 def main() -> int:
+    global PLACE
     parser = argparse.ArgumentParser()
     parser.add_argument("date")
+    parser.add_argument("--place", default="TMG", choices=sorted(MODEL_PATHS))
     parser.add_argument("--base", action="store_true", help="展示を使わない事前判定")
     args = parser.parse_args()
+    PLACE = str(args.place)
+    model_path = MODEL_PATHS[PLACE]
     target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
-    if not MODEL_PATH.is_file():
+    if not model_path.is_file():
         print(json.dumps({"status": "error", "error": "model_not_found"}, ensure_ascii=False))
         return 2
-    artifact = joblib.load(MODEL_PATH)
+    artifact = joblib.load(model_path)
     races = load_entries(target_date)
     if not races:
         print(json.dumps({"status": "ok", "version": artifact["version"], "matches": {}}, ensure_ascii=False))

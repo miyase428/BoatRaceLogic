@@ -1,0 +1,13 @@
+{
+  "version": "toda_course_signal_v1",
+  "path": "/var/www/html/boatrace/forecast/models/toda_course_signal_v1.joblib",
+  "sha256": "2b05f245691e47a95e7249e1344d615597ae89538a1f6d4cc4de5cf400558032",
+  "period": {
+    "start": "2023-09-27",
+    "train_end": "2025-09-26",
+    "valid_start": "2025-09-27",
+    "valid_end": "2026-03-26",
+    "test_start": "2026-03-27",
+    "test_end": "2026-09-26"
+  }
+}

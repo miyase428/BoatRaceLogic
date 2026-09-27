@@ -343,7 +343,8 @@
                         const isLane4 = course === 4;
                         const isLane6 = course === 6;
                         const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1'
-                            || detail.model_version === 'tamagawa_course_signal_v1';
+                            || detail.model_version === 'tamagawa_course_signal_v1'
+                            || detail.model_version === 'toda_course_signal_v1';
                         const level = Math.max(1, Math.min(3, Number(detail.star_level || 1)));
                         const stars = '★'.repeat(level);
                         const signal = String(detail.signal || (course + (level >= 2 ? '軸' : '攻め')));

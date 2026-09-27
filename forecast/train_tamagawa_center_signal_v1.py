@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""多摩川コースサイン v1 の検証済みモデルを固定保存する。"""
+"""場別コースサイン v1 の検証済みモデルを固定保存する。"""
 
 from __future__ import annotations
 
@@ -29,10 +29,13 @@ END = date(2026, 9, 26)
 START = date(2023, 9, 27)
 VALID_START = date(2025, 9, 27)
 TEST_START = date(2026, 3, 27)
-MODEL_PATH = ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib"
+MODEL_PATHS = {
+    "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
+    "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
+}
 
 # 特徴群とアルゴリズムは、特徴選択用期間だけで決めた候補を固定する。
-SPECS = {
+TMG_SPECS = {
     2: {
         "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition")},
         "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "exhibition")},
@@ -55,6 +58,32 @@ SPECS = {
         "top3": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
     },
 }
+TDA_SPECS = {
+    1: {
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "st", "technique")},
+    },
+    2: {
+        "first": {"model": "logistic", "groups": ("player_strength", "exhibition")},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "st", "exhibition")},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat")},
+    },
+    3: {
+        "top3": {"model": "logistic", "groups": ("player_strength", "exhibition")},
+    },
+    4: {
+        "first": {"model": "hist_gradient", "groups": ("st", "technique", "exhibition")},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "st", "technique", "exhibition")},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat")},
+    },
+    5: {
+        "top2": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "st", "exhibition"), "coverage": 0.15},
+    },
+    6: {
+        "top3": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
+    },
+}
+SPECS_BY_PLACE = {"TMG": TMG_SPECS, "TDA": TDA_SPECS}
 GROUP_ORDER = ("player_strength", "motor_boat", "st", "technique", "exhibition")
 
 
@@ -77,11 +106,23 @@ def selection_stats(rows: list[dict], probability: np.ndarray, threshold: float)
 
 
 def main() -> int:
+    global audit
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--place", default="TMG", choices=sorted(SPECS_BY_PLACE))
+    args = parser.parse_args()
+    place = str(args.place)
+    audit = __import__("audit_tamagawa_course_signals_zero_base_ml")
+    audit.PLACE = place
+    specs = SPECS_BY_PLACE[place]
+    model_path = MODEL_PATHS[place]
     config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
-    records, pre_features, post_features = build_dataset(START, END, config)
+    records, pre_features, post_features = audit.build_dataset(START, END, config)
     groups = feature_groups(pre_features, post_features)
     artifact = {
-        "version": "tamagawa_course_signal_v1",
+        "version": f"{'tamagawa' if place == 'TMG' else 'toda'}_course_signal_v1",
+        "place": place,
         "trained_at": date.today().isoformat(),
         "period": {
             "start": START.isoformat(),
@@ -91,11 +132,11 @@ def main() -> int:
             "test_start": TEST_START.isoformat(),
             "test_end": END.isoformat(),
         },
-        "feature_contract": "tamagawa-course-prerace-v1",
+        "feature_contract": "venue-course-prerace-v1",
         "models": {},
     }
 
-    for course, targets in SPECS.items():
+    for course, targets in specs.items():
         rows = [row for row in records if row["course"] == course]
         train = [row for row in rows if row["date"] < VALID_START]
         valid = [row for row in rows if VALID_START <= row["date"] < TEST_START]
@@ -127,19 +168,19 @@ def main() -> int:
                 flush=True,
             )
 
-    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(artifact, MODEL_PATH, compress=3)
-    digest = hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest()
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump(artifact, model_path, compress=3)
+    digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
     manifest = {
         "version": artifact["version"],
-        "path": str(MODEL_PATH),
+        "path": str(model_path),
         "sha256": digest,
         "period": artifact["period"],
     }
-    MODEL_PATH.with_suffix(".json").write_text(
+    model_path.with_suffix(".json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"MODEL: {MODEL_PATH}")
+    print(f"MODEL: {model_path}")
     print(f"SHA256: {digest}")
     return 0
 

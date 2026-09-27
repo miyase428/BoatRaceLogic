@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""多摩川の全コースサインを、現行条件を前提にせず再監査する。
+"""指定場の全コースサインを、現行条件を前提にせず再監査する。
 
 現行サインは比較対象にだけ使い、モデル特徴量には入れない。
 対象レース以前に分かる一次情報と展示情報から、各コースの
@@ -52,6 +52,7 @@ from slit_validate_v2 import connect_db  # noqa: E402
 
 
 PLACE = "TMG"
+PLACE_NAMES = {"TDA": "戸田", "TMG": "多摩川"}
 TARGETS = ("first", "top2", "top3")
 PROFILE_KEYS = ("nige", "sashi", "makuri", "attack")
 RAW_EXHIBITION_KEYS = (
@@ -145,7 +146,7 @@ def current_signal(base: dict, config: dict, course: int) -> bool:
 
 
 def build_dataset(start: date, end: date, config: dict) -> tuple[list[dict], list[str], list[str]]:
-    print(f"多摩川データ読込 {start}～{end}", flush=True)
+    print(f"{PLACE_NAMES.get(PLACE, PLACE)}データ読込 {start}～{end}", flush=True)
     races = load_prerace_targets(start, end, (PLACE,))
     player_ids = sorted({boat["player_id"] for race in races.values() for boat in race["boats"]})
     racer = load_racer_results(required_terms(start, end))
@@ -526,8 +527,9 @@ def pct(value) -> str:
 
 
 def write_markdown(report: dict, path: Path) -> None:
+    place_name = str(report.get("place_name") or report.get("place") or "対象場")
     lines = [
-        "# 多摩川 全コースサイン ゼロベースML監査",
+        f"# {place_name} 全コースサイン ゼロベースML監査",
         "",
         f"- 対象期間: {report['period']['start']}～{report['period']['end']}",
         f"- 学習: ～{report['period']['train_end']} / 検証: ～{report['period']['valid_end']} / 最終テスト: それ以降",
@@ -574,7 +576,9 @@ def write_markdown(report: dict, path: Path) -> None:
 
 
 def main() -> int:
+    global PLACE
     parser = argparse.ArgumentParser()
+    parser.add_argument("--place", default="TMG")
     parser.add_argument("--end", default=(date.today() - timedelta(days=1)).isoformat())
     parser.add_argument("--months", type=int, default=36)
     parser.add_argument("--valid-months", type=int, default=6)
@@ -582,9 +586,12 @@ def main() -> int:
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=ROOT / "analysis" / "output" / "tamagawa_course_signal_zero_base_ml_20260926",
+        default=None,
     )
     args = parser.parse_args()
+    PLACE = str(args.place).strip().upper()
+    if not (len(PLACE) == 3 and PLACE.isalnum()):
+        raise SystemExit(f"invalid place: {PLACE}")
     end = parse_date(args.end)
     start = months_ago(end + timedelta(days=1), args.months)
     test_start = months_ago(end + timedelta(days=1), args.test_months)
@@ -596,7 +603,9 @@ def main() -> int:
 
     report = {
         "status": "ok",
-        "version": "tamagawa-course-signal-zero-base-ml-v1",
+        "version": "venue-course-signal-zero-base-ml-v1",
+        "place": PLACE,
+        "place_name": PLACE_NAMES.get(PLACE, PLACE),
         "period": {
             "start": start.isoformat(),
             "end": end.isoformat(),
@@ -614,8 +623,11 @@ def main() -> int:
             target: evaluate_course_target(course_rows, target, pre_features, post_features)
             for target in TARGETS
         }
-    json_path = args.output_prefix.with_suffix(".json")
-    markdown_path = args.output_prefix.with_suffix(".md")
+    output_prefix = args.output_prefix or (
+        ROOT / "analysis" / "output" / f"{PLACE.lower()}_course_signal_zero_base_ml_{end.strftime('%Y%m%d')}"
+    )
+    json_path = output_prefix.with_suffix(".json")
+    markdown_path = output_prefix.with_suffix(".md")
     json_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     write_markdown(report, markdown_path)

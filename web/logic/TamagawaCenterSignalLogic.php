@@ -1,13 +1,17 @@
 <?php
 declare(strict_types=1);
 
-/** 検証済みの多摩川コースサイン v1 をPythonから取得する。 */
+/** 検証済みの場別コースサイン v1 をPythonから取得する。 */
 final class TamagawaCenterSignalLogic
 {
-    public function calculate(string $date, bool $baseOnly = false): array
+    public function calculate(string $date, bool $baseOnly = false, string $place = 'TMG'): array
     {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return ['status' => 'error', 'error' => 'invalid_date'];
+        }
+        $place = strtoupper(trim($place));
+        if (!in_array($place, ['TMG', 'TDA'], true)) {
+            return ['status' => 'error', 'error' => 'unsupported_place'];
         }
         $root = realpath(__DIR__ . '/../..');
         if ($root === false) {
@@ -18,7 +22,8 @@ final class TamagawaCenterSignalLogic
         if ($script === false || !is_executable($python)) {
             return ['status' => 'error', 'error' => 'runtime_not_found'];
         }
-        $command = escapeshellarg($python) . ' ' . escapeshellarg($script) . ' ' . escapeshellarg($date);
+        $command = escapeshellarg($python) . ' ' . escapeshellarg($script) . ' ' . escapeshellarg($date)
+            . ' --place ' . escapeshellarg($place);
         if ($baseOnly) {
             $command .= ' --base';
         }
