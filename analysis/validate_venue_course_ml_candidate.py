@@ -19,7 +19,7 @@ from validate_tamagawa_center_ml_candidate import TARGETS, validate_target  # no
 from validate_tamagawa_other_course_ml_candidate import validate_lane6  # noqa: E402
 
 
-PLACE_NAMES = {"TDA": "戸田", "TMG": "多摩川", "OMR": "大村", "SMS": "下関"}
+PLACE_NAMES = {"TDA": "戸田", "TMG": "多摩川", "OMR": "大村", "SMS": "下関", "SME": "住之江"}
 
 
 def pct(value) -> str:

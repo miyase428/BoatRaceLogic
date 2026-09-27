@@ -34,6 +34,11 @@ MODEL_PATHS = {
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
     "OMR": ROOT / "forecast" / "models" / "omura_course_signal_v1.joblib",
     "SMS": ROOT / "forecast" / "models" / "shimonoseki_course_signal_v1.joblib",
+    "SME": ROOT / "forecast" / "models" / "suminoe_course_signal_v1.joblib",
+}
+
+PERIODS_BY_PLACE = {
+    "SME": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
 }
 
 # 特徴群とアルゴリズムは、特徴選択用期間だけで決めた候補を固定する。
@@ -133,12 +138,39 @@ SMS_SPECS = {
         "top3": {"model": "logistic", "groups": ("player_strength", "st", "technique"), "coverage": 0.15},
     },
 }
-SPECS_BY_PLACE = {"TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS}
+SME_SPECS = {
+    2: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "technique"), "coverage": 0.10},
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+    },
+    3: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "technique", "exhibition")},
+    },
+    4: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+    },
+    5: {
+        "first": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.10},
+        "top2": {"model": "logistic", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+    },
+    6: {
+        "top2": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "exhibition"), "coverage": 0.15},
+    },
+}
+SPECS_BY_PLACE = {
+    "TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
+}
 VERSION_BY_PLACE = {
     "TMG": "tamagawa_course_signal_v1",
     "TDA": "toda_course_signal_v1",
     "OMR": "omura_course_signal_v1",
     "SMS": "shimonoseki_course_signal_v1",
+    "SME": "suminoe_course_signal_v1",
 }
 GROUP_ORDER = ("player_strength", "motor_boat", "st", "technique", "exhibition")
 
@@ -162,13 +194,15 @@ def selection_stats(rows: list[dict], probability: np.ndarray, threshold: float)
 
 
 def main() -> int:
-    global audit
+    global audit, START, VALID_START, TEST_START, END
     import argparse
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--place", default="TMG", choices=sorted(SPECS_BY_PLACE))
     args = parser.parse_args()
     place = str(args.place)
+    if place in PERIODS_BY_PLACE:
+        START, VALID_START, TEST_START, END = PERIODS_BY_PLACE[place]
     audit = __import__("audit_tamagawa_course_signals_zero_base_ml")
     audit.PLACE = place
     specs = SPECS_BY_PLACE[place]

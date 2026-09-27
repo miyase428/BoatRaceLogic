@@ -10,7 +10,7 @@ final class TamagawaCenterSignalLogic
             return ['status' => 'error', 'error' => 'invalid_date'];
         }
         $place = strtoupper(trim($place));
-        if (!in_array($place, ['TMG', 'TDA', 'OMR', 'SMS'], true)) {
+        if (!in_array($place, ['TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
             return ['status' => 'error', 'error' => 'unsupported_place'];
         }
         $root = realpath(__DIR__ . '/../..');

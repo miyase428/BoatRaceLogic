@@ -499,7 +499,7 @@ $date = new DateTimeImmutable($dateText);
 $courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
 $courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
 $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v8_' . $date->format('Ymd') . '_' . $placeCode
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v9_' . $date->format('Ymd') . '_' . $placeCode
     . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
 $today = new DateTimeImmutable('today');
@@ -1479,11 +1479,12 @@ SQL;
     // 検証済みの場別コースMLサインを適用する。推論できない場合は従来サインを返す。
     // 場ごとに採用した評価段階だけをMLへ置換し、未採用段階は従来サインを維持する。
     // 推論失敗時はこの直前までに作った従来サインを返し、画面を欠損させない。
-    if (in_array($placeCode, ['TMG', 'TDA', 'OMR', 'SMS'], true)) {
+    if (in_array($placeCode, ['TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
         $venueMlVersion = match ($placeCode) {
             'TDA' => 'toda_course_signal_v1',
             'OMR' => 'omura_course_signal_v1',
             'SMS' => 'shimonoseki_course_signal_v1',
+            'SME' => 'suminoe_course_signal_v1',
             default => 'tamagawa_course_signal_v1',
         };
         try {
@@ -1693,7 +1694,7 @@ SQL;
                             'version' => (string)($centerMl['version'] ?? 'omura_course_signal_v1'),
                             'fallback' => false,
                         ];
-                    } else {
+                    } elseif ($placeCode === 'SMS') {
                         // 下関は既存1Cを維持し、検証で改善した段階だけMLへ置換・追加する。
                         // 2CはAI1着だけなので、従来サインを残した上で★★★候補を上書きする。
                         $legacyLane2 = array_replace($lane2SashiMatches, $lane2MakuriMatches);
@@ -1753,6 +1754,65 @@ SQL;
                         $baseResponse['center_ml'] = [
                             'applied' => true,
                             'version' => (string)($centerMl['version'] ?? 'shimonoseki_course_signal_v1'),
+                            'fallback' => false,
+                        ];
+                    } else {
+                        // 住之江1Cは現行サインを維持する。
+                        // 2Cは3段階とも新規採用する。
+                        $lane2SashiMatches = [];
+                        $lane2MakuriMatches = $mlLane2;
+
+                        // 3CはAI1着だけMLへ置換し、現行の★/★★と展示前表示を維持する。
+                        $legacyLane3Lower = [];
+                        foreach ($lane3Matches as $raceCode => $detail) {
+                            if (is_array($detail) && (
+                                $baseOnly
+                                || !isset($exhibitionByRace[$raceCode])
+                                || (int)($detail['star_level'] ?? 0) <= 2
+                            )) {
+                                $legacyLane3Lower[$raceCode] = $detail;
+                            }
+                        }
+                        $lane3Matches = array_replace($legacyLane3Lower, $mlLane3);
+
+                        // 4C・5Cは採用した3段階、6CはAI2連対・AI3連対を新規採用する。
+                        $matches = $mlLane4;
+                        $lane5Matches = $mlLane5;
+                        $lane6Matches = $mlLane6;
+                        $baseResponse['lane1_conditions'] = [
+                            'star' => '従来サインを維持',
+                            'double_star' => '従来サインを維持',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['lane2_sashi_conditions'] = [
+                            'star' => '機械学習v1へ統合',
+                            'double_star' => '機械学習v1へ統合',
+                            'triple_star' => '機械学習v1へ統合',
+                        ];
+                        $baseResponse['lane2_makuri_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['lane3_conditions'] = [
+                            'star' => '従来サインを維持',
+                            'double_star' => '従来サインを維持',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['lane5_conditions'] = $baseResponse['conditions'];
+                        $baseResponse['lane6_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率は未採用',
+                        ];
+                        $baseResponse['center_ml'] = [
+                            'applied' => true,
+                            'version' => (string)($centerMl['version'] ?? 'suminoe_course_signal_v1'),
                             'fallback' => false,
                         ];
                     }

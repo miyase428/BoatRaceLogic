@@ -965,6 +965,7 @@ SQL);
             __DIR__ . '/../../forecast/models/toda_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/omura_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/shimonoseki_course_signal_v1.joblib',
+            __DIR__ . '/../../forecast/models/suminoe_course_signal_v1.joblib',
             __DIR__ . '/../../config/course_signal_rules.json',
         ]);
     }

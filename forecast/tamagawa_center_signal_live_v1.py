@@ -46,6 +46,7 @@ MODEL_PATHS = {
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
     "OMR": ROOT / "forecast" / "models" / "omura_course_signal_v1.joblib",
     "SMS": ROOT / "forecast" / "models" / "shimonoseki_course_signal_v1.joblib",
+    "SME": ROOT / "forecast" / "models" / "suminoe_course_signal_v1.joblib",
 }
 
 
