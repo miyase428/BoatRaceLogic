@@ -343,7 +343,7 @@ if (!is_string($appTrifectaJson)) {
     'venue' => (string)($place_names[$selected_place] ?? $selected_place),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script src="/web/assets/js/app_recent_prediction_history.js?v=20260926-conditional-third-v1"></script>
-<script src="/web/assets/js/app_course_signals.js?v=20260927-center-ml-v1"></script>
+<script src="/web/assets/js/app_course_signals.js?v=20260927-course-ml-v1"></script>
 <script src="/web/assets/js/app_current_meet.js?v=20260918a"></script>
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
 <script>

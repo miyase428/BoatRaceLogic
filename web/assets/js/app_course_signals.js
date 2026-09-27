@@ -63,7 +63,8 @@
         const isLane3 = course === 3;
         const isLane4 = course === 4;
         const isLane6 = course === 6;
-        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1';
+        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1'
+            || detail.model_version === 'tamagawa_course_signal_v1';
         const palette = isLane1 ? colors.lane1
             : (isLane2Makuri ? colors.lane2makuri
                 : (isLane2 ? colors.lane2sashi

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""多摩川3C・4Cサイン v1 の検証済みモデルを固定保存する。"""
+"""多摩川コースサイン v1 の検証済みモデルを固定保存する。"""
 
 from __future__ import annotations
 
@@ -33,6 +33,10 @@ MODEL_PATH = ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib"
 
 # 特徴群とアルゴリズムは、特徴選択用期間だけで決めた候補を固定する。
 SPECS = {
+    2: {
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition")},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "exhibition")},
+    },
     3: {
         "first": {"model": "logistic", "groups": ("technique", "exhibition")},
         "top2": {"model": "hist_gradient", "groups": ("technique", "exhibition")},
@@ -42,6 +46,13 @@ SPECS = {
         "first": {"model": "logistic", "groups": ("player_strength", "motor_boat", "technique", "exhibition")},
         "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat", "st")},
         "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat")},
+    },
+    5: {
+        "top3": {"model": "logistic", "groups": ("player_strength", "st", "exhibition")},
+    },
+    6: {
+        "top2": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
     },
 }
 GROUP_ORDER = ("player_strength", "motor_boat", "st", "technique", "exhibition")
@@ -70,7 +81,7 @@ def main() -> int:
     records, pre_features, post_features = build_dataset(START, END, config)
     groups = feature_groups(pre_features, post_features)
     artifact = {
-        "version": "tamagawa_center_signal_v1",
+        "version": "tamagawa_course_signal_v1",
         "trained_at": date.today().isoformat(),
         "period": {
             "start": START.isoformat(),
@@ -80,7 +91,7 @@ def main() -> int:
             "test_start": TEST_START.isoformat(),
             "test_end": END.isoformat(),
         },
-        "feature_contract": "tamagawa-center-prerace-v1",
+        "feature_contract": "tamagawa-course-prerace-v1",
         "models": {},
     }
 
@@ -90,9 +101,9 @@ def main() -> int:
         valid = [row for row in rows if VALID_START <= row["date"] < TEST_START]
         test = [row for row in rows if row["date"] >= TEST_START]
         current_valid = np.asarray([bool(row["current_signal"]) for row in valid])
-        coverage = float(current_valid.mean()) if current_valid.any() else 0.20
         artifact["models"][str(course)] = {}
         for target, spec in targets.items():
+            coverage = float(spec.get("coverage", current_valid.mean() if current_valid.any() else 0.20))
             names = selected_feature_names(groups, spec["groups"])
             model = clone(make_models()[spec["model"]])
             model.fit(matrix(train, names), np.asarray([row[target] for row in train], dtype=np.int8))

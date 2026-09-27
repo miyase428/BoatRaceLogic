@@ -172,7 +172,8 @@
         const stars = '★'.repeat(level);
         const label = String(detail.signal || levelLabel(course, level));
         const classPrefix = 'is-tmg-lane' + course;
-        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1';
+        const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1'
+            || detail.model_version === 'tamagawa_course_signal_v1';
 
         link.classList.add(classPrefix + '-strong', classPrefix + '-star-' + level);
         link.dataset['tmgLane' + course + 'Level'] = String(level);

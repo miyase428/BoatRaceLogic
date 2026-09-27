@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""多摩川3C・4Cサイン v1 を指定日の出走表へ適用する。"""
+"""多摩川コースサイン v1 を指定日の出走表へ適用する。"""
 
 from __future__ import annotations
 
@@ -135,7 +135,7 @@ def main() -> int:
     exhibition_by_race = {} if args.base else load_exhibition(target_date, target_date, PLACE)
     average_exhibition = None if args.base else load_avg_exhibition(PLACE)
     term = term_info_for_date(target_date)
-    matches: dict[str, dict[str, dict]] = {"3": {}, "4": {}}
+    matches: dict[str, dict[str, dict]] = {str(course): {} for course in artifact["models"]}
 
     for race_code, race in sorted(races.items()):
         boats = race["boats"]
@@ -187,11 +187,14 @@ def main() -> int:
                 for key in SECOND_KEYS:
                     shared[f"c{c}_{key}"] = safe_float(second.get(key))
 
-        for course in (3, 4):
-            probabilities: dict[str, float | None] = {}
-            triggered: dict[str, bool] = {}
+        for course_text, course_models in artifact["models"].items():
+            course = int(course_text)
+            probabilities: dict[str, float | None] = {target: None for target in ("first", "top2", "top3")}
+            triggered: dict[str, bool] = {target: False for target in ("first", "top2", "top3")}
             for target in ("first", "top2", "top3"):
-                item = artifact["models"][str(course)][target]
+                item = course_models.get(target)
+                if item is None:
+                    continue
                 if item["uses_exhibition"] and not exhibition_ready:
                     probabilities[target] = None
                     triggered[target] = False
@@ -208,7 +211,7 @@ def main() -> int:
                 level, selected_target, label = 1, "top3", f"{course}相手候補"
             else:
                 continue
-            item = artifact["models"][str(course)][selected_target]
+            item = course_models[selected_target]
             matches[str(course)][race_code] = {
                 "race_code": race_code,
                 "player_id": by_course[course]["player_id"],

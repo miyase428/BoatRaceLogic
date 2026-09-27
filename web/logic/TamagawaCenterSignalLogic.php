@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/** 検証済みの多摩川3C・4Cサイン v1 をPythonから取得する。 */
+/** 検証済みの多摩川コースサイン v1 をPythonから取得する。 */
 final class TamagawaCenterSignalLogic
 {
     public function calculate(string $date, bool $baseOnly = false): array
