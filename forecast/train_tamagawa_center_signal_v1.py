@@ -11,6 +11,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import sklearn
 from sklearn.base import clone
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,8 @@ START = date(2023, 9, 27)
 VALID_START = date(2025, 9, 27)
 TEST_START = date(2026, 3, 27)
 MODEL_PATHS = {
+    "AMG": ROOT / "forecast" / "models" / "amagasaki_course_signal_v1.joblib",
+    "ASY": ROOT / "forecast" / "models" / "ashiya_course_signal_v1.joblib",
     "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
@@ -39,6 +42,8 @@ MODEL_PATHS = {
 }
 
 PERIODS_BY_PLACE = {
+    "AMG": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
+    "ASY": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "KRY": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "SME": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
 }
@@ -187,10 +192,84 @@ KRY_SPECS = {
         "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
     },
 }
+ASY_SPECS = {
+    3: {
+        "top3": {
+            "model": "logistic",
+            "groups": ("player_strength", "motor_boat"),
+            "coverage": 0.35365853658536583,
+        },
+    },
+    4: {
+        "top3": {
+            "model": "hist_gradient",
+            "groups": ("player_strength", "motor_boat", "st", "technique", "exhibition"),
+            "coverage": 0.05574912891986063,
+        },
+    },
+}
+AMG_SPECS = {
+    2: {
+        "first": {
+            "model": "hist_gradient",
+            "groups": ("player_strength",),
+            "coverage": 0.24732824427480915,
+        },
+        "top3": {
+            "model": "logistic",
+            "groups": ("player_strength", "exhibition"),
+            "coverage": 0.24732824427480915,
+        },
+    },
+    3: {
+        "first": {
+            "model": "hist_gradient",
+            "groups": ("player_strength", "st"),
+            "coverage": 0.17862595419847327,
+        },
+        "top2": {
+            "model": "logistic",
+            "groups": ("player_strength",),
+            "coverage": 0.17862595419847327,
+        },
+        "top3": {
+            "model": "hist_gradient",
+            "groups": ("player_strength", "st"),
+            "coverage": 0.17862595419847327,
+        },
+    },
+    4: {
+        "top2": {
+            "model": "hist_gradient",
+            "groups": ("player_strength", "st"),
+            "coverage": 0.08549618320610687,
+        },
+        "top3": {
+            "model": "logistic",
+            "groups": ("player_strength", "exhibition"),
+            "coverage": 0.08549618320610687,
+        },
+    },
+    5: {
+        "top2": {
+            "model": "logistic",
+            "groups": ("player_strength", "exhibition"),
+            "coverage": 0.27022900763358776,
+        },
+        "top3": {
+            "model": "logistic",
+            "groups": ("player_strength", "exhibition"),
+            "coverage": 0.27022900763358776,
+        },
+    },
+}
 SPECS_BY_PLACE = {
-    "KRY": KRY_SPECS, "TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
+    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
+    "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
 }
 VERSION_BY_PLACE = {
+    "AMG": "amagasaki_course_signal_v1",
+    "ASY": "ashiya_course_signal_v1",
     "KRY": "kiryuu_course_signal_v1",
     "TMG": "tamagawa_course_signal_v1",
     "TDA": "toda_course_signal_v1",
@@ -235,6 +314,18 @@ def main() -> int:
     model_path = MODEL_PATHS[place]
     config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
     records, pre_features, post_features = audit.build_dataset(START, END, config)
+    if place in {"ASY", "AMG"}:
+        training_records = [row for row in records if row["date"] < VALID_START]
+
+        def has_training_value(name: str) -> bool:
+            return any(
+                np.isfinite(float(row["features"].get(name, float("nan"))))
+                for row in training_records
+            )
+
+        # 候補検証と同じく、TRAINで全欠損の特徴量は学習前に除外する。
+        pre_features = [name for name in pre_features if has_training_value(name)]
+        post_features = [name for name in post_features if has_training_value(name)]
     groups = feature_groups(pre_features, post_features)
     artifact = {
         "version": VERSION_BY_PLACE[place],
@@ -249,6 +340,11 @@ def main() -> int:
             "test_end": END.isoformat(),
         },
         "feature_contract": "venue-course-prerace-v1",
+        "runtime": {
+            "python": sys.version.split()[0],
+            "scikit_learn": sklearn.__version__,
+        },
+        "production_enabled_from": "2026-09-28" if place in {"ASY", "AMG"} else None,
         "models": {},
     }
 
@@ -292,7 +388,11 @@ def main() -> int:
         "path": str(model_path),
         "sha256": digest,
         "period": artifact["period"],
+        "runtime": artifact["runtime"],
+        "scikit_learn_version": artifact["runtime"]["scikit_learn"],
     }
+    if artifact.get("production_enabled_from"):
+        manifest["production_enabled_from"] = artifact["production_enabled_from"]
     model_path.with_suffix(".json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )

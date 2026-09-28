@@ -93,6 +93,62 @@ function validDate(string $value): bool
     return $dt !== false && $dt->format('Y-m-d') === $value;
 }
 
+/**
+ * ML採用段階だけを置換し、未採用段階は従来サインから復元する。
+ *
+ * star_level は段階を内包するため、従来★★★でAI1着だけを置換する場合も、
+ * AI1着が非該当なら未採用の★★までは残す。
+ *
+ * @param array<string,array<string,mixed>> $legacy
+ * @param array<string,array<string,mixed>> $ml
+ * @param callable(string):array<int,int> $adoptedLevelsForRace
+ * @return array<string,array<string,mixed>>
+ */
+function mergePurposeMlMatches(array $legacy, array $ml, callable $adoptedLevelsForRace): array
+{
+    $merged = [];
+    $raceCodes = array_values(array_unique(array_merge(array_keys($legacy), array_keys($ml))));
+    foreach ($raceCodes as $raceCode) {
+        $legacyDetail = isset($legacy[$raceCode]) && is_array($legacy[$raceCode]) ? $legacy[$raceCode] : null;
+        $mlDetail = isset($ml[$raceCode]) && is_array($ml[$raceCode]) ? $ml[$raceCode] : null;
+        $adopted = array_values(array_unique(array_map('intval', $adoptedLevelsForRace((string)$raceCode))));
+        $legacyLevel = is_array($legacyDetail) ? max(0, min(3, (int)($legacyDetail['star_level'] ?? 0))) : 0;
+        $mlLevel = is_array($mlDetail) ? max(0, min(3, (int)($mlDetail['star_level'] ?? 0))) : 0;
+
+        $legacyKeepLevel = 0;
+        for ($level = 1; $level <= $legacyLevel; $level++) {
+            if (!in_array($level, $adopted, true)) {
+                $legacyKeepLevel = $level;
+            }
+        }
+        $mlKeepLevel = in_array($mlLevel, $adopted, true) ? $mlLevel : 0;
+        $finalLevel = max($legacyKeepLevel, $mlKeepLevel);
+        if ($finalLevel <= 0) {
+            continue;
+        }
+
+        if ($mlKeepLevel >= $legacyKeepLevel && $mlKeepLevel > 0 && is_array($mlDetail)) {
+            $detail = $mlDetail;
+        } elseif (is_array($legacyDetail)) {
+            $detail = $legacyDetail;
+            if ($finalLevel !== $legacyLevel) {
+                $course = (int)($detail['course'] ?? 0);
+                $detail['star_level'] = $finalLevel;
+                $detail['star_text'] = str_repeat('★', $finalLevel);
+                $detail['signal'] = match ($finalLevel) {
+                    3 => $course . '頭候補',
+                    2 => $course . '軸候補',
+                    default => $course . '相手候補',
+                };
+            }
+        } else {
+            continue;
+        }
+        $merged[(string)$raceCode] = $detail;
+    }
+    return $merged;
+}
+
 function placeNames(): array
 {
     return [
@@ -499,7 +555,7 @@ $date = new DateTimeImmutable($dateText);
 $courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
 $courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
 $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v10_' . $date->format('Ymd') . '_' . $placeCode
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v11_' . $date->format('Ymd') . '_' . $placeCode
     . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
 $today = new DateTimeImmutable('today');
@@ -1479,8 +1535,10 @@ SQL;
     // 検証済みの場別コースMLサインを適用する。推論できない場合は従来サインを返す。
     // 場ごとに採用した評価段階だけをMLへ置換し、未採用段階は従来サインを維持する。
     // 推論失敗時はこの直前までに作った従来サインを返し、画面を欠損させない。
-    if (in_array($placeCode, ['KRY', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
+    if (in_array($placeCode, ['AMG', 'ASY', 'KRY', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
         $venueMlVersion = match ($placeCode) {
+            'AMG' => 'amagasaki_course_signal_v1',
+            'ASY' => 'ashiya_course_signal_v1',
             'KRY' => 'kiryuu_course_signal_v1',
             'TDA' => 'toda_course_signal_v1',
             'OMR' => 'omura_course_signal_v1',
@@ -1500,7 +1558,101 @@ SQL;
                 $mlLane6 = $centerMaps['6'] ?? [];
                 if (is_array($mlLane1) && is_array($mlLane2) && is_array($mlLane3) && is_array($mlLane4)
                     && is_array($mlLane5) && is_array($mlLane6)) {
-                    if ($placeCode === 'TMG') {
+                    if ($placeCode === 'ASY') {
+                        // 芦屋は3C/4CのAI3連対（★）だけをMLへ置換する。
+                        // 4Cモデルは展示を使うため、展示前は従来★も維持する。
+                        $lane3Matches = mergePurposeMlMatches(
+                            $lane3Matches,
+                            $mlLane3,
+                            static fn(string $raceCode): array => [1]
+                        );
+                        $matches = mergePurposeMlMatches(
+                            $matches,
+                            $mlLane4,
+                            static fn(string $raceCode): array => (
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [1] : []
+                            )
+                        );
+                        $baseResponse['lane3_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => '従来サインを維持',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['conditions'] = [
+                            'star' => '展示反映済みはAI3連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'double_star' => '従来サインを維持',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['center_ml'] = [
+                            'applied' => true,
+                            'version' => (string)($centerMl['version'] ?? 'ashiya_course_signal_v1'),
+                            'fallback' => false,
+                        ];
+                    } elseif ($placeCode === 'AMG') {
+                        // 尼崎2CはAI1着（★★★）とAI3連対（★）だけML化し、★★は従来を維持する。
+                        $legacyLane2 = array_replace($lane2SashiMatches, $lane2MakuriMatches);
+                        $lane2SashiMatches = [];
+                        $lane2MakuriMatches = mergePurposeMlMatches(
+                            $legacyLane2,
+                            $mlLane2,
+                            static fn(string $raceCode): array => array_merge(
+                                [3],
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [1] : []
+                            )
+                        );
+
+                        // 3Cは3段階すべてML化する。
+                        $lane3Matches = mergePurposeMlMatches(
+                            $lane3Matches,
+                            $mlLane3,
+                            static fn(string $raceCode): array => [1, 2, 3]
+                        );
+
+                        // 4Cは★★を常時ML化し、展示取得後だけ★もML化。★★★は従来を維持する。
+                        $matches = mergePurposeMlMatches(
+                            $matches,
+                            $mlLane4,
+                            static fn(string $raceCode): array => array_merge(
+                                [2],
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [1] : []
+                            )
+                        );
+
+                        // 5Cの★/★★は展示モデルなので、展示前は両段階とも従来へfallbackする。
+                        $lane5Matches = mergePurposeMlMatches(
+                            $lane5Matches,
+                            $mlLane5,
+                            static fn(string $raceCode): array => (
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [1, 2] : []
+                            )
+                        );
+                        $baseResponse['lane2_sashi_conditions'] = [
+                            'star' => '展示反映済みはAI3連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'double_star' => '従来サインを維持',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['lane2_makuri_conditions'] = $baseResponse['lane2_sashi_conditions'];
+                        $baseResponse['lane3_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => 'AI1着率が検証済み閾値以上（頭候補）',
+                        ];
+                        $baseResponse['conditions'] = [
+                            'star' => '展示反映済みはAI3連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['lane5_conditions'] = [
+                            'star' => '展示反映済みはAI3連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'double_star' => '展示反映済みはAI2連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['center_ml'] = [
+                            'applied' => true,
+                            'version' => (string)($centerMl['version'] ?? 'amagasaki_course_signal_v1'),
+                            'fallback' => false,
+                        ];
+                    } elseif ($placeCode === 'TMG') {
                     // 2Cの従来★★★（頭寄り評価）を残し、展示取得後だけその他をMLへ置換。
                     // 展示前・展示欠損レースは従来表示を維持する。
                     $legacyLane2Strong = [];

@@ -961,6 +961,8 @@ SQL);
             __DIR__ . '/../tamagawa_lane4_star_api.php',
             __DIR__ . '/TamagawaCenterSignalLogic.php',
             __DIR__ . '/../../forecast/tamagawa_center_signal_live_v1.py',
+            __DIR__ . '/../../forecast/models/amagasaki_course_signal_v1.joblib',
+            __DIR__ . '/../../forecast/models/ashiya_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/tamagawa_center_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/kiryuu_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/toda_course_signal_v1.joblib',
