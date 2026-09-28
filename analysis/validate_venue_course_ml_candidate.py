@@ -20,6 +20,8 @@ from validate_tamagawa_other_course_ml_candidate import validate_lane6  # noqa: 
 
 
 PLACE_NAMES = {
+    "ASY": "芦屋",
+    "AMG": "尼崎",
     "KRY": "桐生",
     "TDA": "戸田",
     "TMG": "多摩川",

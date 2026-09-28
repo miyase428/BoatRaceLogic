@@ -52,7 +52,13 @@ from slit_validate_v2 import connect_db  # noqa: E402
 
 
 PLACE = "TMG"
-PLACE_NAMES = {"KRY": "桐生", "TDA": "戸田", "TMG": "多摩川"}
+PLACE_NAMES = {
+    "KRY": "桐生",
+    "TDA": "戸田",
+    "TMG": "多摩川",
+    "ASY": "芦屋",
+    "AMG": "尼崎",
+}
 TARGETS = ("first", "top2", "top3")
 PROFILE_KEYS = ("nige", "sashi", "makuri", "attack")
 RAW_EXHIBITION_KEYS = (
