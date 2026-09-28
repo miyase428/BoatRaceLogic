@@ -963,6 +963,7 @@ SQL);
             __DIR__ . '/../../forecast/tamagawa_center_signal_live_v1.py',
             __DIR__ . '/../../forecast/models/amagasaki_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/ashiya_course_signal_v1.joblib',
+            __DIR__ . '/../../forecast/models/biwako_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/tamagawa_center_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/kiryuu_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/toda_course_signal_v1.joblib',

@@ -33,6 +33,7 @@ TEST_START = date(2026, 3, 27)
 MODEL_PATHS = {
     "AMG": ROOT / "forecast" / "models" / "amagasaki_course_signal_v1.joblib",
     "ASY": ROOT / "forecast" / "models" / "ashiya_course_signal_v1.joblib",
+    "BWK": ROOT / "forecast" / "models" / "biwako_course_signal_v1.joblib",
     "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
@@ -44,6 +45,7 @@ MODEL_PATHS = {
 PERIODS_BY_PLACE = {
     "AMG": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "ASY": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
+    "BWK": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "KRY": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "SME": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
 }
@@ -263,13 +265,37 @@ AMG_SPECS = {
         },
     },
 }
+BWK_SPECS = {
+    2: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "technique", "exhibition"), "coverage": 0.10},
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.10},
+        "top3": {"model": "logistic", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+    },
+    3: {
+        "first": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.10},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "technique"), "coverage": 0.10},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "st", "technique"), "coverage": 0.10},
+    },
+    4: {
+        "first": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.05197132616487455},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.05197132616487455},
+    },
+    5: {
+        "top3": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.10},
+    },
+    6: {
+        "top2": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.10},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "st", "technique"), "coverage": 0.10},
+    },
+}
 SPECS_BY_PLACE = {
-    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
+    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "BWK": BWK_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
     "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
 }
 VERSION_BY_PLACE = {
     "AMG": "amagasaki_course_signal_v1",
     "ASY": "ashiya_course_signal_v1",
+    "BWK": "biwako_course_signal_v1",
     "KRY": "kiryuu_course_signal_v1",
     "TMG": "tamagawa_course_signal_v1",
     "TDA": "toda_course_signal_v1",
@@ -314,7 +340,7 @@ def main() -> int:
     model_path = MODEL_PATHS[place]
     config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
     records, pre_features, post_features = audit.build_dataset(START, END, config)
-    if place in {"ASY", "AMG"}:
+    if place in {"ASY", "AMG", "BWK"}:
         training_records = [row for row in records if row["date"] < VALID_START]
 
         def has_training_value(name: str) -> bool:
@@ -343,8 +369,9 @@ def main() -> int:
         "runtime": {
             "python": sys.version.split()[0],
             "scikit_learn": sklearn.__version__,
+            "numpy": np.__version__,
         },
-        "production_enabled_from": "2026-09-28" if place in {"ASY", "AMG"} else None,
+        "production_enabled_from": "2026-09-28" if place in {"ASY", "AMG", "BWK"} else None,
         "models": {},
     }
 

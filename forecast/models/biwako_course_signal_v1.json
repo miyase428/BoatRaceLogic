@@ -1,0 +1,20 @@
+{
+  "version": "biwako_course_signal_v1",
+  "path": "/var/www/html/boatrace/forecast/models/biwako_course_signal_v1.joblib",
+  "sha256": "756a574039409c3357ac2dd0b73f1d24de3cf3cf96065b615739725d7ad4a0d3",
+  "period": {
+    "start": "2023-09-27",
+    "train_end": "2025-08-31",
+    "valid_start": "2025-09-01",
+    "valid_end": "2026-02-28",
+    "test_start": "2026-03-01",
+    "test_end": "2026-09-27"
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "scikit_learn": "1.4.1.post1",
+    "numpy": "1.26.4"
+  },
+  "scikit_learn_version": "1.4.1.post1",
+  "production_enabled_from": "2026-09-28"
+}
