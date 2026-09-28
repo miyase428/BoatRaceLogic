@@ -121,8 +121,13 @@ if ($raceCodesByPlace === []) {
 }
 
 $existing = HomeCourseSignalSnapshotStore::read($date);
-$places = is_array($existing['places'] ?? null) ? $existing['places'] : [];
-$storedRaceCodes = is_array($existing['race_codes'] ?? null) ? $existing['race_codes'] : [];
+$logicVersion = PredictionForwardSnapshotStore::courseSignalLogicVersion();
+// ロジック更新後に一部場だけ再生成が失敗しても、旧版の場データを新しい版として
+// 保存し直さない。旧スナップショットはTOPで直取得へフォールバックさせる。
+$existingIsCurrent = is_array($existing)
+    && HomeCourseSignalSnapshotStore::isValidForLogicVersion($existing, $logicVersion);
+$places = $existingIsCurrent && is_array($existing['places'] ?? null) ? $existing['places'] : [];
+$storedRaceCodes = $existingIsCurrent && is_array($existing['race_codes'] ?? null) ? $existing['race_codes'] : [];
 $generated = [];
 
 foreach ($raceCodesByPlace as $place => $raceCodes) {
@@ -145,7 +150,7 @@ if ($generated === []) {
     failHomeCourseSignalPrewarm('TOPコースサインを1場も生成できませんでした');
 }
 
-if (!HomeCourseSignalSnapshotStore::write($date, $places, $storedRaceCodes)) {
+if (!HomeCourseSignalSnapshotStore::write($date, $places, $storedRaceCodes, $logicVersion)) {
     failHomeCourseSignalPrewarm('TOPコースサインの保存に失敗しました');
 }
 

@@ -955,7 +955,13 @@ SQL);
         ]);
     }
 
-    private static function courseSignalLogicVersion(): string
+    /**
+     * コースサインの実装・モデルを識別する版。
+     *
+     * 前方保存とTOP展示前スナップショットで同じ版を使い、表示経路間で
+     * 古いロジックの結果を混在させない。
+     */
+    public static function courseSignalLogicVersion(): string
     {
         return self::filesVersion([
             __DIR__ . '/../tamagawa_lane4_star_api.php',

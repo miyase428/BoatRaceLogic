@@ -323,6 +323,9 @@
             ? savedCodes.map(function (code) { return String(code).toUpperCase(); }).sort()
             : [];
 
+        // 現行サーバロジックと保存時の版が違う場合、朝の旧サインを使わず
+        // 場別APIの直取得へ戻す。版計算は改ざんできないサーバ側で行う。
+        if (!snapshot || snapshot.valid_for_current_logic !== true) return null;
         if (!data || data.status !== 'ok' || data.signal_phase !== 'base') return null;
         if (!currentCodes.length || currentCodes.length !== normalizedSavedCodes.length) return null;
         for (let i = 0; i < currentCodes.length; i++) {

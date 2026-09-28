@@ -48,9 +48,9 @@ final class HomeCourseSignalSnapshotStore
      * @param array<string,array<string,mixed>> $places
      * @param array<string,array<int,string>> $raceCodes
      */
-    public static function write(string $date, array $places, array $raceCodes): bool
+    public static function write(string $date, array $places, array $raceCodes, string $logicVersion): bool
     {
-        if (!self::isValidDate($date) || $places === []) {
+        if (!self::isValidDate($date) || $places === [] || $logicVersion === '') {
             return false;
         }
 
@@ -61,6 +61,9 @@ final class HomeCourseSignalSnapshotStore
             'base_only' => true,
             'generated_at' => date('c'),
             'config_mtime' => (int)(@filemtime($configPath) ?: 0),
+            // 保存した展示前サインが、現在のAPI・PHP・Python・モデルと同じ版かを
+            // TOP APIで確認する。旧スナップショット（この項目なし）は自動で無効化される。
+            'logic_version' => $logicVersion,
             'places' => $places,
             'race_codes' => $raceCodes,
         ];
@@ -84,6 +87,15 @@ final class HomeCourseSignalSnapshotStore
 
         self::prune();
         return true;
+    }
+
+    /** @param array<string,mixed> $snapshot */
+    public static function isValidForLogicVersion(array $snapshot, string $currentLogicVersion): bool
+    {
+        $snapshotVersion = (string)($snapshot['logic_version'] ?? '');
+        return $snapshotVersion !== ''
+            && $currentLogicVersion !== ''
+            && hash_equals($currentLogicVersion, $snapshotVersion);
     }
 
     private static function directory(): string
