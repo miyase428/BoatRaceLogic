@@ -12,11 +12,12 @@ import argparse
 import json
 import math
 import sys
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from datetime import date, timedelta
 from pathlib import Path
 
 import numpy as np
+import sklearn
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
@@ -57,6 +58,7 @@ PLACE_NAMES = {
     "TMG": "多摩川",
     "ASY": "芦屋",
     "AMG": "尼崎",
+    "BWK": "びわこ",
 }
 TARGETS = ("first", "top2", "top3")
 PROFILE_KEYS = ("nige", "sashi", "makuri", "attack")
@@ -80,6 +82,7 @@ SECOND_KEYS = (
     "gap_to_top",
 )
 ROLLING_EXHIBITION_DAYS = 183
+LAST_DATASET_AUDIT: dict = {}
 
 
 def safe_float(value) -> float:
@@ -218,6 +221,7 @@ def current_signal(base: dict, config: dict, course: int) -> bool:
 
 
 def build_dataset(start: date, end: date, config: dict) -> tuple[list[dict], list[str], list[str]]:
+    global LAST_DATASET_AUDIT
     print(f"{PLACE_NAMES.get(PLACE, PLACE)}データ読込 {start}～{end}", flush=True)
     races = load_prerace_targets(start, end, (PLACE,))
     player_ids = sorted({boat["player_id"] for race in races.values() for boat in race["boats"]})
@@ -357,6 +361,18 @@ def build_dataset(start: date, end: date, config: dict) -> tuple[list[dict], lis
         f"使用可能={len(records) // 6:,}R / 元={len(races):,}R / skip={dict(skipped)}",
         flush=True,
     )
+    source_dates = [race["date"] for race in races.values()]
+    used_dates = [row["date"] for row in records]
+    LAST_DATASET_AUDIT = {
+        "source_races": len(races),
+        "source_min_date": min(source_dates).isoformat() if source_dates else None,
+        "source_max_date": max(source_dates).isoformat() if source_dates else None,
+        "used_races": len(records) // 6,
+        "used_min_date": min(used_dates).isoformat() if used_dates else None,
+        "used_max_date": max(used_dates).isoformat() if used_dates else None,
+        "excluded_races": len(races) - (len(records) // 6),
+        "exclusion_reasons": dict(sorted(skipped.items())),
+    }
     return records, pre_features, post_features
 
 
@@ -408,6 +424,37 @@ def selection_metrics(y: np.ndarray, selected: np.ndarray) -> dict:
         "rate": rate,
         "base_rate": base,
         "lift_point": None if rate is None else rate - base,
+    }
+
+
+def selection_bias(rows: list[dict], selected: np.ndarray, course: int) -> dict:
+    """選抜が特定選手・級別・全国勝率帯へ偏り過ぎていないかを記録する。"""
+    selected_rows = [row for row, include in zip(rows, selected) if include]
+    class_counts = Counter(str(row.get("player_class") or "未取得") for row in selected_rows)
+    player_counts = Counter(str(row.get("player_id") or "") for row in selected_rows)
+    bands = Counter()
+    key = f"c{course}_national_win_rate"
+    for row in selected_rows:
+        value = safe_float(row["features"].get(key))
+        if not math.isfinite(value):
+            bands["未取得"] += 1
+        elif value < 4.0:
+            bands["4.0未満"] += 1
+        elif value < 5.0:
+            bands["4.0-5.0"] += 1
+        elif value < 6.0:
+            bands["5.0-6.0"] += 1
+        else:
+            bands["6.0以上"] += 1
+    total = len(selected_rows)
+    return {
+        "n": total,
+        "top_players": [
+            {"player_id": player_id, "n": count, "share": count / total if total else 0.0}
+            for player_id, count in player_counts.most_common(10)
+        ],
+        "class_counts": dict(sorted(class_counts.items())),
+        "national_win_rate_bands": dict(sorted(bands.items())),
     }
 
 
@@ -613,7 +660,7 @@ def importance(model: Pipeline, x: np.ndarray, y: np.ndarray, names: list[str]) 
 
 
 def evaluate_course_target(
-    rows: list[dict], target: str, pre_features: list[str], post_features: list[str]
+    rows: list[dict], target: str, pre_features: list[str], post_features: list[str], course: int
 ) -> dict:
     train = [row for row in rows if row["split"] == "train"]
     valid = [row for row in rows if row["split"] == "valid"]
@@ -652,6 +699,7 @@ def evaluate_course_target(
         "period_counts": {"train": len(train), "valid": len(valid), "test": len(test)},
         "base_test_rate": float(np.mean(post["y_test"])),
         "current": selection_metrics(post["y_test"], current_test),
+        "comparator": "current_signal" if np.any(current_test) else "base_rate",
         "pre_ml": {
             "model": pre["model"],
             "threshold": pre_threshold,
@@ -669,6 +717,11 @@ def evaluate_course_target(
             "threshold": hybrid_threshold,
             "selection": selection_metrics(post["y_test"], hybrid_selected),
         },
+        "selection_bias": {
+            "pre_ml": selection_bias(test, pre_selected, course),
+            "post_ml": selection_bias(test, post_selected, course),
+            "hybrid": selection_bias(test, hybrid_selected, course),
+        },
         "monthly_test": monthly_selection(test, post["y_test"], selections),
         "monthly_stability": {
             "comparator": "current" if np.any(current_test) else "base",
@@ -684,13 +737,13 @@ def evaluate_course_target(
         },
         "uncertainty": {
             "pre_ml_vs_current_rate": bootstrap_rate_difference(
-                post["y_test"], pre_selected, current_test
+                post["y_test"], pre_selected, comparison_baseline_test
             ),
             "post_ml_vs_current_rate": bootstrap_rate_difference(
-                post["y_test"], post_selected, current_test
+                post["y_test"], post_selected, comparison_baseline_test
             ),
             "hybrid_vs_current_rate": bootstrap_rate_difference(
-                post["y_test"], hybrid_selected, current_test
+                post["y_test"], hybrid_selected, comparison_baseline_test
             ),
             "post_vs_pre_brier": bootstrap_brier_difference(
                 post["y_test"], pre["test_probability"], post["test_probability"]
@@ -709,6 +762,35 @@ def evaluate_course_target(
     return result
 
 
+def classify_candidate(item: dict) -> str:
+    """TESTはモデル・閾値の選択に使わず、探索結果の説明分類にのみ使う。"""
+    selection = item["post_ml"]["selection"]
+    ordinary = item["uncertainty"]["post_ml_vs_current_rate"]
+    block = item["uncertainty"]["post_ml_vs_comparator_month_block"]
+    stability = item["monthly_stability"]["post_ml"]["classification"]
+    improvement = ordinary.get("probability_improves")
+    block_improvement = block.get("probability_improves")
+    if (
+        selection["n"] >= 30
+        and selection["lift_point"] is not None
+        and selection["lift_point"] > 0
+        and improvement is not None and improvement >= 0.95
+        and block_improvement is not None and block_improvement >= 0.80
+        and stability in {"安定", "やや不安定"}
+    ):
+        return "強い候補"
+    if (
+        selection["n"] >= 20
+        and selection["lift_point"] is not None
+        and selection["lift_point"] > 0
+        and improvement is not None and improvement >= 0.75
+    ):
+        return "次点"
+    if item["comparator"] == "current_signal":
+        return "現行維持寄り"
+    return "見送り寄り"
+
+
 def pct(value) -> str:
     return "-" if value is None else f"{100.0 * float(value):.2f}%"
 
@@ -718,22 +800,31 @@ def write_markdown(report: dict, path: Path) -> None:
     lines = [
         f"# {place_name} 全コースサイン ゼロベースML監査（point-in-time版）",
         "",
+        f"- 実行環境: Python {report['runtime']['python']} / scikit-learn {report['runtime']['scikit_learn']} / numpy {report['runtime']['numpy']}",
         f"- 対象期間: {report['period']['start']}～{report['period']['end']}",
         f"- 学習: ～{report['period']['train_end']} / 検証: ～{report['period']['valid_end']} / 最終テスト: それ以降",
         f"- 使用レース: {report['races']:,}R",
         "- 現行サインは比較対象のみ。モデル特徴量には不使用。",
         f"- 展示タイム場平均は対象日を除く同場直近{ROLLING_EXHIBITION_DAYS}日だけで算出。",
-        "- ML選択数は、原則として現行サインと同程度のカバー率へ検証期間で固定。6Cは20%。",
+        "- ML選択数は、原則として現行サインと同程度のカバー率へ検証期間で固定。現行サインなしは20%。",
         "- 月block比較は現行サインありなら現行、なしなら全体基礎率を比較対象とする。",
         "",
     ]
+    layout = report.get("layout_audit", {})
+    if layout.get("layout_change_date"):
+        lines += [
+            f"- レイアウト変更日: {layout['layout_change_date']}",
+            f"- 元データ最古日: {layout.get('source_min_date')}",
+            f"- 使用データは全件レイアウト変更後: {'はい' if layout.get('all_source_races_after_layout_change') else 'いいえ'}",
+            "",
+        ]
     for course in range(1, 7):
         lines += [f"## {course}コース", ""]
-        lines += ["|対象|基礎率|現行 N/率|展示前ML N/率|展示後ML N/率|現行＋ML N/率|", "|---|---:|---:|---:|---:|---:|"]
+        lines += ["|対象|分類|基礎率|現行 N/率|展示前ML N/率|展示後ML N/率|現行＋ML N/率|", "|---|---|---:|---:|---:|---:|---:|"]
         for target in TARGETS:
             item = report["courses"][str(course)][target]
             lines.append(
-                f"|{target}|{pct(item['base_test_rate'])}|"
+                f"|{target}|{item['classification']}|{pct(item['base_test_rate'])}|"
                 f"{item['current']['n']} / {pct(item['current']['rate'])}|"
                 f"{item['pre_ml']['selection']['n']} / {pct(item['pre_ml']['selection']['rate'])}|"
                 f"{item['post_ml']['selection']['n']} / {pct(item['post_ml']['selection']['rate'])}|"
@@ -797,6 +888,12 @@ def main() -> int:
     valid_start = months_ago(test_start, args.valid_months)
     config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
     records, pre_features, post_features = build_dataset(start, end, config)
+    layout_change = date(2020, 10, 26) if PLACE == "BWK" else None
+    source_min = LAST_DATASET_AUDIT.get("source_min_date")
+    if layout_change is not None and source_min is not None and parse_date(source_min) < layout_change:
+        raise RuntimeError(
+            f"{PLACE} layout-change boundary breach: {source_min} < {layout_change.isoformat()}"
+        )
     for row in records:
         row["split"] = "train" if row["date"] < valid_start else ("valid" if row["date"] < test_start else "test")
     split_races = {
@@ -820,7 +917,20 @@ def main() -> int:
             "train_end": (valid_start - timedelta(days=1)).isoformat(),
             "valid_end": (test_start - timedelta(days=1)).isoformat(),
         },
+        "runtime": {
+            "python": sys.version.split()[0],
+            "scikit_learn": sklearn.__version__,
+            "numpy": np.__version__,
+        },
         "races": len(records) // 6,
+        "dataset_audit": LAST_DATASET_AUDIT,
+        "layout_audit": {
+            "layout_change_date": layout_change.isoformat() if layout_change else None,
+            "source_min_date": source_min,
+            "all_source_races_after_layout_change": (
+                source_min is None or layout_change is None or parse_date(source_min) >= layout_change
+            ),
+        },
         "split_integrity": {
             "race_counts": {key: len(value) for key, value in split_races.items()},
             "race_code_overlap": split_overlap,
@@ -836,9 +946,11 @@ def main() -> int:
         print(f"{course}Cを監査中", flush=True)
         course_rows = [row for row in records if row["course"] == course]
         report["courses"][str(course)] = {
-            target: evaluate_course_target(course_rows, target, pre_features, post_features)
+            target: evaluate_course_target(course_rows, target, pre_features, post_features, course)
             for target in TARGETS
         }
+        for item in report["courses"][str(course)].values():
+            item["classification"] = classify_candidate(item)
     output_prefix = args.output_prefix or (
         ROOT / "analysis" / "output" /
         f"{PLACE.lower()}_course_signal_zero_base_ml_point_in_time_{end.strftime('%Y%m%d')}"
