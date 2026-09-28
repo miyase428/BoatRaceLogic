@@ -1,0 +1,13 @@
+{
+  "version": "kiryuu_course_signal_v1",
+  "path": "/var/www/html/boatrace/forecast/models/kiryuu_course_signal_v1.joblib",
+  "sha256": "f267de0c2f8cd4e0cc7786dcdeb97952f23531325b45cfde563cea799189cb22",
+  "period": {
+    "start": "2023-09-28",
+    "train_end": "2025-09-27",
+    "valid_start": "2025-09-28",
+    "valid_end": "2026-03-27",
+    "test_start": "2026-03-28",
+    "test_end": "2026-09-27"
+  }
+}

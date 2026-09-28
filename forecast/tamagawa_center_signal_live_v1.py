@@ -42,6 +42,7 @@ from slit_validate_v2 import connect_db  # noqa: E402
 
 PLACE = "TMG"
 MODEL_PATHS = {
+    "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
     "OMR": ROOT / "forecast" / "models" / "omura_course_signal_v1.joblib",

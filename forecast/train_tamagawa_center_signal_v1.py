@@ -30,6 +30,7 @@ START = date(2023, 9, 27)
 VALID_START = date(2025, 9, 27)
 TEST_START = date(2026, 3, 27)
 MODEL_PATHS = {
+    "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
     "OMR": ROOT / "forecast" / "models" / "omura_course_signal_v1.joblib",
@@ -38,6 +39,7 @@ MODEL_PATHS = {
 }
 
 PERIODS_BY_PLACE = {
+    "KRY": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "SME": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
 }
 
@@ -162,10 +164,34 @@ SME_SPECS = {
         "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "exhibition"), "coverage": 0.15},
     },
 }
+KRY_SPECS = {
+    1: {
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "technique", "exhibition")},
+    },
+    2: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "exhibition")},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "technique")},
+        "top3": {"model": "logistic", "groups": ("player_strength",)},
+    },
+    3: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "st", "technique", "exhibition"), "coverage": 0.15},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "st", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+    },
+    5: {
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "st", "exhibition")},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "exhibition")},
+    },
+    6: {
+        "top2": {"model": "hist_gradient", "groups": ("player_strength",), "coverage": 0.15},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+    },
+}
 SPECS_BY_PLACE = {
-    "TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
+    "KRY": KRY_SPECS, "TMG": TMG_SPECS, "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
 }
 VERSION_BY_PLACE = {
+    "KRY": "kiryuu_course_signal_v1",
     "TMG": "tamagawa_course_signal_v1",
     "TDA": "toda_course_signal_v1",
     "OMR": "omura_course_signal_v1",

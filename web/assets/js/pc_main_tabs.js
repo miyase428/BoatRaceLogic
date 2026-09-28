@@ -344,6 +344,7 @@
                         const isLane6 = course === 6;
                         const isCenterMl = detail.model_version === 'tamagawa_center_signal_v1'
                             || detail.model_version === 'tamagawa_course_signal_v1'
+                            || detail.model_version === 'kiryuu_course_signal_v1'
                             || detail.model_version === 'toda_course_signal_v1'
                             || detail.model_version === 'omura_course_signal_v1'
                             || detail.model_version === 'shimonoseki_course_signal_v1'
