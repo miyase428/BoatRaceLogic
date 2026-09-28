@@ -12,7 +12,7 @@ import argparse
 import json
 import math
 import sys
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -31,7 +31,6 @@ sys.path.insert(0, str(ROOT / "analysis"))
 from analyze_all_venue_lane_signals import load_prerace_targets, profile_rates  # noqa: E402
 from analyze_all_venue_secondary_signals import (  # noqa: E402
     build_second_scores,
-    load_avg_exhibition,
     load_exhibition,
 )
 from analyze_tamagawa_boaters_hypothesis import (  # noqa: E402
@@ -80,6 +79,7 @@ SECOND_KEYS = (
     "second_rank",
     "gap_to_top",
 )
+ROLLING_EXHIBITION_DAYS = 183
 
 
 def safe_float(value) -> float:
@@ -135,6 +135,71 @@ ORDER BY re.race_code, re.lane_number
     return out
 
 
+def load_point_in_time_avg_exhibition(
+    start: date,
+    end: date,
+    place: str,
+) -> dict[date, float]:
+    """対象日前183日の同場展示タイム平均を日付単位で返す。
+
+    対象日当日の展示は、同日内のレース順にかかわらず一切含めない。
+    exhibition_live に再取得行がある場合は race_code/player_id ごとの最新行を
+    1件だけ採用する。
+    """
+    history_start = start - timedelta(days=ROLLING_EXHIBITION_DAYS)
+    sql = """
+SELECT race_date, exhibition_time
+FROM (
+    SELECT DISTINCT ON (el.race_code, el.player_id)
+        rm.race_date,
+        el.race_code,
+        el.player_id,
+        el.exhibition_time
+    FROM boat_race.exhibition_live el
+    JOIN boat_race.race_master rm ON rm.race_code = el.race_code
+    WHERE rm.race_date BETWEEN %s::date AND %s::date
+      AND SUBSTRING(el.race_code, 9, 3) = %s
+      AND el.exhibition_time IS NOT NULL
+      AND el.exhibition_time > 0
+    ORDER BY el.race_code, el.player_id, el.created_date DESC NULLS LAST
+) latest
+ORDER BY race_date
+"""
+    daily = defaultdict(lambda: [0.0, 0])
+    with connect_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (history_start, end, place))
+            for race_date, exhibition_time in cur.fetchall():
+                value = safe_float(exhibition_time)
+                if math.isfinite(value) and value > 0:
+                    daily[race_date][0] += value
+                    daily[race_date][1] += 1
+
+    history: deque[tuple[date, float, int]] = deque()
+    rolling_sum = 0.0
+    rolling_n = 0
+    averages: dict[date, float] = {}
+    cursor = history_start
+    while cursor <= end:
+        cutoff = cursor - timedelta(days=ROLLING_EXHIBITION_DAYS)
+        while history and history[0][0] < cutoff:
+            _, old_sum, old_n = history.popleft()
+            rolling_sum -= old_sum
+            rolling_n -= old_n
+
+        if cursor >= start and rolling_n > 0:
+            averages[cursor] = rolling_sum / rolling_n
+
+        # 当日の値は、その日の平均を確定した後で履歴へ追加する。
+        day_sum, day_n = daily.get(cursor, (0.0, 0))
+        if day_n:
+            history.append((cursor, float(day_sum), int(day_n)))
+            rolling_sum += float(day_sum)
+            rolling_n += int(day_n)
+        cursor += timedelta(days=1)
+    return averages
+
+
 def relative_values(rows: list[dict], key: str) -> dict[str, float]:
     values = [safe_float(row.get(key)) for row in rows]
     valid = [value for value in values if math.isfinite(value)]
@@ -161,7 +226,7 @@ def build_dataset(start: date, end: date, config: dict) -> tuple[list[dict], lis
         load_lane1_vulnerability_history(start, end, player_ids)
     )
     exhibition_by_race = load_exhibition(start, end, PLACE)
-    average_exhibition = load_avg_exhibition(PLACE)
+    average_exhibition_by_date = load_point_in_time_avg_exhibition(start, end, PLACE)
     entry_facts = load_entry_facts(start, end)
 
     pre_features = []
@@ -190,6 +255,7 @@ def build_dataset(start: date, end: date, config: dict) -> tuple[list[dict], lis
     skipped = defaultdict(int)
     for race_code, race in sorted(races.items()):
         boats = race["boats"]
+        average_exhibition = average_exhibition_by_date.get(race["date"])
         if len(boats) != 6 or race_code not in exhibition_by_race or average_exhibition is None:
             skipped["missing_race_or_exhibition"] += 1
             continue
@@ -384,6 +450,94 @@ def bootstrap_rate_difference(
     }
 
 
+def block_bootstrap_rate_difference(
+    rows: list[dict],
+    y: np.ndarray,
+    candidate: np.ndarray,
+    baseline: np.ndarray,
+    samples: int = 5000,
+) -> dict:
+    """月をブロックとして再標本化し、選択率の差を評価する。"""
+    if not np.any(candidate) or not np.any(baseline):
+        return {
+            "unit": "month",
+            "blocks": 0,
+            "difference": None,
+            "ci95_low": None,
+            "ci95_high": None,
+            "probability_improves": None,
+        }
+    month_keys = np.asarray([row["date"].strftime("%Y-%m") for row in rows])
+    months = sorted(set(month_keys.tolist()))
+    block_indices = {month: np.flatnonzero(month_keys == month) for month in months}
+    rng = np.random.default_rng(20260927)
+    differences = []
+    for _ in range(samples):
+        sampled_months = rng.choice(months, size=len(months), replace=True)
+        indices = np.concatenate([block_indices[str(month)] for month in sampled_months])
+        cand = candidate[indices]
+        base = baseline[indices]
+        if not np.any(cand) or not np.any(base):
+            continue
+        sampled = y[indices]
+        differences.append(float(np.mean(sampled[cand]) - np.mean(sampled[base])))
+    values = np.asarray(differences, dtype=np.float64)
+    low, high = np.quantile(values, [0.025, 0.975])
+    return {
+        "unit": "month",
+        "blocks": len(months),
+        "difference": float(np.mean(y[candidate]) - np.mean(y[baseline])),
+        "ci95_low": float(low),
+        "ci95_high": float(high),
+        "probability_improves": float(np.mean(values > 0)),
+    }
+
+
+def classify_monthly_stability(
+    rows: list[dict],
+    y: np.ndarray,
+    candidate: np.ndarray,
+    baseline: np.ndarray,
+) -> dict:
+    months = sorted({row["date"].strftime("%Y-%m") for row in rows})
+    details = []
+    for month in months:
+        mask = np.asarray([row["date"].strftime("%Y-%m") == month for row in rows])
+        cand_n = int(np.sum(candidate & mask))
+        base_n = int(np.sum(baseline & mask))
+        cand_rate = float(np.mean(y[candidate & mask])) if cand_n else None
+        base_rate = float(np.mean(y[baseline & mask])) if base_n else None
+        eligible = cand_n >= 5 and base_n >= 5
+        difference = None if cand_rate is None or base_rate is None else cand_rate - base_rate
+        details.append({
+            "month": month,
+            "candidate_n": cand_n,
+            "candidate_rate": cand_rate,
+            "baseline_n": base_n,
+            "baseline_rate": base_rate,
+            "difference": difference,
+            "eligible": eligible,
+        })
+    eligible_rows = [item for item in details if item["eligible"]]
+    positive = sum(1 for item in eligible_rows if item["difference"] is not None and item["difference"] > 0)
+    negative = sum(1 for item in eligible_rows if item["difference"] is not None and item["difference"] < 0)
+    eligible_n = len(eligible_rows)
+    if eligible_n >= 4 and positive / eligible_n >= 0.67 and int(np.sum(candidate)) >= 30:
+        label = "安定"
+    elif eligible_n >= 3 and positive / eligible_n >= 0.50 and int(np.sum(candidate)) >= 20:
+        label = "やや不安定"
+    else:
+        label = "不安定"
+    return {
+        "classification": label,
+        "eligible_months": eligible_n,
+        "positive_months": positive,
+        "negative_months": negative,
+        "minimum_n_per_selection": 5,
+        "months": details,
+    }
+
+
 def bootstrap_brier_difference(
     y: np.ndarray, baseline: np.ndarray, candidate: np.ndarray, samples: int = 5000
 ) -> dict:
@@ -486,6 +640,7 @@ def evaluate_course_target(
         "post_ml": post_selected,
         "hybrid": hybrid_selected,
     }
+    comparison_baseline_test = current_test if np.any(current_test) else np.ones(len(test), dtype=bool)
 
     result = {
         "target": target,
@@ -510,6 +665,18 @@ def evaluate_course_target(
             "selection": selection_metrics(post["y_test"], hybrid_selected),
         },
         "monthly_test": monthly_selection(test, post["y_test"], selections),
+        "monthly_stability": {
+            "comparator": "current" if np.any(current_test) else "base",
+            "pre_ml": classify_monthly_stability(
+                test, post["y_test"], pre_selected, comparison_baseline_test
+            ),
+            "post_ml": classify_monthly_stability(
+                test, post["y_test"], post_selected, comparison_baseline_test
+            ),
+            "hybrid": classify_monthly_stability(
+                test, post["y_test"], hybrid_selected, comparison_baseline_test
+            ) if np.any(hybrid_selected) else None,
+        },
         "uncertainty": {
             "pre_ml_vs_current_rate": bootstrap_rate_difference(
                 post["y_test"], pre_selected, current_test
@@ -523,6 +690,15 @@ def evaluate_course_target(
             "post_vs_pre_brier": bootstrap_brier_difference(
                 post["y_test"], pre["test_probability"], post["test_probability"]
             ),
+            "pre_ml_vs_comparator_month_block": block_bootstrap_rate_difference(
+                test, post["y_test"], pre_selected, comparison_baseline_test
+            ),
+            "post_ml_vs_comparator_month_block": block_bootstrap_rate_difference(
+                test, post["y_test"], post_selected, comparison_baseline_test
+            ),
+            "hybrid_vs_comparator_month_block": block_bootstrap_rate_difference(
+                test, post["y_test"], hybrid_selected, comparison_baseline_test
+            ),
         },
     }
     return result
@@ -535,13 +711,15 @@ def pct(value) -> str:
 def write_markdown(report: dict, path: Path) -> None:
     place_name = str(report.get("place_name") or report.get("place") or "対象場")
     lines = [
-        f"# {place_name} 全コースサイン ゼロベースML監査",
+        f"# {place_name} 全コースサイン ゼロベースML監査（point-in-time版）",
         "",
         f"- 対象期間: {report['period']['start']}～{report['period']['end']}",
         f"- 学習: ～{report['period']['train_end']} / 検証: ～{report['period']['valid_end']} / 最終テスト: それ以降",
         f"- 使用レース: {report['races']:,}R",
         "- 現行サインは比較対象のみ。モデル特徴量には不使用。",
+        f"- 展示タイム場平均は対象日を除く同場直近{ROLLING_EXHIBITION_DAYS}日だけで算出。",
         "- ML選択数は、原則として現行サインと同程度のカバー率へ検証期間で固定。6Cは20%。",
+        "- 月block比較は現行サインありなら現行、なしなら全体基礎率を比較対象とする。",
         "",
     ]
     for course in range(1, 7):
@@ -564,6 +742,16 @@ def write_markdown(report: dict, path: Path) -> None:
             lines.append(
                 f"- {target}: 展示前 {pct(pre['difference'])}（改善確率 {pct(pre['probability_improves'])}）"
                 f" / 展示後 {pct(post['difference'])}（改善確率 {pct(post['probability_improves'])}）"
+            )
+        lines += ["", "展示後MLの月ブロック評価・月別安定性:", ""]
+        for target in TARGETS:
+            item = report["courses"][str(course)][target]
+            block = item["uncertainty"]["post_ml_vs_comparator_month_block"]
+            stability = item["monthly_stability"]["post_ml"]
+            lines.append(
+                f"- {target}: 月block改善確率 {pct(block['probability_improves'])} / "
+                f"{stability['classification']} "
+                f"（改善月 {stability['positive_months']}/{stability['eligible_months']}）"
             )
         lines += ["", "展示後MLの主な特徴:", ""]
         for target in TARGETS:
@@ -606,10 +794,19 @@ def main() -> int:
     records, pre_features, post_features = build_dataset(start, end, config)
     for row in records:
         row["split"] = "train" if row["date"] < valid_start else ("valid" if row["date"] < test_start else "test")
+    split_races = {
+        split: {row["race_code"] for row in records if row["split"] == split}
+        for split in ("train", "valid", "test")
+    }
+    split_overlap = {
+        "train_valid": len(split_races["train"] & split_races["valid"]),
+        "train_test": len(split_races["train"] & split_races["test"]),
+        "valid_test": len(split_races["valid"] & split_races["test"]),
+    }
 
     report = {
         "status": "ok",
-        "version": "venue-course-signal-zero-base-ml-v1",
+        "version": "venue-course-signal-zero-base-ml-point-in-time-v2",
         "place": PLACE,
         "place_name": PLACE_NAMES.get(PLACE, PLACE),
         "period": {
@@ -619,6 +816,14 @@ def main() -> int:
             "valid_end": (test_start - timedelta(days=1)).isoformat(),
         },
         "races": len(records) // 6,
+        "split_integrity": {
+            "race_counts": {key: len(value) for key, value in split_races.items()},
+            "race_code_overlap": split_overlap,
+        },
+        "feature_time_policy": {
+            "exhibition_average": "same venue, previous 183 days, target date excluded",
+            "same_day_history": "excluded for technique and vulnerability histories",
+        },
         "feature_sets": {"pre": pre_features, "post": post_features},
         "courses": {},
     }
@@ -630,7 +835,8 @@ def main() -> int:
             for target in TARGETS
         }
     output_prefix = args.output_prefix or (
-        ROOT / "analysis" / "output" / f"{PLACE.lower()}_course_signal_zero_base_ml_{end.strftime('%Y%m%d')}"
+        ROOT / "analysis" / "output" /
+        f"{PLACE.lower()}_course_signal_zero_base_ml_point_in_time_{end.strftime('%Y%m%d')}"
     )
     json_path = output_prefix.with_suffix(".json")
     markdown_path = output_prefix.with_suffix(".md")
