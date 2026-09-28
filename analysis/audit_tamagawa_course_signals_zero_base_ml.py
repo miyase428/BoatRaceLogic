@@ -102,7 +102,8 @@ SELECT
     ps.local_exacta_rate,
     es.motor_exacta_rate,
     es.boat_exacta_rate,
-    rr.average_start
+    rr.average_start,
+    rr."class"::text AS player_class
 FROM boat_race.race_entry re
 LEFT JOIN boat_race.player_stats ps
   ON ps.race_code = re.race_code
@@ -338,10 +339,14 @@ def build_dataset(start: date, end: date, config: dict) -> tuple[list[dict], lis
             continue
 
         for course in range(1, 7):
+            subject_player_id = str(by_course[course]["player_id"]).strip()
+            subject_facts = entry_facts.get((race_code, subject_player_id), {})
             records.append({
                 "race_code": race_code,
                 "date": race_date,
                 "course": course,
+                "player_id": subject_player_id,
+                "player_class": str(subject_facts.get("player_class") or "").strip().upper(),
                 "first": int(race["first"] == course),
                 "top2": int(course in (race["first"], race["second"])),
                 "top3": int(course in (race["first"], race["second"], race["third"])),
