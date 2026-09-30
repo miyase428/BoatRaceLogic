@@ -21,9 +21,21 @@ from pathlib import Path
 
 import numpy as np
 import sklearn
-from catboost import CatBoostClassifier
-from flaml import AutoML
-from interpret.glassbox import ExplainableBoostingClassifier
+
+# --foundation-tabdpt は既存4モデルの保存済み成果物を読むだけでよい。
+# 重い任意依存を持たない隔離環境でも、その経路だけを実行できるようにする。
+try:
+    from catboost import CatBoostClassifier
+except ImportError:  # pragma: no cover - checked by the four-model path
+    CatBoostClassifier = None
+try:
+    from flaml import AutoML
+except ImportError:  # pragma: no cover - checked by the four-model path
+    AutoML = None
+try:
+    from interpret.glassbox import ExplainableBoostingClassifier
+except ImportError:  # pragma: no cover - checked by the four-model path
+    ExplainableBoostingClassifier = None
 from sklearn.base import clone
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
@@ -103,6 +115,21 @@ EBM_PARAMETERS = {
     "n_jobs": 4,
     "random_state": RANDOM_SEED,
     "objective": "log_loss",
+}
+
+# TabDPT v1.2.0 is the official TabDPT-Turbo release. CPU設定だけを明示し、
+# 公式の標準前処理（PCA feature reduction / context subsample）は変更しない。
+TABDPT_TURBO_PARAMETERS = {
+    "normalizer": "standard",
+    "missing_indicators": False,
+    "clip_sigma": 8.0,
+    "feature_reduction": "pca",
+    "context_reduction": "subsample",
+    "device": "cpu",
+    "use_flash": False,
+    "compile": False,
+    "verbose": False,
+    "predict_seed": RANDOM_SEED,
 }
 
 
@@ -619,11 +646,182 @@ def write_four_model_markdown(path: Path, experiment: dict, summary: list[dict],
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def process_rss_kb() -> int | None:
+    """現在のRSSをLinuxの/procから取得する。取得不能でも比較を止めない。"""
+    try:
+        for line in Path("/proc/self/status").read_text(encoding="utf-8").splitlines():
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1])
+    except OSError:
+        pass
+    return None
+
+
+def five_model_monthly_rows(
+    place: str,
+    course: int,
+    target: str,
+    test_rows: list[dict],
+    y_test: np.ndarray,
+    baseline_monthly: dict[tuple[str, int, str, str], dict],
+    tabdpt_probability: np.ndarray,
+) -> list[dict]:
+    months = np.asarray([row["date"].strftime("%Y-%m") for row in test_rows])
+    output: list[dict] = []
+    for month in sorted(set(months.tolist())):
+        mask = months == month
+        baseline = baseline_monthly[(place, course, target, month)]
+        scores = {
+            "hgb": float(baseline["hgb_brier"]),
+            "catboost": float(baseline["catboost_brier"]),
+            "flaml": float(baseline["flaml_brier"]),
+            "ebm": float(baseline["ebm_brier"]),
+            "tabdpt_turbo": float(brier_score_loss(y_test[mask], tabdpt_probability[mask])),
+        }
+        best = min(scores.values())
+        output.append({
+            "place": place, "course": course, "target": target, "month": month,
+            "n": int(mask.sum()), "positive_rate": float(np.mean(y_test[mask])),
+            **{f"{model}_brier": value for model, value in scores.items()},
+            "winner": "+".join(model for model, value in scores.items() if np.isclose(value, best, rtol=0.0, atol=1e-15)),
+        })
+    return output
+
+
+def write_five_model_markdown(path: Path, experiment: dict, summary: list[dict], monthly: list[dict]) -> None:
+    models = ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo")
+    mean_valid = {model: float(np.mean([float(row[f"valid_{model}_brier"]) for row in summary])) for model in models}
+    mean_test = {model: float(np.mean([float(row[f"test_{model}_brier"]) for row in summary])) for model in models}
+    best_cases = {model: sum(model in row["test_winner"].split("+") for row in summary) for model in models}
+    monthly_wins = {model: sum(model in row["winner"].split("+") for row in monthly) for model in models}
+    lines = [
+        "# コースサインML正式比較: 5モデル（TabDPT-Turbo追加）", "",
+        "## 実行可否", "",
+        "- **TabDPT-Turbo v1.2.0: 正式36ケース比較を完走。**",
+        "- **TabICLv2: CPU最小設定でも代表full splitで最大RSS 5.55GB。8GBサーバで継続安全性が不足するため、今回の正式比較対象外（smokeのみ）。**",
+        "", "## 固定条件", "",
+        f"- Git: `{experiment['git_sha']}` / 基準4モデル成果物: `{experiment['baseline_experiment_git_sha']}`",
+        f"- 対象: ASY・AMG、1〜6C × first/top2/top3 = 36ケース。展示込み170特徴量を入力。",
+        f"- TRAIN {experiment['period']['train']} / VALID {experiment['period']['valid']} / TEST {experiment['period']['test']}",
+        "- HGB/CatBoost/FLAML/EBMは既存正式成果物を再利用。TabDPT-Turboだけを今回TRAINでfitし、VALID/TESTは評価専用。",
+        "- TabDPT-Turboは公式v1.2.0、CPU、flash/compile無効。170特徴を入力後、公式標準のPCA feature reductionとcontext subsampleを使用。",
+        "- TabICLv2は公式v2 checkpointを使うCPU smokeのみ。公式事前学習範囲は2〜100列のため、170列の結果は参考値として扱う。",
+        "", "## 全体集計", "", "|モデル|VALID平均Brier|TEST平均Brier|TEST最良ケース|HGB比TEST改善|CatBoost比TEST改善|FLAML比TEST改善|EBM比TEST改善|月別case×month最良|", "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for model in models:
+        improvements = [sum(float(row[f"test_{model}_brier"]) < float(row[f"test_{baseline}_brier"]) for row in summary) for baseline in ("hgb", "catboost", "flaml", "ebm")]
+        lines.append(f"|{model}|{mean_valid[model]:.8f}|{mean_test[model]:.8f}|{best_cases[model]}|{improvements[0]}|{improvements[1]}|{improvements[2]}|{improvements[3]}|{monthly_wins[model]}|")
+    lines += ["", "## 36ケース", "", "|場|C|target|TRAIN|VALID|TEST|HGB|CatBoost|FLAML|EBM|TabDPT-Turbo|最良|", "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+    for row in summary:
+        lines.append(f"|{row['place']}|{row['course']}|{row['target']}|{row['train_n']}|{row['valid_n']}|{row['test_n']}|{float(row['test_hgb_brier']):.6f}|{float(row['test_catboost_brier']):.6f}|{float(row['test_flaml_brier']):.6f}|{float(row['test_ebm_brier']):.6f}|{float(row['test_tabdpt_turbo_brier']):.6f}|{row['test_winner']}|")
+    for title, keys in (("場別", ("place",)), ("コース別", ("course",)), ("target別", ("target",))):
+        groups: dict[tuple, list[dict]] = {}
+        for row in summary:
+            groups.setdefault(tuple(row[key] for key in keys), []).append(row)
+        lines += ["", f"## {title}", "", "|区分|ケース|HGB|CatBoost|FLAML|EBM|TabDPT-Turbo|TabDPT最良|", "|---|---:|---:|---:|---:|---:|---:|---:|"]
+        for key, values in sorted(groups.items()):
+            label = " / ".join(map(str, key))
+            means = [float(np.mean([float(row[f"test_{model}_brier"]) for row in values])) for model in models]
+            wins = sum("tabdpt_turbo" in row["test_winner"].split("+") for row in values)
+            lines.append(f"|{label}|{len(values)}|{means[0]:.6f}|{means[1]:.6f}|{means[2]:.6f}|{means[3]:.6f}|{means[4]:.6f}|{wins}|")
+    lines += ["", "## 月別安定性", "", "|月|HGB平均|CatBoost平均|FLAML平均|EBM平均|TabDPT-Turbo平均|", "|---|---:|---:|---:|---:|---:|"]
+    for month in sorted({row["month"] for row in monthly}):
+        values = [row for row in monthly if row["month"] == month]
+        means = [float(np.mean([float(row[f"{model}_brier"]) for row in values])) for model in models]
+        lines.append(f"|{month}|{means[0]:.6f}|{means[1]:.6f}|{means[2]:.6f}|{means[3]:.6f}|{means[4]:.6f}|")
+    lines += ["", "## VALID→TEST安定性", "", "|モデル|VALID平均|TEST平均|TEST - VALID|", "|---|---:|---:|---:|"]
+    for model in models:
+        lines.append(f"|{model}|{mean_valid[model]:.8f}|{mean_test[model]:.8f}|{mean_test[model] - mean_valid[model]:+.8f}|")
+    lines += ["", "## データリークと予測相関", "", "- 既存のpoint-in-timeデータセット生成器を再利用し、結果はラベル作成のみ。払戻・オッズ・未来情報は特徴量に未使用。", "- 既存4モデルの個別予測確率は前回成果物に保存されていないため、再学習禁止方針を守り、今回の確率相関は未算出。", "", "## 実行負荷", "", f"- TabDPT-Turbo 36ケースの総実行時間: {experiment['runtime']['elapsed_seconds']:.2f}秒 / プロセス最大RSS: {experiment['runtime']['max_rss_kb']:,}KB。", "- 個別時間とRSSはsummary CSVに保存。", "", "## 範囲外", "", "本番置換、校正、ブレンド、AI1着率v6比較、race_number、AutoGluon、NGBoostは未実施。"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def foundation_tabdpt_main(args: argparse.Namespace) -> None:
+    """保存済み4モデル成果物へ、CPUで実用可能なTabDPT-Turboだけを統合する。"""
+    from importlib.metadata import version
+    from tabdpt import TabDPTClassifier
+    import gc
+
+    output_dir = ROOT / "analysis" / "output"
+    baseline, baseline_monthly_rows, baseline_experiment = load_baseline(output_dir, args.baseline_stem)
+    baseline_monthly = {(row["place"], int(row["course"]), row["target"], row["month"]): row for row in baseline_monthly_rows}
+    config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
+    started = time.perf_counter()
+    summary: list[dict] = []
+    monthly: list[dict] = []
+    dataset_audit: dict[str, dict] = {}
+    canonical_features: list[str] | None = None
+    for place in PLACES:
+        audit.PLACE = place
+        records, _pre_features, post_features = audit.build_dataset(date(2023, 9, 27), END, config)
+        dataset_audit[place] = dict(audit.LAST_DATASET_AUDIT)
+        if canonical_features is None:
+            canonical_features = list(post_features)
+        elif canonical_features != list(post_features):
+            raise RuntimeError("場ごとに展示込み特徴量一覧が異なります")
+        if len(post_features) != 170:
+            raise RuntimeError(f"展示込み特徴量数が固定条件170と一致しません: {len(post_features)}")
+        for course in COURSES:
+            train, valid, test = split([row for row in records if row["course"] == course])
+            x_train, x_valid, x_test = (as_matrix(rows, post_features) for rows in (train, valid, test))
+            for target in TARGETS:
+                key = (place, course, target)
+                base = baseline[key]
+                for column, actual in (("train_n", len(train)), ("valid_n", len(valid)), ("test_n", len(test))):
+                    if int(base[column]) != actual:
+                        raise RuntimeError(f"前回成果物と今回データ件数が不一致: {key} {column}")
+                y_train = np.asarray([row[target] for row in train], dtype=np.int8)
+                y_valid = np.asarray([row[target] for row in valid], dtype=np.int8)
+                y_test = np.asarray([row[target] for row in test], dtype=np.int8)
+                model = TabDPTClassifier(**{key: value for key, value in TABDPT_TURBO_PARAMETERS.items() if key not in {"predict_seed"}})
+                fit_started = time.perf_counter(); model.fit(x_train, y_train); fit_seconds = time.perf_counter() - fit_started
+                predict_started = time.perf_counter()
+                valid_probability = model.predict_proba(x_valid, seed=RANDOM_SEED)[:, 1]
+                test_probability = model.predict_proba(x_test, seed=RANDOM_SEED)[:, 1]
+                predict_seconds = time.perf_counter() - predict_started
+                valid_metrics, test_metrics = metrics(y_valid, valid_probability), metrics(y_test, test_probability)
+                if np.isnan(test_probability).any() or np.isinf(test_probability).any():
+                    raise RuntimeError(f"TabDPT-Turbo確率にNaN/Inf: {key}")
+                valid_scores = {"hgb": float(base["valid_hgb_brier"]), "catboost": float(base["valid_catboost_brier"]), "flaml": float(base["valid_flaml_brier"]), "ebm": float(base["valid_ebm_brier"]), "tabdpt_turbo": float(valid_metrics["brier"])}
+                test_scores = {"hgb": float(base["test_hgb_brier"]), "catboost": float(base["test_catboost_brier"]), "flaml": float(base["test_flaml_brier"]), "ebm": float(base["test_ebm_brier"]), "tabdpt_turbo": float(test_metrics["brier"])}
+                valid_best, test_best = min(valid_scores.values()), min(test_scores.values())
+                row = {"place": place, "course": course, "target": target, "feature_set": "post_exhibition_170_input", "feature_count": len(post_features), "train_n": len(train), "valid_n": len(valid), "test_n": len(test), "train_positive_rate": float(np.mean(y_train)), "valid_positive_rate": float(np.mean(y_valid)), "test_positive_rate": float(np.mean(y_test)), **{f"valid_{model}_brier": value for model, value in valid_scores.items()}, **{f"test_{model}_brier": value for model, value in test_scores.items()}, "valid_winner": "+".join(model for model, value in valid_scores.items() if np.isclose(value, valid_best, rtol=0.0, atol=1e-15)), "test_winner": "+".join(model for model, value in test_scores.items() if np.isclose(value, test_best, rtol=0.0, atol=1e-15)), "tabdpt_turbo_fit_seconds": fit_seconds, "tabdpt_turbo_predict_seconds": predict_seconds, "tabdpt_turbo_rss_kb_after_predict": process_rss_kb()}
+                for metric_name in ("log_loss", "auc", "accuracy_0_5", "probability_mean"):
+                    for model_name in ("hgb", "catboost", "flaml", "ebm"):
+                        row[f"test_{model_name}_{metric_name}"] = baseline_value(base, f"test_{model_name}_{metric_name}")
+                    row[f"test_tabdpt_turbo_{metric_name}"] = test_metrics[metric_name]
+                summary.append(row)
+                monthly.extend(five_model_monthly_rows(place, course, target, test, y_test, baseline_monthly, test_probability))
+                print(f"{place} {course}C {target}: TEST TabDPT={test_scores['tabdpt_turbo']:.6f} winner={row['test_winner']}", flush=True)
+                del model, valid_probability, test_probability
+                gc.collect()
+    assert canonical_features is not None
+    import torch
+    elapsed = time.perf_counter() - started
+    experiment = {"experiment": "course_signal_model_compare_five_models_with_tabdpt_turbo", "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "git_sha": git_sha(), "baseline_experiment_git_sha": baseline_experiment.get("git_sha"), "places": list(PLACES), "courses": list(COURSES), "targets": list(TARGETS), "period": {"dataset_start": "2023-09-27", "train": "2023-09-27 to 2025-08-31", "valid": "2025-09-01 to 2026-02-28", "test": "2026-03-01 to 2026-09-27"}, "feature_count": len(canonical_features), "feature_list_reference": "post_features from audit_tamagawa_course_signals_zero_base_ml.build_dataset", "tabdpt_turbo": {"package": "tabdpt", "package_version": version("tabdpt"), "model_version": "1.2.0 (official TabDPT-Turbo)", "license": "Apache-2.0", "parameters": TABDPT_TURBO_PARAMETERS, "preprocessing": "official standard normalizer=standard, feature_reduction=pca, context_reduction=subsample; all 170 features are supplied as input"}, "tabicl_v2": {"package": "tabicl", "package_version": version("tabicl"), "checkpoint": "tabicl-classifier-v2-20260212.ckpt", "license": "BSD-3-Clause", "formal_comparison": False, "reason": "full ASY 3C top3 CPU smoke used 5.55GB RSS at n_estimators=1; insufficient safety margin on 8GB host"}, "leakage_checks": {"results_only_used_as_labels": True, "payouts_and_odds_not_used": True, "point_in_time_existing_generator": True, "test_not_used_for_tabdpt_fit_or_selection": True}, "runtime": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "numpy": np.__version__, "torch": torch.__version__, "torch_cuda_available": torch.cuda.is_available(), "max_rss_kb": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss), "elapsed_seconds": elapsed}, "dataset_audit": dataset_audit}
+    stem = str(args.output_stem)
+    write_csv(output_dir / f"{stem}_summary.csv", summary)
+    write_csv(output_dir / f"{stem}_monthly.csv", monthly)
+    (output_dir / f"{stem}_experiment.json").write_text(json.dumps(experiment, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_five_model_markdown(output_dir / f"{stem}.md", experiment, summary, monthly)
+    print(f"summary: {output_dir / f'{stem}_summary.csv'}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-stem", default="course_signal_model_compare_asy_amg_20260927_four_models")
     parser.add_argument("--baseline-stem", default="course_signal_model_compare_asy_amg_20260927")
+    parser.add_argument("--foundation-tabdpt", action="store_true", help="保存済み4モデル成果物へTabDPT-Turboを統合する")
     args = parser.parse_args()
+    if args.foundation_tabdpt:
+        if args.output_stem == "course_signal_model_compare_asy_amg_20260927_four_models":
+            args.output_stem = "course_signal_model_compare_five_models_20260927"
+        if args.baseline_stem == "course_signal_model_compare_asy_amg_20260927":
+            args.baseline_stem = "course_signal_model_compare_asy_amg_20260927_four_models"
+        foundation_tabdpt_main(args)
+        return
+    if None in (CatBoostClassifier, AutoML, ExplainableBoostingClassifier):
+        raise RuntimeError("HGB/CatBoost/FLAML/EBM比較にはcatboost、flaml、interpret-coreが必要です")
     output_dir = ROOT / "analysis" / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
     baseline, baseline_monthly_rows, baseline_experiment = load_baseline(output_dir, args.baseline_stem)

@@ -1,0 +1,8 @@
+model,phase,place,course,target,train_n,predict_n,feature_count,setting,fit_seconds,predict_seconds,brier,log_loss,auc,nan_or_inf,process_max_rss_kb,exit_status,interpretation
+tabdpt_turbo,smoke_500,ASY,3,top3,500,500,170,"cpu; official v1.2; pca; context_subsample",0.072118,1.697730,0.247117,0.687316,0.568183,false,2146152,0,"shared process peak; both models executed"
+tabiclv2,smoke_500,ASY,3,top3,500,500,170,"cpu; n_estimators=1; batch_size=1; offload=false",6.762814,9.467557,0.239743,0.672125,0.625892,false,2146152,0,"shared process peak; first checkpoint download included"
+tabdpt_turbo,smoke_1000,ASY,3,top3,1000,500,170,"cpu; official v1.2; pca; context_subsample",0.030660,3.048618,0.246368,0.685841,0.603801,false,2573096,0,"shared process peak; both models executed"
+tabiclv2,smoke_1000,ASY,3,top3,1000,500,170,"cpu; n_estimators=1; batch_size=1; offload=false",0.696220,14.867609,0.233279,0.658529,0.644223,false,2573096,0,"shared process peak; both models executed"
+tabdpt_turbo,full_split,ASY,3,top3,3500,1268,170,"cpu; official v1.2; pca; context_subsample",0.066963,18.650278,0.231307,0.654830,0.662765,false,5546912,0,"shared process peak; TabICLv2 also executed in same process"
+tabiclv2,full_split,ASY,3,top3,3500,1268,170,"cpu; n_estimators=1; batch_size=1; offload=auto",0.669430,50.374583,0.227042,0.645218,0.676787,false,5546912,0,"5.55GB peak makes 8GB host continuous operation unsafe"
+tabiclv2,full_split_disk_offload,ASY,3,top3,3500,1268,170,"cpu; n_estimators=1; batch_size=1; offload=disk",0.790429,48.503303,0.227042,0.645218,0.676787,false,5308928,0,"disk offload did not provide a sufficient RSS reduction"

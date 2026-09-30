@@ -1,0 +1,99 @@
+{
+  "experiment": "course_signal_model_compare_five_models_with_tabdpt_turbo",
+  "created_at": "2026-09-30T10:30:56+0900",
+  "git_sha": "db5514d8eb25dbf39063ec64ae8e6119a78a933b",
+  "baseline_experiment_git_sha": "46d3ea34892c80ea4f22a10ed95343be66ea80eb",
+  "places": [
+    "ASY",
+    "AMG"
+  ],
+  "courses": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "targets": [
+    "first",
+    "top2",
+    "top3"
+  ],
+  "period": {
+    "dataset_start": "2023-09-27",
+    "train": "2023-09-27 to 2025-08-31",
+    "valid": "2025-09-01 to 2026-02-28",
+    "test": "2026-03-01 to 2026-09-27"
+  },
+  "feature_count": 170,
+  "feature_list_reference": "post_features from audit_tamagawa_course_signals_zero_base_ml.build_dataset",
+  "tabdpt_turbo": {
+    "package": "tabdpt",
+    "package_version": "1.2.0",
+    "model_version": "1.2.0 (official TabDPT-Turbo)",
+    "license": "Apache-2.0",
+    "parameters": {
+      "normalizer": "standard",
+      "missing_indicators": false,
+      "clip_sigma": 8.0,
+      "feature_reduction": "pca",
+      "context_reduction": "subsample",
+      "device": "cpu",
+      "use_flash": false,
+      "compile": false,
+      "verbose": false,
+      "predict_seed": 20260927
+    },
+    "preprocessing": "official standard normalizer=standard, feature_reduction=pca, context_reduction=subsample; all 170 features are supplied as input"
+  },
+  "tabicl_v2": {
+    "package": "tabicl",
+    "package_version": "2.2.0",
+    "checkpoint": "tabicl-classifier-v2-20260212.ckpt",
+    "license": "BSD-3-Clause",
+    "formal_comparison": false,
+    "reason": "full ASY 3C top3 CPU smoke used 5.55GB RSS at n_estimators=1; insufficient safety margin on 8GB host"
+  },
+  "leakage_checks": {
+    "results_only_used_as_labels": true,
+    "payouts_and_odds_not_used": true,
+    "point_in_time_existing_generator": true,
+    "test_not_used_for_tabdpt_fit_or_selection": true
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "scikit_learn": "1.4.1.post1",
+    "numpy": "1.26.4",
+    "torch": "2.7.1+cpu",
+    "torch_cuda_available": false,
+    "max_rss_kb": 1719932,
+    "elapsed_seconds": 1527.357002730947
+  },
+  "dataset_audit": {
+    "ASY": {
+      "source_races": 6892,
+      "source_min_date": "2023-09-28",
+      "source_max_date": "2026-09-27",
+      "used_races": 5916,
+      "used_min_date": "2024-01-02",
+      "used_max_date": "2026-09-27",
+      "excluded_races": 976,
+      "exclusion_reasons": {
+        "missing_race_or_exhibition": 976
+      }
+    },
+    "AMG": {
+      "source_races": 6737,
+      "source_min_date": "2023-09-28",
+      "source_max_date": "2026-09-27",
+      "used_races": 5917,
+      "used_min_date": "2024-01-05",
+      "used_max_date": "2026-09-26",
+      "excluded_races": 820,
+      "exclusion_reasons": {
+        "missing_race_or_exhibition": 820
+      }
+    }
+  }
+}
