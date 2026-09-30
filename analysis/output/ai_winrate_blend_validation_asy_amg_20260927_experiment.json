@@ -1,0 +1,400 @@
+{
+  "experiment": "ai_winrate_v6_pairwise_blend_validation",
+  "created_at": "2026-09-30T21:31:50+0900",
+  "git_sha_before_analysis": "98cd3d2d6addc140d504670463ab07122ed69190",
+  "source_prediction_commit": "98cd3d2d6addc140d504670463ab07122ed69190",
+  "analysis_script_sha256": "5e6fe8c8241ab0a3e57e665b166b7a969f5dcfb5067d09ae7ba46a959713188b",
+  "environment": {
+    "python": "3.12.3",
+    "numpy": "1.26.4"
+  },
+  "source_prediction_artifacts": {
+    "stage_files": {
+      "core": {
+        "path": "/tmp/boatrace-ai-winrate-system-compare/core.csv",
+        "sha256": "9396b57abe6c6d681fd183c9de2b7261b8e1fed952e5f1716acbe348f23e8111"
+      },
+      "agng": {
+        "path": "/tmp/boatrace-ai-winrate-system-compare/agng.csv",
+        "sha256": "a96a875163ca93e268aa6016e6f43550df8ae0227f6b7737f473c069f5af8bd3"
+      },
+      "v6": {
+        "path": "/tmp/boatrace-ai-winrate-system-compare/v6.csv",
+        "sha256": "ed9fa542e653a7de732da0f1d56d0d0452ffe1f94a87c039fd03ce84fe4714d4"
+      }
+    },
+    "dropped_incomplete_races": 0
+  },
+  "period": {
+    "valid": "2025-09-01 to 2026-02-28",
+    "test": "2026-03-01 to 2026-09-27"
+  },
+  "places": [
+    "ASY",
+    "AMG"
+  ],
+  "models": [
+    "v6_pre_course",
+    "v6_final",
+    "ebm_course_first",
+    "autogluon_course_first",
+    "ngboost_course_first"
+  ],
+  "blends": [
+    {
+      "blend_name": "v6_pre_course__v6_final",
+      "baseline": "v6_pre_course",
+      "challenger": "v6_final"
+    },
+    {
+      "blend_name": "v6_pre_course__ebm",
+      "baseline": "v6_pre_course",
+      "challenger": "ebm_course_first"
+    },
+    {
+      "blend_name": "v6_final__ebm",
+      "baseline": "v6_final",
+      "challenger": "ebm_course_first"
+    },
+    {
+      "blend_name": "v6_pre_course__autogluon",
+      "baseline": "v6_pre_course",
+      "challenger": "autogluon_course_first"
+    },
+    {
+      "blend_name": "v6_final__autogluon",
+      "baseline": "v6_final",
+      "challenger": "autogluon_course_first"
+    },
+    {
+      "blend_name": "v6_pre_course__ngboost",
+      "baseline": "v6_pre_course",
+      "challenger": "ngboost_course_first"
+    },
+    {
+      "blend_name": "v6_final__ngboost",
+      "baseline": "v6_final",
+      "challenger": "ngboost_course_first"
+    }
+  ],
+  "formula": "normalize((1-w)*baseline_normalized_probability + w*challenger_normalized_probability)",
+  "weight_grid": [
+    0.0,
+    0.05,
+    0.1,
+    0.15,
+    0.2,
+    0.25,
+    0.3,
+    0.35,
+    0.4,
+    0.45,
+    0.5,
+    0.55,
+    0.6,
+    0.65,
+    0.7,
+    0.75,
+    0.8,
+    0.85,
+    0.9,
+    0.95,
+    1.0
+  ],
+  "selection": "minimum VALID race-level Brier mean/boat; tie by VALID winner log loss, then smaller challenger weight",
+  "tie_tolerance": 1e-10,
+  "test_used_for_weight_selection": false,
+  "bootstrap": {
+    "unit": "race",
+    "paired": true,
+    "resamples": 5000,
+    "base_seed": 428
+  },
+  "prediction_audit": {
+    "valid_races": 1766,
+    "test_races": 2618,
+    "boats_per_race": 6,
+    "winner_count_per_race": 1,
+    "duplicate_race_boat_rows": 0,
+    "nan_or_inf": 0,
+    "maximum_summary_metric_difference": 1.3877787807814457e-17,
+    "maximum_committed_test_probability_difference": 0.0,
+    "maximum_probability_sum_error": 1.6065314523139307e-08,
+    "checks": [
+      {
+        "split": "valid",
+        "model": "v6_pre_course",
+        "races": 1766,
+        "race_brier_mean": 0.08789355035122062,
+        "race_brier_sum": 0.5273613021073238,
+        "winner_log_loss": 1.0867446292279896,
+        "top1_accuracy": 0.637599093997735,
+        "actual_winner_probability_mean": 0.4606834253987917,
+        "probability_sum_mean": 0.9999999999424317,
+        "probability_sum_max_abs_error": 1.6065314523139307e-08
+      },
+      {
+        "split": "valid",
+        "model": "v6_final",
+        "races": 1766,
+        "race_brier_mean": 0.08778300627641691,
+        "race_brier_sum": 0.5266980376585014,
+        "winner_log_loss": 1.084528742803137,
+        "top1_accuracy": 0.6359003397508494,
+        "actual_winner_probability_mean": 0.46387910029956286,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 4.440892098500626e-16
+      },
+      {
+        "split": "valid",
+        "model": "ebm_course_first",
+        "races": 1766,
+        "race_brier_mean": 0.09096929645735112,
+        "race_brier_sum": 0.5458157787441067,
+        "winner_log_loss": 1.138880371054841,
+        "top1_accuracy": 0.6172140430351076,
+        "actual_winner_probability_mean": 0.45183851125892005,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 4.440892098500626e-16
+      },
+      {
+        "split": "valid",
+        "model": "autogluon_course_first",
+        "races": 1766,
+        "race_brier_mean": 0.0893045141376073,
+        "race_brier_sum": 0.5358270848256438,
+        "winner_log_loss": 1.1114160108183282,
+        "top1_accuracy": 0.6274065685164213,
+        "actual_winner_probability_mean": 0.45284431296419325,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 2.220446049250313e-16
+      },
+      {
+        "split": "valid",
+        "model": "ngboost_course_first",
+        "races": 1766,
+        "race_brier_mean": 0.09090141803698785,
+        "race_brier_sum": 0.5454085082219271,
+        "winner_log_loss": 1.1453322890602693,
+        "top1_accuracy": 0.622876557191393,
+        "actual_winner_probability_mean": 0.46879930075202936,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 4.440892098500626e-16
+      },
+      {
+        "split": "test",
+        "model": "v6_pre_course",
+        "races": 2618,
+        "race_brier_mean": 0.08934309703256627,
+        "race_brier_sum": 0.5360585821953976,
+        "winner_log_loss": 1.09381723990625,
+        "top1_accuracy": 0.6218487394957983,
+        "actual_winner_probability_mean": 0.4580733895246759,
+        "probability_sum_mean": 1.000000000037963,
+        "probability_sum_max_abs_error": 1.4799297787249088e-08
+      },
+      {
+        "split": "test",
+        "model": "v6_final",
+        "races": 2618,
+        "race_brier_mean": 0.08938652047409189,
+        "race_brier_sum": 0.5363191228445513,
+        "winner_log_loss": 1.0931270712943932,
+        "top1_accuracy": 0.6195569136745608,
+        "actual_winner_probability_mean": 0.46081886897938695,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 4.440892098500626e-16
+      },
+      {
+        "split": "test",
+        "model": "ebm_course_first",
+        "races": 2618,
+        "race_brier_mean": 0.0912380130908176,
+        "race_brier_sum": 0.5474280785449056,
+        "winner_log_loss": 1.122748038393481,
+        "top1_accuracy": 0.6130634071810542,
+        "actual_winner_probability_mean": 0.45293985984229657,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 5.551115123125783e-16
+      },
+      {
+        "split": "test",
+        "model": "autogluon_course_first",
+        "races": 2618,
+        "race_brier_mean": 0.0913818018269257,
+        "race_brier_sum": 0.5482908109615542,
+        "winner_log_loss": 1.129381668088439,
+        "top1_accuracy": 0.6119174942704354,
+        "actual_winner_probability_mean": 0.45071832256240285,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 2.220446049250313e-16
+      },
+      {
+        "split": "test",
+        "model": "ngboost_course_first",
+        "races": 2618,
+        "race_brier_mean": 0.09172346706686377,
+        "race_brier_sum": 0.5503408024011827,
+        "winner_log_loss": 1.137908446817394,
+        "top1_accuracy": 0.6122994652406417,
+        "actual_winner_probability_mean": 0.4683982582066073,
+        "probability_sum_mean": 1.0,
+        "probability_sum_max_abs_error": 4.440892098500626e-16
+      }
+    ]
+  },
+  "selected_weights": {
+    "v6_pre_course__v6_final": 1.0,
+    "v6_pre_course__ebm": 0.05,
+    "v6_final__ebm": 0.05,
+    "v6_pre_course__autogluon": 0.3,
+    "v6_final__autogluon": 0.25,
+    "v6_pre_course__ngboost": 0.1,
+    "v6_final__ngboost": 0.05
+  },
+  "venue_diagnostics": [
+    {
+      "blend_name": "v6_pre_course__v6_final",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.09140089841950143,
+      "baseline_brier": 0.09134242982600366,
+      "brier_delta": 5.846859349777078e-05,
+      "log_loss": 1.1306034909916602,
+      "top1": 0.6115965051628276
+    },
+    {
+      "blend_name": "v6_pre_course__v6_final",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.08752036754306126,
+      "baseline_brier": 0.08749088217830747,
+      "brier_delta": 2.9485364753792376e-05,
+      "log_loss": 1.0584082983739669,
+      "top1": 0.6269315673289183
+    },
+    {
+      "blend_name": "v6_pre_course__ebm",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.09129497075875351,
+      "baseline_brier": 0.09134242982600366,
+      "brier_delta": -4.745906725014959e-05,
+      "log_loss": 1.1302687461371996,
+      "top1": 0.6131850675138999
+    },
+    {
+      "blend_name": "v6_pre_course__ebm",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.08740676369515032,
+      "baseline_brier": 0.08749088217830747,
+      "brier_delta": -8.411848315714732e-05,
+      "log_loss": 1.0571982692572601,
+      "top1": 0.6269315673289183
+    },
+    {
+      "blend_name": "v6_final__ebm",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.09135314911067485,
+      "baseline_brier": 0.09140089841950144,
+      "brier_delta": -4.774930882658901e-05,
+      "log_loss": 1.1294967373246232,
+      "top1": 0.6123907863383637
+    },
+    {
+      "blend_name": "v6_final__ebm",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.08743518123782218,
+      "baseline_brier": 0.08752036754306126,
+      "brier_delta": -8.518630523908499e-05,
+      "log_loss": 1.0567971448586688,
+      "top1": 0.6247240618101545
+    },
+    {
+      "blend_name": "v6_pre_course__autogluon",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.09138342787635878,
+      "baseline_brier": 0.09134242982600366,
+      "brier_delta": 4.099805035512327e-05,
+      "log_loss": 1.1317306527298265,
+      "top1": 0.613979348689436
+    },
+    {
+      "blend_name": "v6_pre_course__autogluon",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.08742376178414153,
+      "baseline_brier": 0.08749088217830747,
+      "brier_delta": -6.712039416593985e-05,
+      "log_loss": 1.0586710677958395,
+      "top1": 0.6313465783664459
+    },
+    {
+      "blend_name": "v6_final__autogluon",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.09140856816232401,
+      "baseline_brier": 0.09140089841950144,
+      "brier_delta": 7.669742822569159e-06,
+      "log_loss": 1.1309687018624364,
+      "top1": 0.613979348689436
+    },
+    {
+      "blend_name": "v6_final__autogluon",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.0874339367015395,
+      "baseline_brier": 0.08752036754306126,
+      "brier_delta": -8.643084152176739e-05,
+      "log_loss": 1.058112586842796,
+      "top1": 0.6276674025018396
+    },
+    {
+      "blend_name": "v6_pre_course__ngboost",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.09135430280522126,
+      "baseline_brier": 0.09134242982600366,
+      "brier_delta": 1.1872979217605883e-05,
+      "log_loss": 1.1306014027951483,
+      "top1": 0.6163621922160445
+    },
+    {
+      "blend_name": "v6_pre_course__ngboost",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.087341388750474,
+      "baseline_brier": 0.08749088217830747,
+      "brier_delta": -0.00014949342783347752,
+      "log_loss": 1.0572921314154409,
+      "top1": 0.6306107431935246
+    },
+    {
+      "blend_name": "v6_final__ngboost",
+      "venue": "ASY",
+      "races": 1259,
+      "brier": 0.091405486327816,
+      "baseline_brier": 0.09140089841950144,
+      "brier_delta": 4.587908314562794e-06,
+      "log_loss": 1.1302116303606142,
+      "top1": 0.613979348689436
+    },
+    {
+      "blend_name": "v6_final__ngboost",
+      "venue": "AMG",
+      "races": 1359,
+      "brier": 0.0874432403334645,
+      "baseline_brier": 0.08752036754306126,
+      "brier_delta": -7.712720959676678e-05,
+      "log_loss": 1.05765867336278,
+      "top1": 0.6269315673289183
+    }
+  ],
+  "runtime_seconds": 2.840224185027182,
+  "max_rss_kb": 142092,
+  "production_changed": false
+}
