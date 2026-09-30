@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""コースサイン用の固定データセットで HGB と CatBoost を比較する。
+"""コースサイン用の固定データセットで4モデルを公平に比較する。
 
 モデル選択・特徴量選択・閾値選択は行わない。既存の point-in-time
 データセット生成器が返す展示込み170特徴量を、全36ケースへそのまま渡す。
@@ -22,6 +22,8 @@ from pathlib import Path
 import numpy as np
 import sklearn
 from catboost import CatBoostClassifier
+from flaml import AutoML
+from interpret.glassbox import ExplainableBoostingClassifier
 from sklearn.base import clone
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
@@ -67,6 +69,40 @@ CATBOOST_PARAMETERS = {
     "task_type": "CPU",
     "missing_values": "CatBoost native NaN handling",
     "categorical_features": "none (all existing inputs are numeric)",
+}
+
+# FLAMLは、TRAINを学習、固定VALIDをAutoMLの選択・early stopping専用に使う。
+# Brierを安全に直接渡せないため、内部選択指標はlog_lossとし、BrierはVALID/TESTで
+# 他モデルと同じ評価関数として算出する。TESTはfitへ一切渡さない。
+FLAML_PARAMETERS = {
+    "task": "classification",
+    "metric": "log_loss",
+    "estimator_list": ["lgbm", "xgboost"],
+    "time_budget": 15,
+    "max_iter": 40,
+    "n_jobs": 4,
+    "seed": RANDOM_SEED,
+    "verbose": 0,
+    "retrain_full": False,
+    "eval_method": "holdout",
+}
+
+# 解釈性を保ちつつ4 core / 約8GBで36ケースを継続実行できる固定設定。
+# この値は全ケース共通であり、VALID/TESTを見た個別調整はしていない。
+EBM_PARAMETERS = {
+    "max_bins": 256,
+    "max_interaction_bins": 32,
+    "interactions": 10,
+    "outer_bags": 4,
+    "inner_bags": 0,
+    "learning_rate": 0.02,
+    "max_rounds": 1500,
+    "early_stopping_rounds": 100,
+    "min_samples_leaf": 10,
+    "validation_size": 0.15,
+    "n_jobs": 4,
+    "random_state": RANDOM_SEED,
+    "objective": "log_loss",
 }
 
 
@@ -253,7 +289,7 @@ def write_markdown(path: Path, experiment: dict, summary: list[dict], monthly: l
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
+def legacy_main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-stem", default="course_signal_model_compare_asy_amg_20260927")
     args = parser.parse_args()
@@ -392,6 +428,305 @@ def main() -> None:
     print(f"summary: {output_dir / f'{stem}_summary.csv'}", flush=True)
     print(f"monthly: {output_dir / f'{stem}_monthly.csv'}", flush=True)
     print(f"report: {output_dir / f'{stem}.md'}", flush=True)
+
+
+def csv_rows(path: Path) -> list[dict]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def load_baseline(output_dir: Path, stem: str) -> tuple[dict[tuple[str, int, str], dict], list[dict], dict]:
+    """前回正式HGB/CatBoost成果物を読み、比較条件が同一であることを検査する。"""
+    summary_path = output_dir / f"{stem}_summary.csv"
+    monthly_path = output_dir / f"{stem}_monthly.csv"
+    experiment_path = output_dir / f"{stem}_experiment.json"
+    if not summary_path.exists() or not monthly_path.exists() or not experiment_path.exists():
+        raise RuntimeError(f"前回の正式比較成果物が不足しています: {stem}")
+    experiment = json.loads(experiment_path.read_text(encoding="utf-8"))
+    if experiment.get("feature_count") != 170 or experiment.get("period", {}).get("train") != "2023-09-27 to 2025-08-31":
+        raise RuntimeError("前回成果物の特徴量数または期間が今回の固定条件と一致しません")
+    summary = csv_rows(summary_path)
+    if len(summary) != 36:
+        raise RuntimeError(f"前回summaryのケース数が36ではありません: {len(summary)}")
+    indexed = {(row["place"], int(row["course"]), row["target"]): row for row in summary}
+    if len(indexed) != 36:
+        raise RuntimeError("前回summaryに重複ケースがあります")
+    return indexed, csv_rows(monthly_path), experiment
+
+
+def fit_flaml(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_valid: np.ndarray,
+    y_valid: np.ndarray,
+    x_test: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, float, float, str]:
+    model = AutoML()
+    started = time.perf_counter()
+    model.fit(X_train=x_train, y_train=y_train, X_val=x_valid, y_val=y_valid, **FLAML_PARAMETERS)
+    fit_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    valid_probability = model.predict_proba(x_valid)[:, 1]
+    test_probability = model.predict_proba(x_test)[:, 1]
+    predict_seconds = time.perf_counter() - started
+    return valid_probability, test_probability, fit_seconds, predict_seconds, str(model.best_estimator)
+
+
+def fit_ebm(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_valid: np.ndarray,
+    x_test: np.ndarray,
+    feature_names: list[str],
+) -> tuple[ExplainableBoostingClassifier, np.ndarray, np.ndarray, float, float]:
+    model = ExplainableBoostingClassifier(feature_names=feature_names, **EBM_PARAMETERS)
+    started = time.perf_counter()
+    model.fit(x_train, y_train)
+    fit_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    valid_probability = model.predict_proba(x_valid)[:, 1]
+    test_probability = model.predict_proba(x_test)[:, 1]
+    predict_seconds = time.perf_counter() - started
+    return model, valid_probability, test_probability, fit_seconds, predict_seconds
+
+
+def baseline_value(row: dict, name: str) -> float | None:
+    value = row.get(name, "")
+    return None if value in ("", None) else float(value)
+
+
+def four_model_monthly_rows(
+    place: str,
+    course: int,
+    target: str,
+    test_rows: list[dict],
+    y_test: np.ndarray,
+    baseline_monthly: dict[tuple[str, int, str, str], dict],
+    flaml_probability: np.ndarray,
+    ebm_probability: np.ndarray,
+) -> list[dict]:
+    months = np.asarray([row["date"].strftime("%Y-%m") for row in test_rows])
+    result: list[dict] = []
+    for month in sorted(set(months.tolist())):
+        mask = months == month
+        base = baseline_monthly[(place, course, target, month)]
+        hgb_brier = float(base["hgb_brier"])
+        catboost_brier = float(base["catboost_brier"])
+        flaml_brier = float(brier_score_loss(y_test[mask], flaml_probability[mask]))
+        ebm_brier = float(brier_score_loss(y_test[mask], ebm_probability[mask]))
+        scores = {"hgb": hgb_brier, "catboost": catboost_brier, "flaml": flaml_brier, "ebm": ebm_brier}
+        best = min(scores.values())
+        winners = [name for name, value in scores.items() if np.isclose(value, best, rtol=0.0, atol=1e-15)]
+        result.append({
+            "place": place, "course": course, "target": target, "month": month,
+            "n": int(mask.sum()), "positive_rate": float(np.mean(y_test[mask])),
+            **{f"{name}_brier": value for name, value in scores.items()},
+            "winner": "+".join(winners),
+        })
+    return result
+
+
+def model_aggregate(summary: list[dict], keys: tuple[str, ...]) -> list[dict]:
+    groups: dict[tuple, list[dict]] = {}
+    for row in summary:
+        groups.setdefault(tuple(row[key] for key in keys), []).append(row)
+    output: list[dict] = []
+    for group_key, values in sorted(groups.items()):
+        item = {**dict(zip(keys, group_key)), "cases": len(values)}
+        for split_name in ("valid", "test"):
+            for model in ("hgb", "catboost", "flaml", "ebm"):
+                item[f"mean_{split_name}_{model}_brier"] = float(np.mean([float(row[f"{split_name}_{model}_brier"]) for row in values]))
+        for model in ("hgb", "catboost", "flaml", "ebm"):
+            item[f"test_best_{model}_cases"] = sum(model in row["test_winner"].split("+") for row in values)
+        output.append(item)
+    return output
+
+
+def write_four_model_markdown(path: Path, experiment: dict, summary: list[dict], monthly: list[dict], importance: list[dict]) -> None:
+    models = ("hgb", "catboost", "flaml", "ebm")
+    mean_test = {model: float(np.mean([float(row[f"test_{model}_brier"]) for row in summary])) for model in models}
+    mean_valid = {model: float(np.mean([float(row[f"valid_{model}_brier"]) for row in summary])) for model in models}
+    best_test = {model: sum(model in row["test_winner"].split("+") for row in summary) for model in models}
+    flaml_cat = sum(float(row["test_flaml_brier"]) < float(row["test_catboost_brier"]) for row in summary)
+    ebm_cat = sum(float(row["test_ebm_brier"]) < float(row["test_catboost_brier"]) for row in summary)
+    month_wins = {model: sum(model in row["winner"].split("+") for row in monthly) for model in models}
+    mean_fit = {model: float(np.mean([float(row[f"{model}_fit_seconds"]) for row in summary])) for model in models}
+    mean_predict = {model: float(np.mean([float(row[f"{model}_predict_seconds"]) for row in summary])) for model in models}
+    valid_to_test = {model: mean_test[model] - mean_valid[model] for model in models}
+    same_best = sum(bool(set(row["valid_winner"].split("+")) & set(row["test_winner"].split("+"))) for row in summary)
+    lines = [
+        "# コースサインML正式比較: HGB / CatBoost / FLAML / EBM", "",
+        "## 結論", "",
+        f"- FLAMLがCatBoostのTEST Brierを上回ったケース: **{flaml_cat}/36**",
+        f"- EBMがCatBoostのTEST Brierを上回ったケース: **{ebm_cat}/36**",
+        "- これは本番採用の判断ではない。TESTを用いた条件変更・再チューニング・校正・ブレンドは行っていない。", "",
+        "## 固定条件", "",
+        f"- Git: `{experiment['git_sha']}`",
+        f"- 170展示込み特徴量、ASY/AMG × 1〜6C × first/top2/top3 = 36ケース",
+        f"- TRAIN {experiment['period']['train']} / VALID {experiment['period']['valid']} / TEST {experiment['period']['test']}",
+        f"- Runtime: Python {experiment['runtime']['python']} / scikit-learn {experiment['runtime']['scikit_learn']} / CatBoost {experiment['runtime']['catboost']} / FLAML {experiment['runtime']['flaml']} / InterpretML {experiment['runtime']['interpret']} / NumPy {experiment['runtime']['numpy']}",
+        "- HGB/CatBoostは前回正式成果物を読み込み、同じ条件を検査して統合。FLAML/EBMのみ今回学習。",
+        "- FLAMLはTRAIN学習＋固定VALIDによる15秒・最大40試行の内部選択（log_loss）。Brierは外部評価専用。TESTはfitへ未入力。",
+        "- EBMは全ケース共通の固定設定（10 interactions、4 outer bags、seed固定）。",
+        "",
+        "## 全体集計", "",
+        "|モデル|VALID平均Brier|TEST平均Brier|TEST最良ケース数|月別case×month最良数|HGB比TEST改善|CatBoost比TEST改善|",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for model in models:
+        hgb_improved = sum(float(row[f"test_{model}_brier"]) < float(row["test_hgb_brier"]) for row in summary)
+        cat_improved = sum(float(row[f"test_{model}_brier"]) < float(row["test_catboost_brier"]) for row in summary)
+        lines.append(f"|{model}|{mean_valid[model]:.8f}|{mean_test[model]:.8f}|{best_test[model]}|{month_wins[model]}|{hgb_improved}|{cat_improved}|")
+    lines += ["", "## VALID→TESTの安定性", "", f"- 各ケースでVALID最良モデルとTEST最良モデルが少なくとも1つ一致: {same_best}/36ケース。", "", "|モデル|平均VALID Brier|平均TEST Brier|TEST - VALID|", "|---|---:|---:|---:|"]
+    for model in models:
+        lines.append(f"|{model}|{mean_valid[model]:.8f}|{mean_test[model]:.8f}|{valid_to_test[model]:+.8f}|")
+    lines += ["", "## 36ケース", "", "|場|C|target|TRAIN|VALID|TEST|HGB TEST|CatBoost TEST|FLAML TEST|EBM TEST|最良|FLAML推定器|", "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|"]
+    for row in summary:
+        lines.append(f"|{row['place']}|{row['course']}|{row['target']}|{row['train_n']}|{row['valid_n']}|{row['test_n']}|{float(row['test_hgb_brier']):.6f}|{float(row['test_catboost_brier']):.6f}|{float(row['test_flaml_brier']):.6f}|{float(row['test_ebm_brier']):.6f}|{row['test_winner']}|{row['flaml_selected_estimator']}|")
+    for title, keys in (("場別", ("place",)), ("コース別", ("course",)), ("target別", ("target",))):
+        lines += ["", f"## {title}", "", "|区分|ケース|HGB TEST|CatBoost TEST|FLAML TEST|EBM TEST|HGB最良|CatBoost最良|FLAML最良|EBM最良|", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for row in model_aggregate(summary, keys):
+            label = " / ".join(str(row[key]) for key in keys)
+            lines.append(f"|{label}|{row['cases']}|{row['mean_test_hgb_brier']:.6f}|{row['mean_test_catboost_brier']:.6f}|{row['mean_test_flaml_brier']:.6f}|{row['mean_test_ebm_brier']:.6f}|{row['test_best_hgb_cases']}|{row['test_best_catboost_cases']}|{row['test_best_flaml_cases']}|{row['test_best_ebm_cases']}|")
+    lines += [
+        "", "## 月別安定性", "",
+        "- `*_monthly.csv` は case×month ごとのBrierと最良モデルを記録する。小標本月は参考値。",
+        f"- 月別case×month最良数: HGB {month_wins['hgb']} / CatBoost {month_wins['catboost']} / FLAML {month_wins['flaml']} / EBM {month_wins['ebm']}。",
+        "", "|月|ケース|HGB平均Brier|CatBoost平均Brier|FLAML平均Brier|EBM平均Brier|", "|---|---:|---:|---:|---:|---:|",
+    ]
+    for month in sorted({row["month"] for row in monthly}):
+        values = [row for row in monthly if row["month"] == month]
+        lines.append(f"|{month}|{len(values)}|{np.mean([float(row['hgb_brier']) for row in values]):.6f}|{np.mean([float(row['catboost_brier']) for row in values]):.6f}|{np.mean([float(row['flaml_brier']) for row in values]):.6f}|{np.mean([float(row['ebm_brier']) for row in values]):.6f}|")
+    lines += [
+        "", "## EBMの代表的重要特徴", "",
+        "代表5ケースの上位10 termを `*_ebm_importance.csv` に保存した。相互作用termは `feature × feature` として記録する。",
+        f"- 保存行数: {len(importance)}", "",
+        "## データリーク確認", "",
+        "- 着順・結果はfirst/top2/top3のラベル作成だけに使用し、特徴量・モデル選択には未使用。払戻・オッズも未使用。",
+        "- courseは展示進入優先、展示欠損時のみ枠番fallback。履歴・展示平均は既存point-in-time生成器を再利用。",
+        "- FLAMLの探索はTRAIN/VALID内に限定し、TESTをfit・early stopping・モデル選択へ渡していない。",
+        "", "## 実行負荷", "",
+        f"- 今回プロセス最大RSS: {experiment['runtime']['max_rss_kb']:,} KB、今回FLAML/EBM総実行時間: {experiment['runtime']['elapsed_seconds']:.2f}秒。",
+        "", "|モデル|平均fit秒/ケース|平均predict秒/ケース|", "|---|---:|---:|",
+    ]
+    for model in models:
+        lines.append(f"|{model}|{mean_fit[model]:.3f}|{mean_predict[model]:.3f}|")
+    lines += [
+        "- 個別fit/predict時間はsummary CSVに記録。前回HGB/CatBoostの時間は前回成果物の記録を引き継ぐ。",
+        "", "## 範囲外", "",
+        "本番置換、AI1着率v6直接対決、校正、ブレンド、race_number、TabDPT-Turbo、TabICLv2には進んでいない。",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-stem", default="course_signal_model_compare_asy_amg_20260927_four_models")
+    parser.add_argument("--baseline-stem", default="course_signal_model_compare_asy_amg_20260927")
+    args = parser.parse_args()
+    output_dir = ROOT / "analysis" / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    baseline, baseline_monthly_rows, baseline_experiment = load_baseline(output_dir, args.baseline_stem)
+    baseline_monthly = {(row["place"], int(row["course"]), row["target"], row["month"]): row for row in baseline_monthly_rows}
+    if len(baseline_monthly) != len(baseline_monthly_rows):
+        raise RuntimeError("前回monthly成果物に重複ケースがあります")
+
+    config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
+    all_started = time.perf_counter()
+    summary: list[dict] = []
+    monthly: list[dict] = []
+    importance: list[dict] = []
+    estimators: list[dict] = []
+    dataset_audit: dict[str, dict] = {}
+    canonical_features: list[str] | None = None
+    representative = {("ASY", 1, "top2"), ("ASY", 2, "top3"), ("ASY", 4, "top3"), ("AMG", 2, "top2"), ("AMG", 4, "top3")}
+
+    for place in PLACES:
+        audit.PLACE = place
+        records, _pre_features, post_features = audit.build_dataset(date(2023, 9, 27), END, config)
+        dataset_audit[place] = dict(audit.LAST_DATASET_AUDIT)
+        if canonical_features is None:
+            canonical_features = list(post_features)
+        elif canonical_features != list(post_features):
+            raise RuntimeError("場ごとに展示込み特徴量一覧が異なります")
+        if len(post_features) != 170:
+            raise RuntimeError(f"展示込み特徴量数が固定条件170と一致しません: {len(post_features)}")
+        for course in COURSES:
+            train, valid, test = split([row for row in records if row["course"] == course])
+            if not train or not valid or not test:
+                raise RuntimeError(f"{place} {course}C: splitが空です")
+            x_train, x_valid, x_test = (as_matrix(rows, post_features) for rows in (train, valid, test))
+            for target in TARGETS:
+                key = (place, course, target)
+                base = baseline.get(key)
+                if base is None:
+                    raise RuntimeError(f"前回成果物にケースがありません: {key}")
+                y_train = np.asarray([row[target] for row in train], dtype=np.int8)
+                y_valid = np.asarray([row[target] for row in valid], dtype=np.int8)
+                y_test = np.asarray([row[target] for row in test], dtype=np.int8)
+                for column, actual in (("train_n", len(train)), ("valid_n", len(valid)), ("test_n", len(test))):
+                    if int(base[column]) != actual:
+                        raise RuntimeError(f"前回成果物と今回データ件数が不一致: {key} {column}")
+                if len(np.unique(y_train)) < 2:
+                    raise RuntimeError(f"{place} {course}C {target}: TRAINラベルが単一です")
+                flaml_valid, flaml_test, flaml_fit, flaml_predict, selected = fit_flaml(x_train, y_train, x_valid, y_valid, x_test)
+                ebm, ebm_valid, ebm_test, ebm_fit, ebm_predict = fit_ebm(x_train, y_train, x_valid, x_test, list(post_features))
+                flaml_valid_metrics, flaml_test_metrics = metrics(y_valid, flaml_valid), metrics(y_test, flaml_test)
+                ebm_valid_metrics, ebm_test_metrics = metrics(y_valid, ebm_valid), metrics(y_test, ebm_test)
+                scores_valid = {"hgb": float(base["valid_hgb_brier"]), "catboost": float(base["valid_catboost_brier"]), "flaml": float(flaml_valid_metrics["brier"]), "ebm": float(ebm_valid_metrics["brier"])}
+                scores_test = {"hgb": float(base["test_hgb_brier"]), "catboost": float(base["test_catboost_brier"]), "flaml": float(flaml_test_metrics["brier"]), "ebm": float(ebm_test_metrics["brier"])}
+                valid_best, test_best = min(scores_valid.values()), min(scores_test.values())
+                valid_winner = "+".join(name for name, value in scores_valid.items() if np.isclose(value, valid_best, rtol=0.0, atol=1e-15))
+                test_winner = "+".join(name for name, value in scores_test.items() if np.isclose(value, test_best, rtol=0.0, atol=1e-15))
+                row = {
+                    "place": place, "course": course, "target": target, "feature_set": "post_exhibition", "feature_count": len(post_features),
+                    "train_n": len(train), "valid_n": len(valid), "test_n": len(test), "train_positive_rate": float(np.mean(y_train)), "valid_positive_rate": float(np.mean(y_valid)), "test_positive_rate": float(np.mean(y_test)),
+                    "valid_hgb_brier": scores_valid["hgb"], "valid_catboost_brier": scores_valid["catboost"], "valid_flaml_brier": scores_valid["flaml"], "valid_ebm_brier": scores_valid["ebm"], "valid_winner": valid_winner,
+                    "test_hgb_brier": scores_test["hgb"], "test_catboost_brier": scores_test["catboost"], "test_flaml_brier": scores_test["flaml"], "test_ebm_brier": scores_test["ebm"], "test_winner": test_winner,
+                    "flaml_selected_estimator": selected,
+                    "hgb_fit_seconds": baseline_value(base, "hgb_fit_seconds"), "catboost_fit_seconds": baseline_value(base, "catboost_fit_seconds"), "flaml_fit_seconds": flaml_fit, "ebm_fit_seconds": ebm_fit,
+                    "hgb_predict_seconds": baseline_value(base, "hgb_predict_seconds"), "catboost_predict_seconds": baseline_value(base, "catboost_predict_seconds"), "flaml_predict_seconds": flaml_predict, "ebm_predict_seconds": ebm_predict,
+                }
+                for model, value in (("hgb", None), ("catboost", None), ("flaml", flaml_test_metrics), ("ebm", ebm_test_metrics)):
+                    if value is None:
+                        for metric_name in ("log_loss", "auc", "accuracy_0_5", "probability_mean"):
+                            row[f"test_{model}_{metric_name}"] = baseline_value(base, f"test_{model}_{metric_name}")
+                    else:
+                        for metric_name in ("log_loss", "auc", "accuracy_0_5", "probability_mean"):
+                            row[f"test_{model}_{metric_name}"] = value[metric_name]
+                summary.append(row)
+                estimators.append({"place": place, "course": course, "target": target, "selected_estimator": selected, "internal_metric": "log_loss", "time_budget_seconds": FLAML_PARAMETERS["time_budget"], "max_iter": FLAML_PARAMETERS["max_iter"]})
+                monthly.extend(four_model_monthly_rows(place, course, target, test, y_test, baseline_monthly, flaml_test, ebm_test))
+                if key in representative:
+                    terms = list(ebm.term_names_)
+                    values = list(ebm.term_importances())
+                    top = sorted(zip(terms, values), key=lambda item: float(item[1]), reverse=True)[:10]
+                    importance.extend({"place": place, "course": course, "target": target, "rank": rank, "term": term, "importance": float(value)} for rank, (term, value) in enumerate(top, 1))
+                print(f"{place} {course}C {target}: TEST Brier HGB={scores_test['hgb']:.6f} Cat={scores_test['catboost']:.6f} FLAML={scores_test['flaml']:.6f} EBM={scores_test['ebm']:.6f} ({test_winner})", flush=True)
+
+    assert canonical_features is not None
+    elapsed = time.perf_counter() - all_started
+    import catboost
+    import flaml
+    import interpret
+    experiment = {
+        "experiment": "course_signal_model_compare_hgb_catboost_flaml_ebm", "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "git_sha": git_sha(),
+        "baseline_experiment_git_sha": baseline_experiment.get("git_sha"), "places": list(PLACES), "courses": list(COURSES), "targets": list(TARGETS),
+        "period": {"dataset_start": "2023-09-27", "train": "2023-09-27 to 2025-08-31", "valid": "2025-09-01 to 2026-02-28", "test": "2026-03-01 to 2026-09-27"},
+        "feature_set": "post_exhibition", "feature_count": len(canonical_features), "features": canonical_features, "random_seed": RANDOM_SEED,
+        "hgb_parameters": HGB_PARAMETERS, "catboost_parameters": CATBOOST_PARAMETERS, "flaml_parameters": FLAML_PARAMETERS, "ebm_parameters": EBM_PARAMETERS,
+        "dataset_audit": dataset_audit,
+        "leakage_checks": {"results_only_used_as_labels": True, "payouts_and_odds_not_used": True, "point_in_time_history": "TechniqueHistoryIndex profiles before each race date (12 months)", "point_in_time_exhibition_average": "same venue trailing 183 days, current date excluded", "course_definition": "exhibition entry course, otherwise race_entry lane number", "flaml_test_not_used_for_fit_or_selection": True},
+        "runtime": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "catboost": catboost.__version__, "flaml": flaml.__version__, "interpret": interpret.__version__, "numpy": np.__version__, "max_rss_kb": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss), "elapsed_seconds": elapsed},
+    }
+    stem = str(args.output_stem)
+    write_csv(output_dir / f"{stem}_summary.csv", summary)
+    write_csv(output_dir / f"{stem}_monthly.csv", monthly)
+    write_csv(output_dir / f"{stem}_flaml_estimators.csv", estimators)
+    write_csv(output_dir / f"{stem}_ebm_importance.csv", importance)
+    (output_dir / f"{stem}_experiment.json").write_text(json.dumps(experiment, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_four_model_markdown(output_dir / f"{stem}.md", experiment, summary, monthly, importance)
+    print(f"summary: {output_dir / f'{stem}_summary.csv'}", flush=True)
 
 
 if __name__ == "__main__":

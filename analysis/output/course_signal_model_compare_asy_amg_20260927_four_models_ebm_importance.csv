@@ -1,0 +1,51 @@
+place,course,target,rank,term,importance
+ASY,1,top2,1,c1_national_win_rate & c3_national_exacta_rate,0.1270597659110272
+ASY,1,top2,2,c2_boat_exacta_rate & c5_national_win_rate,0.12100600835471582
+ASY,1,top2,3,c3_start_timing_relative & c4_straight_time_relative,0.11950248950087755
+ASY,1,top2,4,c2_national_win_rate & c6_local_exacta_rate,0.11756367493117127
+ASY,1,top2,5,c2_boat_exacta_rate & c1_exhibition_time_relative,0.10538797418341574
+ASY,1,top2,6,c1_nige,0.0794187336792512
+ASY,1,top2,7,c1_national_win_rate,0.07400211312842758
+ASY,1,top2,8,c1_national_exacta_rate,0.06971461242620554
+ASY,1,top2,9,c2_makuri & c5_around_time_relative,0.06218134830708672
+ASY,1,top2,10,c2_attack & c5_around_time_relative,0.061100611981908436
+ASY,2,top3,1,c2_national_win_rate,0.11127656249594663
+ASY,2,top3,2,c2_national_exacta_rate,0.10112636717646176
+ASY,2,top3,3,c2_local_win_rate,0.07487327421926271
+ASY,2,top3,4,c2_local_exacta_rate,0.06489711693498836
+ASY,2,top3,5,c2_sashi,0.05294820534448616
+ASY,2,top3,6,c2_sashi & c4_exhibition_time_relative,0.04947987458287885
+ASY,2,top3,7,c2_exhibition_time_relative,0.036873793301630625
+ASY,2,top3,8,c4_local_exacta_rate,0.0365310039773948
+ASY,2,top3,9,c4_local_win_rate,0.03590372760599372
+ASY,2,top3,10,c2_national_win_rate & c2_attack_potential,0.034779979843748775
+ASY,4,top3,1,c4_national_win_rate,0.13686396864386322
+ASY,4,top3,2,c4_national_exacta_rate,0.10955665704353662
+ASY,4,top3,3,c5_st_rank & c5_local_win_rate,0.0851534394461642
+ASY,4,top3,4,c4_local_win_rate,0.07851974585923678
+ASY,4,top3,5,c3_average_start & c6_exhibition_time_relative,0.07359370629081458
+ASY,4,top3,6,c3_makuri & c3_final_2nd_score,0.07352263076853585
+ASY,4,top3,7,c4_local_exacta_rate,0.06920504868985967
+ASY,4,top3,8,c1_boat_exacta_rate,0.06240769743904507
+ASY,4,top3,9,c3_attack & c3_straight_time_relative,0.057725850232343064
+ASY,4,top3,10,c4_motor_exacta_rate,0.052051059705457633
+AMG,2,top2,1,c2_national_win_rate,0.1262086756288797
+AMG,2,top2,2,c2_national_exacta_rate,0.11849538512955975
+AMG,2,top2,3,c2_exhibition_time_relative,0.09277444887109075
+AMG,2,top2,4,c2_local_win_rate,0.08979847729384609
+AMG,2,top2,5,c2_local_exacta_rate,0.07762244792720623
+AMG,2,top2,6,c5_attack,0.0494155670905741
+AMG,2,top2,7,c2_national_win_rate & c5_motor_exacta_rate,0.047963798500854166
+AMG,2,top2,8,c2_motor_exacta_rate,0.04689254568306471
+AMG,2,top2,9,c2_lap_time_relative,0.04403740438733727
+AMG,2,top2,10,c2_ex_score,0.04161516376421483
+AMG,4,top3,1,c4_national_win_rate,0.1137324590863682
+AMG,4,top3,2,c4_exhibition_time_relative,0.1102216389748496
+AMG,4,top3,3,c4_national_exacta_rate,0.10184848261107708
+AMG,4,top3,4,c4_local_win_rate,0.07209797498759397
+AMG,4,top3,5,c4_local_exacta_rate,0.071458861186559
+AMG,4,top3,6,c4_national_win_rate & c4_boat_exacta_rate,0.0651131635241244
+AMG,4,top3,7,c6_national_exacta_rate,0.04393262875908606
+AMG,4,top3,8,c3_national_exacta_rate,0.043725561496031844
+AMG,4,top3,9,c2_national_win_rate,0.04288617946714942
+AMG,4,top3,10,c3_national_win_rate,0.041244397509267804
