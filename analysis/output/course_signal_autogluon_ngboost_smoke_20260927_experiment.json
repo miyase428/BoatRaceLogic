@@ -1,0 +1,102 @@
+{
+  "experiment": "course_signal_autogluon_ngboost_smoke",
+  "created_at": "2026-09-30T10:48:17+0900",
+  "git_sha": "600402e23fda8287b81caaa6fdf36e686b0e5d89",
+  "baseline_experiment_git_sha": "db5514d8eb25dbf39063ec64ae8e6119a78a933b",
+  "places": [
+    "ASY"
+  ],
+  "cases": [
+    {
+      "place": "ASY",
+      "course": 3,
+      "target": "top3"
+    }
+  ],
+  "period": {
+    "dataset_start": "2023-09-27",
+    "train": "2023-09-27 to 2025-08-31",
+    "valid": "2025-09-01 to 2026-02-28",
+    "test": "2026-03-01 to 2026-09-27"
+  },
+  "feature_count": 170,
+  "feature_list_reference": "post_features from audit_tamagawa_course_signals_zero_base_ml.build_dataset",
+  "random_seed": 20260927,
+  "autogluon": {
+    "package": "autogluon.tabular",
+    "version": "1.6.3",
+    "license": "Apache-2.0",
+    "parameters": {
+      "preset": "medium_quality",
+      "time_limit_seconds": 60,
+      "eval_metric": "log_loss",
+      "num_cpus": 4,
+      "num_gpus": 0,
+      "fit_strategy": "sequential",
+      "hyperparameters": {
+        "GBM": {},
+        "CAT": {},
+        "XGB": {},
+        "RF": {},
+        "XT": {}
+      },
+      "excluded_models": [
+        "TABPFN",
+        "TABICL",
+        "TABDPT",
+        "TABDPT-TURBO"
+      ],
+      "random_seed": 0,
+      "random_seed_note": "AutoGluon 1.6 standard model framework default; leaderboard confirms model seed=0"
+    },
+    "preprocessing": "AutoGluon standard numeric missing-value handling; all 170 inputs supplied",
+    "model_artifacts": "written only under /tmp then deleted after leaderboard/disk capture"
+  },
+  "ngboost": {
+    "package": "ngboost",
+    "version": "0.5.11",
+    "license": "Apache-2.0",
+    "parameters": {
+      "Dist": "Bernoulli",
+      "n_estimators": 500,
+      "learning_rate": 0.01,
+      "minibatch_frac": 1.0,
+      "col_sample": 1.0,
+      "natural_gradient": true,
+      "validation_fraction": 0.0,
+      "early_stopping_rounds": 50,
+      "random_state": 20260927,
+      "verbose": false
+    },
+    "preprocessing": "SimpleImputer(strategy=median) fit on TRAIN only; 170 input columns retained"
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "scikit_learn": "1.9.1",
+    "numpy": "1.26.4",
+    "autogluon": "1.6.3",
+    "ngboost": "0.5.11",
+    "max_rss_kb": 1076400,
+    "elapsed_seconds": 82.23725091386586
+  },
+  "dataset_audit": {
+    "ASY": {
+      "source_races": 6892,
+      "source_min_date": "2023-09-28",
+      "source_max_date": "2026-09-27",
+      "used_races": 5916,
+      "used_min_date": "2024-01-02",
+      "used_max_date": "2026-09-27",
+      "excluded_races": 976,
+      "exclusion_reasons": {
+        "missing_race_or_exhibition": 976
+      }
+    }
+  },
+  "leakage_checks": {
+    "results_only_used_as_labels": true,
+    "payouts_and_odds_not_used": true,
+    "point_in_time_existing_generator": true,
+    "test_not_used_for_fit_or_selection": true
+  }
+}

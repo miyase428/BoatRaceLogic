@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gc
 import json
 import platform
 import resource
+import shutil
 import subprocess
 import sys
 import time
@@ -36,7 +38,20 @@ try:
     from interpret.glassbox import ExplainableBoostingClassifier
 except ImportError:  # pragma: no cover - checked by the four-model path
     ExplainableBoostingClassifier = None
+try:
+    import pandas as pd
+    from autogluon.tabular import TabularPredictor
+except ImportError:  # pragma: no cover - checked by the AutoGluon path
+    pd = None
+    TabularPredictor = None
+try:
+    from ngboost import NGBClassifier
+    from ngboost.distns import Bernoulli
+except ImportError:  # pragma: no cover - checked by the NGBoost path
+    NGBClassifier = None
+    Bernoulli = None
 from sklearn.base import clone
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -131,6 +146,47 @@ TABDPT_TURBO_PARAMETERS = {
     "verbose": False,
     "predict_seed": RANDOM_SEED,
 }
+
+# AutoGluon 1.6系の medium_quality preset をベースに、今回の比較対象を
+# CPU向けの標準ツリー系Tabular ensembleへ明示的に限定する。foundation model、
+# GPU専用モデル、NLP/画像モデルは含めない。固定VALIDだけをモデル選択・ensemble
+# 構成に使い、TESTは fit に渡さない。
+AUTOGLUON_PARAMETERS = {
+    "preset": "medium_quality",
+    "time_limit_seconds": 60,
+    "eval_metric": "log_loss",
+    "num_cpus": 4,
+    "num_gpus": 0,
+    "fit_strategy": "sequential",
+    "hyperparameters": {
+        "GBM": {},
+        "CAT": {},
+        "XGB": {},
+        "RF": {},
+        "XT": {},
+    },
+    "excluded_models": ["TABPFN", "TABICL", "TABDPT", "TABDPT-TURBO"],
+    # AutoGluon 1.6の全標準モデルに共通で渡せる乱数引数はなく、frameworkの
+    # 再現可能な既定値0を使用する（leaderboardの各モデル設定にも記録される）。
+    "random_seed": 0,
+}
+
+# NGBoost v0.5.11のBernoulli分類。CPU上の固定設定で、early stoppingは
+# 固定VALIDのみを参照する。170特徴の情報量は変えず、TRAINでfitするmedian補完
+# だけを前処理に使う。
+NGBOOST_PARAMETERS = {
+    "Dist": "Bernoulli",
+    "n_estimators": 500,
+    "learning_rate": 0.01,
+    "minibatch_frac": 1.0,
+    "col_sample": 1.0,
+    "natural_gradient": True,
+    "validation_fraction": 0.0,
+    "early_stopping_rounds": 50,
+    "random_state": RANDOM_SEED,
+    "verbose": False,
+}
+AUTOGLUON_ROOT = Path("/tmp/boatrace-autogluon-models")
 
 
 def git_sha() -> str:
@@ -807,18 +863,355 @@ def foundation_tabdpt_main(args: argparse.Namespace) -> None:
     print(f"summary: {output_dir / f'{stem}_summary.csv'}", flush=True)
 
 
+def directory_size_bytes(path: Path) -> int:
+    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+
+
+def positive_probability(value: object) -> np.ndarray:
+    """AutoGluonのbinary predict_proba出力を正例1の一次元配列へ正規化する。"""
+    result = np.asarray(value, dtype=float)
+    if result.ndim == 1:
+        return result
+    if result.ndim == 2 and result.shape[1] == 2:
+        return result[:, 1]
+    raise RuntimeError(f"AutoGluon predict_probaの想定外shape: {result.shape}")
+
+
+def make_tabular_frame(matrix: np.ndarray, features: list[str], label: np.ndarray | None = None):
+    if pd is None:
+        raise RuntimeError("AutoGluon比較にはpandasが必要です")
+    frame = pd.DataFrame(matrix, columns=features)
+    if label is not None:
+        frame["_target"] = label
+    return frame
+
+
+def fit_autogluon(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_valid: np.ndarray,
+    y_valid: np.ndarray,
+    x_test: np.ndarray,
+    features: list[str],
+    case_id: str,
+) -> tuple[np.ndarray, np.ndarray, float, float, int, str, str, list[dict]]:
+    if TabularPredictor is None:
+        raise RuntimeError("AutoGluon比較にはautogluon.tabularが必要です")
+    model_path = AUTOGLUON_ROOT / case_id
+    shutil.rmtree(model_path, ignore_errors=True)
+    train_frame = make_tabular_frame(x_train, features, y_train)
+    valid_frame = make_tabular_frame(x_valid, features, y_valid)
+    test_frame = make_tabular_frame(x_test, features)
+    predictor = TabularPredictor(
+        label="_target",
+        problem_type="binary",
+        eval_metric=AUTOGLUON_PARAMETERS["eval_metric"],
+        path=str(model_path),
+        verbosity=0,
+    )
+    started = time.perf_counter()
+    predictor.fit(
+        train_data=train_frame,
+        tuning_data=valid_frame,
+        time_limit=AUTOGLUON_PARAMETERS["time_limit_seconds"],
+        presets=AUTOGLUON_PARAMETERS["preset"],
+        hyperparameters=AUTOGLUON_PARAMETERS["hyperparameters"],
+        excluded_model_types=AUTOGLUON_PARAMETERS["excluded_models"],
+        fit_weighted_ensemble=True,
+        dynamic_stacking=False,
+        calibrate_decision_threshold=False,
+        num_cpus=AUTOGLUON_PARAMETERS["num_cpus"],
+        num_gpus=AUTOGLUON_PARAMETERS["num_gpus"],
+        fit_strategy=AUTOGLUON_PARAMETERS["fit_strategy"],
+        memory_limit=6.0,
+    )
+    fit_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    valid_probability = positive_probability(predictor.predict_proba(valid_frame.drop(columns=["_target"]), as_pandas=False))
+    test_probability = positive_probability(predictor.predict_proba(test_frame, as_pandas=False))
+    predict_seconds = time.perf_counter() - started
+    if not np.isfinite(valid_probability).all() or not np.isfinite(test_probability).all():
+        raise RuntimeError(f"AutoGluon確率にNaN/Inf: {case_id}")
+    leaderboard = predictor.leaderboard(silent=True, extra_info=True)
+    leaderboard_rows = []
+    for rank, item in enumerate(leaderboard.to_dict(orient="records"), 1):
+        leaderboard_rows.append({"rank": rank, **item})
+    info = predictor.info()
+    final_model = str(predictor.model_best)
+    model_info = info.get("model_info", {}).get(final_model, {})
+    stacker = model_info.get("stacker_info", {})
+    components = stacker.get("base_model_names", [])
+    if not components:
+        components = model_info.get("base_model_names", [])
+    composition = "+".join(map(str, components)) if components else final_model
+    disk_bytes = directory_size_bytes(model_path)
+    del predictor, leaderboard, info, train_frame, valid_frame, test_frame
+    gc.collect()
+    shutil.rmtree(model_path, ignore_errors=True)
+    return valid_probability, test_probability, fit_seconds, predict_seconds, disk_bytes, final_model, composition, leaderboard_rows
+
+
+def fit_ngboost(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_valid: np.ndarray,
+    y_valid: np.ndarray,
+    x_test: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, float, float]:
+    if NGBClassifier is None or Bernoulli is None:
+        raise RuntimeError("NGBoost比較にはngboostが必要です")
+    # keep_empty_features=True で、TRAIN内で全欠損だった列も削除せず0を代入する。
+    # ケースごとに列数が変わらず、170入力情報という固定比較条件を維持する。
+    imputer = SimpleImputer(strategy="median", keep_empty_features=True)
+    train_input = imputer.fit_transform(x_train)
+    valid_input = imputer.transform(x_valid)
+    test_input = imputer.transform(x_test)
+    model = NGBClassifier(
+        Dist=Bernoulli,
+        n_estimators=NGBOOST_PARAMETERS["n_estimators"],
+        learning_rate=NGBOOST_PARAMETERS["learning_rate"],
+        minibatch_frac=NGBOOST_PARAMETERS["minibatch_frac"],
+        col_sample=NGBOOST_PARAMETERS["col_sample"],
+        natural_gradient=NGBOOST_PARAMETERS["natural_gradient"],
+        validation_fraction=NGBOOST_PARAMETERS["validation_fraction"],
+        early_stopping_rounds=NGBOOST_PARAMETERS["early_stopping_rounds"],
+        random_state=NGBOOST_PARAMETERS["random_state"],
+        verbose=NGBOOST_PARAMETERS["verbose"],
+    )
+    started = time.perf_counter()
+    model.fit(train_input, y_train, X_val=valid_input, Y_val=y_valid)
+    fit_seconds = time.perf_counter() - started
+    started = time.perf_counter()
+    valid_probability = model.predict_proba(valid_input)[:, 1]
+    test_probability = model.predict_proba(test_input)[:, 1]
+    predict_seconds = time.perf_counter() - started
+    if not np.isfinite(valid_probability).all() or not np.isfinite(test_probability).all():
+        raise RuntimeError("NGBoost確率にNaN/Inf")
+    del model, imputer, train_input, valid_input, test_input
+    gc.collect()
+    return valid_probability, test_probability, fit_seconds, predict_seconds
+
+
+def load_five_baseline(output_dir: Path, stem: str) -> tuple[dict[tuple[str, int, str], dict], list[dict], dict]:
+    indexed, monthly, experiment = load_baseline(output_dir, stem)
+    required = {"test_tabdpt_turbo_brier", "valid_tabdpt_turbo_brier"}
+    if not required.issubset(indexed[("ASY", 1, "first")]):
+        raise RuntimeError("5モデル成果物にTabDPT-Turbo列がありません")
+    return indexed, monthly, experiment
+
+
+def seven_model_monthly_rows(
+    place: str,
+    course: int,
+    target: str,
+    test_rows: list[dict],
+    y_test: np.ndarray,
+    baseline_monthly: dict[tuple[str, int, str, str], dict],
+    autogluon_probability: np.ndarray,
+    ngboost_probability: np.ndarray,
+) -> list[dict]:
+    months = np.asarray([row["date"].strftime("%Y-%m") for row in test_rows])
+    output: list[dict] = []
+    for month in sorted(set(months.tolist())):
+        mask = months == month
+        baseline = baseline_monthly[(place, course, target, month)]
+        scores = {name: float(baseline[f"{name}_brier"]) for name in ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo")}
+        scores["autogluon"] = float(brier_score_loss(y_test[mask], autogluon_probability[mask]))
+        scores["ngboost"] = float(brier_score_loss(y_test[mask], ngboost_probability[mask]))
+        best = min(scores.values())
+        output.append({
+            "place": place, "course": course, "target": target, "month": month,
+            "n": int(mask.sum()), "positive_rate": float(np.mean(y_test[mask])),
+            **{f"{name}_brier": value for name, value in scores.items()},
+            "winner": "+".join(name for name, value in scores.items() if np.isclose(value, best, rtol=0.0, atol=1e-15)),
+        })
+    return output
+
+
+def write_seven_model_markdown(path: Path, experiment: dict, summary: list[dict], monthly: list[dict], leaderboard: list[dict]) -> None:
+    models = ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo", "autogluon", "ngboost")
+    mean_valid = {name: float(np.mean([float(row[f"valid_{name}_brier"]) for row in summary])) for name in models}
+    mean_test = {name: float(np.mean([float(row[f"test_{name}_brier"]) for row in summary])) for name in models}
+    best_cases = {name: sum(name in row["test_winner"].split("+") for row in summary) for name in models}
+    month_wins = {name: sum(name in row["winner"].split("+") for row in monthly) for name in models}
+    lines = [
+        "# コースサインML正式比較: 7モデル（AutoGluon / NGBoost追加）", "",
+        "## 実行可否", "",
+        "- AutoGluon Tabular と NGBoost は、ASY・AMG × 1〜6C × first/top2/top3 の固定36ケースを完走した。",
+        "- AutoGluon はCPU 4core、medium_quality、標準ツリー系（GBM/CAT/XGB/RF/XT）とweighted ensembleのみ。foundation model・GPU前提モデルは未使用。",
+        "- NGBoost はBernoulli分類、TRAINでfit・固定VALIDでearly stopping、TESTは評価専用。median補完はTRAINだけでfitし、170特徴の情報量は変えていない。", "",
+        "## 固定条件", "",
+        f"- Git: `{experiment['git_sha']}` / 基準5モデル成果物: `{experiment['baseline_experiment_git_sha']}`",
+        f"- 展示込み170特徴、TRAIN {experiment['period']['train']} / VALID {experiment['period']['valid']} / TEST {experiment['period']['test']}",
+        "- 結果・払戻・オッズはラベル以外に未使用。既存point-in-timeデータ生成器を再利用し、TESTは設定選択・fit・early stoppingに渡していない。", "",
+        "## 全体集計", "",
+        "|モデル|VALID平均Brier|TEST平均Brier|TEST最良|HGB比改善|CatBoost比改善|FLAML比改善|EBM比改善|TabDPT比改善|月別最良|", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for name in models:
+        improvements = [sum(float(row[f"test_{name}_brier"]) < float(row[f"test_{baseline}_brier"]) for row in summary) for baseline in ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo")]
+        lines.append(f"|{name}|{mean_valid[name]:.8f}|{mean_test[name]:.8f}|{best_cases[name]}|{improvements[0]}|{improvements[1]}|{improvements[2]}|{improvements[3]}|{improvements[4]}|{month_wins[name]}|")
+    lines += ["", "## 36ケース", "", "|場|C|target|HGB|CatBoost|FLAML|EBM|TabDPT|AutoGluon|NGBoost|最良|AutoGluon最終モデル|", "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---|---|"]
+    for row in summary:
+        values = [float(row[f"test_{name}_brier"]) for name in models]
+        lines.append(f"|{row['place']}|{row['course']}|{row['target']}|" + "|".join(f"{value:.6f}" for value in values) + f"|{row['test_winner']}|{row['autogluon_final_model']}|")
+    for title, keys in (("場別", ("place",)), ("コース別", ("course",)), ("target別", ("target",))):
+        groups: dict[tuple, list[dict]] = {}
+        for row in summary:
+            groups.setdefault(tuple(row[key] for key in keys), []).append(row)
+        lines += ["", f"## {title}", "", "|区分|ケース|" + "|".join(models) + "|", "|---|---:|" + "|".join("---:" for _ in models) + "|"]
+        for key, values in sorted(groups.items()):
+            means = [float(np.mean([float(row[f"test_{name}_brier"]) for row in values])) for name in models]
+            lines.append(f"|{' / '.join(map(str, key))}|{len(values)}|" + "|".join(f"{value:.6f}" for value in means) + "|")
+    lines += ["", "## 月別安定性", "", "|月|" + "|".join(models) + "|", "|---|" + "|".join("---:" for _ in models) + "|"]
+    for month in sorted({row["month"] for row in monthly}):
+        values = [row for row in monthly if row["month"] == month]
+        means = [float(np.mean([float(row[f"{name}_brier"]) for row in values])) for name in models]
+        lines.append(f"|{month}|" + "|".join(f"{value:.6f}" for value in means) + "|")
+    lines += ["", "## VALID→TEST安定性", "", "|モデル|VALID|TEST|TEST - VALID|", "|---|---:|---:|---:|"]
+    for name in models:
+        lines.append(f"|{name}|{mean_valid[name]:.8f}|{mean_test[name]:.8f}|{mean_test[name] - mean_valid[name]:+.8f}|")
+    ensemble_rows = [row for row in summary if "+" in row["autogluon_composition"]]
+    lines += ["", "## AutoGluon構成", "", f"- 最終モデルがensembleだったケース: {len(ensemble_rows)}/36。各ケースのleaderboardは `*_autogluon_leaderboard.csv`、構成・disk量はsummary CSVに保存。", "- AutoGluonの内部selection metricはlog_loss。BrierはVALID/TESTの外部評価にだけ使用した。", "", "## 実行負荷", "", f"- 総実行時間: {experiment['runtime']['elapsed_seconds']:.2f}秒 / プロセス最大RSS: {experiment['runtime']['max_rss_kb']:,}KB。", "- AutoGluon生成model directoryは個別集計後に /tmp から削除し、Gitには含めていない。", "", "|モデル|平均fit秒/ケース|平均predict秒/ケース|", "|---|---:|---:|"]
+    for name in models:
+        lines.append(f"|{name}|{np.mean([float(row.get(f'{name}_fit_seconds') or 0) for row in summary]):.3f}|{np.mean([float(row.get(f'{name}_predict_seconds') or 0) for row in summary]):.3f}|")
+    lines += ["", "## 予測相関", "", "- 既存5モデルの個別TEST予測確率は前回成果物に保存されておらず、再学習禁止方針を守るため、今回の7モデル間のpairwise correlationは未算出。ブレンド検証フェーズで同一splitの予測確率を保存して評価する。", "", "## 範囲外", "", "- 本番置換、AI1着率v6比較、確率校正、ブレンド、race_number追加は行っていない。"]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def autogluon_ngboost_main(args: argparse.Namespace, smoke_only: bool = False) -> None:
+    from importlib.metadata import version
+
+    if None in (pd, TabularPredictor, NGBClassifier, Bernoulli):
+        raise RuntimeError("AutoGluon / NGBoost比較にはpandas、autogluon.tabular、ngboostが必要です")
+    output_dir = ROOT / "analysis" / "output"
+    baseline, baseline_monthly_rows, baseline_experiment = load_five_baseline(output_dir, args.baseline_stem)
+    four_timing, _four_monthly, four_experiment = load_baseline(output_dir, "course_signal_model_compare_asy_amg_20260927_four_models")
+    baseline_monthly = {(row["place"], int(row["course"]), row["target"], row["month"]): row for row in baseline_monthly_rows}
+    config = json.loads((ROOT / "config" / "course_signal_rules.json").read_text(encoding="utf-8"))
+    cases = [("ASY", 3, "top3")] if smoke_only else [(place, course, target) for place in PLACES for course in COURSES for target in TARGETS]
+    started = time.perf_counter()
+    summary: list[dict] = []
+    monthly: list[dict] = []
+    leaderboard: list[dict] = []
+    dataset_audit: dict[str, dict] = {}
+    canonical_features: list[str] | None = None
+    records_by_place: dict[str, list[dict]] = {}
+    for place in sorted({case[0] for case in cases}):
+        audit.PLACE = place
+        records, _pre_features, post_features = audit.build_dataset(date(2023, 9, 27), END, config)
+        records_by_place[place] = records
+        dataset_audit[place] = dict(audit.LAST_DATASET_AUDIT)
+        if canonical_features is None:
+            canonical_features = list(post_features)
+        elif canonical_features != list(post_features):
+            raise RuntimeError("場ごとに展示込み特徴量一覧が異なります")
+        if len(post_features) != 170:
+            raise RuntimeError(f"展示込み特徴量数が固定条件170と一致しません: {len(post_features)}")
+    assert canonical_features is not None
+    for place, course, target in cases:
+        key = (place, course, target)
+        base = baseline[key]
+        timing_base = four_timing[key]
+        train, valid, test = split([row for row in records_by_place[place] if row["course"] == course])
+        for column, actual in (("train_n", len(train)), ("valid_n", len(valid)), ("test_n", len(test))):
+            if int(base[column]) != actual:
+                raise RuntimeError(f"前回成果物と今回データ件数が不一致: {key} {column}")
+        x_train, x_valid, x_test = (as_matrix(rows, canonical_features) for rows in (train, valid, test))
+        y_train = np.asarray([row[target] for row in train], dtype=np.int8)
+        y_valid = np.asarray([row[target] for row in valid], dtype=np.int8)
+        y_test = np.asarray([row[target] for row in test], dtype=np.int8)
+        case_id = f"{place.lower()}_{course}c_{target}"
+        ag_valid, ag_test, ag_fit, ag_predict, ag_disk, ag_final, ag_composition, ag_leaderboard = fit_autogluon(x_train, y_train, x_valid, y_valid, x_test, canonical_features, case_id)
+        ng_valid, ng_test, ng_fit, ng_predict = fit_ngboost(x_train, y_train, x_valid, y_valid, x_test)
+        ag_valid_metrics, ag_test_metrics = metrics(y_valid, ag_valid), metrics(y_test, ag_test)
+        ng_valid_metrics, ng_test_metrics = metrics(y_valid, ng_valid), metrics(y_test, ng_test)
+        valid_scores = {name: float(base[f"valid_{name}_brier"]) for name in ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo")}
+        test_scores = {name: float(base[f"test_{name}_brier"]) for name in ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo")}
+        valid_scores.update({"autogluon": float(ag_valid_metrics["brier"]), "ngboost": float(ng_valid_metrics["brier"])})
+        test_scores.update({"autogluon": float(ag_test_metrics["brier"]), "ngboost": float(ng_test_metrics["brier"])})
+        valid_best, test_best = min(valid_scores.values()), min(test_scores.values())
+        row = {
+            "place": place, "course": course, "target": target, "feature_set": "post_exhibition_170_input", "feature_count": len(canonical_features),
+            "train_n": len(train), "valid_n": len(valid), "test_n": len(test), "train_positive_rate": float(np.mean(y_train)), "valid_positive_rate": float(np.mean(y_valid)), "test_positive_rate": float(np.mean(y_test)),
+            **{f"valid_{name}_brier": value for name, value in valid_scores.items()}, **{f"test_{name}_brier": value for name, value in test_scores.items()},
+            "valid_winner": "+".join(name for name, value in valid_scores.items() if np.isclose(value, valid_best, rtol=0.0, atol=1e-15)),
+            "test_winner": "+".join(name for name, value in test_scores.items() if np.isclose(value, test_best, rtol=0.0, atol=1e-15)),
+            "autogluon_final_model": ag_final, "autogluon_composition": ag_composition, "autogluon_disk_bytes": ag_disk,
+            "autogluon_fit_seconds": ag_fit, "autogluon_predict_seconds": ag_predict, "ngboost_fit_seconds": ng_fit, "ngboost_predict_seconds": ng_predict,
+            "hgb_fit_seconds": baseline_value(timing_base, "hgb_fit_seconds"), "hgb_predict_seconds": baseline_value(timing_base, "hgb_predict_seconds"),
+            "catboost_fit_seconds": baseline_value(timing_base, "catboost_fit_seconds"), "catboost_predict_seconds": baseline_value(timing_base, "catboost_predict_seconds"),
+            "flaml_fit_seconds": baseline_value(timing_base, "flaml_fit_seconds"), "flaml_predict_seconds": baseline_value(timing_base, "flaml_predict_seconds"),
+            "ebm_fit_seconds": baseline_value(timing_base, "ebm_fit_seconds"), "ebm_predict_seconds": baseline_value(timing_base, "ebm_predict_seconds"),
+            "tabdpt_turbo_fit_seconds": baseline_value(base, "tabdpt_turbo_fit_seconds"), "tabdpt_turbo_predict_seconds": baseline_value(base, "tabdpt_turbo_predict_seconds"),
+            "rss_kb_after_case": process_rss_kb(),
+        }
+        for name in ("hgb", "catboost", "flaml", "ebm", "tabdpt_turbo"):
+            for metric_name in ("log_loss", "auc", "accuracy_0_5", "probability_mean"):
+                row[f"test_{name}_{metric_name}"] = baseline_value(base, f"test_{name}_{metric_name}")
+        for name, value in (("autogluon", ag_test_metrics), ("ngboost", ng_test_metrics)):
+            for metric_name in ("log_loss", "auc", "accuracy_0_5", "probability_mean"):
+                row[f"test_{name}_{metric_name}"] = value[metric_name]
+        summary.append(row)
+        for item in ag_leaderboard:
+            leaderboard.append({"place": place, "course": course, "target": target, **item})
+        if not smoke_only:
+            monthly.extend(seven_model_monthly_rows(place, course, target, test, y_test, baseline_monthly, ag_test, ng_test))
+        print(f"{place} {course}C {target}: AutoGluon={test_scores['autogluon']:.6f} NGBoost={test_scores['ngboost']:.6f} winner={row['test_winner']}", flush=True)
+        del x_train, x_valid, x_test, ag_valid, ag_test, ng_valid, ng_test
+        gc.collect()
+    elapsed = time.perf_counter() - started
+    import autogluon
+    import ngboost
+    experiment = {
+        "experiment": "course_signal_autogluon_ngboost_smoke" if smoke_only else "course_signal_model_compare_seven_models",
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "git_sha": git_sha(), "baseline_experiment_git_sha": baseline_experiment.get("git_sha"), "four_model_experiment_git_sha": four_experiment.get("git_sha"),
+        "places": sorted({case[0] for case in cases}), "cases": [{"place": place, "course": course, "target": target} for place, course, target in cases],
+        "period": {"dataset_start": "2023-09-27", "train": "2023-09-27 to 2025-08-31", "valid": "2025-09-01 to 2026-02-28", "test": "2026-03-01 to 2026-09-27"},
+        "feature_count": len(canonical_features), "feature_list_reference": "post_features from audit_tamagawa_course_signals_zero_base_ml.build_dataset", "random_seed": RANDOM_SEED,
+        "autogluon": {"package": "autogluon.tabular", "version": version("autogluon.tabular"), "license": "Apache-2.0", "parameters": AUTOGLUON_PARAMETERS, "preprocessing": "AutoGluon standard numeric missing-value handling; all 170 inputs supplied", "model_artifacts": "written only under /tmp then deleted after leaderboard/disk capture"},
+        "ngboost": {"package": "ngboost", "version": ngboost.__version__, "license": "Apache-2.0", "parameters": NGBOOST_PARAMETERS, "preprocessing": "SimpleImputer(strategy=median, keep_empty_features=True) fit on TRAIN only; all-missing TRAIN columns retained as 0 and all 170 inputs preserved"},
+        "runtime": {"python": platform.python_version(), "scikit_learn": sklearn.__version__, "numpy": np.__version__, "autogluon": version("autogluon.tabular"), "ngboost": ngboost.__version__, "max_rss_kb": int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss), "elapsed_seconds": elapsed},
+        "dataset_audit": dataset_audit,
+        "leakage_checks": {"results_only_used_as_labels": True, "payouts_and_odds_not_used": True, "point_in_time_existing_generator": True, "test_not_used_for_fit_or_selection": True},
+    }
+    stem = str(args.output_stem)
+    write_csv(output_dir / f"{stem}_summary.csv", summary)
+    write_csv(output_dir / f"{stem}_autogluon_leaderboard.csv", leaderboard)
+    (output_dir / f"{stem}_experiment.json").write_text(json.dumps(experiment, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if smoke_only:
+        row = summary[0]
+        (output_dir / f"{stem}.md").write_text("\n".join([
+            "# AutoGluon / NGBoost feasibility smoke", "", "- 対象: ASY 3C top3、固定170特徴・同一split。", f"- AutoGluon: fit {row['autogluon_fit_seconds']:.2f}s / predict {row['autogluon_predict_seconds']:.2f}s / disk {row['autogluon_disk_bytes']:,} bytes / RSS {row['rss_kb_after_case']}KB / TEST Brier {row['test_autogluon_brier']:.8f}", f"- NGBoost: fit {row['ngboost_fit_seconds']:.2f}s / predict {row['ngboost_predict_seconds']:.2f}s / RSS {row['rss_kb_after_case']}KB / TEST Brier {row['test_ngboost_brier']:.8f}", f"- AutoGluon final model: `{row['autogluon_final_model']}` / composition: `{row['autogluon_composition']}`", "- AutoGluon artifactは/tmpから削除済み。", "",
+        ]), encoding="utf-8")
+    else:
+        write_csv(output_dir / f"{stem}_monthly.csv", monthly)
+        write_seven_model_markdown(output_dir / f"{stem}.md", experiment, summary, monthly, leaderboard)
+    print(f"summary: {output_dir / f'{stem}_summary.csv'}", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-stem", default="course_signal_model_compare_asy_amg_20260927_four_models")
     parser.add_argument("--baseline-stem", default="course_signal_model_compare_asy_amg_20260927")
     parser.add_argument("--foundation-tabdpt", action="store_true", help="保存済み4モデル成果物へTabDPT-Turboを統合する")
+    parser.add_argument("--autogluon-ngboost", action="store_true", help="保存済み5モデル成果物へAutoGluon/NGBoostを統合する")
+    parser.add_argument("--autogluon-ngboost-smoke", action="store_true", help="ASY 3C top3だけでAutoGluon/NGBoostの実行可能性を確認する")
     args = parser.parse_args()
+    if args.autogluon_ngboost and args.autogluon_ngboost_smoke:
+        raise RuntimeError("--autogluon-ngboost と --autogluon-ngboost-smoke は同時に使えません")
     if args.foundation_tabdpt:
         if args.output_stem == "course_signal_model_compare_asy_amg_20260927_four_models":
             args.output_stem = "course_signal_model_compare_five_models_20260927"
         if args.baseline_stem == "course_signal_model_compare_asy_amg_20260927":
             args.baseline_stem = "course_signal_model_compare_asy_amg_20260927_four_models"
         foundation_tabdpt_main(args)
+        return
+    if args.autogluon_ngboost or args.autogluon_ngboost_smoke:
+        if args.output_stem == "course_signal_model_compare_asy_amg_20260927_four_models":
+            args.output_stem = "course_signal_autogluon_ngboost_smoke_20260927" if args.autogluon_ngboost_smoke else "course_signal_model_compare_seven_models_20260927"
+        if args.baseline_stem == "course_signal_model_compare_asy_amg_20260927":
+            args.baseline_stem = "course_signal_model_compare_five_models_20260927"
+        autogluon_ngboost_main(args, smoke_only=args.autogluon_ngboost_smoke)
         return
     if None in (CatBoostClassifier, AutoML, ExplainableBoostingClassifier):
         raise RuntimeError("HGB/CatBoost/FLAML/EBM比較にはcatboost、flaml、interpret-coreが必要です")
