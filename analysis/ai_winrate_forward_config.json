@@ -1,0 +1,472 @@
+{
+  "manifest": "analysis/artifacts/ai_winrate_forward/20260927/manifest.json",
+  "manifest_sha256": "c968b5008002d1fd788cb80ef559f8753497219be23519b2211d2c7d1a4fe36e",
+  "version": "ai_winrate_blend_forward_20260927",
+  "forward_start": "2026-10-01",
+  "training_cutoff": "2026-09-27",
+  "git_sha_at_training": "faf9dc48cc366ea9bca95342adff43a8e9963da7",
+  "feature_count": 170,
+  "feature_names": [
+    "c1_history_n",
+    "c1_nige",
+    "c1_sashi",
+    "c1_makuri",
+    "c1_attack",
+    "c1_st_rank",
+    "c1_national_win_rate",
+    "c1_national_exacta_rate",
+    "c1_local_win_rate",
+    "c1_local_exacta_rate",
+    "c1_motor_exacta_rate",
+    "c1_boat_exacta_rate",
+    "c1_average_start",
+    "c2_history_n",
+    "c2_nige",
+    "c2_sashi",
+    "c2_makuri",
+    "c2_attack",
+    "c2_st_rank",
+    "c2_national_win_rate",
+    "c2_national_exacta_rate",
+    "c2_local_win_rate",
+    "c2_local_exacta_rate",
+    "c2_motor_exacta_rate",
+    "c2_boat_exacta_rate",
+    "c2_average_start",
+    "c3_history_n",
+    "c3_nige",
+    "c3_sashi",
+    "c3_makuri",
+    "c3_attack",
+    "c3_st_rank",
+    "c3_national_win_rate",
+    "c3_national_exacta_rate",
+    "c3_local_win_rate",
+    "c3_local_exacta_rate",
+    "c3_motor_exacta_rate",
+    "c3_boat_exacta_rate",
+    "c3_average_start",
+    "c4_history_n",
+    "c4_nige",
+    "c4_sashi",
+    "c4_makuri",
+    "c4_attack",
+    "c4_st_rank",
+    "c4_national_win_rate",
+    "c4_national_exacta_rate",
+    "c4_local_win_rate",
+    "c4_local_exacta_rate",
+    "c4_motor_exacta_rate",
+    "c4_boat_exacta_rate",
+    "c4_average_start",
+    "c5_history_n",
+    "c5_nige",
+    "c5_sashi",
+    "c5_makuri",
+    "c5_attack",
+    "c5_st_rank",
+    "c5_national_win_rate",
+    "c5_national_exacta_rate",
+    "c5_local_win_rate",
+    "c5_local_exacta_rate",
+    "c5_motor_exacta_rate",
+    "c5_boat_exacta_rate",
+    "c5_average_start",
+    "c6_history_n",
+    "c6_nige",
+    "c6_sashi",
+    "c6_makuri",
+    "c6_attack",
+    "c6_st_rank",
+    "c6_national_win_rate",
+    "c6_national_exacta_rate",
+    "c6_local_win_rate",
+    "c6_local_exacta_rate",
+    "c6_motor_exacta_rate",
+    "c6_boat_exacta_rate",
+    "c6_average_start",
+    "lane1_vulnerability_rate",
+    "lane1_vulnerability_n",
+    "c1_exhibition_time_relative",
+    "c1_start_timing_relative",
+    "c1_lap_time_relative",
+    "c1_around_time_relative",
+    "c1_straight_time_relative",
+    "c1_ex_score",
+    "c1_st_score",
+    "c1_lap_score",
+    "c1_mawari_score",
+    "c1_straight_score",
+    "c1_attack_potential",
+    "c1_stable_score",
+    "c1_final_2nd_score",
+    "c1_second_rank",
+    "c1_gap_to_top",
+    "c2_exhibition_time_relative",
+    "c2_start_timing_relative",
+    "c2_lap_time_relative",
+    "c2_around_time_relative",
+    "c2_straight_time_relative",
+    "c2_ex_score",
+    "c2_st_score",
+    "c2_lap_score",
+    "c2_mawari_score",
+    "c2_straight_score",
+    "c2_attack_potential",
+    "c2_stable_score",
+    "c2_final_2nd_score",
+    "c2_second_rank",
+    "c2_gap_to_top",
+    "c3_exhibition_time_relative",
+    "c3_start_timing_relative",
+    "c3_lap_time_relative",
+    "c3_around_time_relative",
+    "c3_straight_time_relative",
+    "c3_ex_score",
+    "c3_st_score",
+    "c3_lap_score",
+    "c3_mawari_score",
+    "c3_straight_score",
+    "c3_attack_potential",
+    "c3_stable_score",
+    "c3_final_2nd_score",
+    "c3_second_rank",
+    "c3_gap_to_top",
+    "c4_exhibition_time_relative",
+    "c4_start_timing_relative",
+    "c4_lap_time_relative",
+    "c4_around_time_relative",
+    "c4_straight_time_relative",
+    "c4_ex_score",
+    "c4_st_score",
+    "c4_lap_score",
+    "c4_mawari_score",
+    "c4_straight_score",
+    "c4_attack_potential",
+    "c4_stable_score",
+    "c4_final_2nd_score",
+    "c4_second_rank",
+    "c4_gap_to_top",
+    "c5_exhibition_time_relative",
+    "c5_start_timing_relative",
+    "c5_lap_time_relative",
+    "c5_around_time_relative",
+    "c5_straight_time_relative",
+    "c5_ex_score",
+    "c5_st_score",
+    "c5_lap_score",
+    "c5_mawari_score",
+    "c5_straight_score",
+    "c5_attack_potential",
+    "c5_stable_score",
+    "c5_final_2nd_score",
+    "c5_second_rank",
+    "c5_gap_to_top",
+    "c6_exhibition_time_relative",
+    "c6_start_timing_relative",
+    "c6_lap_time_relative",
+    "c6_around_time_relative",
+    "c6_straight_time_relative",
+    "c6_ex_score",
+    "c6_st_score",
+    "c6_lap_score",
+    "c6_mawari_score",
+    "c6_straight_score",
+    "c6_attack_potential",
+    "c6_stable_score",
+    "c6_final_2nd_score",
+    "c6_second_rank",
+    "c6_gap_to_top"
+  ],
+  "feature_definition": "fixed post-exhibition 170 features from audit_tamagawa_course_signals_zero_base_ml.py",
+  "label_definition": "exhibition-course subject player is positive iff that same player won",
+  "weights": {
+    "baseline": {
+      "v6_final": 1.0
+    },
+    "autogluon25": {
+      "v6_final": 0.75,
+      "autogluon_course_first": 0.25
+    },
+    "ebm05": {
+      "v6_final": 0.95,
+      "ebm_course_first": 0.05
+    }
+  },
+  "autogluon_parameters": {
+    "preset": "medium_quality",
+    "time_limit_seconds": 60,
+    "eval_metric": "log_loss",
+    "num_cpus": 4,
+    "num_gpus": 0,
+    "fit_strategy": "sequential",
+    "hyperparameters": {
+      "GBM": {},
+      "CAT": {},
+      "XGB": {},
+      "RF": {},
+      "XT": {}
+    },
+    "excluded_models": [
+      "TABPFN",
+      "TABICL",
+      "TABDPT",
+      "TABDPT-TURBO"
+    ],
+    "random_seed": 0
+  },
+  "ebm_parameters": {
+    "max_bins": 256,
+    "max_interaction_bins": 32,
+    "interactions": 10,
+    "outer_bags": 4,
+    "inner_bags": 0,
+    "learning_rate": 0.02,
+    "max_rounds": 1500,
+    "early_stopping_rounds": 100,
+    "min_samples_leaf": 10,
+    "validation_size": 0.15,
+    "n_jobs": 4,
+    "random_state": 20260927,
+    "objective": "log_loss"
+  },
+  "training_policy": "AutoGluon model selection uses the historical fixed TRAIN/VALID split, then refit_full adds the fixed historical TEST rows through cutoff. EBM fits all rows through cutoff with its fixed internal validation setting.",
+  "artifacts": {
+    "autogluon": {
+      "path": "analysis/artifacts/ai_winrate_forward/20260927/autogluon",
+      "sha256": "050e37697c24890ba3ebdef5924c0a058b1fb803e515c7cfb47e5e711b33b1e9",
+      "rows": {
+        "ASY": {
+          "1": {
+            "train": 3500,
+            "valid_selection": 1148,
+            "refit_extra": 1268,
+            "total_through_cutoff": 5916
+          },
+          "2": {
+            "train": 3500,
+            "valid_selection": 1148,
+            "refit_extra": 1268,
+            "total_through_cutoff": 5916
+          },
+          "3": {
+            "train": 3500,
+            "valid_selection": 1148,
+            "refit_extra": 1268,
+            "total_through_cutoff": 5916
+          },
+          "4": {
+            "train": 3500,
+            "valid_selection": 1148,
+            "refit_extra": 1268,
+            "total_through_cutoff": 5916
+          },
+          "5": {
+            "train": 3500,
+            "valid_selection": 1148,
+            "refit_extra": 1268,
+            "total_through_cutoff": 5916
+          },
+          "6": {
+            "train": 3500,
+            "valid_selection": 1148,
+            "refit_extra": 1268,
+            "total_through_cutoff": 5916
+          }
+        },
+        "AMG": {
+          "1": {
+            "train": 3866,
+            "valid_selection": 655,
+            "refit_extra": 1396,
+            "total_through_cutoff": 5917
+          },
+          "2": {
+            "train": 3866,
+            "valid_selection": 655,
+            "refit_extra": 1396,
+            "total_through_cutoff": 5917
+          },
+          "3": {
+            "train": 3866,
+            "valid_selection": 655,
+            "refit_extra": 1396,
+            "total_through_cutoff": 5917
+          },
+          "4": {
+            "train": 3866,
+            "valid_selection": 655,
+            "refit_extra": 1396,
+            "total_through_cutoff": 5917
+          },
+          "5": {
+            "train": 3866,
+            "valid_selection": 655,
+            "refit_extra": 1396,
+            "total_through_cutoff": 5917
+          },
+          "6": {
+            "train": 3866,
+            "valid_selection": 655,
+            "refit_extra": 1396,
+            "total_through_cutoff": 5917
+          }
+        }
+      },
+      "best_models": {
+        "ASY": {
+          "1": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "RandomForest": "RandomForest_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "2": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "ExtraTrees": "ExtraTrees_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "3": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "RandomForest": "RandomForest_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "4": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "ExtraTrees": "ExtraTrees_FULL",
+              "XGBoost": "XGBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "5": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "RandomForest": "RandomForest_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "6": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "ExtraTrees": "ExtraTrees_FULL",
+              "XGBoost": "XGBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          }
+        },
+        "AMG": {
+          "1": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "RandomForest": "RandomForest_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "XGBoost": "XGBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "2": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "3": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "ExtraTrees": "ExtraTrees_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "4": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "CatBoost": "CatBoost_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "5": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "ExtraTrees": "ExtraTrees_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          },
+          "6": {
+            "selection_model": "WeightedEnsemble_L2",
+            "refit_model": "WeightedEnsemble_L2_FULL",
+            "refit_mapping": {
+              "LightGBM": "LightGBM_FULL",
+              "RandomForest": "RandomForest_FULL",
+              "CatBoost": "CatBoost_FULL",
+              "ExtraTrees": "ExtraTrees_FULL",
+              "WeightedEnsemble_L2": "WeightedEnsemble_L2_FULL"
+            }
+          }
+        }
+      },
+      "python": "3.12.3",
+      "numpy": "1.26.4",
+      "sklearn": "1.9.1",
+      "autogluon": "1.6.3"
+    },
+    "ebm": {
+      "path": "analysis/artifacts/ai_winrate_forward/20260927/ebm_models.joblib",
+      "sha256": "d2438313baef6fe43a9947d0d04ef06a034e9b1c6389977a23c7b3776c6311d2",
+      "rows": {
+        "ASY": {
+          "1": 5916,
+          "2": 5916,
+          "3": 5916,
+          "4": 5916,
+          "5": 5916,
+          "6": 5916
+        },
+        "AMG": {
+          "1": 5917,
+          "2": 5917,
+          "3": 5917,
+          "4": 5917,
+          "5": 5917,
+          "6": 5917
+        }
+      },
+      "python": "3.12.3",
+      "numpy": "1.26.4",
+      "sklearn": "1.4.1.post1",
+      "interpret": "0.6.16"
+    }
+  }
+}

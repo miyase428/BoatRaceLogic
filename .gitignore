@@ -10,6 +10,7 @@ __pycache__/
 /FETCH_HEAD
 /analysis/logs/
 /analysis/output/
+/analysis/artifacts/ai_winrate_forward/
 /var/
 /public/stats_*.json
 /theories/new_sam/exec_debug.log
