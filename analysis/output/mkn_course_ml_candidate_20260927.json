@@ -60,10 +60,12 @@
           "rate": 0.6872727272727273
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.23557237464522232,
           "threshold": 0.6743259777295485,
           "n": 272,
           "coverage": 0.24704813805631246,
-          "rate": 0.6875
+          "rate": 0.6875,
+          "test_realized_coverage": 0.24704813805631246
         },
         "uncertainty_equal_count": {
           "difference": 0.010909090909090868,
@@ -230,10 +232,12 @@
           "rate": 0.8472727272727273
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.23557237464522232,
           "threshold": 0.8443429805382504,
           "n": 269,
           "coverage": 0.24432334241598547,
-          "rate": 0.8475836431226765
+          "rate": 0.8475836431226765,
+          "test_realized_coverage": 0.24432334241598547
         },
         "uncertainty_equal_count": {
           "difference": 0.029090909090909056,
@@ -399,10 +403,12 @@
           "rate": 0.8836363636363637
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.23557237464522232,
           "threshold": 0.9060983968094292,
           "n": 279,
           "coverage": 0.25340599455040874,
-          "rate": 0.8853046594982079
+          "rate": 0.8853046594982079,
+          "test_realized_coverage": 0.25340599455040874
         },
         "uncertainty_equal_count": {
           "difference": 0.0072727272727273196,
@@ -570,6 +576,7 @@
             "n": 54,
             "coverage": 0.04904632152588556,
             "rate": 0.4074074074074074,
+            "test_realized_coverage": 0.04904632152588556,
             "uncertainty_vs_baseline": {
               "difference": 0.2620849732566354,
               "ci95_low": 0.13287001486252165,
@@ -704,6 +711,7 @@
             "n": 107,
             "coverage": 0.0971843778383288,
             "rate": 0.308411214953271,
+            "test_realized_coverage": 0.0971843778383288,
             "uncertainty_vs_baseline": {
               "difference": 0.16308878080249897,
               "ci95_low": 0.07925191274496221,
@@ -838,6 +846,7 @@
             "n": 156,
             "coverage": 0.14168937329700274,
             "rate": 0.3076923076923077,
+            "test_realized_coverage": 0.14168937329700274,
             "uncertainty_vs_baseline": {
               "difference": 0.16236987354153568,
               "ci95_low": 0.0954158372499039,
@@ -972,6 +981,7 @@
             "n": 223,
             "coverage": 0.2025431425976385,
             "rate": 0.273542600896861,
+            "test_realized_coverage": 0.2025431425976385,
             "uncertainty_vs_baseline": {
               "difference": 0.12822016674608896,
               "ci95_low": 0.07766536895440135,
@@ -1141,6 +1151,7 @@
             "n": 59,
             "coverage": 0.053587647593097185,
             "rate": 0.6949152542372882,
+            "test_realized_coverage": 0.053587647593097185,
             "uncertainty_vs_baseline": {
               "difference": 0.2907372342554535,
               "ci95_low": 0.1700586743360137,
@@ -1275,6 +1286,7 @@
             "n": 113,
             "coverage": 0.10263396911898275,
             "rate": 0.6371681415929203,
+            "test_realized_coverage": 0.10263396911898275,
             "uncertainty_vs_baseline": {
               "difference": 0.23299012161108568,
               "ci95_low": 0.14662161195362874,
@@ -1409,6 +1421,7 @@
             "n": 169,
             "coverage": 0.15349682107175294,
             "rate": 0.5976331360946746,
+            "test_realized_coverage": 0.15349682107175294,
             "uncertainty_vs_baseline": {
               "difference": 0.19345511611283994,
               "ci95_low": 0.12410444314553927,
@@ -1543,6 +1556,7 @@
             "n": 209,
             "coverage": 0.18982742960944596,
             "rate": 0.5598086124401914,
+            "test_realized_coverage": 0.18982742960944596,
             "uncertainty_vs_baseline": {
               "difference": 0.15563059245835675,
               "ci95_low": 0.09460339085679684,
@@ -1710,6 +1724,7 @@
             "n": 44,
             "coverage": 0.03996366939146231,
             "rate": 0.8181818181818182,
+            "test_realized_coverage": 0.03996366939146231,
             "uncertainty_vs_baseline": {
               "difference": 0.23598381636528776,
               "ci95_low": 0.11028767312497643,
@@ -1844,6 +1859,7 @@
             "n": 118,
             "coverage": 0.10717529518619437,
             "rate": 0.8135593220338984,
+            "test_realized_coverage": 0.10717529518619437,
             "uncertainty_vs_baseline": {
               "difference": 0.23136132021736788,
               "ci95_low": 0.1609171230840482,
@@ -1978,6 +1994,7 @@
             "n": 177,
             "coverage": 0.16076294277929154,
             "rate": 0.7401129943502824,
+            "test_realized_coverage": 0.16076294277929154,
             "uncertainty_vs_baseline": {
               "difference": 0.15791499253375196,
               "ci95_low": 0.09878174957460335,
@@ -2112,6 +2129,7 @@
             "n": 225,
             "coverage": 0.20435967302452315,
             "rate": 0.7333333333333333,
+            "test_realized_coverage": 0.20435967302452315,
             "uncertainty_vs_baseline": {
               "difference": 0.1511353315168028,
               "ci95_low": 0.09865273501077583,
@@ -2280,10 +2298,12 @@
           "rate": 0.29213483146067415
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.0946073793755913,
           "threshold": 0.267549636294248,
           "n": 115,
           "coverage": 0.1044504995458674,
-          "rate": 0.3130434782608696
+          "rate": 0.3130434782608696,
+          "test_realized_coverage": 0.1044504995458674
         },
         "uncertainty_equal_count": {
           "difference": 0.06741573033707865,
@@ -2449,10 +2469,12 @@
           "rate": 0.6404494382022472
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.0946073793755913,
           "threshold": 0.5608487105000407,
           "n": 136,
           "coverage": 0.12352406902815623,
-          "rate": 0.6102941176470589
+          "rate": 0.6102941176470589,
+          "test_realized_coverage": 0.12352406902815623
         },
         "uncertainty_equal_count": {
           "difference": 0.15730337078651685,
@@ -2618,10 +2640,12 @@
           "rate": 0.7865168539325843
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.0946073793755913,
           "threshold": 0.7323203644920157,
           "n": 129,
           "coverage": 0.11716621253405994,
-          "rate": 0.7674418604651163
+          "rate": 0.7674418604651163,
+          "test_realized_coverage": 0.11716621253405994
         },
         "uncertainty_equal_count": {
           "difference": 0.0898876404494382,
@@ -2791,10 +2815,12 @@
           "rate": 0.20588235294117646
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.07379375591296121,
           "threshold": 0.20180586915785625,
           "n": 102,
           "coverage": 0.09264305177111716,
-          "rate": 0.1568627450980392
+          "rate": 0.1568627450980392,
+          "test_realized_coverage": 0.09264305177111716
         },
         "uncertainty_equal_count": {
           "difference": 0.0,
@@ -2962,10 +2988,12 @@
           "rate": 0.5
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.07379375591296121,
           "threshold": 0.45375420945575934,
           "n": 115,
           "coverage": 0.1044504995458674,
-          "rate": 0.43478260869565216
+          "rate": 0.43478260869565216,
+          "test_realized_coverage": 0.1044504995458674
         },
         "uncertainty_equal_count": {
           "difference": 0.0735294117647059,
@@ -3132,10 +3160,12 @@
           "rate": 0.75
         },
         "candidate_frozen_threshold": {
+          "validation_coverage": 0.07379375591296121,
           "threshold": 0.6947930207391114,
           "n": 126,
           "coverage": 0.11444141689373297,
-          "rate": 0.7301587301587301
+          "rate": 0.7301587301587301,
+          "test_realized_coverage": 0.11444141689373297
         },
         "uncertainty_equal_count": {
           "difference": 0.11764705882352944,
@@ -3304,6 +3334,7 @@
             "n": 45,
             "coverage": 0.04087193460490463,
             "rate": 0.1111111111111111,
+            "test_realized_coverage": 0.04087193460490463,
             "uncertainty_vs_baseline": {
               "difference": 0.04753254617014835,
               "ci95_low": -0.033325708685883644,
@@ -3438,6 +3469,7 @@
             "n": 93,
             "coverage": 0.08446866485013624,
             "rate": 0.07526881720430108,
+            "test_realized_coverage": 0.08446866485013624,
             "uncertainty_vs_baseline": {
               "difference": 0.011690252263338322,
               "ci95_low": -0.034370241608660694,
@@ -3572,6 +3604,7 @@
             "n": 127,
             "coverage": 0.11534968210717529,
             "rate": 0.07086614173228346,
+            "test_realized_coverage": 0.11534968210717529,
             "uncertainty_vs_baseline": {
               "difference": 0.007287576791320707,
               "ci95_low": -0.03133931007829979,
@@ -3706,6 +3739,7 @@
             "n": 161,
             "coverage": 0.14623069936421434,
             "rate": 0.06832298136645963,
+            "test_realized_coverage": 0.14623069936421434,
             "uncertainty_vs_baseline": {
               "difference": 0.004744416425496875,
               "ci95_low": -0.02859696733483529,
@@ -3875,6 +3909,7 @@
             "n": 55,
             "coverage": 0.049954586739327886,
             "rate": 0.2545454545454545,
+            "test_realized_coverage": 0.049954586739327886,
             "uncertainty_vs_baseline": {
               "difference": 0.07834200313764345,
               "ci95_low": -0.03076339121744553,
@@ -4009,6 +4044,7 @@
             "n": 108,
             "coverage": 0.09809264305177112,
             "rate": 0.25925925925925924,
+            "test_realized_coverage": 0.09809264305177112,
             "uncertainty_vs_baseline": {
               "difference": 0.08305580785144817,
               "ci95_low": 0.008347193224577401,
@@ -4143,6 +4179,7 @@
             "n": 163,
             "coverage": 0.148047229791099,
             "rate": 0.25153374233128833,
+            "test_realized_coverage": 0.148047229791099,
             "uncertainty_vs_baseline": {
               "difference": 0.07533029092347726,
               "ci95_low": 0.019721390635480247,
@@ -4277,6 +4314,7 @@
             "n": 229,
             "coverage": 0.20799273387829245,
             "rate": 0.2576419213973799,
+            "test_realized_coverage": 0.20799273387829245,
             "uncertainty_vs_baseline": {
               "difference": 0.08143846998956883,
               "ci95_low": 0.033647106499669496,
@@ -4444,6 +4482,7 @@
             "n": 76,
             "coverage": 0.06902815622161672,
             "rate": 0.618421052631579,
+            "test_realized_coverage": 0.06902815622161672,
             "uncertainty_vs_baseline": {
               "difference": 0.25329843682776426,
               "ci95_low": 0.14681709072036045,
@@ -4578,6 +4617,7 @@
             "n": 125,
             "coverage": 0.11353315168029064,
             "rate": 0.552,
+            "test_realized_coverage": 0.11353315168029064,
             "uncertainty_vs_baseline": {
               "difference": 0.18687738419618533,
               "ci95_low": 0.10546552842092992,
@@ -4712,6 +4752,7 @@
             "n": 185,
             "coverage": 0.16802906448683017,
             "rate": 0.5297297297297298,
+            "test_realized_coverage": 0.16802906448683017,
             "uncertainty_vs_baseline": {
               "difference": 0.16460711392591504,
               "ci95_low": 0.09880741462273676,
@@ -4846,6 +4887,7 @@
             "n": 247,
             "coverage": 0.22434150772025432,
             "rate": 0.5020242914979757,
+            "test_realized_coverage": 0.22434150772025432,
             "uncertainty_vs_baseline": {
               "difference": 0.13690167569416095,
               "ci95_low": 0.08169542813071407,
@@ -5014,6 +5056,7 @@
             "n": 49,
             "coverage": 0.04450499545867393,
             "rate": 0.0,
+            "test_realized_coverage": 0.04450499545867393,
             "uncertainty_vs_baseline": {
               "difference": -0.019981834695731154,
               "ci95_low": -0.029064486830154404,
@@ -5148,6 +5191,7 @@
             "n": 115,
             "coverage": 0.1044504995458674,
             "rate": 0.0,
+            "test_realized_coverage": 0.1044504995458674,
             "uncertainty_vs_baseline": {
               "difference": -0.019981834695731154,
               "ci95_low": -0.029064486830154404,
@@ -5282,6 +5326,7 @@
             "n": 131,
             "coverage": 0.11898274296094459,
             "rate": 0.0,
+            "test_realized_coverage": 0.11898274296094459,
             "uncertainty_vs_baseline": {
               "difference": -0.019981834695731154,
               "ci95_low": -0.029064486830154404,
@@ -5416,6 +5461,7 @@
             "n": 143,
             "coverage": 0.1298819255222525,
             "rate": 0.0,
+            "test_realized_coverage": 0.1298819255222525,
             "uncertainty_vs_baseline": {
               "difference": -0.019981834695731154,
               "ci95_low": -0.029064486830154404,
@@ -5582,6 +5628,7 @@
             "n": 69,
             "coverage": 0.06267029972752043,
             "rate": 0.18840579710144928,
+            "test_realized_coverage": 0.06267029972752043,
             "uncertainty_vs_baseline": {
               "difference": 0.11756111045294791,
               "ci95_low": 0.033982747134957525,
@@ -5716,6 +5763,7 @@
             "n": 111,
             "coverage": 0.1008174386920981,
             "rate": 0.1891891891891892,
+            "test_realized_coverage": 0.1008174386920981,
             "uncertainty_vs_baseline": {
               "difference": 0.11834450254068783,
               "ci95_low": 0.05326809880957581,
@@ -5850,6 +5898,7 @@
             "n": 153,
             "coverage": 0.13896457765667575,
             "rate": 0.1568627450980392,
+            "test_realized_coverage": 0.13896457765667575,
             "uncertainty_vs_baseline": {
               "difference": 0.08601805844953785,
               "ci95_low": 0.034710483231804326,
@@ -5984,6 +6033,7 @@
             "n": 198,
             "coverage": 0.17983651226158037,
             "rate": 0.16161616161616163,
+            "test_realized_coverage": 0.17983651226158037,
             "uncertainty_vs_baseline": {
               "difference": 0.09077147496766026,
               "ci95_low": 0.048237417579543494,
@@ -6152,6 +6202,7 @@
             "n": 67,
             "coverage": 0.06085376930063579,
             "rate": 0.4626865671641791,
+            "test_realized_coverage": 0.06085376930063579,
             "uncertainty_vs_baseline": {
               "difference": 0.24833597679179037,
               "ci95_low": 0.1282605181730014,
@@ -6286,6 +6337,7 @@
             "n": 127,
             "coverage": 0.11534968210717529,
             "rate": 0.3700787401574803,
+            "test_realized_coverage": 0.11534968210717529,
             "uncertainty_vs_baseline": {
               "difference": 0.15572814978509159,
               "ci95_low": 0.07845156632906619,
@@ -6420,6 +6472,7 @@
             "n": 193,
             "coverage": 0.17529518619436876,
             "rate": 0.36787564766839376,
+            "test_realized_coverage": 0.17529518619436876,
             "uncertainty_vs_baseline": {
               "difference": 0.15352505729600502,
               "ci95_low": 0.09340787888236918,
@@ -6554,6 +6607,7 @@
             "n": 227,
             "coverage": 0.2061762034514078,
             "rate": 0.3568281938325991,
+            "test_realized_coverage": 0.2061762034514078,
             "uncertainty_vs_baseline": {
               "difference": 0.14247760346021038,
               "ci95_low": 0.08805191630977706,

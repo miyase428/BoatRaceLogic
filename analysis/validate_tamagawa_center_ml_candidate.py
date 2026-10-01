@@ -155,8 +155,10 @@ def validate_target(
         "current": selection_metrics(y_test, current_test),
         "candidate_equal_count": selection_metrics(y_test, equal_selected),
         "candidate_frozen_threshold": {
+            "validation_coverage": valid_coverage,
             "threshold": float(threshold),
             **selection_metrics(y_test, frozen_selected),
+            "test_realized_coverage": float(np.mean(frozen_selected)),
         },
         "uncertainty_equal_count": bootstrap_rate_difference(y_test, equal_selected, current_test),
         "monthly_equal_count": monthly_metrics(test, y_test, current_test, equal_selected),
@@ -200,6 +202,23 @@ def write_markdown(report: dict, path: Path) -> None:
                 f"|{course}C {target}|{labels}|{current['n']} / {pct(current['rate'])}|"
                 f"{candidate['n']} / {pct(candidate['rate'])}|{pct(uncertainty['difference'])}|"
                 f"{pct(uncertainty['probability_improves'])}|"
+            )
+    lines += [
+        "",
+        "## 閾値固定時のcoverage",
+        "",
+        "VALID目標coverageから閾値を決め、TEST実現coverageとは分けて表示する。",
+        "",
+        "|対象|VALID目標coverage|閾値|TEST実現coverage|TEST N|",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for course in COURSES:
+        for target in TARGETS:
+            frozen = report["courses"][str(course)][target]["candidate_frozen_threshold"]
+            lines.append(
+                f"|{course}C {target}|{pct(frozen['validation_coverage'])}|"
+                f"{float(frozen['threshold']):.12f}|{pct(frozen['test_realized_coverage'])}|"
+                f"{int(frozen['n'])}|"
             )
     lines += ["", "## 月別", ""]
     for course in COURSES:

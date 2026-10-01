@@ -70,6 +70,7 @@
             || detail.model_version === 'biwako_course_signal_v1'
             || detail.model_version === 'edogawa_course_signal_v1'
             || detail.model_version === 'heiwajima_course_signal_v1'
+            || detail.model_version === 'mikuni_course_signal_v1'
             || detail.model_version === 'kiryuu_course_signal_v1'
             || detail.model_version === 'toda_course_signal_v1'
             || detail.model_version === 'omura_course_signal_v1'

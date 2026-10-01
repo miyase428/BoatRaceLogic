@@ -10,16 +10,16 @@ final class TamagawaCenterSignalLogic
             return ['status' => 'error', 'error' => 'invalid_date'];
         }
         $place = strtoupper(trim($place));
-        if (!in_array($place, ['AMG', 'ASY', 'BWK', 'EDG', 'HWJ', 'KRY', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
+        if (!in_array($place, ['AMG', 'ASY', 'BWK', 'EDG', 'HWJ', 'KRY', 'MKN', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
             return ['status' => 'error', 'error' => 'unsupported_place'];
         }
         $root = realpath(__DIR__ . '/../..');
         if ($root === false) {
             return ['status' => 'error', 'error' => 'root_not_found'];
         }
-        // ASY/AMG/BWK/EDG/HWJは候補検証時のscikit-learn 1.4で学習・固定している。
+        // ASY/AMG/BWK/EDG/HWJ/MKNは候補検証時のscikit-learn 1.4で学習・固定している。
         // HistGradientBoostingの版差で閾値再現が崩れるため、同じsystem runtimeを使う。
-        $python = in_array($place, ['AMG', 'ASY', 'BWK', 'EDG', 'HWJ'], true)
+        $python = in_array($place, ['AMG', 'ASY', 'BWK', 'EDG', 'HWJ', 'MKN'], true)
             ? '/usr/bin/python3'
             : $root . '/.venv-models/bin/python';
         $script = realpath($root . '/forecast/tamagawa_center_signal_live_v1.py');

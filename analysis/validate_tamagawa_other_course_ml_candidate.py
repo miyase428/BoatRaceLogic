@@ -92,6 +92,7 @@ def validate_lane6(rows: list[dict], target: str, all_features: list[str], group
             "validation_coverage": coverage,
             "threshold": float(threshold),
             **selection_metrics(y_test, selected),
+            "test_realized_coverage": float(np.mean(selected)),
             "uncertainty_vs_baseline": bootstrap_rate_difference(y_test, selected, baseline),
             "monthly": monthly_metrics(test, y_test, baseline, selected),
         }
@@ -144,14 +145,36 @@ def write_markdown(report: dict, path: Path) -> None:
                 f"{candidate['n']} / {pct(candidate['rate'])}|{pct(uncertainty['difference'])}|"
                 f"{pct(uncertainty['probability_improves'])}|"
             )
-    lines += ["", "## 6C（現行主サインなし）", "", "|対象|採用要素|表示率|N/率|全体率|差|改善確率|", "|---|---|---:|---:|---:|---:|---:|"]
+    lines += [
+        "",
+        "## 閾値固定時のcoverage（現行サインあり）",
+        "",
+        "|対象|VALID目標coverage|閾値|TEST実現coverage|TEST N|",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for course in CURRENT_COURSES:
+        for target in TARGETS:
+            frozen = report["courses"][str(course)][target]["candidate_frozen_threshold"]
+            lines.append(
+                f"|{course}C {target}|{pct(frozen['validation_coverage'])}|"
+                f"{float(frozen['threshold']):.12f}|{pct(frozen['test_realized_coverage'])}|"
+                f"{int(frozen['n'])}|"
+            )
+    lines += [
+        "",
+        "## 6C（現行主サインなし）",
+        "",
+        "|対象|採用要素|VALID目標coverage|TEST実現coverage|N/率|全体率|差|改善確率|",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
     for target in TARGETS:
         item = report["courses"]["6"][target]
         group_text = "＋".join(labels[name] for name in item["groups"])
         for key, candidate in item["coverage_candidates"].items():
             uncertainty = candidate["uncertainty_vs_baseline"]
             lines.append(
-                f"|6C {target}|{group_text}|{key}|{candidate['n']} / {pct(candidate['rate'])}|"
+                f"|6C {target}|{group_text}|{pct(candidate['validation_coverage'])}|"
+                f"{pct(candidate['test_realized_coverage'])}|{candidate['n']} / {pct(candidate['rate'])}|"
                 f"{pct(item['baseline']['rate'])}|{pct(uncertainty['difference'])}|"
                 f"{pct(uncertainty['probability_improves'])}|"
             )

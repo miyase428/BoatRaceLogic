@@ -972,6 +972,7 @@ SQL);
             __DIR__ . '/../../forecast/models/biwako_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/edogawa_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/heiwajima_course_signal_v1.joblib',
+            __DIR__ . '/../../forecast/models/mikuni_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/tamagawa_center_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/kiryuu_course_signal_v1.joblib',
             __DIR__ . '/../../forecast/models/toda_course_signal_v1.joblib',

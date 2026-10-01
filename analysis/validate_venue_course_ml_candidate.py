@@ -73,13 +73,30 @@ def write_markdown(report: dict, path: Path) -> None:
                 f"{candidate['n']} / {pct(candidate['rate'])}|{pct(uncertainty['difference'])}|"
                 f"{pct(uncertainty['probability_improves'])}|"
             )
+    lines += [
+        "",
+        "## 閾値固定時のcoverage（現行サインあり）",
+        "",
+        "VALID目標coverageから閾値を決め、TEST実現coverageとは分けて表示する。",
+        "",
+        "|対象|VALID目標coverage|閾値|TEST実現coverage|TEST N|",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for course in report["current_courses"]:
+        for target in TARGETS:
+            frozen = report["courses"][str(course)][target]["candidate_frozen_threshold"]
+            lines.append(
+                f"|{course}C {target}|{pct(frozen['validation_coverage'])}|"
+                f"{float(frozen['threshold']):.12f}|{pct(frozen['test_realized_coverage'])}|"
+                f"{int(frozen['n'])}|"
+            )
     lines += ["", "## 停止中コース", ""]
     for course in report["disabled_courses"]:
         lines += [
             f"### {course}C",
             "",
-            "|対象|採用要素|表示率|N/率|全体率|差|改善確率|",
-            "|---|---|---:|---:|---:|---:|---:|",
+            "|対象|採用要素|VALID目標coverage|TEST実現coverage|N/率|全体率|差|改善確率|",
+            "|---|---|---:|---:|---:|---:|---:|---:|",
         ]
         for target in TARGETS:
             item = report["courses"][str(course)][target]
@@ -87,7 +104,8 @@ def write_markdown(report: dict, path: Path) -> None:
             for key, candidate in item["coverage_candidates"].items():
                 uncertainty = candidate["uncertainty_vs_baseline"]
                 lines.append(
-                    f"|{target}|{labels}|{key}|{candidate['n']} / {pct(candidate['rate'])}|"
+                    f"|{target}|{labels}|{pct(candidate['validation_coverage'])}|"
+                    f"{pct(candidate['test_realized_coverage'])}|{candidate['n']} / {pct(candidate['rate'])}|"
                     f"{pct(item['baseline']['rate'])}|{pct(uncertainty['difference'])}|"
                     f"{pct(uncertainty['probability_improves'])}|"
                 )

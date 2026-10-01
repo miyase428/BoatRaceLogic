@@ -48,6 +48,7 @@ MODEL_PATHS = {
     "BWK": ROOT / "forecast" / "models" / "biwako_course_signal_v1.joblib",
     "EDG": ROOT / "forecast" / "models" / "edogawa_course_signal_v1.joblib",
     "HWJ": ROOT / "forecast" / "models" / "heiwajima_course_signal_v1.joblib",
+    "MKN": ROOT / "forecast" / "models" / "mikuni_course_signal_v1.joblib",
     "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
