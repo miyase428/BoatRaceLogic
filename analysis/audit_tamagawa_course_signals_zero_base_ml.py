@@ -53,6 +53,7 @@ from slit_validate_v2 import connect_db  # noqa: E402
 
 PLACE = "TMG"
 PLACE_NAMES = {
+    "EDG": "江戸川",
     "KRY": "桐生",
     "HWJ": "平和島",
     "TDA": "戸田",
