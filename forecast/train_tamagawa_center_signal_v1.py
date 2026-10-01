@@ -34,6 +34,7 @@ MODEL_PATHS = {
     "AMG": ROOT / "forecast" / "models" / "amagasaki_course_signal_v1.joblib",
     "ASY": ROOT / "forecast" / "models" / "ashiya_course_signal_v1.joblib",
     "BWK": ROOT / "forecast" / "models" / "biwako_course_signal_v1.joblib",
+    "HWJ": ROOT / "forecast" / "models" / "heiwajima_course_signal_v1.joblib",
     "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
     "TDA": ROOT / "forecast" / "models" / "toda_course_signal_v1.joblib",
@@ -46,6 +47,7 @@ PERIODS_BY_PLACE = {
     "AMG": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "ASY": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "BWK": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
+    "HWJ": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "KRY": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "SME": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
 }
@@ -288,14 +290,41 @@ BWK_SPECS = {
         "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "st", "technique"), "coverage": 0.10},
     },
 }
+HWJ_SPECS = {
+    1: {
+        "top2": {"model": "logistic", "groups": ("player_strength", "technique", "exhibition")},
+    },
+    2: {
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "exhibition")},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat")},
+    },
+    3: {
+        "first": {"model": "hist_gradient", "groups": ("st", "technique", "exhibition")},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "technique", "exhibition")},
+    },
+    4: {
+        "top2": {"model": "logistic", "groups": ("player_strength",)},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat")},
+    },
+    5: {
+        "first": {"model": "hist_gradient", "groups": ("st", "technique", "exhibition"), "coverage": 0.15},
+        "top2": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "technique", "exhibition"), "coverage": 0.15},
+    },
+    6: {
+        "top2": {"model": "hist_gradient", "groups": ("motor_boat", "st", "technique"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
+    },
+}
 SPECS_BY_PLACE = {
-    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "BWK": BWK_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
+    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "BWK": BWK_SPECS, "HWJ": HWJ_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
     "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
 }
 VERSION_BY_PLACE = {
     "AMG": "amagasaki_course_signal_v1",
     "ASY": "ashiya_course_signal_v1",
     "BWK": "biwako_course_signal_v1",
+    "HWJ": "heiwajima_course_signal_v1",
     "KRY": "kiryuu_course_signal_v1",
     "TMG": "tamagawa_course_signal_v1",
     "TDA": "toda_course_signal_v1",
@@ -371,7 +400,9 @@ def main() -> int:
             "scikit_learn": sklearn.__version__,
             "numpy": np.__version__,
         },
-        "production_enabled_from": "2026-09-28" if place in {"ASY", "AMG", "BWK"} else None,
+        "production_enabled_from": date.today().isoformat() if place == "HWJ" else (
+            "2026-09-28" if place in {"ASY", "AMG", "BWK"} else None
+        ),
         "models": {},
     }
 
@@ -395,6 +426,7 @@ def main() -> int:
                 "groups": list(spec["groups"]),
                 "feature_names": names,
                 "uses_exhibition": "exhibition" in spec["groups"],
+                "valid_coverage": coverage,
                 "threshold": float(threshold),
                 "test_selection": selection_stats(test, test_probability, threshold),
                 "model": model,
@@ -417,6 +449,17 @@ def main() -> int:
         "period": artifact["period"],
         "runtime": artifact["runtime"],
         "scikit_learn_version": artifact["runtime"]["scikit_learn"],
+        "models": {
+            course: {
+                target: {
+                    key: value
+                    for key, value in model.items()
+                    if key != "model"
+                }
+                for target, model in targets.items()
+            }
+            for course, targets in artifact["models"].items()
+        },
     }
     if artifact.get("production_enabled_from"):
         manifest["production_enabled_from"] = artifact["production_enabled_from"]

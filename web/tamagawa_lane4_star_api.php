@@ -555,7 +555,7 @@ $date = new DateTimeImmutable($dateText);
 $courseSignalConfigPath = __DIR__ . '/../config/course_signal_rules.json';
 $courseSignalCacheConfigMtime = (int)(@filemtime($courseSignalConfigPath) ?: 0);
 $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v12_' . $date->format('Ymd') . '_' . $placeCode
+    . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v13_' . $date->format('Ymd') . '_' . $placeCode
     . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
 $today = new DateTimeImmutable('today');
@@ -1535,11 +1535,12 @@ SQL;
     // 検証済みの場別コースMLサインを適用する。推論できない場合は従来サインを返す。
     // 場ごとに採用した評価段階だけをMLへ置換し、未採用段階は従来サインを維持する。
     // 推論失敗時はこの直前までに作った従来サインを返し、画面を欠損させない。
-    if (in_array($placeCode, ['AMG', 'ASY', 'BWK', 'KRY', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
+    if (in_array($placeCode, ['AMG', 'ASY', 'BWK', 'HWJ', 'KRY', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
         $venueMlVersion = match ($placeCode) {
             'AMG' => 'amagasaki_course_signal_v1',
             'ASY' => 'ashiya_course_signal_v1',
             'BWK' => 'biwako_course_signal_v1',
+            'HWJ' => 'heiwajima_course_signal_v1',
             'KRY' => 'kiryuu_course_signal_v1',
             'TDA' => 'toda_course_signal_v1',
             'OMR' => 'omura_course_signal_v1',
@@ -1628,6 +1629,89 @@ SQL;
                         $baseResponse['center_ml'] = [
                             'applied' => true,
                             'version' => (string)($centerMl['version'] ?? 'biwako_course_signal_v1'),
+                            'fallback' => false,
+                        ];
+                    } elseif ($placeCode === 'HWJ') {
+                        // 平和島は候補検証で採用した用途だけをML化する。
+                        // 展示依存の6用途だけは、展示前・展示欠損時に従来サインを維持する。
+                        $lane1Matches = mergePurposeMlMatches(
+                            $lane1Matches,
+                            $mlLane1,
+                            static fn(string $raceCode): array => (
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [2] : []
+                            )
+                        );
+
+                        $legacyLane2 = array_replace($lane2SashiMatches, $lane2MakuriMatches);
+                        $lane2SashiMatches = [];
+                        $lane2MakuriMatches = mergePurposeMlMatches(
+                            $legacyLane2,
+                            $mlLane2,
+                            static fn(string $raceCode): array => array_merge(
+                                [1],
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [2] : []
+                            )
+                        );
+
+                        $lane3Matches = mergePurposeMlMatches(
+                            $lane3Matches,
+                            $mlLane3,
+                            static fn(string $raceCode): array => (
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [1, 3] : []
+                            )
+                        );
+                        $matches = mergePurposeMlMatches(
+                            $matches,
+                            $mlLane4,
+                            static fn(string $raceCode): array => [1, 2]
+                        );
+                        $lane5Matches = mergePurposeMlMatches(
+                            $lane5Matches,
+                            $mlLane5,
+                            static fn(string $raceCode): array => array_merge(
+                                [2],
+                                !$baseOnly && isset($exhibitionByRace[$raceCode]) ? [1, 3] : []
+                            )
+                        );
+                        $lane6Matches = mergePurposeMlMatches(
+                            $lane6Matches,
+                            $mlLane6,
+                            static fn(string $raceCode): array => [1, 2]
+                        );
+                        $baseResponse['lane1_conditions'] = [
+                            'star' => '従来サインを維持',
+                            'double_star' => '展示反映済みはAI2連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['lane2_sashi_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => '展示反映済みはAI2連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['lane2_makuri_conditions'] = $baseResponse['lane2_sashi_conditions'];
+                        $baseResponse['lane3_conditions'] = [
+                            'star' => '展示反映済みはAI3連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'double_star' => '従来サインを維持',
+                            'triple_star' => '展示反映済みはAI1着率が検証済み閾値以上／展示前は従来サインを維持',
+                        ];
+                        $baseResponse['conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => '従来の強サインを維持',
+                        ];
+                        $baseResponse['lane5_conditions'] = [
+                            'star' => '展示反映済みはAI3連対率が検証済み閾値以上／展示前は従来サインを維持',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => '展示反映済みはAI1着率が検証済み閾値以上／展示前は従来サインを維持',
+                        ];
+                        $baseResponse['lane6_conditions'] = [
+                            'star' => 'AI3連対率が検証済み閾値以上（3連相手候補）',
+                            'double_star' => 'AI2連対率が検証済み閾値以上（2連軸候補）',
+                            'triple_star' => '未採用',
+                        ];
+                        $baseResponse['center_ml'] = [
+                            'applied' => true,
+                            'version' => (string)($centerMl['version'] ?? 'heiwajima_course_signal_v1'),
                             'fallback' => false,
                         ];
                     } elseif ($placeCode === 'ASY') {
