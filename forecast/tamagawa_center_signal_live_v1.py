@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -45,6 +46,7 @@ MODEL_PATHS = {
     "AMG": ROOT / "forecast" / "models" / "amagasaki_course_signal_v1.joblib",
     "ASY": ROOT / "forecast" / "models" / "ashiya_course_signal_v1.joblib",
     "BWK": ROOT / "forecast" / "models" / "biwako_course_signal_v1.joblib",
+    "EDG": ROOT / "forecast" / "models" / "edogawa_course_signal_v1.joblib",
     "HWJ": ROOT / "forecast" / "models" / "heiwajima_course_signal_v1.joblib",
     "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
@@ -122,6 +124,26 @@ def historical_stats(model_item: dict) -> dict:
     }
 
 
+def load_verified_artifact(model_path: Path) -> dict:
+    """manifestとjoblibが一致しない場合は、呼出元で安全にfallbackさせる。"""
+    manifest_path = model_path.with_suffix(".json")
+    if not manifest_path.is_file():
+        raise ValueError("manifest_not_found")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("manifest_invalid") from error
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("version"), str):
+        raise ValueError("manifest_invalid")
+    digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
+    if not isinstance(manifest.get("sha256"), str) or manifest["sha256"] != digest:
+        raise ValueError("manifest_sha256_mismatch")
+    artifact = joblib.load(model_path)
+    if not isinstance(artifact, dict) or artifact.get("version") != manifest["version"]:
+        raise ValueError("artifact_manifest_version_mismatch")
+    return artifact
+
+
 def main() -> int:
     global PLACE
     parser = argparse.ArgumentParser()
@@ -135,7 +157,11 @@ def main() -> int:
     if not model_path.is_file():
         print(json.dumps({"status": "error", "error": "model_not_found"}, ensure_ascii=False))
         return 2
-    artifact = joblib.load(model_path)
+    try:
+        artifact = load_verified_artifact(model_path)
+    except (OSError, ValueError, EOFError) as error:
+        print(json.dumps({"status": "error", "error": str(error)}, ensure_ascii=False))
+        return 2
     races = load_entries(target_date)
     if not races:
         print(json.dumps({"status": "ok", "version": artifact["version"], "matches": {}}, ensure_ascii=False))

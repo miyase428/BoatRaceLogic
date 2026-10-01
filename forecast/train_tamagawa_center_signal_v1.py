@@ -34,6 +34,7 @@ MODEL_PATHS = {
     "AMG": ROOT / "forecast" / "models" / "amagasaki_course_signal_v1.joblib",
     "ASY": ROOT / "forecast" / "models" / "ashiya_course_signal_v1.joblib",
     "BWK": ROOT / "forecast" / "models" / "biwako_course_signal_v1.joblib",
+    "EDG": ROOT / "forecast" / "models" / "edogawa_course_signal_v1.joblib",
     "HWJ": ROOT / "forecast" / "models" / "heiwajima_course_signal_v1.joblib",
     "KRY": ROOT / "forecast" / "models" / "kiryuu_course_signal_v1.joblib",
     "TMG": ROOT / "forecast" / "models" / "tamagawa_center_signal_v1.joblib",
@@ -47,6 +48,7 @@ PERIODS_BY_PLACE = {
     "AMG": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "ASY": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
     "BWK": (date(2023, 9, 27), date(2025, 9, 1), date(2026, 3, 1), date(2026, 9, 27)),
+    "EDG": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "HWJ": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "KRY": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
     "SME": (date(2023, 9, 28), date(2025, 9, 28), date(2026, 3, 28), date(2026, 9, 27)),
@@ -316,14 +318,41 @@ HWJ_SPECS = {
         "top3": {"model": "logistic", "groups": ("player_strength", "technique"), "coverage": 0.15},
     },
 }
+EDG_SPECS = {
+    2: {
+        "first": {"model": "hist_gradient", "groups": ("technique", "exhibition"), "coverage": 0.15},
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.15},
+    },
+    3: {
+        "first": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.15},
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+    },
+    4: {
+        "top2": {"model": "logistic", "groups": ("player_strength", "motor_boat")},
+        "top3": {"model": "logistic", "groups": ("player_strength", "motor_boat", "exhibition")},
+    },
+    5: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+        "top2": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "technique"), "coverage": 0.15},
+        "top3": {"model": "logistic", "groups": ("player_strength",), "coverage": 0.15},
+    },
+    6: {
+        "first": {"model": "hist_gradient", "groups": ("player_strength",), "coverage": 0.15},
+        "top2": {"model": "logistic", "groups": ("player_strength", "exhibition"), "coverage": 0.15},
+        "top3": {"model": "hist_gradient", "groups": ("player_strength", "motor_boat", "exhibition"), "coverage": 0.15},
+    },
+}
 SPECS_BY_PLACE = {
-    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "BWK": BWK_SPECS, "HWJ": HWJ_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
+    "AMG": AMG_SPECS, "ASY": ASY_SPECS, "BWK": BWK_SPECS, "EDG": EDG_SPECS, "HWJ": HWJ_SPECS, "KRY": KRY_SPECS, "TMG": TMG_SPECS,
     "TDA": TDA_SPECS, "OMR": OMR_SPECS, "SMS": SMS_SPECS, "SME": SME_SPECS,
 }
 VERSION_BY_PLACE = {
     "AMG": "amagasaki_course_signal_v1",
     "ASY": "ashiya_course_signal_v1",
     "BWK": "biwako_course_signal_v1",
+    "EDG": "edogawa_course_signal_v1",
     "HWJ": "heiwajima_course_signal_v1",
     "KRY": "kiryuu_course_signal_v1",
     "TMG": "tamagawa_course_signal_v1",
@@ -400,7 +429,7 @@ def main() -> int:
             "scikit_learn": sklearn.__version__,
             "numpy": np.__version__,
         },
-        "production_enabled_from": date.today().isoformat() if place == "HWJ" else (
+        "production_enabled_from": date.today().isoformat() if place in {"EDG", "HWJ"} else (
             "2026-09-28" if place in {"ASY", "AMG", "BWK"} else None
         ),
         "models": {},
@@ -444,6 +473,7 @@ def main() -> int:
     digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
     manifest = {
         "version": artifact["version"],
+        "venue": place,
         "path": str(model_path),
         "sha256": digest,
         "period": artifact["period"],
