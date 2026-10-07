@@ -255,7 +255,7 @@ def run_research():
     # Independently score frozen Wall artifacts over the same rows and ensure matching roles.
     wrows=add_wall_features(rows); wdev,wval,wconf=split(wrows); wall_sel=json.loads((OUT/"course34_wall_phase3r_selection_model.json").read_text()); wall_final=json.loads((OUT/"course34_wall_phase3r_final_model.json").read_text())
     wdev_sel,wval_sel=predict_artifact(wall_sel,x_of(wdev,WALL_FEATURES)),predict_artifact(wall_sel,x_of(wval,WALL_FEATURES)); wdev_final,wval_final,wconf_final=predict_artifact(wall_final,x_of(wdev,WALL_FEATURES)),predict_artifact(wall_final,x_of(wval,WALL_FEATURES)),predict_artifact(wall_final,x_of(wconf,WALL_FEATURES))
-    cross_v,wgv,agv=cross_rows(val,wval_sel,pval,selection_b,selection_b,"validation")
+    cross_v,wgv,agv=cross_rows(val,wval_sel,pval,wall_sel["score_percentile_boundaries"],selection_b,"validation")
     cross_c,wgc,agc=cross_rows(conf,wconf_final,pconf,wall_final["score_percentile_boundaries"],final_b,"exposed_confirmation")
     meta_v,meta_v_dec,meta_v_coef=meta_compare(ydev,wdev_sel,pdev,val,wval_sel,pval,"validation")
     meta_c,meta_c_dec,meta_c_coef=meta_compare(np.r_[ydev,yval],np.r_[wdev_final,wval_final],pdv,conf,wconf_final,pconf,"exposed_confirmation")
