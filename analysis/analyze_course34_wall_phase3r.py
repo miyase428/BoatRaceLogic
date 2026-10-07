@@ -15,7 +15,6 @@ import csv
 import hashlib
 import json
 import math
-import os
 import subprocess
 from collections import defaultdict
 from datetime import date, datetime
@@ -287,12 +286,13 @@ def write_csv(path, rows):
 
 def run_research():
     raw, overall, paths = source_rows(); input_hash = sha256_paths(paths)
-    comparisons, all_prepared = [], {}
+    comparisons, all_prepared, validation_probabilities = [], {}, {}
     for k in K_VALUES:
         prepared = add_features(raw, overall, k); all_prepared[k] = prepared
         dev, val, _ = split(prepared)
         for name, features in MODELS.items():
             m = LinearLogit().fit(*xy(dev, features)); vp = m.predict(xy(val, features)[0])
+            validation_probabilities[(k, name)] = vp
             comparisons.append({"k": k, "model": name, "features": "|".join(features), "development_n": len(dev), "validation_n": len(val), **metric_dict(xy(val, features)[1], vp)})
     # Predeclared rule: highest Validation ROC-AUC; ties within 1e-12 then lower
     # model complexity and lower K.  Confirmation is never inspected here.
@@ -315,8 +315,8 @@ def run_research():
     conf_scores = to_score(pconf, boundaries)
     validation_deciles = []
     for r in comparisons:
-        prep = all_prepared[r["k"]]; _, vv, _ = split(prep); fm = LinearLogit().fit(*xy(split(prep)[0], MODELS[r["model"]])); pp = fm.predict(xy(vv,MODELS[r["model"]])[0])
-        validation_deciles += deciles(vv, pp, "validation", {"k":r["k"],"model":r["model"]})
+        _, vv, _ = split(all_prepared[r["k"]])
+        validation_deciles += deciles(vv, validation_probabilities[(r["k"], r["model"])], "validation", {"k":r["k"],"model":r["model"]})
     write_csv(OUT/"course34_wall_phase3r_candidates.csv", comparisons)
     write_csv(OUT/"course34_wall_phase3r_validation_deciles.csv", validation_deciles)
     write_csv(OUT/"course34_wall_phase3r_exposed_confirmation_deciles.csv", deciles(confirmation,pconf,"exposed_confirmation",{"model":name,"k":k}))
