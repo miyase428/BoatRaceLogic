@@ -229,8 +229,12 @@ def to_score(p, boundaries):
     return [max(0, min(100, bisect.bisect_right(boundaries, float(x))-1)) for x in p]
 
 
-def artifact(role, name, features, k, model, input_hash, dev_p, boundaries=None):
-    return {
+def distribution(p):
+    return {"n": int(len(p)), "min": float(np.min(p)), "max": float(np.max(p)), "mean": float(np.mean(p)), "std": float(np.std(p)), "quantiles": {str(q): float(np.quantile(p, q)) for q in (0,.01,.05,.1,.25,.5,.75,.9,.95,.99,1)}}
+
+
+def artifact(role, name, features, k, model, input_hash, dev_p, boundaries=None, score_reference_p=None):
+    a = {
         "artifact_version": "phase3r-v1", "model_role": role, "model_name": name,
         "created_at": datetime.now().astimezone().isoformat(),
         "development_period": "2024-10-01..2025-09-30", "validation_period": "2025-10-01..2026-03-31",
@@ -243,9 +247,14 @@ def artifact(role, name, features, k, model, input_hash, dev_p, boundaries=None)
         "tolerance": model.tolerance, "max_iterations": model.max_iter, "iterations_used": model.iterations_,
         "logit_clipping": [-model.clip, model.clip], "source_script": str(Path(__file__).relative_to(ROOT.parent)),
         "source_git_commit": git_head(), "input_dataset_sha256": input_hash,
-        "development_prediction_sha256": prob_hash(dev_p), "development_probability_distribution": {"n": int(len(dev_p)), "min": float(np.min(dev_p)), "max": float(np.max(dev_p)), "mean": float(np.mean(dev_p)), "std": float(np.std(dev_p)), "quantiles": {str(q): float(np.quantile(dev_p, q)) for q in (0,.01,.05,.1,.25,.5,.75,.9,.95,.99,1)}},
+        "development_prediction_sha256": prob_hash(dev_p), "development_probability_distribution": distribution(dev_p),
         "score_percentile_boundaries": boundaries,
     }
+    if score_reference_p is not None:
+        a["score_reference_population"] = "Development + Validation"
+        a["score_reference_prediction_sha256"] = prob_hash(score_reference_p)
+        a["score_reference_probability_distribution"] = distribution(score_reference_p)
+    return a
 
 
 def predict_artifact(a, x):
@@ -307,9 +316,9 @@ def run_research():
     selection_path = OUT/"course34_wall_phase3r_selection_model.json"; selection_path.write_text(json.dumps(selection, ensure_ascii=False, indent=2), encoding="utf-8")
     selection_rt = roundtrip(selection, {"development": (xdev,pdev), "validation": (xval,pval)})
     final = LinearLogit().fit(np.vstack((xdev,xval)), np.r_[ydev,yval])
-    pdv, pconf = final.predict(np.vstack((xdev,xval))), final.predict(xconf)
+    pfinal_dev, pdv, pconf = final.predict(xdev), final.predict(np.vstack((xdev,xval))), final.predict(xconf)
     boundaries = percentile_boundaries(pdv)
-    final_art = artifact("WALL-R-FINAL", name, features, k, final, input_hash, pdv, boundaries)
+    final_art = artifact("WALL-R-FINAL", name, features, k, final, input_hash, pfinal_dev, boundaries, pdv)
     final_path = OUT/"course34_wall_phase3r_final_model.json"; final_path.write_text(json.dumps(final_art, ensure_ascii=False, indent=2), encoding="utf-8")
     final_rt = roundtrip(final_art, {"development_plus_validation": (np.vstack((xdev,xval)),pdv), "exposed_confirmation": (xconf,pconf)})
     conf_scores = to_score(pconf, boundaries)
