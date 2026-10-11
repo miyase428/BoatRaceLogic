@@ -24,7 +24,59 @@
         if (!row) return null;
         const clone = row.cloneNode(true);
         clone.style.display = '';
-        return clone;
+        return normalizeRateRow(clone);
+    }
+
+    function rateRowClass(label) {
+        if (label.indexOf('場1着率') === 0) return 'pc-rate-development-row--venue';
+        if (label.indexOf('基本1着率') === 0) return 'pc-rate-development-row--base';
+        if (label.indexOf('補正後1着率') === 0) return 'pc-rate-development-row--corrected';
+        if (label.indexOf('AI1着率') === 0) return 'pc-rate-development-row--ai-win';
+        if (label.indexOf('AI2連対率') === 0) return 'pc-rate-development-row--ai-place';
+        if (label.indexOf('基礎3連対率') === 0) return 'pc-rate-development-row--base-trio';
+        if (label.indexOf('AI3連対率') === 0) return 'pc-rate-development-row--ai-trio';
+        return '';
+    }
+
+    function clearLegacyRateColors(root) {
+        root.querySelectorAll('[style]').forEach(function (node) {
+            if (node.classList.contains('lane-badge') || node.closest('.lane-badge')) return;
+            node.style.removeProperty('color');
+            node.style.removeProperty('background');
+            node.style.removeProperty('background-color');
+            node.style.removeProperty('border-top');
+        });
+    }
+
+    function normalizeRateRow(row) {
+        const label = String(row.cells[0] ? row.cells[0].textContent : '').trim();
+        clearLegacyRateColors(row);
+        row.classList.add('pc-rate-development-row');
+        const roleClass = rateRowClass(label);
+        if (roleClass) row.classList.add(roleClass);
+
+        Array.from(row.cells).forEach(function (cell, index) {
+            cell.classList.add(index === 0 ? 'pc-rate-development-label' : 'pc-rate-development-value');
+            cell.querySelectorAll('div').forEach(function (node) {
+                if (/^AI\s*[1-6]位$/.test(String(node.textContent || '').trim())) {
+                    node.classList.add('pc-rate-development-rank');
+                }
+            });
+        });
+        row.querySelectorAll('span').forEach(function (node) {
+            if (/^v\d+$/.test(String(node.textContent || '').trim())) {
+                node.classList.add('pc-rate-development-version');
+            }
+        });
+        return row;
+    }
+
+    function normalizeRateHeader(header) {
+        clearLegacyRateColors(header);
+        header.querySelectorAll('tr').forEach(function (row) {
+            row.classList.add('pc-rate-development-header-row');
+        });
+        return header;
     }
 
     function buildRateSummary(panel) {
@@ -36,25 +88,24 @@
 
         card = document.createElement('div');
         card.id = 'pc-rate-development-summary';
-        card.style.cssText = 'margin:12px 0 14px;background:#fffaf2;border:1px solid #d8cdbc;border-radius:8px;padding:14px;color:#334155;';
 
         const title = document.createElement('div');
-        title.style.cssText = 'font-size:16px;font-weight:800;color:#75659b;margin-bottom:4px;';
+        title.className = 'pc-rate-development-title';
         title.textContent = '📊 連対率・勝率';
         card.appendChild(title);
 
         const note = document.createElement('div');
-        note.style.cssText = 'font-size:11px;color:#6b7785;margin-bottom:10px;line-height:1.6;';
+        note.className = 'pc-rate-development-note';
         note.textContent = 'v表記は機械学習の適用中だけ表示。AI2連対率は1着＋2着、AI3連対率は1着＋2着＋3着です。';
         card.appendChild(note);
 
         const scroll = document.createElement('div');
-        scroll.style.overflowX = 'auto';
+        scroll.className = 'pc-rate-development-scroll';
         const table = document.createElement('table');
-        table.style.cssText = 'width:100%;min-width:760px;border-collapse:collapse;';
+        table.className = 'pc-rate-development-table';
 
         const sourceHead = headerSource.querySelector('thead');
-        if (sourceHead) table.appendChild(sourceHead.cloneNode(true));
+        if (sourceHead) table.appendChild(normalizeRateHeader(sourceHead.cloneNode(true)));
 
         const tbody = document.createElement('tbody');
         [

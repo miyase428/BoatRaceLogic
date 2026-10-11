@@ -1,0 +1,123 @@
+/* Web版「連対率・勝率」専用。元表の計算値・列構成を保った複製表だけを整える。 */
+#pc-rate-development-summary {
+    margin: 12px 0 14px;
+    padding: 14px;
+    border: 1px solid #d8cdbc;
+    border-radius: 8px;
+    background: #f8f4ec;
+    color: #334155;
+}
+
+#pc-rate-development-summary .pc-rate-development-title {
+    margin-bottom: 4px;
+    color: #2b3440;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+#pc-rate-development-summary .pc-rate-development-note {
+    margin-bottom: 10px;
+    color: #6b7785;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+#pc-rate-development-summary .pc-rate-development-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#pc-rate-development-summary .pc-rate-development-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    background: #fffaf2;
+    color: #334155;
+}
+
+#pc-rate-development-summary .pc-rate-development-table thead tr {
+    background: #e8dfd2;
+}
+
+#pc-rate-development-summary .pc-rate-development-table th {
+    color: #2b3440;
+    font-weight: 800;
+    border-bottom: 2px solid #cbbda9;
+}
+
+#pc-rate-development-summary .pc-rate-development-table td {
+    color: #334155;
+    background: #fffaf2;
+    border-bottom: 1px solid #d8cdbc;
+}
+
+#pc-rate-development-summary .pc-rate-development-row:nth-child(even) td {
+    background: #fbf8f2;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--corrected td {
+    background: #fffaf0;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--ai-win td,
+#pc-rate-development-summary .pc-rate-development-row--ai-trio td {
+    background: #faf8fc;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--ai-place td {
+    background: #f4faf8;
+}
+
+#pc-rate-development-summary .pc-rate-development-label {
+    background: #f2ece2;
+    color: #334155;
+    font-weight: 800;
+    text-align: left;
+}
+
+#pc-rate-development-summary .pc-rate-development-value {
+    font-weight: 800;
+    text-align: center;
+}
+
+#pc-rate-development-summary .pc-rate-development-rank {
+    margin-top: 2px;
+    color: #6b7785;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--venue .pc-rate-development-value {
+    color: #52606d;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--base .pc-rate-development-value,
+#pc-rate-development-summary .pc-rate-development-row--base-trio .pc-rate-development-value {
+    color: #2f789f;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--corrected .pc-rate-development-value {
+    color: #a16b17;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--ai-win .pc-rate-development-value,
+#pc-rate-development-summary .pc-rate-development-row--ai-trio .pc-rate-development-value {
+    color: #75659b;
+}
+
+#pc-rate-development-summary .pc-rate-development-row--ai-place .pc-rate-development-value {
+    color: #356f67;
+}
+
+#pc-rate-development-summary .pc-rate-development-version {
+    margin-left: 3px;
+    color: #75659b;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+@media (max-width: 600px) {
+    #pc-rate-development-summary {
+        padding: 12px;
+    }
+}

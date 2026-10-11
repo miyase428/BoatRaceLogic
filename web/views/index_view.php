@@ -14,9 +14,10 @@
 
     <!-- CSS 分離版 -->
     <link rel="stylesheet" href="/web/assets/css/style.css?v=20260921-8point-ref">
+    <link rel="stylesheet" href="/web/assets/css/pc_prediction_panels.css?v=20261011-phase4-pc2">
 </head>
 
-<body>
+<body class="pc-web-page">
 <div class="container">
 
     <h1>艇 BoatRace Analytics</h1>
@@ -95,13 +96,13 @@
 
     <?php if (!empty($entries)): ?>
         <div class="matrix-wrapper">
-            <table class="matrix-table" style="white-space: nowrap; width: 100%;">
+            <table class="matrix-table matrix-table--light" style="white-space: nowrap; width: 100%;">
                 <thead>
-                    <tr style="background-color: #1e293b; text-align: center;">
-                        <th style="position: sticky; left: 0; background-color: #1e293b; z-index: 2; min-width: 120px;">項目 / 艇番</th>
+                    <tr class="matrix-table-header" style="text-align: center;">
+                        <th class="matrix-sticky-header" style="position: sticky; left: 0; z-index: 2; min-width: 120px;">項目 / 艇番</th>
                         <?php for ($i = 1; $i <= 6; $i++): ?>
                             <?php $c = $lane_colors[$i] ?? $lane_colors[1]; ?>
-                            <th style="min-width: 130px;">
+                            <th class="matrix-course-header" style="min-width: 130px;">
                                 <span class="lane-badge"
                                     style="background-color: <?= $c['bg'] ?>; color: <?= $c['text'] ?>; border: 1px solid <?= $c['border'] ?>; padding: 2px 8px; border-radius: 4px;">
                                     <?= $i ?>号艇
@@ -145,8 +146,8 @@
                     ?>
 
                     <!-- 1. 出走表・基本情報セクション -->
-                    <tr style="background-color: #1e293b;">
-                        <td colspan="7" style="text-align: left; padding: 8px 12px; font-weight: bold; color: #38bdf8; border-top: 2px solid #334155; border-bottom: 1px solid #334155;">
+                    <tr class="matrix-section-row">
+                        <td colspan="7" class="matrix-section-title" style="text-align: left; padding: 8px 12px; font-weight: bold;">
                             📋 出走表・基本情報
                         </td>
                     </tr>
@@ -170,7 +171,7 @@
                     ?>
                     <?php foreach ($basic_rows as $row): ?>
                         <tr>
-                            <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; padding-left: 20px;">
+                            <td class="matrix-sticky-label" style="position: sticky; left: 0; font-weight: bold; z-index: 1; padding-left: 20px;">
                                 <?= $row['label'] ?>
                             </td>
                             <?php for ($i = 1; $i <= 6; $i++): ?>
@@ -189,8 +190,8 @@
                     <?php endforeach; ?>
 
                     <!-- 2. 展示・評価情報セクション -->
-                    <tr style="background-color: #1e293b;">
-                        <td colspan="7" style="text-align: left; padding: 8px 12px; font-weight: bold; color: #38bdf8; border-top: 2px solid #334155; border-bottom: 1px solid #334155;">
+                    <tr class="matrix-section-row">
+                        <td colspan="7" class="matrix-section-title" style="text-align: left; padding: 8px 12px; font-weight: bold;">
                             ⏱️ 展示・評価情報
                         </td>
                     </tr>
@@ -201,9 +202,9 @@
                             ['label' => '周回', 'key' => 'lap', 'src' => 'tenji'],
                             ['label' => '周り足', 'key' => 'mawari', 'src' => 'tenji'],
                             ['label' => '直線', 'key' => 'straight', 'src' => 'tenji'],
-                            ['label' => 'J列', 'key' => 'tenji_J', 'src' => 'tenji', 'color' => '#c7d2fe'],
-                            ['label' => 'K列', 'key' => 'tenji_K', 'src' => 'tenji', 'color' => '#c7d2fe'],
-                            ['label' => 'L列(メイン評価)', 'key' => 'tenji_L', 'src' => 'tenji', 'highlight' => true, 'color' => '#38bdf8'],
+                            ['label' => 'J列', 'key' => 'tenji_J', 'src' => 'tenji', 'tone' => 'matrix-tone-support'],
+                            ['label' => 'K列', 'key' => 'tenji_K', 'src' => 'tenji', 'tone' => 'matrix-tone-support'],
+                            ['label' => 'L列(メイン評価)', 'key' => 'tenji_L', 'src' => 'tenji', 'highlight' => true, 'tone' => 'matrix-tone-primary'],
                             ['label' => '展示ST', 'key' => 'st', 'src' => 'tenji'],
                             ['label' => '展示タイム場平均差', 'key' => 'ex_diff', 'src' => 'tenji'],
                             ['label' => '展示タイム評価', 'key' => 'ex_score', 'src' => 'tenji'],
@@ -234,7 +235,8 @@
                     ?>
                     <?php foreach ($tenji_rows as $row): ?>
                         <tr>
-                            <td style="position: sticky; left: 0; background-color: #0f172a; font-weight: bold; border-right: 2px solid #334155; z-index: 1; color: <?= $row['color'] ?? '#f8fafc' ?>; padding-left: 20px;">
+                            <?php $label_class = 'matrix-sticky-label' . (!empty($row['tone']) ? ' ' . $row['tone'] : ''); ?>
+                            <td class="<?= $label_class ?>" style="position: sticky; left: 0; font-weight: bold; z-index: 1; padding-left: 20px;">
                                 <?= $row['label'] ?>
                             </td>
                             <?php for ($i = 1; $i <= 6; $i++): ?>
@@ -245,8 +247,8 @@
                                         $val = $map_tenji[$i][$row['key']] ?? '-';
                                     }
                                     $td_style = $row['style'] ?? '';
-                                    if (!empty($row['color']) && $row['src'] !== 'custom') $td_style .= " color: {$row['color']};";
                                     $td_class = !empty($row['highlight']) ? 'score-highlight' : '';
+                                    if (!empty($row['tone'])) $td_class .= ' ' . $row['tone'];
                                 ?>
                                 <td class="<?= $td_class ?>" style="text-align: center; vertical-align: middle; <?= $td_style ?>">
                                     <?php if ($row['src'] === 'custom' && (strpos($val, '<span') !== false)): ?>
@@ -319,18 +321,18 @@
                 ?>
 
                 <!-- ▼▼▼ 直近1年 ▼▼▼ -->
-                <tr style="background-color:#1e293b;">
+                <tr class="matrix-section-row">
                     <td colspan="7"
-                        style="text-align:left; padding:8px 12px; font-weight:bold;
-                            color:#38bdf8; border-top:2px solid #334155; border-bottom:1px solid #334155;">
+                        class="matrix-section-title"
+                        style="text-align:left; padding:8px 12px; font-weight:bold;">
                         🎯 決まり手（直近1年）
                     </td>
                 </tr>
 
                 <tr>
-                    <td style="background:#0f172a; font-weight:bold; padding-left:20px;">決まり手</td>
+                    <td class="matrix-kimarite-label" style="font-weight:bold; padding-left:20px;">決まり手</td>
                     <?php for ($i = 1; $i <= 6; $i++): ?>
-                        <td style="text-align:center; font-weight:bold; background:#0f172a;">
+                        <td class="matrix-kimarite-course" style="text-align:center; font-weight:bold;">
                             <?= $i ?>コース
                         </td>
                     <?php endfor; ?>
@@ -338,7 +340,7 @@
 
                 <?php foreach ($kimarite_rows as $row): ?>
                 <tr>
-                    <td style="background:#0f172a; font-weight:bold; padding-left:20px;">
+                    <td class="matrix-kimarite-label" style="font-weight:bold; padding-left:20px;">
                         <?= $row['label'] ?>
                     </td>
 
@@ -346,7 +348,7 @@
                         <?php
                             $key = $row['keys'][$i];
                             if (!$key) {
-                                echo '<td style="text-align:center; color:#94a3b8;">-</td>';
+                                echo '<td class="matrix-empty-value" style="text-align:center;">-</td>';
                                 continue;
                             }
 
@@ -354,7 +356,7 @@
                             $pct = number_format($v, 1) . '%';
                             $bg = biyori_color($v);
                         ?>
-                        <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
+                        <td class="matrix-kimarite-heat" style="text-align:center; background:<?= $bg ?>; font-weight:bold;">
                             <?= $pct ?>
                         </td>
                     <?php endfor; ?>
@@ -363,18 +365,18 @@
 
 
                 <!-- ▼▼▼ 直近6ヶ月 ▼▼▼ -->
-                <tr style="background-color:#1e293b;">
+                <tr class="matrix-section-row">
                     <td colspan="7"
-                        style="text-align:left; padding:8px 12px; font-weight:bold;
-                            color:#38bdf8; border-top:2px solid #334155; border-bottom:1px solid #334155;">
+                        class="matrix-section-title"
+                        style="text-align:left; padding:8px 12px; font-weight:bold;">
                         🎯 決まり手（直近6ヶ月）
                     </td>
                 </tr>
 
                 <tr>
-                    <td style="background:#0f172a; font-weight:bold; padding-left:20px;">決まり手</td>
+                    <td class="matrix-kimarite-label" style="font-weight:bold; padding-left:20px;">決まり手</td>
                     <?php for ($i = 1; $i <= 6; $i++): ?>
-                        <td style="text-align:center; font-weight:bold; background:#0f172a;">
+                        <td class="matrix-kimarite-course" style="text-align:center; font-weight:bold;">
                             <?= $i ?>コース
                         </td>
                     <?php endfor; ?>
@@ -382,7 +384,7 @@
 
                 <?php foreach ($kimarite_rows as $row): ?>
                 <tr>
-                    <td style="background:#0f172a; font-weight:bold; padding-left:20px;">
+                    <td class="matrix-kimarite-label" style="font-weight:bold; padding-left:20px;">
                         <?= $row['label'] ?>
                     </td>
 
@@ -390,7 +392,7 @@
                         <?php
                             $key = $row['keys'][$i];
                             if (!$key) {
-                                echo '<td style="text-align:center; color:#94a3b8;">-</td>';
+                                echo '<td class="matrix-empty-value" style="text-align:center;">-</td>';
                                 continue;
                             }
 
@@ -398,7 +400,7 @@
                             $pct = number_format($v, 1) . '%';
                             $bg = biyori_color($v);
                         ?>
-                        <td style="text-align:center; background:<?= $bg ?>; color:#0f172a; font-weight:bold;">
+                        <td class="matrix-kimarite-heat" style="text-align:center; background:<?= $bg ?>; font-weight:bold;">
                             <?= $pct ?>
                         </td>
                     <?php endfor; ?>
@@ -412,11 +414,11 @@
     <?php endif; ?>
     
     <!-- ■ 最終予想 -->
-    <h2>📊 最終予想</h2>
+    <h2 class="pc-prediction-heading">📊 最終予想</h2>
 
     <?php if (!empty($final_predictions)): ?>
-        <div class="table-container">
-            <table>
+        <div class="table-container pc-final-prediction-table">
+            <table class="pc-prediction-table">
                 <thead>
                     <tr>
                         <th>艇番</th>
@@ -483,8 +485,8 @@
         </div>
 
         <!-- ■ 集計・買い目テーブル（下部） -->
-        <div class="summary-box">
-            <table>
+        <div class="summary-box pc-final-summary">
+            <table class="pc-prediction-table">
                 <thead>
                     <tr>
                         <th>本命/対抗</th>
@@ -499,7 +501,7 @@
 
                 <tbody>
                     <tr>
-                        <td style="font-weight:bold; color:#38bdf8;">
+                        <td class="pc-final-role pc-final-role--primary">
                             本命（AI1着 v5<?= (string)($common_second_probability_source ?? '') === 'ai_place_v1_joint120' ? '・AI2着 v1' : '・従来2着' ?><?= !empty($honmei_ai_second_cut_rescue_applied) ? '・AI2着救済 v1' : '' ?><?= !empty($honmei_ai_third_prune_applied) ? '・AI3着絞り v1' : '' ?>）
                         </td>
                         <td><?= $honmei_head ?></td>
@@ -511,7 +513,7 @@
                     </tr>
 
                     <tr>
-                        <td style="font-weight:bold; color:#f59e0b;">
+                        <td class="pc-final-role pc-final-role--opposition">
                             対抗（AI1着 v5<?= (string)($taikou_common_second_probability_source ?? '') === 'ai_place_v1_joint120' ? '・AI2着 v1' : '・従来2着' ?><?= !empty($taikou_ai_second_cut_rescue_applied) ? '・AI2着救済 v1' : '' ?><?= !empty($taikou_ai_third_prune_applied) ? '・AI3着絞り v1' : '' ?>）
                         </td>
                         <td><?= $taikou_head ?></td>
@@ -530,11 +532,11 @@
     <?php endif; ?>
 
     <!-- ■ 展示サム理論マスタデータ -->
-    <h2>📐 展示サム理論（レース適用値）</h2>
+    <h2 class="pc-prediction-heading pc-sam-applied-heading">📐 展示サム理論（レース適用値）</h2>
 
     <?php if (!empty($sam_applied_list)): ?>
-        <div class="table-container">
-            <table>
+        <div class="table-container pc-sam-applied-table">
+            <table class="pc-prediction-table">
                 <thead>
                     <tr>
                         <th>コース</th>
@@ -568,27 +570,27 @@
                             <td><?= number_format($s['val_k'], 2) ?></td>
                             <td><?= number_format($s['val_l'], 2) ?></td>
 
-                            <td style="font-weight: bold;">
+                            <td class="pc-sam-applied-total">
                                 <?= number_format($s['sum'], 2) ?>
                             </td>
 
-                            <td style="color: <?= $s['avg_diff'] < 0 ? '#38bdf8' : '#f87171' ?>; font-weight: bold;">
+                            <td class="pc-sam-applied-value pc-sam-applied-value--strong <?= $s['avg_diff'] < 0 ? 'is-favorable' : 'is-adverse' ?>">
                                 <?= sprintf('%+.3f', $s['avg_diff']) ?>
                             </td>
 
-                            <td style="color: <?= $s['win'] > 0 ? '#38bdf8' : ($s['win'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <td class="pc-sam-applied-value <?= $s['win'] > 0 ? 'is-favorable' : ($s['win'] < 0 ? 'is-adverse' : 'is-neutral') ?>">
                                 <?= number_format($s['win'] * 100, 0) ?>%
                             </td>
 
-                            <td style="color: <?= $s['place2'] > 0 ? '#38bdf8' : ($s['place2'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <td class="pc-sam-applied-value <?= $s['place2'] > 0 ? 'is-favorable' : ($s['place2'] < 0 ? 'is-adverse' : 'is-neutral') ?>">
                                 <?= number_format($s['place2'] * 100, 0) ?>%
                             </td>
 
-                            <td style="color: <?= $s['place3'] > 0 ? '#38bdf8' : ($s['place3'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <td class="pc-sam-applied-value <?= $s['place3'] > 0 ? 'is-favorable' : ($s['place3'] < 0 ? 'is-adverse' : 'is-neutral') ?>">
                                 <?= number_format($s['place3'] * 100, 0) ?>%
                             </td>
 
-                            <td style="font-weight: bold; color: <?= $s['trio'] > 0 ? '#38bdf8' : ($s['trio'] < 0 ? '#f87171' : '#fff') ?>;">
+                            <td class="pc-sam-applied-value pc-sam-applied-value--strong <?= $s['trio'] > 0 ? 'is-favorable' : ($s['trio'] < 0 ? 'is-adverse' : 'is-neutral') ?>">
                                 <?= number_format($s['trio'] * 100, 0) ?>%
                             </td>
                         </tr>
@@ -597,9 +599,9 @@
                 </tbody>
 
                 <tfoot>
-                    <tr style="background-color: #0f172a; font-weight: bold;">
-                        <td colspan="4" style="text-align: right; color: #94a3b8;">全体平均:</td>
-                        <td style="color: #38bdf8;"><?= number_format($overall_avg, 3) ?></td>
+                    <tr class="pc-sam-applied-average-row">
+                        <td colspan="4" class="pc-sam-applied-average-label">全体平均:</td>
+                        <td class="pc-sam-applied-average-value"><?= number_format($overall_avg, 3) ?></td>
                         <td colspan="5"></td>
                     </tr>
                 </tfoot>

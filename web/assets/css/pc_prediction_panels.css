@@ -1,0 +1,110 @@
+/* PC Webの表示中予想パネル専用。アプリ版と非表示の旧SUM・スリットには適用しない。 */
+.pc-web-page .pc-final-role,
+.pc-web-page .pc-sam-applied-total,
+.pc-web-page .pc-sam-applied-value--strong,
+.pc-web-page .pc-sam-applied-average-row {
+    font-weight: 800;
+}
+
+.pc-web-page .pc-sam-applied-average-label {
+    text-align: right;
+}
+
+@media (min-width: 601px) {
+    .pc-web-page .pc-prediction-heading {
+        color: #2b3440;
+    }
+
+    .pc-web-page .pc-final-prediction-table,
+    .pc-web-page .pc-sam-applied-table {
+        background: #f8f4ec;
+        border-color: #d8cdbc;
+    }
+
+    .pc-web-page .pc-prediction-table {
+        color: #3f4b5a;
+    }
+
+    .pc-web-page .pc-prediction-table th {
+        background: #e8dfd2;
+        color: #2b3440;
+        border-bottom-color: #cbbda9;
+    }
+
+    .pc-web-page .pc-prediction-table td {
+        background: #fffaf2;
+        border-bottom-color: #d8cdbc;
+    }
+
+    .pc-web-page .pc-prediction-table tbody tr:hover > td {
+        background: #f3ecdf;
+    }
+
+    .pc-web-page .pc-final-prediction-table .score-highlight,
+    .pc-web-page .pc-final-summary .score-highlight {
+        color: #75659b;
+    }
+
+    .pc-web-page .pc-final-summary {
+        background: #f2ece2;
+        border-color: #d8cdbc;
+    }
+
+    .pc-web-page .pc-final-role--primary {
+        color: #75659b;
+    }
+
+    .pc-web-page .pc-final-role--opposition {
+        color: #98630f;
+    }
+
+    .pc-web-page .pc-sam-applied-value.is-favorable,
+    .pc-web-page .pc-sam-applied-average-value {
+        color: #246f94;
+    }
+
+    .pc-web-page .pc-sam-applied-value.is-adverse {
+        color: #9a4f43;
+    }
+
+    .pc-web-page .pc-sam-applied-value.is-neutral {
+        color: #526777;
+    }
+
+    .pc-web-page .pc-sam-applied-average-row > td {
+        background: #f2ece2;
+    }
+
+    .pc-web-page .pc-sam-applied-average-label {
+        color: #526777;
+    }
+}
+
+/* スマホWebは今回の対象外。役割クラス化前の表示色を維持する。 */
+@media (max-width: 600px) {
+    .pc-web-page .pc-final-role--primary,
+    .pc-web-page .pc-sam-applied-value.is-favorable,
+    .pc-web-page .pc-sam-applied-average-value {
+        color: #75659b;
+    }
+
+    .pc-web-page .pc-final-role--opposition {
+        color: #f59e0b;
+    }
+
+    .pc-web-page .pc-sam-applied-value.is-adverse {
+        color: #f87171;
+    }
+
+    .pc-web-page .pc-sam-applied-value.is-neutral {
+        color: #ffffff;
+    }
+
+    .pc-web-page .pc-sam-applied-average-row > td {
+        background: #f2ece2;
+    }
+
+    .pc-web-page .pc-sam-applied-average-label {
+        color: #6b7785;
+    }
+}

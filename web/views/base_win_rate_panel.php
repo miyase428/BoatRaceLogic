@@ -26,9 +26,11 @@ include __DIR__ . '/recent_prediction_history_panel.php';
 
 <!-- PC Webは役割別タブへ段階的に再整理する。 -->
 <link rel="stylesheet" href="/web/assets/css/pc_main_tabs.css?v=20260925-panel-visible-v1">
+<link rel="stylesheet" href="/web/assets/css/pc_conditional_second_rate.css?v=20261011-phase1">
+<link rel="stylesheet" href="/web/assets/css/pc_rate_development.css?v=20261011-phase2">
 <script src="/web/assets/js/pc_main_tabs.js?v=20260927-venue-ml-v2" defer></script>
-<script src="/web/assets/js/pc_rate_development_tab.js?v=20260925-dynamic-ai-version-v1" defer></script>
-<script src="/web/assets/js/pc_head1_second_merge.js?v=20260926-conditional-third-v1" defer></script>
+<script src="/web/assets/js/pc_rate_development_tab.js?v=20261011-phase2" defer></script>
+<script src="/web/assets/js/pc_head1_second_merge.js?v=20261011-phase1" defer></script>
 <script src="/web/assets/js/pc_ai_prediction_cleanup.js?v=20260918a" defer></script>
 <script src="/web/assets/js/pc_player_sam_modal.js?v=20260918a" defer></script>
 <script src="/web/assets/js/pc_exacta_tab.js?v=20260926-exacta-odds-snapshot-v1" defer></script>

@@ -487,6 +487,303 @@ tr:hover > td {
     color: #75659b !important;
 }
 
+/* ===============================
+   PC Web 基本画面の役割別ライトテーマ
+   旧ダークテーマのinline指定を残さず、マトリクスと元勝率表に限定して適用する。
+   決まり手のヒートマップと艇番バッジはデータ上の意味色として保持する。
+================================= */
+@media (min-width: 601px) {
+.pc-web-page .matrix-table--light .matrix-table-header,
+.pc-web-page .matrix-table--light .matrix-section-title {
+    background: var(--surface-muted);
+}
+
+.pc-web-page .matrix-table--light .matrix-sticky-header,
+.pc-web-page .matrix-table--light .matrix-course-header {
+    background: var(--surface-muted);
+    color: var(--text-strong);
+}
+
+.pc-web-page .matrix-table--light .matrix-section-title {
+    color: #246f94;
+    border-top: 2px solid var(--border-strong);
+    border-bottom: 1px solid var(--border-strong);
+}
+
+.pc-web-page .matrix-table--light .matrix-sticky-label,
+.pc-web-page .matrix-table--light .matrix-kimarite-label,
+.pc-web-page .matrix-table--light .matrix-kimarite-course {
+    background: var(--surface-soft);
+    color: var(--text-strong);
+    border-right: 2px solid var(--border-strong);
+}
+
+.pc-web-page .matrix-table--light .matrix-kimarite-course {
+    border-right-width: 1px;
+}
+
+.pc-web-page .matrix-table--light .matrix-tone-support {
+    color: #75659b;
+}
+
+.pc-web-page .matrix-table--light .matrix-tone-primary {
+    color: #246f94;
+}
+
+.pc-web-page .matrix-table--light .matrix-empty-value {
+    color: var(--text-muted);
+}
+
+.pc-web-page .matrix-table--light .matrix-kimarite-heat {
+    color: #0f172a;
+}
+
+.pc-base-win-rate-source {
+    margin: 18px 0 14px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.pc-base-rate-title {
+    color: var(--text-strong);
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.pc-base-rate-description,
+.pc-base-rate-raw-total,
+.pc-base-rate-simulation-note,
+.pc-base-rate-status {
+    font-size: 12px;
+}
+
+.pc-base-rate-description,
+.pc-base-rate-raw-total {
+    color: #526777;
+}
+
+.pc-base-rate-simulation-note {
+    color: #246f94;
+}
+
+.pc-base-rate-scroll {
+    overflow-x: auto;
+}
+
+.pc-base-rate-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    background: #fffaf2;
+    color: var(--text);
+}
+
+.pc-base-rate-header-row {
+    background: var(--surface-muted);
+}
+
+.pc-base-rate-header-label,
+.pc-base-rate-header-cell {
+    color: var(--text-strong);
+    border-bottom: 2px solid var(--border-strong);
+}
+
+.pc-base-rate-course-name,
+.pc-base-rate-label {
+    color: var(--text-strong);
+    font-weight: 800;
+}
+
+.pc-base-rate-row td {
+    border-top: 1px solid var(--border);
+    background: #fffaf2;
+}
+
+.pc-base-rate-row--corrected td {
+    background: #fffaf0;
+}
+
+.pc-base-rate-row--ai-win td {
+    background: #faf8fc;
+}
+
+.pc-base-rate-row--ai-place td {
+    background: #f4faf8;
+}
+
+.pc-base-rate-value {
+    color: var(--text);
+    font-weight: 800;
+    text-align: center;
+}
+
+.pc-base-rate-row--venue .pc-base-rate-value {
+    color: #52606d;
+}
+
+.pc-base-rate-row--base .pc-base-rate-value {
+    color: #2f789f;
+}
+
+.pc-base-rate-row--corrected .pc-base-rate-value {
+    color: #a16b17;
+}
+
+.pc-base-rate-row--ai-win .pc-base-rate-value,
+.pc-base-rate-row--ai-win .pc-base-rate-version,
+.pc-base-rate-status--ai-win {
+    color: #75659b;
+}
+
+.pc-base-rate-row--ai-place .pc-base-rate-value,
+.pc-base-rate-row--ai-place .pc-base-rate-version,
+.pc-base-rate-status--ai-place {
+    color: #356f67;
+}
+
+.pc-base-rate-version {
+    margin-left: 3px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.pc-base-rate-rank {
+    margin-top: 2px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.pc-base-rate-status--neutral {
+    color: #526777;
+}
+
+.pc-base-rate-status--error,
+.pc-base-rate-fallback {
+    color: #8d4343;
+}
+
+.pc-base-rate-fallback {
+    padding: 8px 10px;
+    border: 1px solid #d4a7a7;
+    border-radius: 5px;
+    background: #fff0f0;
+    font-size: 13px;
+}
+
+.pc-entry-simulation-actual {
+    color: #526777;
+}
+
+.pc-entry-simulation-actual-value {
+    color: var(--text-strong);
+}
+
+.pc-entry-simulation-help {
+    color: var(--text-muted);
+}
+}
+
+/* スマホWebは従来のレスポンシブ表示を維持する。役割クラス化前に
+   属性セレクタ補正が作っていた見た目だけを引き継ぎ、文字サイズや表幅は変えない。 */
+@media (max-width: 600px) {
+    .pc-web-page .matrix-table--light .matrix-table-header,
+    .pc-web-page .matrix-table--light .matrix-section-title {
+        background: var(--surface-muted);
+    }
+
+    .pc-web-page .matrix-table--light .matrix-sticky-header,
+    .pc-web-page .matrix-table--light .matrix-course-header {
+        background: var(--surface-muted);
+        color: var(--text-strong);
+    }
+
+    .pc-web-page .matrix-table--light .matrix-section-title {
+        color: #2f789f;
+        border-top: 2px solid var(--border-strong);
+        border-bottom: 1px solid var(--border-strong);
+    }
+
+    .pc-web-page .matrix-table--light .matrix-sticky-label,
+    .pc-web-page .matrix-table--light .matrix-kimarite-label,
+    .pc-web-page .matrix-table--light .matrix-kimarite-course {
+        background: var(--surface-soft);
+        color: var(--text);
+        border-right: 2px solid var(--border-strong);
+    }
+
+    .pc-web-page .matrix-table--light .matrix-kimarite-course {
+        border-right-width: 1px;
+    }
+
+    .pc-web-page .matrix-table--light td.matrix-tone-support:not(.matrix-sticky-label) {
+        color: #c7d2fe;
+    }
+
+    .pc-web-page .matrix-table--light td.matrix-tone-primary:not(.matrix-sticky-label) {
+        color: #2f789f;
+    }
+
+    .pc-web-page .matrix-table--light .matrix-empty-value {
+        color: var(--text-muted);
+    }
+
+    .pc-web-page .matrix-table--light .matrix-kimarite-heat {
+        color: #0f172a;
+    }
+
+    .pc-base-win-rate-source {
+        margin: 18px 0 14px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-soft);
+        color: var(--text);
+    }
+
+    .pc-base-rate-title { color: #2f789f; font-size: 16px; font-weight: 700; }
+    .pc-base-rate-description,
+    .pc-base-rate-raw-total,
+    .pc-base-rate-status { color: var(--text-muted); font-size: 12px; }
+    .pc-base-rate-simulation-note { color: #93c5fd; font-size: 12px; }
+    .pc-base-rate-scroll { overflow-x: auto; }
+    .pc-base-rate-table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    .pc-base-rate-header-row { background: var(--surface-muted); }
+    .pc-base-rate-header-label,
+    .pc-base-rate-header-cell,
+    .pc-base-rate-course-name,
+    .pc-base-rate-label { color: var(--text-strong); font-weight: 700; }
+    .pc-base-rate-row td { border-top: 1px solid var(--border-strong); }
+    .pc-base-rate-row--ai-win { background: rgba(167, 139, 250, .06); }
+    .pc-base-rate-row--ai-place { background: rgba(56, 189, 248, .05); }
+    .pc-base-rate-value { font-weight: 700; text-align: center; }
+    .pc-base-rate-row--venue .pc-base-rate-value { color: var(--text-muted); }
+    .pc-base-rate-row--base .pc-base-rate-value { color: #2f789f; }
+    .pc-base-rate-row--corrected .pc-base-rate-value { color: #aa741f; }
+    .pc-base-rate-row--ai-win .pc-base-rate-value,
+    .pc-base-rate-row--ai-win .pc-base-rate-version { color: #c4b5fd; }
+    .pc-base-rate-row--ai-place .pc-base-rate-value,
+    .pc-base-rate-row--ai-place .pc-base-rate-version { color: #7dd3fc; }
+    .pc-base-rate-version { margin-left: 3px; font-size: 11px; }
+    .pc-base-rate-rank { margin-top: 2px; color: var(--text-muted); font-size: 11px; }
+    .pc-base-rate-status--ai-win { color: #75659b; }
+    .pc-base-rate-status--ai-place { color: #7dd3fc; }
+    .pc-base-rate-status--error { color: #fca5a5; }
+    .pc-base-rate-fallback {
+        padding: 8px 10px;
+        border-radius: 5px;
+        background: var(--surface-muted);
+        color: #fca5a5;
+        font-size: 13px;
+    }
+    .pc-entry-simulation-actual { color: var(--text-muted); }
+    .pc-entry-simulation-actual-value { color: var(--text-strong); }
+    .pc-entry-simulation-help { color: var(--text-muted); }
+}
+
 /* 決まり手のヒートマップは既存色を維持 */
 .matrix-table td[style*="background:#f87171"],
 .matrix-table td[style*="background:#fb923c"],

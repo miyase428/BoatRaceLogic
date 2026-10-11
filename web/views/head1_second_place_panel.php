@@ -3,13 +3,12 @@
   実データと頭選択UIは trifecta_probability_panel_common.php が出す120通りを
   pc_head1_second_merge.js が受け取り、展示後だけ機械学習版 v1 を表示する。
 -->
-<div id="conditional-second-rate-panel"
-     style="margin:0 0 14px; background-color:#0f172a; border:1px solid #334155; border-radius:8px; padding:14px;">
-    <div style="font-size:16px; font-weight:bold; color:#a78bfa;">🤖 AI条件付き2着率</div>
-    <div style="margin-top:5px; font-size:12px; color:#94a3b8;">
+<div id="conditional-second-rate-panel" class="pc-conditional-rate-panel">
+    <div class="pc-conditional-rate-title">🤖 AI条件付き2着率</div>
+    <div class="pc-conditional-rate-description">
         120通りから、選んだ頭が1着になった場合の2着率を表示します。
     </div>
-    <div style="margin-top:9px; font-size:13px; color:#94a3b8;">出目確率を読み込み中…</div>
+    <div class="pc-conditional-rate-loading">出目確率を読み込み中…</div>
 </div>
 
 <script>

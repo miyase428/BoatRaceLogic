@@ -78,46 +78,46 @@ for ($course = 1; $course <= 6; $course++) {
     </div>
 <?php endif; ?>
 
-<div style="margin: 18px 0 14px; background-color: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 14px;">
+<div class="pc-base-win-rate-source">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px;">
         <div>
-            <div style="font-size:16px; font-weight:bold; color:#38bdf8;">🎯 1着率</div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
+            <div class="pc-base-rate-title">🎯 1着率</div>
+            <div class="pc-base-rate-description" style="margin-top:3px;">
                 基本：場×コース → 選手×コース → 選手×場×コース / BB_MEDIUM K=20・10
             </div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+            <div class="pc-base-rate-description" style="margin-top:2px;">
                 補正後：展示進入 → <?= htmlspecialchars($correctedExLabel) ?> β=0.10 → SUM_RAW γ=2.0 → スリット α=0.25 / 各段階6艇100%正規化
             </div>
-            <div style="font-size:12px; color:#94a3b8; margin-top:2px;">
+            <div class="pc-base-rate-description" style="margin-top:2px;">
                 AI：<?= $aiWinApplied ? htmlspecialchars((string)$aiWinMethod) : '展示情報取得後に機械学習を計算' ?> / 展示5指標・進入変化・実戦ST・公式選手成績・場/コース/モーター履歴から学習
             </div>
             <?php if (!empty($simulation_active)): ?>
-                <div style="font-size:12px; color:#93c5fd; margin-top:3px;">
+                <div class="pc-base-rate-simulation-note" style="margin-top:3px;">
                     ※現在は仮想進入 <?= htmlspecialchars((string)$prediction_entry_order) ?> 基準で計算
                 </div>
             <?php endif; ?>
         </div>
         <?php if (!empty($baseWinBoats)): ?>
-            <div style="font-size:12px; color:#94a3b8; white-space:nowrap;">
+            <div class="pc-base-rate-raw-total" style="white-space:nowrap;">
                 基本正規化前 <?= number_format($baseWinRawTotal * 100, 2) ?>%
             </div>
         <?php endif; ?>
     </div>
 
     <?php if (!empty($baseWinBoats)): ?>
-        <div style="overflow-x:auto;">
-            <table style="width:100%; min-width:760px; border-collapse:collapse;">
+        <div class="pc-base-rate-scroll">
+            <table class="pc-base-rate-table">
                 <thead>
-                    <tr style="background-color:#1e293b;">
-                        <th style="padding:8px; text-align:left; min-width:130px;">項目 / 進入</th>
+                    <tr class="pc-base-rate-header-row">
+                        <th class="pc-base-rate-header-label" style="padding:8px; text-align:left; min-width:130px;">項目 / 進入</th>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $header = $kimariteHeaderMap[(string)$course] ?? [];
                                 $boat = (int)($header['boat'] ?? $course);
                                 $c = $lane_colors[$boat] ?? $lane_colors[1];
                             ?>
-                            <th style="padding:8px; text-align:center; min-width:95px;">
-                                <div style="font-weight:bold; color:#f8fafc; white-space:nowrap;">
+                            <th class="pc-base-rate-header-cell" style="padding:8px; text-align:center; min-width:95px;">
+                                <div class="pc-base-rate-course-name" style="white-space:nowrap;">
                                     <?= $course ?>コース
                                 </div>
                                 <div style="margin-top:4px;">
@@ -131,8 +131,8 @@ for ($course = 1; $course <= 6; $course++) {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">場1着率（コース別）</td>
+                    <tr class="pc-base-rate-row pc-base-rate-row--venue">
+                        <td class="pc-base-rate-label" style="padding:10px 8px;">場1着率（コース別）</td>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
@@ -140,25 +140,25 @@ for ($course = 1; $course <= 6; $course++) {
                                     ? ((float)$baseWinBoats[$boat]['p0'] * 100.0)
                                     : null;
                             ?>
-                            <td style="padding:10px 8px; text-align:center; font-size:16px; font-weight:bold; color:#cbd5e1;">
+                            <td class="pc-base-rate-value" style="padding:10px 8px; font-size:16px;">
                                 <?= $rate !== null ? number_format($rate, 2) . '%' : '-' ?>
                             </td>
                         <?php endfor; ?>
                     </tr>
-                    <tr style="border-top:1px solid #334155;">
-                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">基本1着率</td>
+                    <tr class="pc-base-rate-row pc-base-rate-row--base">
+                        <td class="pc-base-rate-label" style="padding:10px 8px;">基本1着率</td>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
                                 $rate = $baseWinBoats[$boat]['normalized_rate'] ?? null;
                             ?>
-                            <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#38bdf8;">
+                            <td class="pc-base-rate-value" style="padding:10px 8px; font-size:18px;">
                                 <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
                             </td>
                         <?php endfor; ?>
                     </tr>
-                    <tr style="border-top:1px solid #334155;">
-                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">補正後1着率</td>
+                    <tr class="pc-base-rate-row pc-base-rate-row--corrected">
+                        <td class="pc-base-rate-label" style="padding:10px 8px;">補正後1着率</td>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
@@ -166,13 +166,13 @@ for ($course = 1; $course <= 6; $course++) {
                                     ?? $correctedWinBoats[$boat]['corrected_rate']
                                     ?? null;
                             ?>
-                            <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#fbbf24;">
+                            <td class="pc-base-rate-value" style="padding:10px 8px; font-size:18px;">
                                 <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
                             </td>
                         <?php endfor; ?>
                     </tr>
-                    <tr style="border-top:1px solid #334155; background:rgba(167,139,250,.06);">
-                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">AI1着率<?= $aiWinApplied ? ' <span style="font-size:11px; color:#c4b5fd;">v5</span>' : '' ?></td>
+                    <tr class="pc-base-rate-row pc-base-rate-row--ai-win">
+                        <td class="pc-base-rate-label" style="padding:10px 8px;">AI1着率<?= $aiWinApplied ? ' <span class="pc-base-rate-version">v5</span>' : '' ?></td>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
@@ -180,13 +180,13 @@ for ($course = 1; $course <= 6; $course++) {
                                     ?? $aiWinBoats[$boat]['ai_rate']
                                     ?? null;
                             ?>
-                            <td style="padding:10px 8px; text-align:center; font-size:18px; font-weight:bold; color:#c4b5fd;">
+                            <td class="pc-base-rate-value" style="padding:10px 8px; font-size:18px;">
                                 <?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?>
                             </td>
                         <?php endfor; ?>
                     </tr>
-                    <tr style="border-top:1px solid #334155; background:rgba(56,189,248,.05);">
-                        <td style="padding:10px 8px; font-weight:bold; color:#f8fafc;">AI2連対率<?= $aiPlaceApplied ? ' <span style="font-size:11px; color:#7dd3fc;">v1</span>' : '' ?></td>
+                    <tr class="pc-base-rate-row pc-base-rate-row--ai-place">
+                        <td class="pc-base-rate-label" style="padding:10px 8px;">AI2連対率<?= $aiPlaceApplied ? ' <span class="pc-base-rate-version">v1</span>' : '' ?></td>
                         <?php for ($course = 1; $course <= 6; $course++): ?>
                             <?php
                                 $boat = (int)($kimariteHeaderMap[(string)$course]['boat'] ?? $course);
@@ -197,10 +197,10 @@ for ($course = 1; $course <= 6; $course++) {
                                     ?? $aiPlaceBoats[$boat]['ai_top2_rank']
                                     ?? 0);
                             ?>
-                            <td style="padding:10px 8px; text-align:center; font-size:17px; font-weight:bold; color:#7dd3fc;">
+                            <td class="pc-base-rate-value" style="padding:10px 8px; font-size:17px;">
                                 <div><?= $rate !== null ? number_format((float)$rate, 2) . '%' : '-' ?></div>
                                 <?php if ($rank >= 1 && $rank <= 6): ?>
-                                    <div style="margin-top:2px; font-size:11px; color:#6b7785;">AI <?= $rank ?>位</div>
+                                    <div class="pc-base-rate-rank">AI <?= $rank ?>位</div>
                                 <?php endif; ?>
                             </td>
                         <?php endfor; ?>
@@ -210,38 +210,38 @@ for ($course = 1; $course <= 6; $course++) {
         </div>
 
         <?php if ($correctedWinStatus === 'ok'): ?>
-            <div style="margin-top:8px; font-size:12px; color:#94a3b8;">
+            <div class="pc-base-rate-status pc-base-rate-status--neutral" style="margin-top:8px;">
                 補正後6艇合計 <?= number_format((float)($corrected_win_rate_data['totals']['corrected'] ?? 0), 2) ?>%
                 <?php if (isset($correctedMethod['slit_pattern_id'])): ?>
                     / スリット PID=<?= htmlspecialchars((string)$correctedMethod['slit_pattern_id']) ?>
                 <?php endif; ?>
             </div>
         <?php else: ?>
-            <div style="margin-top:8px; font-size:12px; color:#fca5a5;">
+            <div class="pc-base-rate-status pc-base-rate-status--error" style="margin-top:8px;">
                 補正後1着率：<?= htmlspecialchars($correctedWinError !== '' ? $correctedWinError : '展示情報待ち') ?>
             </div>
         <?php endif; ?>
         <?php if ($aiWinStatus === 'ok'): ?>
-            <div style="margin-top:4px; font-size:12px; color:#a78bfa;">
+            <div class="pc-base-rate-status pc-base-rate-status--ai-win" style="margin-top:4px;">
                 AI1着率 6艇合計 <?= number_format((float)($ai_win_rate_data['totals']['ai'] ?? 0), 2) ?>%
                 / 本命・対抗の頭と3連単確率へ反映
             </div>
         <?php else: ?>
-            <div style="margin-top:4px; font-size:12px; color:#fca5a5;">
+            <div class="pc-base-rate-status pc-base-rate-status--error" style="margin-top:4px;">
                 AI1着率：<?= htmlspecialchars($aiWinError !== '' ? $aiWinError : '展示情報待ち') ?>
             </div>
         <?php endif; ?>
         <?php if ($aiPlaceStatus === 'ok'): ?>
-            <div style="margin-top:4px; font-size:12px; color:#7dd3fc;">
+            <div class="pc-base-rate-status pc-base-rate-status--ai-place" style="margin-top:4px;">
                 AI2連対率：1着率＋2着率 / 6艇合計 <?= number_format((float)($ai_place_rate_data['totals']['top2'] ?? 0), 2) ?>%
             </div>
         <?php else: ?>
-            <div style="margin-top:4px; font-size:12px; color:#fca5a5;">
+            <div class="pc-base-rate-status pc-base-rate-status--error" style="margin-top:4px;">
                 AI2連対率：<?= htmlspecialchars($aiPlaceError !== '' ? $aiPlaceError : '計算待ち') ?>
             </div>
         <?php endif; ?>
     <?php else: ?>
-        <div style="padding:8px 10px; background-color:#1e293b; border-radius:5px; color:#fca5a5; font-size:13px;">
+        <div class="pc-base-rate-fallback">
             基本1着率を取得できませんでした<?= $baseWinError !== '' ? '：' . htmlspecialchars($baseWinError) : '' ?>
         </div>
     <?php endif; ?>
@@ -277,8 +277,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const actual = document.createElement('div');
         actual.style.marginBottom = '7px';
         actual.style.fontSize = '13px';
-        actual.style.color = '#cbd5e1';
-        actual.innerHTML = '展示進入：<strong style="color:#f8fafc;">' +
+        actual.className = 'pc-entry-simulation-actual';
+        actual.innerHTML = '展示進入：<strong class="pc-entry-simulation-actual-value">' +
             (entryMapReady ? exhibitionEntryOrder : '展示情報待ち') + '</strong>';
         formGroup.appendChild(actual);
 
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const help = document.createElement('div');
         help.style.marginTop = '5px';
         help.style.fontSize = '11px';
-        help.style.color = '#94a3b8';
+        help.className = 'pc-entry-simulation-help';
         help.textContent = 'コース順の艇番を入力（例: 126345 = 3Cに6号艇）';
         formGroup.appendChild(help);
     }

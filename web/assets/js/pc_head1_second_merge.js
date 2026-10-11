@@ -15,16 +15,10 @@
         return String(panel && panel.dataset.probabilitySource || '') === 'ai_place_v1_joint120';
     }
 
-    function buttonStyle(active) {
-        return 'border:1px solid ' + (active ? '#a78bfa' : '#64748b')
-            + ';background:' + (active ? '#312e81' : '#1e293b')
-            + ';color:#f8fafc;border-radius:5px;padding:6px 8px;cursor:pointer;font-weight:700;font-size:12px;white-space:nowrap;';
-    }
-
-    function cell(text, css) {
+    function cell(text, className) {
         const td = document.createElement('td');
         td.textContent = text;
-        td.style.cssText = css || 'padding:10px 8px;text-align:center;';
+        td.className = className || 'pc-conditional-rate-table-value';
         return td;
     }
 
@@ -78,22 +72,23 @@
 
             target.innerHTML = '';
             const title = document.createElement('div');
-            title.style.cssText = 'font-size:16px;font-weight:bold;color:#a78bfa;';
+            title.className = 'pc-conditional-rate-title';
             title.textContent = '🤖 AI条件付き2着率' + (ml ? ' v1' : '');
             target.appendChild(title);
 
             const description = document.createElement('div');
-            description.style.cssText = 'margin-top:4px;font-size:12px;color:#94a3b8;line-height:1.5;';
+            description.className = 'pc-conditional-rate-description';
             description.textContent = '頭を選ぶと、その艇が1着になった場合の2着率を120通りから100%で表示します。';
             target.appendChild(description);
 
             const controls = document.createElement('div');
-            controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;';
+            controls.className = 'pc-conditional-rate-controls';
             heads.forEach(function (course) {
                 const boat = Number(courseBoats[course] || course);
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.style.cssText = buttonStyle(course === selected);
+                button.className = 'pc-conditional-rate-button pc-conditional-rate-button--head'
+                    + (course === selected ? ' is-selected' : '');
                 button.textContent = course + 'C ' + boat + '号艇';
                 button.setAttribute('aria-pressed', course === selected ? 'true' : 'false');
                 button.addEventListener('click', function () {
@@ -106,28 +101,28 @@
             target.appendChild(controls);
 
             const current = document.createElement('div');
-            current.style.cssText = 'margin-top:10px;font-size:13px;color:#c4b5fd;font-weight:700;';
+            current.className = 'pc-conditional-rate-selection';
             current.textContent = selected + 'C ' + Number(block.head_boat || courseBoats[selected] || selected) + '号艇が1着の場合';
             target.appendChild(current);
 
             const scroll = document.createElement('div');
-            scroll.style.cssText = 'overflow-x:auto;margin-top:6px;';
+            scroll.className = 'pc-conditional-rate-table-scroll';
             const table = document.createElement('table');
-            table.style.cssText = 'width:100%;min-width:760px;border-collapse:collapse;';
+            table.className = 'pc-conditional-rate-table';
             const thead = document.createElement('thead');
             const headRow = document.createElement('tr');
-            headRow.style.backgroundColor = '#1e293b';
-            headRow.appendChild(cell('項目 / 進入', 'padding:8px;text-align:left;min-width:130px;color:#f8fafc;'));
+            headRow.className = 'pc-conditional-rate-table-head';
+            headRow.appendChild(cell('項目 / 進入', 'pc-conditional-rate-table-heading'));
             for (let course = 1; course <= 6; course++) {
                 const boat = Number(courseBoats[course] || course);
-                headRow.appendChild(cell(course + 'コース / ' + boat + '号艇', 'padding:8px;text-align:center;min-width:95px;color:#f8fafc;font-weight:700;'));
+                headRow.appendChild(cell(course + 'コース / ' + boat + '号艇', 'pc-conditional-rate-table-heading'));
             }
             thead.appendChild(headRow);
             table.appendChild(thead);
 
             const tbody = document.createElement('tbody');
             const rates = document.createElement('tr');
-            rates.appendChild(cell('AI条件付き2着率' + (ml ? ' v1' : ''), 'padding:10px 8px;text-align:left;font-weight:700;color:#f8fafc;'));
+            rates.appendChild(cell('AI条件付き2着率' + (ml ? ' v1' : ''), 'pc-conditional-rate-table-label'));
             for (let course = 1; course <= 6; course++) {
                 const row = rowByCourse[course];
                 let label = '-';
@@ -135,7 +130,8 @@
                     const rank = Number(row.ai_rank || 0);
                     label = (Number(row.ai) * 100).toFixed(1) + '%' + (rank > 0 ? '（' + rank + '位）' : '');
                 }
-                rates.appendChild(cell(label, 'padding:10px 8px;text-align:center;font-size:17px;font-weight:700;color:#c4b5fd;border-top:1px solid #334155;'));
+                rates.appendChild(cell(label, 'pc-conditional-rate-table-value'
+                    + (label === '-' ? ' is-unavailable' : '')));
             }
             tbody.appendChild(rates);
             table.appendChild(tbody);
@@ -150,18 +146,20 @@
             }
             if (selectedSecond > 0) {
                 const secondTitle = document.createElement('div');
-                secondTitle.style.cssText = 'margin-top:11px;font-size:13px;color:#c4b5fd;font-weight:700;';
+                secondTitle.className = 'pc-conditional-rate-selection pc-conditional-rate-second-title';
                 secondTitle.textContent = '2着を選択して3着候補を見る';
                 target.appendChild(secondTitle);
 
                 const secondControls = document.createElement('div');
-                secondControls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;';
+                secondControls.className = 'pc-conditional-rate-controls pc-conditional-rate-controls--second';
                 secondCourses.forEach(function (course) {
                     const boat = Number(courseBoats[course] || course);
                     const button = document.createElement('button');
                     button.type = 'button';
-                    button.style.cssText = buttonStyle(course === selectedSecond);
+                    button.className = 'pc-conditional-rate-button pc-conditional-rate-button--second'
+                        + (course === selectedSecond ? ' is-selected' : '');
                     button.textContent = selected + '-' + course + '（' + boat + '号艇）';
+                    button.setAttribute('aria-pressed', course === selectedSecond ? 'true' : 'false');
                     button.addEventListener('click', function () {
                         selectedSecond = course;
                         draw();
@@ -174,24 +172,25 @@
                 const thirdByCourse = {};
                 thirdRows.forEach(function (row) { thirdByCourse[Number(row.third_course)] = row; });
                 const thirdTitle = document.createElement('div');
-                thirdTitle.style.cssText = 'margin-top:10px;font-size:13px;color:#5eead4;font-weight:700;';
+                thirdTitle.className = 'pc-conditional-rate-third-title';
                 thirdTitle.textContent = 'AI条件付き3着率' + (ml ? ' v1' : '') + '：' + selected + '-' + selectedSecond + 'の場合';
                 target.appendChild(thirdTitle);
 
                 const thirdScroll = document.createElement('div');
-                thirdScroll.style.cssText = 'overflow-x:auto;margin-top:6px;';
+                thirdScroll.className = 'pc-conditional-rate-table-scroll';
                 const thirdTable = document.createElement('table');
-                thirdTable.style.cssText = 'width:100%;min-width:760px;border-collapse:collapse;';
+                thirdTable.className = 'pc-conditional-rate-table pc-conditional-rate-table--third';
                 const thirdBody = document.createElement('tbody');
                 const thirdRateRow = document.createElement('tr');
-                thirdRateRow.appendChild(cell('AI条件付き3着率' + (ml ? ' v1' : ''), 'padding:10px 8px;text-align:left;font-weight:700;color:#f8fafc;background:#1e293b;'));
+                thirdRateRow.appendChild(cell('AI条件付き3着率' + (ml ? ' v1' : ''), 'pc-conditional-rate-table-label'));
                 for (let course = 1; course <= 6; course++) {
                     const row = thirdByCourse[course];
                     let label = '-';
                     if (row && Number.isFinite(Number(row.ai))) {
                         label = (Number(row.ai) * 100).toFixed(1) + '%（' + Number(row.ai_rank || 0) + '位）';
                     }
-                    thirdRateRow.appendChild(cell(label, 'padding:10px 8px;text-align:center;font-size:17px;font-weight:700;color:#5eead4;border-top:1px solid #334155;'));
+                    thirdRateRow.appendChild(cell(label, 'pc-conditional-rate-table-value'
+                        + (label === '-' ? ' is-unavailable' : '')));
                 }
                 thirdBody.appendChild(thirdRateRow);
                 thirdTable.appendChild(thirdBody);
@@ -200,7 +199,7 @@
             }
 
             const note = document.createElement('div');
-            note.style.cssText = 'margin-top:7px;font-size:11px;color:#94a3b8;line-height:1.5;';
+            note.className = 'pc-conditional-rate-note';
             note.textContent = '2着率は P（2着 | ' + selected + 'Cが1着）、3着率は P（3着 | ' + selected + 'C-選択2着）。' + (ml
                 ? ' 展示情報反映後は機械学習120通り v1 を使用。'
                 : ' 展示情報取得前は従来の出目確率を使用。');
