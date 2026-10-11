@@ -104,7 +104,7 @@ if (!is_string($appTrifectaJson)) {
     <title>BoatRace</title>
     <link rel="manifest" href="/web/manifest.webmanifest">
     <link rel="stylesheet" href="/web/assets/css/app.css?v=20260921-8point-ref">
-    <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20261011-app-controls-v5">
+    <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20261011-app-details-v6">
     <link rel="stylesheet" href="/web/assets/css/app_course_signals.css?v=20260917-0915">
 </head>
 <body>
@@ -336,7 +336,7 @@ if (!is_string($appTrifectaJson)) {
 </div>
 
 <script id="app-trifecta-data" type="application/json"><?= $appTrifectaJson ?></script>
-<script src="/web/assets/js/app_trifecta_tab.js?v=20261011-app-controls-v7"></script>
+<script src="/web/assets/js/app_trifecta_tab.js?v=20261011-app-details-v8"></script>
 <script id="app-recent-history-config" type="application/json"><?= json_encode([
     'place' => (string)$selected_place,
     'date' => (string)$selected_date,

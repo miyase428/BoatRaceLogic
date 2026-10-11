@@ -596,7 +596,7 @@
 
     if (!document.querySelector('script[data-app-exacta-loader="1"]')) {
         const script = document.createElement('script');
-        script.src = '/web/assets/js/app_exacta_tab.js?v=20261011-app-controls-v7';
+        script.src = '/web/assets/js/app_exacta_tab.js?v=20261011-app-details-v8';
         script.dataset.appExactaLoader = '1';
         script.async = false;
         document.head.appendChild(script);

@@ -107,13 +107,14 @@
                 display:none;
                 align-items:center;
                 justify-content:center;
-                padding:12px;
+                padding:max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
                 background:rgba(15,23,42,.62);
                 box-sizing:border-box;
             }
             #app-player-sam-modal {
                 width:min(760px,calc(100vw - 24px));
                 max-height:88vh;
+                max-height:calc(100dvh - 24px);
                 display:flex;
                 flex-direction:column;
                 overflow:hidden;
@@ -134,14 +135,20 @@
             }
             .app-player-sam-modal-title { font-size:15px; font-weight:900; color:#75659b; }
             .app-player-sam-modal-close {
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                width:44px;
+                min-height:44px;
                 border:0;
                 background:transparent;
                 color:#64748b;
                 font-size:28px;
                 line-height:1;
-                padding:0 3px;
+                padding:0;
             }
-            .app-player-sam-modal-body { padding:10px; overflow:auto; -webkit-overflow-scrolling:touch; }
+            .app-player-sam-modal-close:focus-visible { outline:3px solid #1683bd; outline-offset:2px; }
+            .app-player-sam-modal-body { padding:10px; overflow:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
             #ai-tenkai-trial-panel { margin:0 0 10px !important; }
             #ai-tenkai-trial-panel table { min-width:560px !important; }
             .app-parity-other-title { margin-bottom:0; }
@@ -775,8 +782,9 @@
         if (backdrop) return backdrop;
         backdrop = document.createElement('div');
         backdrop.id = 'app-player-sam-modal-backdrop';
-        backdrop.innerHTML = '<div id="app-player-sam-modal" role="dialog" aria-modal="true">'
-            + '<div class="app-player-sam-modal-header"><div class="app-player-sam-modal-title">👤 選手SUM特性</div><button type="button" class="app-player-sam-modal-close" aria-label="閉じる">×</button></div>'
+        backdrop.setAttribute('aria-hidden', 'true');
+        backdrop.innerHTML = '<div id="app-player-sam-modal" role="dialog" aria-modal="true" aria-labelledby="app-player-sam-modal-title" tabindex="-1">'
+            + '<div class="app-player-sam-modal-header"><div id="app-player-sam-modal-title" class="app-player-sam-modal-title">👤 選手SUM特性</div><button type="button" class="app-player-sam-modal-close" aria-label="閉じる">×</button></div>'
             + '<div class="app-player-sam-modal-body"></div></div>';
         document.body.appendChild(backdrop);
         function close() {
@@ -784,10 +792,33 @@
             const body = backdrop.querySelector('.app-player-sam-modal-body');
             if (body) body.innerHTML = '';
             document.body.style.overflow = backdrop.dataset.prevBodyOverflow || '';
+            backdrop.setAttribute('aria-hidden', 'true');
+            const returnFocus = backdrop._returnFocus;
+            backdrop._returnFocus = null;
+            if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
         }
         backdrop.querySelector('.app-player-sam-modal-close').addEventListener('click', close);
         backdrop.addEventListener('click', function (event) { if (event.target === backdrop) close(); });
-        document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && backdrop.style.display !== 'none') close(); });
+        document.addEventListener('keydown', function (event) {
+            if (backdrop.style.display === 'none') return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                close();
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const focusable = Array.from(backdrop.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        });
         backdrop._closePlayerSam = close;
         return backdrop;
     }
@@ -796,6 +827,7 @@
         const backdrop = ensurePlayerModal();
         const title = backdrop.querySelector('.app-player-sam-modal-title');
         const body = backdrop.querySelector('.app-player-sam-modal-body');
+        const closeButton = backdrop.querySelector('.app-player-sam-modal-close');
         if (title) title.textContent = '👤 選手SUM特性 — ' + boat + '号艇';
         if (body) {
             body.innerHTML = '';
@@ -809,8 +841,13 @@
             }
         }
         backdrop.dataset.prevBodyOverflow = document.body.style.overflow || '';
+        backdrop._returnFocus = document.activeElement;
         document.body.style.overflow = 'hidden';
+        backdrop.setAttribute('aria-hidden', 'false');
         backdrop.style.display = 'flex';
+        window.requestAnimationFrame(function () {
+            if (closeButton) closeButton.focus();
+        });
     }
 
     function decorateSam() {

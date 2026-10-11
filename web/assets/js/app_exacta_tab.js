@@ -103,7 +103,7 @@
 
     if(!document.querySelector('script[data-app-web-parity-loader="1"]')){
         const s=document.createElement('script');
-        s.src='/web/assets/js/app_web_parity.js?v=20261011-app-controls-v7';
+        s.src='/web/assets/js/app_web_parity.js?v=20261011-app-details-v8';
         s.dataset.appWebParityLoader='1';
         s.async=false;
         document.head.appendChild(s);
