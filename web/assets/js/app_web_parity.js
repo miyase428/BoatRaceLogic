@@ -55,6 +55,37 @@
                 font-size:10px;
                 line-height:1.5;
             }
+            .app-conditional-rate-controls {
+                display:flex;
+                flex-wrap:wrap;
+                gap:6px;
+                padding:0 10px 9px;
+            }
+            .app-conditional-rate-button {
+                min-height:44px;
+                border:1px solid #cfc2ad;
+                border-radius:5px;
+                padding:7px 8px;
+                background:#fffaf2;
+                color:#4b5866;
+                font-size:12px;
+                font-weight:800;
+            }
+            .app-conditional-rate-button--head.is-selected {
+                border-color:#75659b;
+                background:#eee8f7;
+                color:#5e4c87;
+            }
+            .app-conditional-rate-button--second { color:#356f67; }
+            .app-conditional-rate-button--second.is-selected {
+                border-color:#4fb8a9;
+                background:#e4f5f1;
+                color:#356f67;
+            }
+            .app-conditional-rate-button:focus-visible {
+                outline:3px solid #1683bd;
+                outline-offset:2px;
+            }
             .app-sam-pattern-marker,
             .app-sam-position-hint {
                 display:table;
@@ -159,6 +190,27 @@
         return panel;
     }
 
+    function syncTabA11y(tabs, shell) {
+        if (!tabs || !shell) return;
+        tabs.setAttribute('role', 'tablist');
+        Array.from(tabs.querySelectorAll('.app-tab')).forEach(function (tab) {
+            const name = String(tab.dataset.tab || '');
+            if (!name) return;
+            tab.setAttribute('role', 'tab');
+            tab.id = 'app-tab-' + name;
+            tab.setAttribute('aria-controls', 'app-tab-panel-' + name);
+            tab.setAttribute('aria-selected', tab.classList.contains('is-active') ? 'true' : 'false');
+            tab.tabIndex = tab.classList.contains('is-active') ? 0 : -1;
+        });
+        Array.from(shell.querySelectorAll('.app-tab-panel')).forEach(function (panel) {
+            const name = String(panel.dataset.panel || '');
+            if (!name) return;
+            panel.setAttribute('role', 'tabpanel');
+            panel.id = 'app-tab-panel-' + name;
+            panel.setAttribute('aria-labelledby', 'app-tab-' + name);
+        });
+    }
+
     function reorderTabs(tabs) {
         const current = Array.from(tabs.querySelectorAll('.app-tab')).map(function (button) {
             return button.dataset.tab || '';
@@ -187,12 +239,14 @@
             const active = tab.dataset.tab === name;
             tab.classList.toggle('is-active', active);
             tab.setAttribute('aria-selected', active ? 'true' : 'false');
+            tab.tabIndex = active ? 0 : -1;
         });
         Array.from(shell.querySelectorAll('.app-tab-panel')).forEach(function (tabPanel) {
             const active = tabPanel.dataset.panel === name;
             tabPanel.classList.toggle('is-active', active);
             tabPanel.hidden = !active;
         });
+        syncTabA11y(tabs, shell);
         try {
             sessionStorage.setItem(PARITY_STORAGE_KEY, name);
             sessionStorage.setItem('boatraceAppTab', name);
@@ -200,15 +254,41 @@
         } catch (e) {}
     }
 
-    function setupUnifiedTabClicks(tabs) {
+    function setupTabA11y(tabs) {
         if (tabs.dataset.appWebParityEvents === '1') return;
         tabs.dataset.appWebParityEvents = '1';
         tabs.addEventListener('click', function (event) {
             const button = event.target.closest('.app-tab');
             if (!button || !tabs.contains(button)) return;
-            const name = String(button.dataset.tab || '');
-            if (!name) return;
-            window.setTimeout(function () { activateTab(name); }, 0);
+            // 既存の各タブ実装が選択状態を更新した後に、ARIA属性だけを同期する。
+            window.setTimeout(function () {
+                syncTabA11y(tabs, document.querySelector('.app-shell'));
+            }, 0);
+        });
+        tabs.addEventListener('keydown', function (event) {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            const buttons = Array.from(tabs.querySelectorAll('.app-tab'));
+            const current = event.target.closest('.app-tab');
+            const index = buttons.indexOf(current);
+            if (index < 0 || !buttons.length) return;
+            let next = index;
+            if (event.key === 'ArrowLeft') next = (index - 1 + buttons.length) % buttons.length;
+            if (event.key === 'ArrowRight') next = (index + 1) % buttons.length;
+            if (event.key === 'Home') next = 0;
+            if (event.key === 'End') next = buttons.length - 1;
+            event.preventDefault();
+            const target = buttons[next];
+            target.focus();
+            activateTab(String(target.dataset.tab || 'basic'));
+        });
+    }
+
+    function setupParityTabActivation(tabs) {
+        ['player', 'other'].forEach(function (name) {
+            const button = tabs.querySelector('.app-tab[data-tab="' + name + '"]');
+            if (!button || button.dataset.appParityActivateEvents === '1') return;
+            button.dataset.appParityActivateEvents = '1';
+            button.addEventListener('click', function () { activateTab(name); });
         });
     }
 
@@ -333,7 +413,7 @@
         let selected = heads.indexOf(1) >= 0 ? 1 : heads[0];
         let selectedSecond = 0;
         const controls = document.createElement('div');
-        controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 9px;';
+        controls.className = 'app-conditional-rate-controls';
         const grid = document.createElement('div');
         grid.className = 'app-basic-grid';
         const thirdShell = document.createElement('div');
@@ -356,11 +436,10 @@
             heads.forEach(function (course) {
                 const button = document.createElement('button');
                 button.type = 'button';
+                button.className = 'app-conditional-rate-button app-conditional-rate-button--head'
+                    + (course === selected ? ' is-selected' : '');
                 button.textContent = course + 'C ' + String(boatOrder[course - 1] || course) + '号艇';
-                button.style.cssText = 'border:1px solid ' + (course === selected ? '#75659b' : '#cfc2ad')
-                    + ';background:' + (course === selected ? '#eee8f7' : '#fffaf2')
-                    + ';color:' + (course === selected ? '#5e4c87' : '#4b5866')
-                    + ';border-radius:5px;padding:6px 8px;font-size:12px;font-weight:800;';
+                button.setAttribute('aria-pressed', course === selected ? 'true' : 'false');
                 button.addEventListener('click', function () {
                     selected = course;
                     selectedSecond = 0;
@@ -396,14 +475,14 @@
                 selectTitle.textContent = '2着を選択して3着候補を見る';
                 thirdShell.appendChild(selectTitle);
                 const secondControls = document.createElement('div');
-                secondControls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 9px;';
+                secondControls.className = 'app-conditional-rate-controls';
                 secondCourses.forEach(function (course) {
                     const button = document.createElement('button');
                     button.type = 'button';
+                    button.className = 'app-conditional-rate-button app-conditional-rate-button--second'
+                        + (course === selectedSecond ? ' is-selected' : '');
                     button.textContent = selected + '-' + course + '（' + String(boatOrder[course - 1] || course) + '号艇）';
-                    button.style.cssText = 'border:1px solid ' + (course === selectedSecond ? '#4fb8a9' : '#cfc2ad')
-                        + ';background:' + (course === selectedSecond ? '#e4f5f1' : '#fffaf2')
-                        + ';color:#356f67;border-radius:5px;padding:6px 8px;font-size:12px;font-weight:800;';
+                    button.setAttribute('aria-pressed', course === selectedSecond ? 'true' : 'false');
                     button.addEventListener('click', function () {
                         selectedSecond = course;
                         draw();
@@ -804,8 +883,10 @@
         const mainPanel = ensurePanel(shell, 'main');
         const otherPanel = ensurePanel(shell, 'other');
 
+        syncTabA11y(tabs, shell);
         reorderTabs(tabs);
-        setupUnifiedTabClicks(tabs);
+        setupTabA11y(tabs);
+        setupParityTabActivation(tabs);
         buildRoleContent(shell, basicPanel, mainPanel, playerPanel, otherPanel);
         decorateSam();
 
@@ -814,6 +895,7 @@
             const observer = new MutationObserver(function () {
                 reorderTabs(tabs);
                 tabs.classList.add('app-web-parity-tabs');
+                syncTabA11y(tabs, shell);
             });
             observer.observe(tabs, {childList:true});
         }

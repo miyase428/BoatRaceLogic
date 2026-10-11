@@ -19,7 +19,7 @@
 
 .app-recent-reload {
     flex: 0 0 auto;
-    min-height: 32px;
+    min-height: 42px;
     padding: 5px 9px;
     border: 1px solid var(--app-border);
     border-radius: 6px;
@@ -31,6 +31,12 @@
 
 .app-recent-reload:disabled {
     opacity: 0.55;
+    cursor: wait;
+}
+
+.app-recent-reload:focus-visible {
+    outline: 3px solid #1683bd;
+    outline-offset: 2px;
 }
 
 .app-recent-status {

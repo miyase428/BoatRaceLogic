@@ -104,7 +104,7 @@ if (!is_string($appTrifectaJson)) {
     <title>BoatRace</title>
     <link rel="manifest" href="/web/manifest.webmanifest">
     <link rel="stylesheet" href="/web/assets/css/app.css?v=20260921-8point-ref">
-    <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20260826a">
+    <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20261011-app-controls-v5">
     <link rel="stylesheet" href="/web/assets/css/app_course_signals.css?v=20260917-0915">
 </head>
 <body>
@@ -336,7 +336,7 @@ if (!is_string($appTrifectaJson)) {
 </div>
 
 <script id="app-trifecta-data" type="application/json"><?= $appTrifectaJson ?></script>
-<script src="/web/assets/js/app_trifecta_tab.js?v=20260926-conditional-third-v1"></script>
+<script src="/web/assets/js/app_trifecta_tab.js?v=20261011-app-controls-v7"></script>
 <script id="app-recent-history-config" type="application/json"><?= json_encode([
     'place' => (string)$selected_place,
     'date' => (string)$selected_date,
@@ -344,7 +344,7 @@ if (!is_string($appTrifectaJson)) {
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script src="/web/assets/js/app_recent_prediction_history.js?v=20260926-conditional-third-v1"></script>
 <script src="/web/assets/js/app_course_signals.js?v=20260927-venue-ml-v2"></script>
-<script src="/web/assets/js/app_current_meet.js?v=20260918a"></script>
+<script src="/web/assets/js/app_current_meet.js?v=20261011-current-meet-summary-v3"></script>
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
 <script>
 (function () {

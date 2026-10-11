@@ -92,8 +92,16 @@
             const value = cell('app-basic-value app-current-meet-column app-current-meet-summary-cell');
             const summary = document.createElement('div');
             summary.className = 'app-current-meet-summary';
-            summary.textContent = (runCount > 0 ? runCount + '走' : '-')
-                + ' / 平均ST ' + (Number.isFinite(avg) ? avg.toFixed(2) : '-');
+            const count = document.createElement('span');
+            count.className = 'app-current-meet-summary-count';
+            count.textContent = runCount > 0 ? runCount + '走' : '-';
+            const averageLabel = document.createElement('span');
+            averageLabel.className = 'app-current-meet-summary-label';
+            averageLabel.textContent = '平均ST';
+            const average = document.createElement('span');
+            average.className = 'app-current-meet-summary-value';
+            average.textContent = Number.isFinite(avg) ? avg.toFixed(2) : '-';
+            summary.append(count, averageLabel, average);
             value.appendChild(summary);
             fragment.appendChild(value);
         }

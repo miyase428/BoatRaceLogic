@@ -15,7 +15,7 @@
 }
 
 .app-tab {
-    min-height: 42px;
+    min-height: 44px;
     border: 1px solid var(--app-border);
     border-bottom: 3px solid transparent;
     background: #e8dfd2;
@@ -36,6 +36,16 @@
     background: #fffaf2;
     color: var(--app-accent);
     border-bottom-color: var(--app-accent);
+}
+
+.app-tab:focus-visible,
+.app-trifecta-filter:focus-visible,
+.app-trifecta-clear:focus-visible,
+.app-trifecta-odds-refresh:focus-visible,
+.app-exacta-refresh:focus-visible,
+.app-trifecta-table th button:focus-visible {
+    outline: 3px solid #1683bd;
+    outline-offset: 2px;
 }
 
 .app-tab-panel[hidden] {
@@ -185,7 +195,7 @@
 
 .app-trifecta-filter,
 .app-trifecta-clear {
-    min-height: 31px;
+    min-height: 40px;
     padding: 3px 2px;
     border: 1px solid #cbbda9;
     border-radius: 5px;
@@ -307,6 +317,7 @@
 
 .app-trifecta-table th button {
     width: 100%;
+    min-height: 40px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -438,7 +449,7 @@
 
 @media (max-width: 390px) {
     .app-tab {
-        min-height: 40px;
+        min-height: 44px;
         font-size: 12px;
     }
 
@@ -472,7 +483,7 @@
     }
 
     .app-trifecta-filter {
-        min-height: 30px;
+        min-height: 40px;
         font-size: 10px;
     }
 }

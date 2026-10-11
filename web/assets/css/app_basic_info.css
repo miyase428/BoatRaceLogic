@@ -24,6 +24,15 @@
     text-align: center;
 }
 
+/*
+ * 今節成績の取得前アンカーは空の要素だが、上の display:flex が hidden 属性を
+ * 打ち消すとグリッドの1セルになってしまう。以降に差し込む展示評価の行が
+ * 1列ずれるため、取得されるまでレイアウトから完全に外す。
+ */
+.app-basic-grid > [hidden] {
+    display: none !important;
+}
+
 .app-basic-section {
     grid-column: 1 / -1;
     min-height: 34px !important;
@@ -50,7 +59,7 @@
 
 .app-basic-label {
     background: #e5dccf;
-    color: #596574;
+    color: #52606d;
     font-size: 9px;
     font-weight: 900;
     line-height: 1.15;
@@ -106,8 +115,8 @@
 }
 
 .app-basic-course {
-    color: #7a8692;
-    font-size: 8px;
+    color: #536170;
+    font-size: 9px;
     font-weight: 700;
 }
 
@@ -137,8 +146,9 @@
 .app-basic-rank {
     display: block;
     margin-top: 2px;
-    color: #7b8490;
-    font-size: 7px;
+    color: #5c6774;
+    font-size: 8px;
+    font-weight: 800;
     line-height: 1;
 }
 
@@ -155,7 +165,7 @@
     border-radius: 4px;
     background: #64748b;
     color: #fff;
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 900;
     line-height: 1.1;
 }
@@ -178,7 +188,7 @@
 }
 
 .app-basic-small-label {
-    font-size: 8px !important;
+    font-size: 9px !important;
 }
 
 .app-basic-kimarite {
@@ -215,8 +225,8 @@
 .app-basic-sample {
     display: block;
     margin-top: 2px;
-    color: #7a8692;
-    font-size: 7px;
+    color: #5c6774;
+    font-size: 8px;
     white-space: nowrap;
 }
 
@@ -248,10 +258,52 @@
     justify-content: center;
     gap: 1px;
     color: #667085;
-    font-size: 7px;
+    font-size: 8px;
     font-weight: 800;
-    line-height: 1.15;
+    line-height: 1.2;
+}
+
+.app-current-meet-summary > span {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    text-align: center;
     white-space: nowrap;
+}
+
+.app-current-meet-summary-count,
+.app-current-meet-summary-value {
+    color: #3f4b5a;
+    font-weight: 900;
+}
+
+.app-current-meet-summary-label {
+    color: #667085;
+    font-weight: 700;
+}
+
+@media (min-width: 391px) {
+    .app-current-meet-summary {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 1px 3px;
+    }
+}
+
+/* 狭い画面では概要を3行に固定し、艇ごとのセル内で完結させる。 */
+@media (max-width: 430px) {
+    .app-current-meet-summary-cell {
+        min-height: 46px !important;
+        padding: 4px 2px !important;
+    }
+
+    .app-current-meet-summary {
+        min-height: 34px;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        gap: 1px;
+        line-height: 1.1;
+    }
 }
 
 .app-current-meet-run {
@@ -292,9 +344,9 @@
 
 .app-current-meet-result {
     color: #344154;
-    font-size: 8px;
+    font-size: 9px;
     font-weight: 900;
-    line-height: 1.1;
+    line-height: 1.15;
     white-space: nowrap;
 }
 
@@ -307,13 +359,13 @@
 }
 
 .app-current-meet-empty {
-    color: #94a3b8;
+    color: #667085;
     font-size: 10px;
 }
 
 .app-basic-status {
     padding: 8px 10px;
-    color: #a16b17;
+    color: #8a5913;
     font-size: 10px;
 }
 
@@ -328,15 +380,15 @@
     }
 
     .app-basic-label {
-        font-size: 8px;
-    }
-
-    .app-basic-value {
         font-size: 9px;
     }
 
-    .app-basic-value strong {
+    .app-basic-value {
         font-size: 10px;
+    }
+
+    .app-basic-value strong {
+        font-size: 11px;
     }
 
     .app-basic-boat-badge {
@@ -345,6 +397,11 @@
     }
 
     .app-basic-player-name {
+        font-size: 9px;
+    }
+
+    /* 今節成績の行ラベルは Phase 2 の密度を維持する。 */
+    .app-current-meet-label {
         font-size: 8px;
     }
 
@@ -362,7 +419,7 @@
     }
 
     .app-current-meet-summary {
-        font-size: 6px;
+        font-size: 8px;
     }
 
     .app-current-meet-run {
@@ -377,6 +434,10 @@
 
     .app-current-meet-result,
     .app-current-meet-st {
-        font-size: 7px;
+        font-size: 8px;
+    }
+
+    .app-current-meet-result {
+        padding: 1px 2px !important;
     }
 }

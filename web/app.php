@@ -336,8 +336,8 @@ $html = ob_get_clean();
 // iPhoneのホーム画面アプリではCSSが残りやすいため、アプリ用CSSだけ版番号を付ける。
 $html = str_replace(
     '</head>',
-    '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css?v=20260822-0835">' . "\n"
-        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css?v=20260917-0915">' . "\n</head>",
+    '    <link rel="stylesheet" href="/web/assets/css/app_tabs.css?v=20261011-app-controls-v5">' . "\n"
+        . '    <link rel="stylesheet" href="/web/assets/css/app_basic_info.css?v=20261011-app-basic-grid-v4">' . "\n</head>",
     $html
 );
 
