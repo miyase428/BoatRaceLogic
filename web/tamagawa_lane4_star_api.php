@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/logic/PredictionForwardSnapshotStore.php';
+require_once __DIR__ . '/logic/StrictForwardReadinessLedger.php';
+require_once __DIR__ . '/logic/StrictForwardComparativeCapture.php';
+require_once __DIR__ . '/logic/FormalMeasurementWindowContext.php';
 require_once __DIR__ . '/logic/TamagawaCenterSignalLogic.php';
 
 date_default_timezone_set('Asia/Tokyo');
@@ -235,6 +238,101 @@ function primaryStRelation(array $venueRules, int $course, string $variant = 'ma
 function primaryStRelationMatches(float $innerRank, float $outerRank, string $relation): bool
 {
     return $relation === 'same_or_better' ? $innerRank <= $outerRank : $innerRank < $outerRank;
+}
+
+/**
+ * Records whether the pre-ML Traditional policy had enough *existing* input to
+ * evaluate its single-course policy.  This is an internal strict-forward
+ * shadow trace only: it neither decides a new signal nor changes the display
+ * maps below.  In particular, 2C remains intentionally excluded because the
+ * product has two separate policies (sashi / makuri), not one combined 2C
+ * decision.
+ *
+ * A positive display-map entry already proves the selected star level.  This
+ * companion map only allows its absence to mean "evaluated false" when the
+ * same prerequisite data checked by the existing policy was present.
+ *
+ * @return array<int,array<string,array{policy_exists:bool,evaluated:bool,reason:string}>>
+ */
+function strictForwardTraditionalEvaluationMap(
+    array $venueRules,
+    array $targets,
+    array $lane1Profiles,
+    array $lane3Profiles,
+    array $profiles,
+    array $lane5Profiles,
+    array $lane6Profiles,
+    array $ranks
+): array {
+    $result = [1 => [], 3 => [], 4 => [], 5 => [], 6 => []];
+    $mark = static function (array &$map, string $raceCode, bool $policyExists, bool $evaluated, string $reason): void {
+        if ($raceCode !== '') {
+            $map[$raceCode] = [
+                'policy_exists' => $policyExists,
+                'evaluated' => $evaluated,
+                'reason' => $reason,
+            ];
+        }
+    };
+    foreach ($targets as $row) {
+        if (!is_array($row)) continue;
+        $raceCode = trim((string)($row['race_code'] ?? ''));
+        if ($raceCode === '') continue;
+
+        $pid1 = trim((string)($row['lane1_player_id'] ?? ''));
+        $p1 = $lane1Profiles[$pid1] ?? null;
+        $enabled1 = primaryEnabled($venueRules, 1);
+        $mark($result[1], $raceCode, $enabled1,
+            $enabled1 && $pid1 !== '' && is_array($p1) && is_numeric($p1['nige_rate'] ?? null),
+            !$enabled1 ? 'PRIMARY_POLICY_DISABLED'
+                : ($pid1 === '' || !is_array($p1) || !is_numeric($p1['nige_rate'] ?? null)
+                    ? 'LANE1_NIGE_RATE_MISSING' : 'EXISTING_POLICY_EVALUATED'));
+
+        $pid3 = trim((string)($row['lane3_player_id'] ?? ''));
+        $p3 = $lane3Profiles[$pid3] ?? null;
+        $enabled3 = primaryEnabled($venueRules, 3);
+        $mark($result[3], $raceCode, $enabled3,
+            $enabled3 && $pid3 !== '' && is_array($p3) && is_numeric($p3['attack_rate'] ?? null),
+            !$enabled3 ? 'PRIMARY_POLICY_DISABLED'
+                : ($pid3 === '' || !is_array($p3) || !is_numeric($p3['attack_rate'] ?? null)
+                    ? 'LANE3_ATTACK_RATE_MISSING' : 'EXISTING_POLICY_EVALUATED'));
+
+        $pid4 = trim((string)($row['lane4_player_id'] ?? ''));
+        $p4 = $profiles[$pid4] ?? null;
+        $rate4 = is_array($p4)
+            ? ((($venueRules['4']['primary_rules']['main']['parameter'] ?? 'makuri_rate') === 'attack_rate')
+                ? ($p4['attack_rate'] ?? null) : ($p4['makuri_rate'] ?? null))
+            : null;
+        $needsVulnerability4 = primaryVulnerabilityThreshold($venueRules, 4, 'main') !== null;
+        $lane1Vulnerability = is_array($p1) ? ($p1['vulnerability_rate'] ?? null) : null;
+        $enabled4 = primaryEnabled($venueRules, 4);
+        $inputs4 = $pid3 !== '' && $pid4 !== '' && is_numeric($ranks[$pid3][3] ?? null)
+            && is_numeric($ranks[$pid4][4] ?? null) && is_numeric($rate4)
+            && (!$needsVulnerability4 || is_numeric($lane1Vulnerability));
+        $mark($result[4], $raceCode, $enabled4, $enabled4 && $inputs4,
+            !$enabled4 ? 'PRIMARY_POLICY_DISABLED'
+                : (!$inputs4 ? 'LANE4_PRIMARY_INPUT_MISSING' : 'EXISTING_POLICY_EVALUATED'));
+
+        $pid5 = trim((string)($row['lane5_player_id'] ?? ''));
+        $p5 = $lane5Profiles[$pid5] ?? null;
+        $enabled5 = primaryEnabled($venueRules, 5);
+        $mark($result[5], $raceCode, $enabled5,
+            $enabled5 && $pid5 !== '' && is_array($p5) && is_numeric($p5['attack_rate'] ?? null),
+            !$enabled5 ? 'PRIMARY_POLICY_DISABLED'
+                : ($pid5 === '' || !is_array($p5) || !is_numeric($p5['attack_rate'] ?? null)
+                    ? 'LANE5_ATTACK_RATE_MISSING' : 'EXISTING_POLICY_EVALUATED'));
+
+        $pid6 = trim((string)($row['lane6_player_id'] ?? ''));
+        $p6 = $lane6Profiles[$pid6] ?? null;
+        $enabled6 = primaryEnabled($venueRules, 6);
+        $inputs6 = $pid5 !== '' && $pid6 !== '' && is_array($p6)
+            && is_numeric($p6['attack_rate'] ?? null)
+            && is_numeric($ranks[$pid5][5] ?? null) && is_numeric($ranks[$pid6][6] ?? null);
+        $mark($result[6], $raceCode, $enabled6, $enabled6 && $inputs6,
+            !$enabled6 ? 'PRIMARY_POLICY_DISABLED'
+                : (!$inputs6 ? 'LANE6_PRIMARY_INPUT_MISSING' : 'EXISTING_POLICY_EVALUATED'));
+    }
+    return $result;
 }
 
 function primaryStRelationText(string $relation): string
@@ -558,6 +656,9 @@ $courseSignalCacheFile = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
     . DIRECTORY_SEPARATOR . 'boatrace_course_signals_v15_' . $date->format('Ymd') . '_' . $placeCode
     . ($baseOnly ? '_base' : '') . '.json';
 $forceCourseSignalRefresh = (string)($_GET['refresh'] ?? '') === '1';
+// This environment flag is set only by the scheduler-owned subprocess.  A
+// normal Web/API request must never create formal comparative evidence.
+$strictForwardFormalCaptureRequested = getenv('BOATRACE_STRICT_FORWARD_FORMAL_CAPTURE') === '1';
 $today = new DateTimeImmutable('today');
 $cacheTtl = $date >= $today ? 300 : 30 * 86400;
 $recentCutoff = $today->modify('-7 days');
@@ -1532,10 +1633,43 @@ SQL;
         $lane6Matches[$raceCode] = $detail;
     }
 
+    // Strict Forward Readiness用に、ML置換前の従来サインを別保持する。
+    // 表示用配列・従来fallbackには一切使い直さない。
+    // 2Cは既存UI/前方snapshotとも「差し」と「まくり」を別政策として
+    // 表示する。総合max-starは既存policyにはないため、shadowへは別成分
+    // のまま渡す。単一2C decisionでfalseを推測しないためである。
+    $strictForwardLegacyByCourse = [
+        1 => $lane1Matches,
+        2 => ['sashi' => $lane2SashiMatches, 'makuri' => $lane2MakuriMatches],
+        3 => $lane3Matches,
+        4 => $matches,
+        5 => $lane5Matches,
+        6 => $lane6Matches,
+    ];
+    // Positive display maps alone cannot distinguish a non-selection from a
+    // missing input.  Keep the evaluation evidence separately for the five
+    // existing single-course policies; this is never exposed to the client.
+    $strictForwardTraditionalEvaluationByCourse = strictForwardTraditionalEvaluationMap(
+        $venueRules,
+        $targets,
+        $lane1Profiles,
+        $lane3Profiles,
+        $profiles,
+        $lane5Profiles,
+        $lane6Profiles,
+        $ranks
+    );
+    $strictForwardMlDecisions = null;
+    $strictForwardMlVersion = '';
+    $strictForwardMlFailureReason = '';
+    $strictForwardMlFailureByRace = [];
+    $strictForwardMlInputsByRace = [];
+    $strictForwardVenueMlEnabled = in_array($placeCode, ['AMG', 'ASY', 'BWK', 'EDG', 'HWJ', 'KRY', 'MKN', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true);
+
     // 検証済みの場別コースMLサインを適用する。推論できない場合は従来サインを返す。
     // 場ごとに採用した評価段階だけをMLへ置換し、未採用段階は従来サインを維持する。
     // 推論失敗時はこの直前までに作った従来サインを返し、画面を欠損させない。
-    if (in_array($placeCode, ['AMG', 'ASY', 'BWK', 'EDG', 'HWJ', 'KRY', 'MKN', 'TMG', 'TDA', 'OMR', 'SMS', 'SME'], true)) {
+    if ($strictForwardVenueMlEnabled) {
         $venueMlVersion = match ($placeCode) {
             'AMG' => 'amagasaki_course_signal_v1',
             'ASY' => 'ashiya_course_signal_v1',
@@ -1550,8 +1684,14 @@ SQL;
             'SME' => 'suminoe_course_signal_v1',
             default => 'tamagawa_course_signal_v1',
         };
+        $strictForwardMlVersion = $venueMlVersion;
         try {
-            $centerMl = (new TamagawaCenterSignalLogic())->calculate($dateText, $baseOnly, $placeCode);
+            $centerMl = (new TamagawaCenterSignalLogic())->calculate(
+                $dateText,
+                $baseOnly,
+                $placeCode,
+                $strictForwardFormalCaptureRequested,
+            );
             $centerMaps = $centerMl['matches'] ?? null;
             if (($centerMl['status'] ?? '') === 'ok' && is_array($centerMaps)) {
                 $mlLane1 = $centerMaps['1'] ?? [];
@@ -1562,6 +1702,24 @@ SQL;
                 $mlLane6 = $centerMaps['6'] ?? [];
                 if (is_array($mlLane1) && is_array($mlLane2) && is_array($mlLane3) && is_array($mlLane4)
                     && is_array($mlLane5) && is_array($mlLane6)) {
+                    $candidateReadiness = $centerMl['readiness_decisions'] ?? null;
+                    if (is_array($candidateReadiness)) {
+                        $strictForwardMlDecisions = $candidateReadiness;
+                        $strictForwardMlVersion = (string)($centerMl['version'] ?? $venueMlVersion);
+                    }
+                    $captureInputs = $centerMl['readiness_inputs'] ?? [];
+                    if ($strictForwardFormalCaptureRequested && is_array($captureInputs)) {
+                        $strictForwardMlInputsByRace = $captureInputs;
+                    }
+                    $inputFailures = $centerMl['race_input_failures'] ?? [];
+                    if (is_array($inputFailures)) {
+                        foreach ($inputFailures as $raceCode => $reason) {
+                            $reason = strtoupper(trim((string)$reason));
+                            if (in_array($reason, ['INFERENCE_INPUT_EMPTY', 'INFERENCE_INPUT_INCOMPLETE', 'INFERENCE_INPUT_ERROR'], true)) {
+                                $strictForwardMlFailureByRace[(string)$raceCode] = $reason;
+                            }
+                        }
+                    }
                     if ($placeCode === 'BWK') {
                         // びわこは候補検証で採用した用途だけをML化する。
                         // 2Cの★/★★★だけ展示特徴を使うため、展示前は従来サインを維持する。
@@ -2351,6 +2509,10 @@ SQL;
                     }
                 }
             } else {
+                $failure = strtoupper(trim((string)($centerMl['error'] ?? $centerMl['input_status'] ?? 'ARTIFACT_ERROR')));
+                $strictForwardMlFailureReason = in_array($failure, [
+                    'ARTIFACT_ERROR', 'INFERENCE_INPUT_EMPTY', 'INFERENCE_INPUT_INCOMPLETE', 'INFERENCE_INPUT_ERROR',
+                ], true) ? $failure : 'ARTIFACT_ERROR';
                 $baseResponse['center_ml'] = [
                     'applied' => false,
                     'version' => $venueMlVersion,
@@ -2358,6 +2520,7 @@ SQL;
                 ];
             }
         } catch (Throwable) {
+            $strictForwardMlFailureReason = 'ARTIFACT_ERROR';
             $baseResponse['center_ml'] = [
                 'applied' => false,
                 'version' => $venueMlVersion,
@@ -2373,6 +2536,99 @@ SQL;
     $baseResponse['lane5_matches'] = $lane5Matches;
     $baseResponse['lane6_matches'] = $lane6Matches;
     $baseResponse['lane1_matches'] = $lane1Matches;
+    // 完全な展示取得済みlive API実行だけを、結果を一切読まない
+    // READINESS_PILOT台帳へbest-effortで追加する。失敗しても応答には影響しない。
+    if (
+        !$baseOnly
+        && !defined('BOATRACE_LATE_REPLAY_CAPTURE')
+        && $strictForwardVenueMlEnabled
+        && !empty($baseResponse['_snapshot_ready_race_codes'])
+    ) {
+        // The API may calculate every exhibition-ready race for the ordinary
+        // production response.  Formal measurement is narrower: it can use
+        // only the Candidate set that was frozen from cutoff > armed_at.
+        // Never re-derive this boundary from scheduler/API current time.
+        if ($strictForwardFormalCaptureRequested) {
+            try {
+                $candidateCodes = (new StrictForwardOpportunityLedger(
+                    FormalMeasurementWindowContext::production(dirname(__DIR__))->opportunityRoot(),
+                ))->formalProspectiveCandidateRaceCodes($dateText, $placeCode);
+                $formalReadyRaceCodes = array_values(array_intersect(
+                    $baseResponse['_snapshot_ready_race_codes'],
+                    $candidateCodes,
+                ));
+            } catch (Throwable $error) {
+                // A failure to resolve the frozen formal population must not
+                // fall back to all production-ready races.
+                $formalReadyRaceCodes = [];
+                error_log('strict forward prospective candidate projection failed: ' . $error->getMessage());
+            }
+        } else {
+            $formalReadyRaceCodes = [];
+        }
+        if ($formalReadyRaceCodes !== []) {
+            $traditionalPath = __DIR__ . '/../config/course_signal_rules.json';
+            StrictForwardReadinessLedger::captureLiveFromContext([
+            'date' => $dateText,
+            'place' => $placeCode,
+            'phase' => $signalPhase,
+            'late_replay' => false,
+            'ready_race_codes' => $formalReadyRaceCodes,
+            'legacy_by_course' => $strictForwardLegacyByCourse,
+            'traditional_evaluation_by_course' => $strictForwardTraditionalEvaluationByCourse,
+            'ml_decisions' => is_array($strictForwardMlDecisions) ? $strictForwardMlDecisions : [],
+            'ml_failure_reason' => $strictForwardMlFailureReason,
+            'ml_failure_by_race' => $strictForwardMlFailureByRace,
+            'logic_version' => PredictionForwardSnapshotStore::courseSignalLogicVersion(),
+            'traditional_policy_version' => is_file($traditionalPath)
+                ? 'course_signal_rules:' . hash_file('sha256', $traditionalPath)
+                : 'course_signal_rules:missing',
+            'ml_policy_version' => $strictForwardMlVersion,
+            ]);
+
+        // Comparative Contract evidence is intentionally narrower than the
+        // existing best-effort readiness ledger: only the scheduler-owned
+        // formal capture is allowed to write it.  Its own result is recorded
+        // fail-loud in the measurement Window while this API stays fail-open.
+            try {
+                $comparative = (new StrictForwardComparativeCapture(
+                    FormalMeasurementWindowContext::production(dirname(__DIR__)),
+                    ComparativeContractV1::production(dirname(__DIR__)),
+                ))->capture([
+                    'date' => $dateText,
+                    'venue' => $placeCode,
+                    'phase' => $signalPhase,
+                    'ready_race_codes' => $formalReadyRaceCodes,
+                    'input_by_race' => $strictForwardMlInputsByRace,
+                    'ml_decisions' => is_array($strictForwardMlDecisions) ? $strictForwardMlDecisions : [],
+                    'legacy_by_course' => $strictForwardLegacyByCourse,
+                    'traditional_evaluation_by_course' => $strictForwardTraditionalEvaluationByCourse,
+                    'traditional_policy_version' => is_file($traditionalPath)
+                        ? 'course_signal_rules:' . hash_file('sha256', $traditionalPath)
+                        : 'course_signal_rules:missing',
+                    'traditional_runtime_input' => [
+                        'venue_rules' => $venueRules,
+                        'targets' => $targets,
+                        'ranks' => $ranks,
+                        'lane1_profiles' => $lane1Profiles,
+                        'lane3_profiles' => $lane3Profiles,
+                        'course_profiles' => $profiles,
+                        'lane5_profiles' => $lane5Profiles,
+                        'lane6_profiles' => $lane6Profiles,
+                        'average_exhibition' => $avgExhibition,
+                    ],
+                ]);
+                if (($comparative['status'] ?? '') !== 'COMPLETE' && ($comparative['status'] ?? '') !== 'SKIPPED') {
+                    error_log('strict forward comparative capture blocked: ' . (string)($comparative['reason'] ?? 'unknown'));
+                }
+            } catch (Throwable $error) {
+                // A Window/context failure cannot change a production signal.
+                // Once a Window is writable, the coordinator persists its own
+                // fail-loud evidence for incomplete or conflicting capture.
+                error_log('strict forward comparative capture boundary failed: ' . $error->getMessage());
+            }
+        }
+    }
     respond($baseResponse);
 } catch (Throwable $e) {
     respond([

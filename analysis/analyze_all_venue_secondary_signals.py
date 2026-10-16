@@ -45,14 +45,16 @@ def load_avg_exhibition(place: str) -> float | None:
 
 
 def load_exhibition(start: date, end: date, place: str) -> dict[str, list[dict]]:
+    # Live inference must not require the result-oriented race_master row for
+    # the target race.  race_entry owns the pre-race date and participant
+    # identity needed to scope the latest exhibition rows.
     sql = """
 SELECT DISTINCT ON (el.race_code, el.player_id)
     el.race_code, re.lane_number::integer AS lane, el.player_id::text,
     el.exhibition_time, el.start_timing, el.lap_time, el.around_time, el.straight_time
 FROM boat_race.exhibition_live el
-JOIN boat_race.race_master rm ON rm.race_code = el.race_code
 JOIN boat_race.race_entry re ON re.race_code = el.race_code AND re.player_id = el.player_id
-WHERE rm.race_date BETWEEN %s::date AND %s::date
+WHERE re.race_date BETWEEN %s::date AND %s::date
   AND SUBSTRING(el.race_code, 9, 3) = %s
 ORDER BY el.race_code, el.player_id, el.created_date DESC NULLS LAST
 """

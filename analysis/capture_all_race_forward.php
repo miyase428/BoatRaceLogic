@@ -16,6 +16,9 @@ require_once __DIR__ . '/../web/logic/OfficialDeadlineLogic.php';
 require_once __DIR__ . '/../web/controllers/IndexController.php';
 require_once __DIR__ . '/../web/logic/Lane1EscapeFollowerLogic.php';
 require_once __DIR__ . '/../web/logic/PredictionForwardSnapshotStore.php';
+require_once __DIR__ . '/../web/logic/StrictForwardReadinessLedger.php';
+require_once __DIR__ . '/../web/logic/StrictForwardOpportunityLedger.php';
+require_once __DIR__ . '/../web/logic/GateA1ProspectiveInventory.php';
 require_once __DIR__ . '/../web/api/ApiClientProduction.php';
 require_once __DIR__ . '/../web/logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/../web/logic/RecentCourseTrioRateLogic.php';
@@ -26,6 +29,7 @@ require_once __DIR__ . '/../web/logic/CommonSecondRuntimeBridge.php';
 require_once __DIR__ . '/../web/logic/AiPlaceTrifectaDisplayLogic.php';
 require_once __DIR__ . '/../web/logic/AiThirdCandidatePruneLogic.php';
 require_once __DIR__ . '/../web/logic/OfficialOddsLogic.php';
+require_once __DIR__ . '/../web/logic/OfficialEpochWindowBindingRuntimeAuthorization.php';
 
 date_default_timezone_set('Asia/Tokyo');
 
@@ -47,8 +51,32 @@ if (!is_resource($lock) || !flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
 
-$pdo = getPDO();
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+// Formal capture is fail-closed once an Official Epoch exists. This happens
+// before any DB connection, Candidate creation, prediction snapshot, or
+// external-access decision.
+$runtimeAuthorization = (new OfficialEpochWindowBindingRuntimeAuthorization(dirname(__DIR__)))->authorizeOperationalPointerWindow();
+if (empty($runtimeAuthorization['accepted'])) {
+    $reason = (string)($runtimeAuthorization['reason'] ?? 'OFFICIAL_EPOCH_WINDOW_BINDING_INVALID');
+    if (($runtimeAuthorization['kind'] ?? '') === 'NOOP') {
+        echo '[' . date('c') . "] SAFE_NOOP_NO_ACTIVE_WINDOW: {$reason}\n";
+        exit(0);
+    }
+    fwrite(STDERR, '[' . date('c') . "] FORMAL_CAPTURE_AUTHORIZATION_FATAL: {$reason}\n");
+    exit(1);
+}
+
+// CC12 A1 bootstrap rule: no formal measurement evidence is written until an
+// authoritative OfficialDeadlineLogic result has been loaded and its Expected
+// inventory is frozen and read back. The normal prediction path stays
+// fail-open when that formal barrier cannot be established.
+
+try {
+    $pdo = getPDO();
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (Throwable $e) {
+    fwrite(STDERR, "前向き保存DB接続エラー: {$e->getMessage()}\n");
+    exit(1);
+}
 $store = new PredictionForwardSnapshotStore($pdo);
 if (!$store->isReady()) {
     fwrite(STDERR, "自動前向き検証テーブルが未作成です。\n");
@@ -61,13 +89,21 @@ FROM boat_race.race_entry
 WHERE race_code LIKE :prefix
 ORDER BY race_code
 SQL);
-$raceStmt->execute([':prefix' => $datePrefix . '%']);
-$raceCodes = array_values(array_filter(array_map(
-    static fn($v): string => strtoupper(trim((string)$v)),
-    $raceStmt->fetchAll(PDO::FETCH_COLUMN) ?: []
-), static fn(string $v): bool => preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $v) === 1));
+try {
+    $raceStmt->execute([':prefix' => $datePrefix . '%']);
+    $raceCodes = array_values(array_filter(array_map(
+        static fn($v): string => strtoupper(trim((string)$v)),
+        $raceStmt->fetchAll(PDO::FETCH_COLUMN) ?: []
+    ), static fn(string $v): bool => preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $v) === 1));
+} catch (Throwable $e) {
+    throw $e;
+}
 
 if ($raceCodes === []) {
+    // If the official cache already named candidates, an empty DB enumeration
+    // cannot safely prove they were ineligible or absent. Preserve both sides
+    // of that mismatch and let the opportunity ledger resolve only by its
+    // explicit post-cutoff safety rules.
     echo '[' . date('c') . "] 対象開催なし\n";
     exit(0);
 }
@@ -75,12 +111,38 @@ if ($raceCodes === []) {
 $places = array_values(array_unique(array_map(static fn(string $code): string => substr($code, 8, 3), $raceCodes)));
 $deadlineResult = (new OfficialDeadlineLogic())->load($datePrefix, $places, false);
 $deadlines = is_array($deadlineResult['deadlines'] ?? null) ? $deadlineResult['deadlines'] : [];
+// Expected, Candidate and schedule evidence are all derived from this exact
+// in-memory result. Never re-read the cache here: that would permit a cache
+// refresh race to first-write an empty Expected inventory.
+$strictForwardBarrier = recordStrictForwardOpportunityUniverseFromAuthoritativeResult($dateText, $datePrefix, $deadlineResult, $places);
+$formalStrictWriteAllowed = !empty($strictForwardBarrier['accepted']);
+$formalProspectiveRaceCodes = [];
+if ($formalStrictWriteAllowed) {
+    foreach ((array)($strictForwardBarrier['snapshot']['strict_entries'] ?? []) as $entry) {
+        if (is_array($entry) && is_string($entry['race_code'] ?? null)) {
+            $formalProspectiveRaceCodes[(string)$entry['race_code']] = true;
+        }
+    }
+}
 if ($deadlines === []) {
     fwrite(STDERR, "公式締切時刻を取得できないため、安全のため保存しません。\n");
     exit(1);
 }
 
-$readyBefore = exhibitionReadyRaceCodes($pdo, $raceCodes);
+try {
+    $readyBefore = exhibitionReadyRaceCodes($pdo, $raceCodes);
+    if ($formalStrictWriteAllowed) StrictForwardOpportunityLedger::observeEligibilityFromContext([
+        'date' => $dateText, 'ready_race_codes' => array_keys($readyBefore),
+        'input_availability' => 'AVAILABLE', 'reason' => 'SCHEDULER_PRE_EXHIBITION_UPDATE_READ',
+    ]);
+} catch (Throwable $e) {
+    if ($formalStrictWriteAllowed) StrictForwardOpportunityLedger::observeEligibilityFromContext([
+        'date' => $dateText,
+        'input_availability' => 'UNAVAILABLE',
+        'reason' => 'EXHIBITION_READ_FAILED',
+    ]);
+    throw $e;
+}
 $attemptStatePath = __DIR__ . '/../var/cache/forward_capture_attempts_' . $datePrefix . '.json';
 $attemptState = $dbOnly ? [] : readAttemptState($attemptStatePath);
 $due = [];
@@ -128,7 +190,16 @@ if (!$dryRun && $due !== []) {
         $attemptState[$raceCode] = time();
         [$message] = $api->updateExhibition($raceCode);
         $ok = !str_contains((string)$message, '失敗');
-        $completeNow = isset(exhibitionReadyRaceCodes($pdo, [$raceCode])[$raceCode]);
+        try {
+            $completeNow = isset(exhibitionReadyRaceCodes($pdo, [$raceCode])[$raceCode]);
+        } catch (Throwable $e) {
+            if ($formalStrictWriteAllowed) StrictForwardOpportunityLedger::observeEligibilityFromContext([
+                'date' => $dateText,
+                'input_availability' => 'UNAVAILABLE',
+                'reason' => 'EXHIBITION_SINGLE_RACE_READ_FAILED',
+            ]);
+            throw $e;
+        }
         if ($ok && !$completeNow) {
             $message .= '（主要項目未完備・前向き検証は欠測）';
         }
@@ -138,7 +209,22 @@ if (!$dryRun && $due !== []) {
     }
 }
 
-$readyAfter = exhibitionReadyRaceCodes($pdo, $raceCodes);
+try {
+    $readyAfter = exhibitionReadyRaceCodes($pdo, $raceCodes);
+    if ($formalStrictWriteAllowed) StrictForwardOpportunityLedger::observeEligibilityFromContext([
+        'date' => $dateText,
+        'ready_race_codes' => array_keys($readyAfter),
+        'input_availability' => 'AVAILABLE',
+        'reason' => 'SCHEDULER_POST_EXHIBITION_UPDATE_READ',
+    ]);
+} catch (Throwable $e) {
+    if ($formalStrictWriteAllowed) StrictForwardOpportunityLedger::observeEligibilityFromContext([
+        'date' => $dateText,
+        'input_availability' => 'UNAVAILABLE',
+        'reason' => 'EXHIBITION_POST_UPDATE_READ_FAILED',
+    ]);
+    throw $e;
+}
 $predictionSaved = snapshotRaceCodes($pdo, $dateText, 'exhibition', 'prediction');
 $signalSaved = snapshotRaceCodes($pdo, $dateText, 'exhibition', 'course_signals');
 $aiModeSaved = snapshotTrifectaOddsSourceRaceCodes($pdo, $dateText, 'ai_bet_modes_v1');
@@ -146,6 +232,7 @@ $holeAlertMap = loadDailyPrimaryHoleAlerts($datePrefix);
 $captureTargets = [];
 $aiModeTargets = [];
 $signalPlaces = [];
+$strictSignalTargets = [];
 foreach (array_keys($readyAfter) as $raceCode) {
     $deadline = deadlineForRace($dateText, $deadlines[$raceCode] ?? null);
     if ($deadline === null || $now >= $deadline->modify('-' . DEADLINE_SAFETY_MINUTES . ' minutes')) {
@@ -159,6 +246,14 @@ foreach (array_keys($readyAfter) as $raceCode) {
     }
     if (!isset($signalSaved[$raceCode])) {
         $signalPlaces[substr($raceCode, 8, 3)] = true;
+    }
+    $place = substr($raceCode, 8, 3);
+    if ($formalStrictWriteAllowed && isset($formalProspectiveRaceCodes[$raceCode]) && strictForwardMlVenue($place)) {
+        $strictSignalTargets[$place][] = [
+            'race_code' => $raceCode,
+            'cutoff_timestamp' => $deadline->format(DATE_ATOM),
+            'deadline_source' => 'OfficialDeadlineLogic',
+        ];
     }
 }
 printf(
@@ -209,9 +304,31 @@ if (!$dryRun) {
         }
     }
 
-    foreach (array_keys($signalPlaces) as $place) {
-        if (captureLiveCourseSignals($dateText, $place)) {
+    // Existing snapshot capture may already be complete, but strict-forward
+    // expected/captured accounting must still visit every current eligible ML
+    // venue. The ledger is first-write-wins, so this does not duplicate rows.
+    $allSignalPlaces = array_values(array_unique(array_merge(array_keys($signalPlaces), array_keys($strictSignalTargets))));
+    foreach ($allSignalPlaces as $place) {
+        $strictTargets = $strictSignalTargets[$place] ?? [];
+        if ($strictTargets !== []) {
+            StrictForwardReadinessLedger::recordExpectedLiveFromContext([
+                'date' => $dateText,
+                'place' => $place,
+                'races' => $strictTargets,
+            ]);
+        }
+        $capture = captureLiveCourseSignals($dateText, $place, $formalStrictWriteAllowed && $strictTargets !== []);
+        if ($capture['ok']) {
             $signalOk++;
+        } elseif ($strictTargets !== []) {
+            StrictForwardReadinessLedger::recordCaptureFailureFromContext([
+                'date' => $dateText,
+                'place' => $place,
+                'race_codes' => array_column($strictTargets, 'race_code'),
+                'error_type' => 'COURSE_SIGNAL_SUBPROCESS',
+                'error_code' => 'API_CAPTURE_FAILED',
+                'error_message' => $capture['error'],
+            ]);
         }
     }
 }
@@ -436,11 +553,13 @@ function loadDailyPrimaryHoleAlerts(string $datePrefix): array
     return $out;
 }
 
-function captureLiveCourseSignals(string $date, string $place): bool
+/** @return array{ok:bool,error:string} */
+function captureLiveCourseSignals(string $date, string $place, bool $formalCapture = false): array
 {
     $endpoint = realpath(__DIR__ . '/../web/tamagawa_lane4_star_api.php');
-    if ($endpoint === false) return false;
-    $inline = '$_GET = ['
+    if ($endpoint === false) return ['ok' => false, 'error' => 'endpoint_not_found'];
+    $inline = ($formalCapture ? "putenv('BOATRACE_STRICT_FORWARD_FORMAL_CAPTURE=1'); " : '')
+        . '$_GET = ['
         . "'date' => " . var_export($date, true) . ', '
         . "'place' => " . var_export($place, true) . ', '
         . "'phase' => 'live', 'refresh' => '1']; "
@@ -452,7 +571,7 @@ function captureLiveCourseSignals(string $date, string $place): bool
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
     ], $pipes, dirname($endpoint));
-    if (!is_resource($process)) return false;
+    if (!is_resource($process)) return ['ok' => false, 'error' => 'process_open_failed'];
     fclose($pipes[0]);
     $stdout = stream_get_contents($pipes[1]);
     $stderr = stream_get_contents($pipes[2]);
@@ -461,10 +580,70 @@ function captureLiveCourseSignals(string $date, string $place): bool
     $exit = proc_close($process);
     $data = json_decode(is_string($stdout) ? $stdout : '', true);
     if ($exit !== 0 || !is_array($data) || ($data['status'] ?? '') !== 'ok') {
-        fwrite(STDERR, "  コースサイン更新失敗 {$place}: " . trim((string)$stderr) . "\n");
-        return false;
+        $error = trim((string)$stderr);
+        if ($error === '') $error = 'invalid_api_response_or_nonzero_exit';
+        fwrite(STDERR, "  コースサイン更新失敗 {$place}: {$error}\n");
+        return ['ok' => false, 'error' => $error];
     }
-    return true;
+    return ['ok' => true, 'error' => ''];
+}
+
+function strictForwardMlVenue(string $place): bool
+{
+    return GateA1ProspectiveInventory::isStrictVenue($place);
+}
+
+/**
+ * Formal A1 transaction: the caller supplies the exact in-memory result
+ * returned by OfficialDeadlineLogic.  On any failure normal capture remains
+ * available, but no formal Candidate/schedule/eligibility/ML evidence is
+ * allowed through the barrier.
+ *
+ * @param array<string,mixed> $deadlineResult
+ * @param list<string> $places
+ * @return array{accepted:bool,formal_active:bool,status:string,reason:string,snapshot:array<string,mixed>}
+ */
+function recordStrictForwardOpportunityUniverseFromAuthoritativeResult(string $dateText, string $datePrefix, array $deadlineResult, array $places): array
+{
+    $validated = GateA1ProspectiveInventory::validateAuthoritativeDeadlineResult($dateText, $datePrefix, $deadlineResult, $places);
+    if (empty($validated['accepted'])) {
+        // This is the final authoritative resolution for this scheduler pass;
+        // only now is a source failure eligible for a formal append.
+        StrictForwardOpportunityLedger::recordUniverseSourceUnavailableFromContext([
+            'date' => $dateText,
+            'source' => (string)($deadlineResult['source'] ?? 'OfficialDeadlineLogic'),
+            'error_type' => 'OFFICIAL_DEADLINE_UNIVERSE_INCOMPLETE',
+            'error_code' => (string)($validated['reason'] ?? 'AUTHORITATIVE_DEADLINE_INVALID'),
+            'error_message' => 'Validated authoritative deadline snapshot was unavailable; no formal writes were admitted.',
+        ]);
+        return ['accepted' => false, 'formal_active' => true, 'status' => (string)$validated['status'], 'reason' => (string)$validated['reason'], 'snapshot' => []];
+    }
+    $bootstrap = GateA1ProspectiveInventory::bootstrapAuthoritativeFromContext($validated['snapshot']);
+    if (empty($bootstrap['accepted'])) return $bootstrap;
+    // bootstrap returns the one immutable cutoff > armed_at derivation that
+    // was frozen and read back as A1 Expected inventory.  Never re-filter by
+    // scheduler "now" or reopen the deadline cache here.
+    $snapshot = $bootstrap['snapshot'];
+    $candidates = $snapshot['strict_entries'];
+    StrictForwardOpportunityLedger::recordCandidateUniverseFromContext([
+        'date' => $dateText, 'candidates' => $candidates,
+        'source' => (string)$snapshot['source'], 'source_identity' => (string)$snapshot['source_identity'],
+        'source_generated_at' => (string)$snapshot['source_generated_at'],
+        'deadline_snapshot_identity' => (string)$snapshot['deadline_snapshot_identity'],
+        'prospective_filter_contract' => (string)$snapshot['prospective_filter_contract'],
+        'prospective_keyset_identity' => (string)$snapshot['prospective_keyset_identity'],
+        'armed_at' => (string)$snapshot['prospective_armed_at'],
+        'prospective_entries' => $candidates,
+        'formal_barrier_required' => true, 'expected_inventory_verified' => true,
+    ]);
+    StrictForwardOpportunityLedger::recordOfficialScheduleSnapshotFromContext([
+        'date' => $dateText, 'raw_source_identity' => (string)$snapshot['source_identity'],
+        'source_generated_at' => (string)$snapshot['source_generated_at'],
+        'schedules' => array_map(static fn(array $candidate): array => [
+            'race_code' => $candidate['race_code'], 'cutoff_timestamp' => $candidate['cutoff_timestamp'], 'official_status' => 'ACTIVE',
+        ], $candidates),
+    ]);
+    return $bootstrap;
 }
 
 function runHoleForwardFreeze(string $date, array $raceCodes): bool

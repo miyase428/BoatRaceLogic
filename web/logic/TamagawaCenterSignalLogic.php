@@ -4,7 +4,7 @@ declare(strict_types=1);
 /** 検証済みの場別コースサイン v1 をPythonから取得する。 */
 final class TamagawaCenterSignalLogic
 {
-    public function calculate(string $date, bool $baseOnly = false, string $place = 'TMG'): array
+    public function calculate(string $date, bool $baseOnly = false, string $place = 'TMG', bool $strictForwardInput = false): array
     {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return ['status' => 'error', 'error' => 'invalid_date'];
@@ -30,6 +30,11 @@ final class TamagawaCenterSignalLogic
             . ' --place ' . escapeshellarg($place);
         if ($baseOnly) {
             $command .= ' --base';
+        }
+        if ($strictForwardInput) {
+            // Used only by the scheduler-owned Strict Forward capture.  The
+            // normal Web/API response keeps the existing lightweight shape.
+            $command .= ' --strict-forward-input';
         }
         $raw = shell_exec($command);
         if (!is_string($raw) || trim($raw) === '') {

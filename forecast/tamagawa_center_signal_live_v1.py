@@ -58,15 +58,27 @@ MODEL_PATHS = {
 }
 
 
-def load_entries(target_date) -> dict[str, dict]:
-    sql = """
-WITH latest_ex AS (
+def live_entry_sql() -> str:
+    """Return the current-day, outcome-blind live input query.
+
+    ``race_master`` is intentionally absent here.  It is a historical/result
+    pipeline table and can be absent for an otherwise complete same-day entry.
+    All fields used by the live feature builder are available from the tables
+    below at the time of prediction.
+    """
+    return """
+WITH target_entries AS (
+    SELECT *
+    FROM boat_race.race_entry re
+    WHERE re.race_date = %s::date
+      AND SUBSTRING(re.race_code, 9, 3) = %s
+), latest_ex AS (
     SELECT DISTINCT ON (el.race_code, el.player_id)
         el.race_code, el.player_id, el.entry_course::integer AS entry_course
     FROM boat_race.exhibition_live el
-    JOIN boat_race.race_master rm ON rm.race_code = el.race_code
-    WHERE rm.race_date = %s::date
-      AND SUBSTRING(el.race_code, 9, 3) = %s
+    JOIN target_entries re
+      ON re.race_code = el.race_code
+     AND re.player_id = el.player_id
     ORDER BY el.race_code, el.player_id, el.created_date DESC NULLS LAST
 )
 SELECT
@@ -76,8 +88,7 @@ SELECT
     ps.local_win_rate, ps.local_exacta_rate,
     es.motor_exacta_rate, es.boat_exacta_rate,
     rr.average_start
-FROM boat_race.race_entry re
-JOIN boat_race.race_master rm ON rm.race_code = re.race_code
+FROM target_entries re
 LEFT JOIN latest_ex le ON le.race_code = re.race_code AND le.player_id = re.player_id
 LEFT JOIN boat_race.player_stats ps ON ps.race_code = re.race_code AND ps.player_id = re.player_id
 LEFT JOIN boat_race.engine_specs es
@@ -93,25 +104,96 @@ LEFT JOIN boat_race.racer_results rr
       THEN TO_CHAR(re.race_date, 'YY') || '04'
     ELSE TO_CHAR(re.race_date, 'YY') || '10'
  END
-WHERE rm.race_date = %s::date
-  AND SUBSTRING(re.race_code, 9, 3) = %s
 ORDER BY re.race_code, course, re.lane_number
 """
+
+
+def classify_live_input(races: dict[str, dict], target_entry_race_count: int) -> tuple[str, dict[str, str]]:
+    """Classify only the live input shape; no outcome data is involved."""
+    if target_entry_race_count <= 0:
+        return "NO_APPLICABLE_RACE", {}
+    if not races:
+        return "INFERENCE_INPUT_EMPTY", {}
+
+    failures: dict[str, str] = {}
+    for race_code, race in races.items():
+        boats = race.get("boats") if isinstance(race, dict) else None
+        by_course: set[int] = set()
+        for boat in boats or []:
+            if not isinstance(boat, dict):
+                continue
+            try:
+                course = int(boat.get("course") or 0)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= course <= 6:
+                by_course.add(course)
+        if not isinstance(boats, list) or len(boats) != 6 or by_course != set(range(1, 7)):
+            failures[race_code] = "INFERENCE_INPUT_INCOMPLETE"
+    if len(failures) == len(races):
+        return "INFERENCE_INPUT_INCOMPLETE", failures
+    return "OK", failures
+
+
+def error_payload(code: str, detail: str = "") -> dict:
+    payload = {"status": "error", "error": code, "input_status": code}
+    if detail:
+        payload["error_detail"] = detail
+    return payload
+
+
+def load_entries(target_date) -> tuple[dict[str, dict], int]:
+    entry_count_sql = """
+SELECT COUNT(DISTINCT re.race_code)
+FROM boat_race.race_entry re
+WHERE re.race_date = %s::date
+  AND SUBSTRING(re.race_code, 9, 3) = %s
+"""
+    sql = live_entry_sql()
     races: dict[str, dict] = {}
     with connect_db() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (target_date, PLACE, target_date, PLACE))
+            cur.execute(entry_count_sql, (target_date, PLACE))
+            entry_race_count = int(cur.fetchone()[0] or 0)
+            cur.execute(sql, (target_date, PLACE))
             names = [item.name for item in cur.description]
             for values in cur.fetchall():
                 row = dict(zip(names, values))
                 code = str(row["race_code"])
                 row["player_id"] = str(row["player_id"]).strip()
                 races.setdefault(code, {"date": target_date, "boats": []})["boats"].append(row)
-    return races
+    return races, entry_race_count
 
 
 def feature_vector(shared: dict[str, float], names: list[str]) -> np.ndarray:
     return np.asarray([[shared.get(name, float("nan")) for name in names]], dtype=np.float64)
+
+
+def snapshot_scalar(value):
+    """Preserve the inference-time missing representation without JSON NaN."""
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        return numeric if math.isfinite(numeric) else {"missing": "nan"}
+    if isinstance(value, (int, np.integer, str, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def snapshot_json(value):
+    if isinstance(value, dict):
+        return {str(key): snapshot_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [snapshot_json(item) for item in value]
+    return snapshot_scalar(value)
+
+
+def feature_schema_identity(names: list[str]) -> str:
+    payload = {
+        "schema_version": "strict-forward-ml-feature-schema/v1",
+        "feature_names": list(names),
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def historical_stats(model_item: dict) -> dict:
@@ -125,7 +207,7 @@ def historical_stats(model_item: dict) -> dict:
     }
 
 
-def load_verified_artifact(model_path: Path) -> dict:
+def load_verified_artifact(model_path: Path) -> tuple[dict, str]:
     """manifestとjoblibが一致しない場合は、呼出元で安全にfallbackさせる。"""
     manifest_path = model_path.with_suffix(".json")
     if not manifest_path.is_file():
@@ -142,7 +224,7 @@ def load_verified_artifact(model_path: Path) -> dict:
     artifact = joblib.load(model_path)
     if not isinstance(artifact, dict) or artifact.get("version") != manifest["version"]:
         raise ValueError("artifact_manifest_version_mismatch")
-    return artifact
+    return artifact, digest
 
 
 def main() -> int:
@@ -151,22 +233,34 @@ def main() -> int:
     parser.add_argument("date")
     parser.add_argument("--place", default="TMG", choices=sorted(MODEL_PATHS))
     parser.add_argument("--base", action="store_true", help="展示を使わない事前判定")
+    parser.add_argument("--strict-forward-input", action="store_true", help="Strict Forward専用の実推論入力を内部出力する")
     args = parser.parse_args()
     PLACE = str(args.place)
     model_path = MODEL_PATHS[PLACE]
     target_date = datetime.strptime(args.date, "%Y-%m-%d").date()
     if not model_path.is_file():
-        print(json.dumps({"status": "error", "error": "model_not_found"}, ensure_ascii=False))
+        print(json.dumps(error_payload("ARTIFACT_ERROR", "model_not_found"), ensure_ascii=False))
         return 2
     try:
-        artifact = load_verified_artifact(model_path)
+        artifact, artifact_sha256 = load_verified_artifact(model_path)
     except (OSError, ValueError, EOFError) as error:
-        print(json.dumps({"status": "error", "error": str(error)}, ensure_ascii=False))
+        print(json.dumps(error_payload("ARTIFACT_ERROR", str(error)), ensure_ascii=False))
         return 2
-    races = load_entries(target_date)
-    if not races:
-        print(json.dumps({"status": "ok", "version": artifact["version"], "matches": {}}, ensure_ascii=False))
+    try:
+        races, entry_race_count = load_entries(target_date)
+    except Exception as error:
+        print(json.dumps(error_payload("INFERENCE_INPUT_ERROR", type(error).__name__), ensure_ascii=False))
+        return 3
+    input_status, race_input_failures = classify_live_input(races, entry_race_count)
+    if input_status == "NO_APPLICABLE_RACE":
+        print(json.dumps({
+            "status": "ok", "version": artifact["version"], "date": args.date,
+            "input_status": input_status, "matches": {}, "readiness_decisions": {},
+        }, ensure_ascii=False))
         return 0
+    if input_status in {"INFERENCE_INPUT_EMPTY", "INFERENCE_INPUT_INCOMPLETE"}:
+        print(json.dumps(error_payload(input_status), ensure_ascii=False))
+        return 3
 
     player_ids = sorted({boat["player_id"] for race in races.values() for boat in race["boats"]})
     history = TechniqueHistoryIndex(load_history(target_date, target_date, player_ids))
@@ -178,8 +272,15 @@ def main() -> int:
     average_exhibition = None if args.base else load_avg_exhibition(PLACE)
     term = term_info_for_date(target_date)
     matches: dict[str, dict[str, dict]] = {str(course): {} for course in artifact["models"]}
+    # This internal-only section exposes every raw ML target decision, including
+    # false decisions.  The existing `matches` contract and display selection
+    # remain unchanged; PHP uses this only for the fail-open readiness ledger.
+    readiness_decisions: dict[str, dict[str, dict]] = {}
+    readiness_inputs: dict[str, dict] = {}
 
     for race_code, race in sorted(races.items()):
+        if race_code in race_input_failures:
+            continue
         boats = race["boats"]
         by_course = {int(boat["course"]): boat for boat in boats if 1 <= int(boat["course"] or 0) <= 6}
         if len(boats) != 6 or set(by_course) != set(range(1, 7)):
@@ -229,10 +330,14 @@ def main() -> int:
                 for key in SECOND_KEYS:
                     shared[f"c{c}_{key}"] = safe_float(second.get(key))
 
+        race_readiness: dict[str, dict] = {}
+        race_ml_inputs: dict[str, dict] = {}
+        missing_features: list[str] = []
         for course_text, course_models in artifact["models"].items():
             course = int(course_text)
             probabilities: dict[str, float | None] = {target: None for target in ("first", "top2", "top3")}
             triggered: dict[str, bool] = {target: False for target in ("first", "top2", "top3")}
+            target_readiness: dict[str, dict] = {}
             for target in ("first", "top2", "top3"):
                 item = course_models.get(target)
                 if item is None:
@@ -240,10 +345,47 @@ def main() -> int:
                 if item["uses_exhibition"] and not exhibition_ready:
                     probabilities[target] = None
                     triggered[target] = False
+                    target_readiness[target] = {
+                        "decision_available": False,
+                        "unavailable_reason": "EXHIBITION_MISSING",
+                        "selected": False,
+                        "threshold": float(item["threshold"]),
+                        "uses_exhibition": True,
+                        "model_version": artifact["version"],
+                        "artifact_identifier": str(model_path),
+                        "artifact_sha256": artifact_sha256,
+                    }
                     continue
                 probability = float(item["model"].predict_proba(feature_vector(shared, item["feature_names"]))[0, 1])
+                feature_names = list(item["feature_names"])
+                feature_values = {name: snapshot_scalar(shared.get(name, float("nan"))) for name in feature_names}
+                missing_features.extend(name for name, value in feature_values.items() if isinstance(value, dict) and value.get("missing") == "nan")
+                race_ml_inputs[f"{course}|{target}"] = {
+                    "feature_schema_identity": feature_schema_identity(feature_names),
+                    "feature_names": feature_names,
+                    "feature_values": feature_values,
+                    "uses_exhibition": bool(item["uses_exhibition"]),
+                    "model_version": artifact["version"],
+                    "artifact_identifier": str(model_path),
+                    "artifact_sha256": artifact_sha256,
+                }
                 probabilities[target] = probability
                 triggered[target] = probability >= float(item["threshold"])
+                target_readiness[target] = {
+                    "decision_available": True,
+                    "selected": bool(triggered[target]),
+                    "threshold": float(item["threshold"]),
+                    "uses_exhibition": bool(item["uses_exhibition"]),
+                    "model_version": artifact["version"],
+                    "artifact_identifier": str(model_path),
+                    "artifact_sha256": artifact_sha256,
+                }
+
+            race_readiness[str(course)] = {
+                "course": course,
+                "player_id": by_course[course]["player_id"],
+                "targets": target_readiness,
+            }
 
             if triggered["first"]:
                 level, selected_target, label = 3, "first", f"{course}頭候補"
@@ -275,13 +417,53 @@ def main() -> int:
                 "makuri_rate": round(float(profiles[course]["makuri"]), 2),
                 "historical_stats": historical_stats(item),
             }
+        # The readiness ledger needs the full 6C x 3-target decision universe.
+        # An undispatched target is explicitly unavailable, never represented by
+        # an omitted key that downstream code could accidentally call false.
+        for course in range(1, 7):
+            readiness_course = race_readiness.setdefault(str(course), {
+                "course": course,
+                "player_id": by_course[course]["player_id"],
+                "targets": {},
+            })
+            readiness_targets = readiness_course["targets"]
+            for target in ("first", "top2", "top3"):
+                if target in readiness_targets:
+                    continue
+                readiness_targets[target] = {
+                    "decision_available": False,
+                    "unavailable_reason": "ML_TARGET_NOT_DEPLOYED",
+                    "selected": False,
+                    "threshold": None,
+                    "uses_exhibition": None,
+                    "model_version": artifact["version"],
+                    "artifact_identifier": str(model_path),
+                    "artifact_sha256": artifact_sha256,
+                }
+        readiness_decisions[race_code] = race_readiness
+        if args.strict_forward_input:
+            readiness_inputs[race_code] = {
+                "entries": [snapshot_json(by_course[course]) for course in range(1, 7)],
+                "exhibition": snapshot_json(exhibition_rows),
+                "ml_child": {
+                    "runtime": "tamagawa_center_signal_live_v1",
+                    "uses": race_ml_inputs,
+                },
+                "missing_markers": [{"kind": "ml_feature_nan", "feature": name} for name in sorted(set(missing_features))],
+            }
 
-    print(json.dumps({
+    payload = {
         "status": "ok",
         "version": artifact["version"],
         "date": args.date,
+        "input_status": "OK" if not race_input_failures else "PARTIAL_INPUT_INCOMPLETE",
+        "race_input_failures": race_input_failures,
         "matches": matches,
-    }, ensure_ascii=False, allow_nan=False))
+        "readiness_decisions": readiness_decisions,
+    }
+    if args.strict_forward_input:
+        payload["readiness_inputs"] = readiness_inputs
+    print(json.dumps(payload, ensure_ascii=False, allow_nan=False))
     return 0
 
 
