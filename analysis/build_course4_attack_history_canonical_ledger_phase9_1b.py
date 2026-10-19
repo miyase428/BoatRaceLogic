@@ -11,10 +11,11 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import json
 import subprocess
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -31,6 +32,167 @@ FIELDS = (
     "source_kind", "source_path", "source_sha256", "ledger_version", "baseline_frozen",
     "availability_kind", "race_finalized_at", "first_observed_at", "ingested_at",
 )
+
+
+class GenerationBuilderError(RuntimeError):
+    """Generation input is incomplete or would weaken the ledger contract."""
+
+
+def _canonical_json_bytes(value: dict) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
+
+
+def _utc_timestamp(value: str, label: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError) as error:
+        raise GenerationBuilderError(f"{label}_INVALID") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise GenerationBuilderError(f"{label}_TIMEZONE_REQUIRED")
+    return parsed.astimezone(timezone.utc)
+
+
+def resolve_generation_through_date(date_value: str | None, through_value: str | None, *, today_jst: date) -> date:
+    """Resolve the explicit inclusive JST upper bound without DB access.
+
+    ``--date`` remains only an exact alias for older callers.  A generation
+    writer must never silently select its own end date.
+    """
+    if not date_value and not through_value:
+        raise GenerationBuilderError("THROUGH_DATE_REQUIRED")
+    parsed: list[date] = []
+    for value in (date_value, through_value):
+        if value:
+            try:
+                parsed.append(date.fromisoformat(value))
+            except ValueError as error:
+                raise GenerationBuilderError("THROUGH_DATE_INVALID") from error
+    if len(parsed) == 2 and parsed[0] != parsed[1]:
+        raise GenerationBuilderError("DATE_ARGUMENT_MISMATCH")
+    through = parsed[0]
+    if through <= BASELINE_END:
+        raise GenerationBuilderError("THROUGH_DATE_BEFORE_PROSPECTIVE_RANGE")
+    if through > today_jst:
+        raise GenerationBuilderError("THROUGH_DATE_IN_FUTURE")
+    return through
+
+
+def _csv_bytes(rows: list[dict]) -> bytes:
+    out = io.StringIO(newline="")
+    writer = csv.DictWriter(out, fieldnames=FIELDS, extrasaction="raise")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({field: row.get(field, "") for field in FIELDS})
+    return out.getvalue().encode("utf-8")
+
+
+def _immutable_row_view(row: dict) -> dict:
+    """Ignore only ingestion bookkeeping when comparing frozen baseline rows."""
+    return {field: str(row.get(field, "")) for field in FIELDS if field != "ingested_at"}
+
+
+def _validate_complete_finalized_races(raw_rows: list[dict], *, through_date: date, observed_at: datetime) -> list[dict]:
+    """Convert complete, injected race results into append-only C4 rows.
+
+    This intentionally accepts no DB cursor.  The production database schema
+    has not yet been proven to express a six-entrant final-result condition,
+    so a DB adapter must be added separately and must supply this complete
+    normalized shape.  Partial results are rejected rather than inferred.
+    """
+    by_race: dict[str, list[dict]] = {}
+    for raw in raw_rows:
+        try:
+            race_code = str(raw["race_code"])
+            race_day = date.fromisoformat(str(raw["race_date"]))
+            player_id = str(raw["player_id"]).strip()
+            actual_course = int(raw["actual_course"])
+            final_rank = int(raw["final_rank"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise GenerationBuilderError("FINALIZED_RACE_ROW_INVALID") from error
+        if not race_code or not player_id or actual_course not in range(1, 7) or final_rank not in range(1, 7):
+            raise GenerationBuilderError("FINALIZED_RACE_ROW_INVALID")
+        if not (BASELINE_END < race_day <= through_date):
+            raise GenerationBuilderError("FINALIZED_RACE_OUTSIDE_THROUGH_DATE")
+        item = dict(raw)
+        item.update({"race_code": race_code, "race_date": race_day.isoformat(), "player_id": player_id,
+                     "actual_course": actual_course, "final_rank": final_rank})
+        by_race.setdefault(race_code, []).append(item)
+
+    rows: list[dict] = []
+    stamp = observed_at.isoformat()
+    for race_code, entrants in sorted(by_race.items()):
+        if len(entrants) != 6:
+            raise GenerationBuilderError("RACE_FINALIZATION_NOT_COMPLETE")
+        if len({item["player_id"] for item in entrants}) != 6 or {item["final_rank"] for item in entrants} != set(range(1, 7)):
+            raise GenerationBuilderError("RACE_FINALIZATION_NOT_COMPLETE")
+        c4 = [item for item in entrants if item["actual_course"] == 4]
+        if len(c4) != 1:
+            raise GenerationBuilderError("RACE_COURSE_MAPPING_NOT_COMPLETE")
+        item = c4[0]
+        technique = str(item.get("raw_technique", item.get("technique", "")) or "").strip()
+        norm = normalize_technique(technique)
+        source_record = {"race_code": race_code, "race_date": item["race_date"], "player_id": item["player_id"],
+                         "actual_course": 4, "final_rank": item["final_rank"], "raw_technique": technique}
+        rows.append({
+            "event_id": event_id(race_code, item["player_id"]), **source_record,
+            "normalized_technique": norm, "is_history_eligible": 1,
+            "is_makuri": int(item["final_rank"] == 1 and norm == "MAKURI"),
+            "is_makurizashi": int(item["final_rank"] == 1 and norm == "MAKURIZASHI"),
+            "source_kind": "prospective_complete_result", "source_path": "injected_finalized_race_provider",
+            "source_sha256": sha256_bytes(_canonical_json_bytes(source_record)), "ledger_version": LEDGER_VERSION,
+            "baseline_frozen": 0, "availability_kind": "OBSERVED_AT_INGESTION",
+            "race_finalized_at": str(item.get("race_finalized_at", "")), "first_observed_at": stamp, "ingested_at": stamp,
+        })
+    return rows
+
+
+def build_generation_ledger(*, baseline_rows: list[dict], baseline_source_manifest: list[dict],
+                            baseline_source_sha256: str, existing_rows: list[dict], finalized_race_rows: list[dict],
+                            through_date: date, observed_at: str, builder_sha256: str) -> tuple[bytes, bytes, dict]:
+    """Build an immutable generation payload only from explicit inputs.
+
+    No fixed legacy path, DB connection, or clock is consulted here.  This is
+    the seam that allows the writer and its fixture to prove their contracts
+    without touching live artifacts.
+    """
+    observed = _utc_timestamp(observed_at, "DB_OBSERVED_AT")
+    if not isinstance(baseline_source_sha256, str) or len(baseline_source_sha256) != 64:
+        raise GenerationBuilderError("BASELINE_SOURCE_SHA256_INVALID")
+    baseline_by_id = {str(row.get("event_id", "")): row for row in baseline_rows}
+    if not baseline_by_id or len(baseline_by_id) != len(baseline_rows):
+        raise GenerationBuilderError("BASELINE_IDENTITY_INVALID")
+    for row in baseline_rows:
+        if str(row.get("baseline_frozen")) not in ("1", "True", "true", "1"):
+            raise GenerationBuilderError("BASELINE_NOT_FROZEN")
+    existing_by_id = {str(row.get("event_id", "")): row for row in existing_rows}
+    if existing_rows and len(existing_by_id) != len(existing_rows):
+        raise GenerationBuilderError("EXISTING_EVENT_ID_DUPLICATE")
+    if existing_rows:
+        prior_baseline = {event: row for event, row in existing_by_id.items() if str(row.get("baseline_frozen")) in ("1", "True", "true", "1")}
+        if set(prior_baseline) != set(baseline_by_id):
+            raise GenerationBuilderError("BASELINE_IDENTITY_CHANGED")
+        for event, row in baseline_by_id.items():
+            if _immutable_row_view(prior_baseline[event]) != _immutable_row_view(row):
+                raise GenerationBuilderError("BASELINE_ROW_CHANGED")
+    else:
+        existing_by_id = dict(baseline_by_id)
+
+    incoming = _validate_complete_finalized_races(finalized_race_rows, through_date=through_date, observed_at=observed)
+    rows, append = append_only(list(existing_by_id.values()), incoming)
+    ledger_bytes = _csv_bytes(rows)
+    manifest = {
+        "ledger_id": "course4_attack_history_canonical_ledger", "ledger_version": LEDGER_VERSION,
+        "schema_version": "course4-attack-ledger-generation-manifest/v1",
+        "baseline_source_sha256": baseline_source_sha256, "baseline_source_files": baseline_source_manifest,
+        "baseline_row_count": len(baseline_rows), "row_count": len(rows),
+        "prospective_row_count": len(rows) - len(baseline_rows), "generation_through_date": through_date.isoformat(),
+        "db_observed_at": observed.isoformat(), "builder_sha256": builder_sha256,
+        "append_policy": "append-only; duplicate event_id is a no-op; prior rows are immutable",
+        "finalization_policy": "exactly six distinct entrants and ranks 1..6 required before C4 event append",
+        "history_date_policy": "post-baseline race_date must satisfy baseline_end < race_date <= through_date",
+        "append_run": append, "ledger_sha256": sha256_bytes(ledger_bytes),
+    }
+    return ledger_bytes, _canonical_json_bytes(manifest), append
 
 
 def sha256_bytes(data: bytes) -> str:
