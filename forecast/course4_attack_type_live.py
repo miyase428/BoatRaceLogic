@@ -22,7 +22,10 @@ ANALYSIS = REPO / "analysis"
 sys.path.insert(0, str(ANALYSIS))
 from course4_attack_type_live_input_provider import (  # noqa: E402
     ARTIFACT, CONTRACT_VERSION, FEATURE_ORDER, LEDGER, LEDGER_STATE, MANIFEST, SPEC,
-    AttackTypeLiveInputProvider, canonical_json,
+    AttackTypeLiveInputProvider, canonical_json, parse_cutoff,
+)
+from course4_attack_ledger_generation_store import (  # noqa: E402
+    MODE_GENERATION, MODE_LEGACY, AttackTypeLedgerGenerationStore, GenerationStoreError,
 )
 
 CONTRACT = ANALYSIS / "output" / "course4_tenkai_phase9_attack_type_live_input_contract_v2.json"
@@ -51,8 +54,15 @@ def now_iso() -> str:
 class AttackTypeLiveInferenceCore:
     """Frozen-artifact core; no ledger append and no feature/DB logic."""
 
-    def __init__(self, provider=None, paths=None, expected_identities=None):
+    def __init__(self, provider=None, paths=None, expected_identities=None, *, ledger_mode=MODE_LEGACY,
+                 generation_root=None, generation_store_factory=AttackTypeLedgerGenerationStore, provider_paths=None):
+        if ledger_mode not in (MODE_LEGACY, MODE_GENERATION):
+            raise ValueError("INVALID_LEDGER_MODE")
         paths = paths or {}
+        self.ledger_mode = ledger_mode
+        self.generation_root = Path(generation_root).absolute() if generation_root is not None else None
+        self.generation_store_factory = generation_store_factory
+        self.provider_paths = provider_paths
         self.paths = {
             "contract": Path(paths.get("contract", CONTRACT)),
             "artifact": Path(paths.get("artifact", ARTIFACT)),
@@ -71,8 +81,17 @@ class AttackTypeLiveInferenceCore:
 
     def _load_and_verify(self):
         try:
-            self.identities = {key: sha256(path) if path.exists() else None for key, path in self.paths.items()}
+            static_paths = self.paths if self.ledger_mode == MODE_LEGACY else {
+                "contract": self.paths["contract"], "artifact": self.paths["artifact"], "spec": self.paths["spec"],
+            }
+            self.identities = {key: sha256(path) if path.exists() else None for key, path in static_paths.items()}
+            if self.ledger_mode == MODE_GENERATION:
+                self.identities.update({"ledger": None, "ledger_manifest": None, "ledger_state": None})
+            if self.ledger_mode == MODE_GENERATION and self.generation_root is None:
+                return "GENERATION_CONTEXT_REQUIRED"
             for key, expected in self.expected.items():
+                if self.ledger_mode == MODE_GENERATION and key in ("ledger", "ledger_manifest"):
+                    continue
                 if key in ("ledger", "ledger_manifest") and self.paths["ledger_state"].exists():
                     continue
                 if self.identities.get(key) != expected:
@@ -86,17 +105,16 @@ class AttackTypeLiveInferenceCore:
             self.contract = json.loads(self.paths["contract"].read_text(encoding="utf-8"))
             self.artifact = json.loads(self.paths["artifact"].read_text(encoding="utf-8"))
             spec = json.loads(self.paths["spec"].read_text(encoding="utf-8"))
-            self.manifest = json.loads(self.paths["ledger_manifest"].read_text(encoding="utf-8"))
-            state = json.loads(self.paths["ledger_state"].read_text(encoding="utf-8")) if self.paths["ledger_state"].exists() else None
+            self.manifest = json.loads(self.paths["ledger_manifest"].read_text(encoding="utf-8")) if self.ledger_mode == MODE_LEGACY else None
+            state = json.loads(self.paths["ledger_state"].read_text(encoding="utf-8")) if self.ledger_mode == MODE_LEGACY and self.paths["ledger_state"].exists() else None
             contract_ledger = self.contract.get("ledger", {})
             identities_ok = (
                 self.contract.get("contract_version") == CONTRACT_VERSION
                 and self.contract.get("artifact", {}).get("sha256") == self.identities["artifact"]
                 and self.contract.get("spec", {}).get("sha256") == self.identities["spec"]
-                and ((contract_ledger.get("sha256") == self.identities["ledger"] and contract_ledger.get("manifest_sha256") == self.identities["ledger_manifest"]) or state is not None)
-                and self.manifest.get("ledger_sha256") == self.identities["ledger"]
-                and (state is None or (state.get("ledger_sha256") == self.identities["ledger"] and state.get("manifest_sha256") == self.identities["ledger_manifest"] and state.get("baseline_source_sha256") == self.manifest.get("baseline_source_sha256") and state.get("ledger_version") == "v1"))
             )
+            if self.ledger_mode == MODE_LEGACY:
+                identities_ok = identities_ok and ((contract_ledger.get("sha256") == self.identities["ledger"] and contract_ledger.get("manifest_sha256") == self.identities["ledger_manifest"]) or state is not None) and self.manifest.get("ledger_sha256") == self.identities["ledger"] and (state is None or (state.get("ledger_sha256") == self.identities["ledger"] and state.get("manifest_sha256") == self.identities["ledger_manifest"] and state.get("baseline_source_sha256") == self.manifest.get("baseline_source_sha256") and state.get("ledger_version") == "v1"))
             feature_ok = (
                 tuple(self.contract.get("feature_order", ())) == FEATURE_ORDER
                 and tuple(self.artifact.get("feature_order", ())) == FEATURE_ORDER
@@ -114,8 +132,9 @@ class AttackTypeLiveInferenceCore:
                 "contract_sha256": self.identities["contract"],
                 "artifact_sha256": self.identities["artifact"],
                 "spec_sha256": self.identities["spec"],
-                "ledger_id": self.manifest.get("ledger_id"),
-                "ledger_version": self.manifest.get("ledger_version"),
+                "ledger_mode": self.ledger_mode,
+                "ledger_id": self.manifest.get("ledger_id") if self.manifest else None,
+                "ledger_version": self.manifest.get("ledger_version") if self.manifest else None,
             }
             # Deliberately excludes the mutable ledger content SHA.
             self.logic_version = hashlib.sha256(canonical_json(version_payload).encode("utf-8")).hexdigest()
@@ -123,8 +142,8 @@ class AttackTypeLiveInferenceCore:
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
             return "INFERENCE_ARTIFACT_LOAD_ERROR"
 
-    def _base_response(self, race_code, prediction_cutoff):
-        return {
+    def _base_response(self, race_code, prediction_cutoff, generation_context=None):
+        response = {
             "race_code": str(race_code), "prediction_cutoff": str(prediction_cutoff),
             "stage": "POST_EXHIBITION", "artifact_sha256": self.identities.get("artifact"),
             "spec_sha256": self.identities.get("spec"), "ledger_sha256": self.identities.get("ledger"),
@@ -133,9 +152,18 @@ class AttackTypeLiveInferenceCore:
             "input_contract_sha256": self.identities.get("contract"), "logic_version": self.logic_version,
             "generated_at": now_iso(),
         }
+        if generation_context is not None:
+            response.update({"ledger_sha256": generation_context.ledger_sha256,
+                             "ledger_manifest_sha256": generation_context.manifest_sha256,
+                             "ledger_generation": {"generation_id": generation_context.generation_id,
+                                                   "descriptor_sha256": generation_context.descriptor_sha256,
+                                                   "state_sha256": generation_context.state_sha256,
+                                                   "activation_id": generation_context.activation_id,
+                                                   "activated_at": generation_context.activated_at.isoformat()}})
+        return response
 
-    def _failure(self, race_code, cutoff, reason, provider_response=None):
-        response = self._base_response(race_code, cutoff)
+    def _failure(self, race_code, cutoff, reason, provider_response=None, generation_context=None):
+        response = self._base_response(race_code, cutoff, generation_context)
         response.update({"prediction_available": False, "missing_reason": [reason], "blocked_reason": [reason]})
         if provider_response:
             reasons = provider_response.get("missing_reason") or provider_response.get("blocked_reason") or [reason]
@@ -146,8 +174,16 @@ class AttackTypeLiveInferenceCore:
 
     def _provider(self):
         if self.provider is None:
-            self.provider = AttackTypeLiveInputProvider()
+            self.provider = AttackTypeLiveInputProvider(ledger_mode=self.ledger_mode, paths=self.provider_paths)
         return self.provider
+
+    def _resolve_generation_context(self, cutoff):
+        if self.ledger_mode != MODE_GENERATION:
+            return None
+        try:
+            return self.generation_store_factory(self.generation_root).resolve(mode=MODE_GENERATION, prediction_cutoff=cutoff)
+        except GenerationStoreError as error:
+            return error
 
     def _calculate(self, features, allow_replay_median):
         vector = np.asarray(features, dtype=float)
@@ -177,22 +213,34 @@ class AttackTypeLiveInferenceCore:
     def _predict_mode(self, race_code, prediction_cutoff, mode):
         if self.load_error:
             return self._failure(race_code, prediction_cutoff, self.load_error)
-        provider_response = self._provider().build(race_code, prediction_cutoff, mode, CONTRACT_VERSION)
+        try:
+            cutoff = parse_cutoff(prediction_cutoff)
+        except ValueError:
+            return self._failure(race_code, prediction_cutoff, "INPUT_CONTRACT_VERSION_MISMATCH")
+        generation_context = self._resolve_generation_context(cutoff)
+        if isinstance(generation_context, GenerationStoreError):
+            return self._failure(race_code, prediction_cutoff, "LEDGER_HASH_MISMATCH")
+        provider_response = self._provider().build(race_code, cutoff, mode, CONTRACT_VERSION, generation_context=generation_context)
         if not provider_response.get("prediction_available"):
-            return self._failure(race_code, prediction_cutoff, "MISSING_REQUIRED_FEATURE", provider_response)
+            return self._failure(race_code, prediction_cutoff, "MISSING_REQUIRED_FEATURE", provider_response, generation_context)
         if tuple(provider_response.get("feature_order", ())) != FEATURE_ORDER:
-            return self._failure(race_code, prediction_cutoff, "INFERENCE_FEATURE_ORDER_MISMATCH", provider_response)
+            return self._failure(race_code, prediction_cutoff, "INFERENCE_FEATURE_ORDER_MISMATCH", provider_response, generation_context)
         try:
             vector, probabilities = self._calculate(provider_response.get("feature_vector"), allow_replay_median=(mode == "RESEARCH_REPLAY"))
         except ValueError as error:
-            return self._failure(race_code, prediction_cutoff, str(error), provider_response)
-        response = self._base_response(race_code, prediction_cutoff)
+            return self._failure(race_code, prediction_cutoff, str(error), provider_response, generation_context)
+        response = self._base_response(race_code, prediction_cutoff, generation_context)
         response.update({
             "prediction_available": True, "missing_reason": [], "blocked_reason": [],
             "p_no_attack_success": probabilities[0], "p_makuri_success": probabilities[1],
             "p_makurizashi_success": probabilities[2], "input_feature_vector": vector,
             "input_sha256": provider_response["input_sha256"],
         })
+        if self.ledger_mode == MODE_GENERATION:
+            # Preserve the provider's exact context-derived identity alongside
+            # the core provenance; callers can verify both without re-reading
+            # CURRENT or any generation file.
+            response["input_ledger_identity"] = provider_response.get("ledger_identity")
         return response
 
     def predict(self, race_code, prediction_cutoff):

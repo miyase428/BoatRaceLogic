@@ -13,6 +13,7 @@ import json
 import math
 import sys
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -23,6 +24,7 @@ from build_course4_attack_history_canonical_ledger_phase9_1b import (  # noqa: E
     build_ledger_index,
     history_features_from_canonical_ledger,
 )
+from course4_attack_ledger_generation_store import MODE_GENERATION, MODE_LEGACY, GenerationContext  # noqa: E402
 
 CONTRACT_VERSION = "course4-tenkai-attack-type-live-input-v2"
 FEATURE_ORDER = (
@@ -44,7 +46,7 @@ FAIL_REASONS = (
     "ARTIFACT_HASH_MISMATCH", "LEDGER_HASH_MISMATCH", "LEDGER_NOT_AVAILABLE_AT_CUTOFF",
     "EXHIBITION_NOT_COMPLETE", "EXHIBITION_AFTER_CUTOFF", "ENTRY_MAPPING_INCOMPLETE",
     "NON_WAKUNARI", "COURSE4_NOT_RESOLVABLE", "MISSING_REQUIRED_FEATURE", "INPUT_CONTRACT_VERSION_MISMATCH",
-    "RESEARCH_SOURCE_NOT_FOUND", "FEATURE_SCHEMA_MISMATCH", "INVALID_MODE",
+    "RESEARCH_SOURCE_NOT_FOUND", "FEATURE_SCHEMA_MISMATCH", "INVALID_MODE", "GENERATION_CONTEXT_REQUIRED",
 )
 
 
@@ -69,8 +71,22 @@ def read_csv(path: Path):
         return list(csv.DictReader(f))
 
 
+def read_csv_bytes(data: bytes):
+    try:
+        return list(csv.DictReader(StringIO(data.decode("utf-8"))))
+    except UnicodeDecodeError as error:
+        raise ValueError("GENERATION_LEDGER_ENCODING_INVALID") from error
+
+
 def canonical_json(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
 
 
 def parse_cutoff(value) -> datetime:
@@ -84,36 +100,92 @@ def parse_cutoff(value) -> datetime:
 
 
 class AttackTypeLiveInputProvider:
-    def __init__(self):
-        self.artifact = json.loads(ARTIFACT.read_text(encoding="utf-8"))
-        self.spec = json.loads(SPEC.read_text(encoding="utf-8"))
-        self.manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-        self.ledger = read_csv(LEDGER)
-        self.ledger_index = build_ledger_index(self.ledger)
-        self.research = {r["race_code"]: r for r in read_csv(PHASE4_INPUT)}
-        self.hashes = {"artifact": sha256(ARTIFACT), "spec": sha256(SPEC), "ledger": sha256(LEDGER), "ledger_manifest": sha256(MANIFEST), "research_input": sha256(PHASE4_INPUT)}
-        self.ledger_state = json.loads(LEDGER_STATE.read_text(encoding="utf-8")) if LEDGER_STATE.exists() else None
+    """Build inputs from either legacy files or one supplied immutable context.
 
-    def _identity_errors(self):
+    GENERATION mode intentionally has no Store instance and cannot resolve
+    CURRENT.  The inference core supplies exactly one verified context for a
+    request, preventing a provider-side generation switch.
+    """
+
+    def __init__(self, *, ledger_mode: str = MODE_LEGACY, paths=None, expected_hashes=None):
+        if ledger_mode not in (MODE_LEGACY, MODE_GENERATION):
+            raise ValueError("INVALID_LEDGER_MODE")
+        paths = paths or {}
+        self.ledger_mode = ledger_mode
+        self.expected_hashes = dict(EXPECTED_HASHES if expected_hashes is None else expected_hashes)
+        self.paths = {
+            "artifact": Path(paths.get("artifact", ARTIFACT)), "spec": Path(paths.get("spec", SPEC)),
+            "ledger": Path(paths.get("ledger", LEDGER)), "manifest": Path(paths.get("manifest", MANIFEST)),
+            "state": Path(paths.get("state", LEDGER_STATE)), "research": Path(paths.get("research", PHASE4_INPUT)),
+        }
+        self.artifact = json.loads(self.paths["artifact"].read_text(encoding="utf-8"))
+        self.spec = json.loads(self.paths["spec"].read_text(encoding="utf-8"))
+        self.hashes = {"artifact": sha256(self.paths["artifact"]), "spec": sha256(self.paths["spec"])}
+        self.manifest = None
+        self.ledger = []
+        self.ledger_index = {}
+        self.research = {}
+        self.ledger_state = None
+        if self.ledger_mode == MODE_LEGACY:
+            self.manifest = json.loads(self.paths["manifest"].read_text(encoding="utf-8"))
+            self.ledger = read_csv(self.paths["ledger"])
+            self.ledger_index = build_ledger_index(self.ledger)
+            self.research = {r["race_code"]: r for r in read_csv(self.paths["research"])}
+            self.hashes.update({"ledger": sha256(self.paths["ledger"]), "ledger_manifest": sha256(self.paths["manifest"]), "research_input": sha256(self.paths["research"])})
+            self.ledger_state = json.loads(self.paths["state"].read_text(encoding="utf-8")) if self.paths["state"].exists() else None
+
+    def _identity_errors(self, generation_context: GenerationContext | None = None):
         errors = []
-        if self.hashes["artifact"] != EXPECTED_HASHES["artifact"] or self.hashes["spec"] != EXPECTED_HASHES["spec"]:
+        if self.hashes["artifact"] != self.expected_hashes["artifact"] or self.hashes["spec"] != self.expected_hashes["spec"]:
             errors.append("ARTIFACT_HASH_MISMATCH")
-        state_ok = self.ledger_state and self.ledger_state.get("ledger_sha256") == self.hashes["ledger"] and self.ledger_state.get("manifest_sha256") == self.hashes["ledger_manifest"] and self.ledger_state.get("baseline_source_sha256") == self.manifest.get("baseline_source_sha256") and self.ledger_state.get("ledger_version") == "v1"
-        if (self.hashes["ledger"] != EXPECTED_HASHES["ledger"] and not state_ok) or self.manifest.get("ledger_sha256") != self.hashes["ledger"]:
-            errors.append("LEDGER_HASH_MISMATCH")
+        if self.ledger_mode == MODE_LEGACY:
+            state_ok = self.ledger_state and self.ledger_state.get("ledger_sha256") == self.hashes["ledger"] and self.ledger_state.get("manifest_sha256") == self.hashes["ledger_manifest"] and self.ledger_state.get("baseline_source_sha256") == self.manifest.get("baseline_source_sha256") and self.ledger_state.get("ledger_version") == "v1"
+            if (self.hashes["ledger"] != self.expected_hashes["ledger"] and not state_ok) or self.manifest.get("ledger_sha256") != self.hashes["ledger"]:
+                errors.append("LEDGER_HASH_MISMATCH")
+            manifest = self.manifest
+        else:
+            manifest = generation_context.manifest if generation_context is not None else None
+            if generation_context is None:
+                errors.append("GENERATION_CONTEXT_REQUIRED")
+            else:
+                try:
+                    manifest_ok = (
+                        generation_context.mode == MODE_GENERATION
+                        and hashlib.sha256(generation_context.ledger_bytes).hexdigest() == generation_context.ledger_sha256
+                        and manifest.get("ledger_sha256") == generation_context.ledger_sha256
+                        and generation_context.state.get("generation_id") == generation_context.generation_id
+                        and generation_context.state.get("ledger_sha256") == generation_context.ledger_sha256
+                        and generation_context.state.get("manifest_sha256") == generation_context.manifest_sha256
+                        and generation_context.descriptor.get("generation_id") == generation_context.generation_id
+                    )
+                except (AttributeError, TypeError):
+                    manifest_ok = False
+                if not manifest_ok:
+                    errors.append("LEDGER_HASH_MISMATCH")
         if tuple(self.artifact.get("feature_order", [])) != FEATURE_ORDER or tuple(self.spec.get("final_feature_order", [])) != FEATURE_ORDER:
             errors.append("FEATURE_SCHEMA_MISMATCH")
-        if self.manifest.get("ledger_version") != "v1":
+        if manifest is None or manifest.get("ledger_version") != "v1":
             errors.append("LEDGER_HASH_MISMATCH")
         return errors
 
-    def _response(self, *, race_code, cutoff, mode, available, reasons, features=None, raw_input=None, mapping=None, history=None):
+    def _ledger_identity(self, generation_context: GenerationContext | None):
+        if self.ledger_mode == MODE_LEGACY:
+            return {"path": display_path(self.paths["ledger"]), "sha256": self.hashes["ledger"], "manifest_path": display_path(self.paths["manifest"]), "manifest_sha256": self.hashes["ledger_manifest"], "ledger_version": self.manifest.get("ledger_version")}
+        if generation_context is None:
+            return {"mode": MODE_GENERATION, "unavailable": True}
+        return {"mode": MODE_GENERATION, "generation_id": generation_context.generation_id,
+                "sha256": generation_context.ledger_sha256, "manifest_sha256": generation_context.manifest_sha256,
+                "state_sha256": generation_context.state_sha256, "descriptor_sha256": generation_context.descriptor_sha256,
+                "activation_id": generation_context.activation_id, "activated_at": generation_context.activated_at.isoformat(),
+                "ledger_version": generation_context.manifest.get("ledger_version")}
+
+    def _response(self, *, race_code, cutoff, mode, available, reasons, features=None, raw_input=None, mapping=None, history=None, generation_context=None):
         payload = {
             "contract_version": CONTRACT_VERSION, "signal_id": "ATTACK_TYPE", "stage": "POST_EXHIBITION",
             "mode": mode, "race_code": race_code, "prediction_cutoff": cutoff.isoformat() if isinstance(cutoff, datetime) else str(cutoff),
-            "artifact_identity": {"path": str(ARTIFACT.relative_to(REPO)), "sha256": self.hashes["artifact"]},
-            "spec_identity": {"path": str(SPEC.relative_to(REPO)), "sha256": self.hashes["spec"]},
-            "ledger_identity": {"path": str(LEDGER.relative_to(REPO)), "sha256": self.hashes["ledger"], "manifest_path": str(MANIFEST.relative_to(REPO)), "manifest_sha256": self.hashes["ledger_manifest"], "ledger_version": self.manifest.get("ledger_version")},
+            "artifact_identity": {"path": display_path(self.paths["artifact"]), "sha256": self.hashes["artifact"]},
+            "spec_identity": {"path": display_path(self.paths["spec"]), "sha256": self.hashes["spec"]},
+            "ledger_identity": self._ledger_identity(generation_context),
             "feature_order": list(FEATURE_ORDER), "raw_input_payload": raw_input or {}, "feature_vector": features,
             "entry_mapping": mapping or {}, "history_audit": history or {},
             "prediction_available": available, "missing_reason": reasons, "blocked_reason": reasons,
@@ -121,33 +193,59 @@ class AttackTypeLiveInputProvider:
         payload["input_sha256"] = hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
         return payload
 
-    def _history(self, player_id, race_date, cutoff, mode):
-        activation = datetime.fromisoformat(self.manifest["ledger_activation_at"])
+    def _history(self, player_id, race_date, cutoff, mode, generation_context=None):
+        if self.ledger_mode == MODE_GENERATION:
+            if generation_context is None:
+                return None, {"reason": "GENERATION_CONTEXT_REQUIRED"}
+            try:
+                activation = generation_context.activated_at
+                if activation.tzinfo is None or activation.utcoffset() is None:
+                    raise ValueError("activation timezone")
+                ledger = read_csv_bytes(generation_context.ledger_bytes)
+                for row in ledger:
+                    if str(row.get("baseline_frozen")) not in ("1", "True", "true"):
+                        observed = datetime.fromisoformat(str(row.get("first_observed_at", "")))
+                        if observed.tzinfo is None or observed.utcoffset() is None:
+                            raise ValueError("observation timezone")
+                index = build_ledger_index(ledger)
+            except (TypeError, ValueError):
+                return None, {"reason": "LEDGER_HASH_MISMATCH"}
+            manifest = generation_context.manifest
+        else:
+            activation = datetime.fromisoformat(self.manifest["ledger_activation_at"])
+            index = self.ledger_index
+            manifest = self.manifest
+        if activation.tzinfo is None or activation.utcoffset() is None:
+            return None, {"reason": "LEDGER_NOT_AVAILABLE_AT_CUTOFF"}
         if mode == "LIVE" and cutoff < activation:
             return None, {"reason": "LEDGER_NOT_AVAILABLE_AT_CUTOFF", "ledger_activation_at": activation.isoformat()}
         result = history_features_from_canonical_ledger(
-            self.ledger_index, player_id, race_date, cutoff if mode == "LIVE" else None,
+            index, player_id, race_date, cutoff if mode == "LIVE" else None,
             research_reproduction=(mode == "RESEARCH_REPLAY"), ledger_activation_at=activation,
         )
-        return result, {"ledger_mode": "baseline_research_replay" if mode == "RESEARCH_REPLAY" else "live_available_at", "ledger_activation_at": activation.isoformat()}
+        audit = {"ledger_mode": "baseline_research_replay" if mode == "RESEARCH_REPLAY" else "live_available_at", "ledger_activation_at": activation.isoformat()}
+        if self.ledger_mode == MODE_GENERATION:
+            audit.update({"generation_id": generation_context.generation_id, "ledger_sha256": generation_context.ledger_sha256,
+                          "manifest_sha256": generation_context.manifest_sha256})
+        return result, audit
 
-    def build(self, race_code: str, prediction_cutoff, mode: str, input_contract_version: str = CONTRACT_VERSION):
+    def build(self, race_code: str, prediction_cutoff, mode: str, input_contract_version: str = CONTRACT_VERSION, *, generation_context: GenerationContext | None = None):
         mode = str(mode).upper()
         try:
             cutoff = parse_cutoff(prediction_cutoff)
         except ValueError:
             # Keep an explicit caller-supplied value in the fail-closed payload.
-            return self._response(race_code=race_code, cutoff=prediction_cutoff, mode=mode, available=False, reasons=["INPUT_CONTRACT_VERSION_MISMATCH"], raw_input={"cutoff_parse_error": True})
-        errors = self._identity_errors()
+            return self._response(race_code=race_code, cutoff=prediction_cutoff, mode=mode, available=False, reasons=["INPUT_CONTRACT_VERSION_MISMATCH"], raw_input={"cutoff_parse_error": True}, generation_context=generation_context)
+        errors = self._identity_errors(generation_context)
         if input_contract_version != CONTRACT_VERSION:
             errors.append("INPUT_CONTRACT_VERSION_MISMATCH")
-        if mode not in ("RESEARCH_REPLAY", "LIVE"):
+        if mode not in ("RESEARCH_REPLAY", "LIVE") or (self.ledger_mode == MODE_GENERATION and mode != "LIVE"):
             errors.append("INVALID_MODE")
         if errors:
-            return self._response(race_code=race_code, cutoff=cutoff, mode=mode, available=False, reasons=sorted(set(errors)))
+            return self._response(race_code=race_code, cutoff=cutoff, mode=mode, available=False, reasons=sorted(set(errors)), generation_context=generation_context)
         if mode == "RESEARCH_REPLAY":
             return self._research_replay(race_code, cutoff)
-        return self._live(race_code, cutoff)
+        return self._live(race_code, cutoff, generation_context=generation_context)
 
     def _research_replay(self, race_code, cutoff):
         source = self.research.get(race_code)
@@ -166,7 +264,7 @@ class AttackTypeLiveInputProvider:
                               raw_input={"research_source": str(PHASE4_INPUT.relative_to(REPO)), "research_source_sha256": self.hashes["research_input"], "course4_player_id": player_id},
                               mapping={"research_fixed_population": True, "course4_player_id": player_id}, history={**audit, "missing_research_values": missing})
 
-    def _live(self, race_code, cutoff):
+    def _live(self, race_code, cutoff, *, generation_context=None):
         # The live query intentionally reads no outcome/result table.
         sys.path.insert(0, str(ROOT))
         from slit_validate_v2 import connect_db  # noqa: WPS433
@@ -194,7 +292,7 @@ class AttackTypeLiveInputProvider:
             cur.execute(query, (race_code, race_code, local_cutoff, race_code, local_cutoff))
             rows = cur.fetchall()
         if not rows:
-            return self._response(race_code=race_code, cutoff=cutoff, mode="LIVE", available=False, reasons=["ENTRY_MAPPING_INCOMPLETE"])
+            return self._response(race_code=race_code, cutoff=cutoff, mode="LIVE", available=False, reasons=["ENTRY_MAPPING_INCOMPLETE"], generation_context=generation_context)
         race_date = rows[0][0]
         records, reasons = [], []
         for row in rows:
@@ -220,16 +318,16 @@ class AttackTypeLiveInputProvider:
                 reasons.append("MISSING_REQUIRED_FEATURE")
         else:
             missing_ex = list(FEATURE_ORDER[3:])
-        history, history_audit = self._history(course4["player_id"], race_date, cutoff, "LIVE") if course4 else (None, {"reason": "COURSE4_NOT_RESOLVABLE"})
+        history, history_audit = self._history(course4["player_id"], race_date, cutoff, "LIVE", generation_context=generation_context) if course4 else (None, {"reason": "COURSE4_NOT_RESOLVABLE"})
         if history is None:
             reasons.append(history_audit["reason"])
         if reasons:
             return self._response(race_code=race_code, cutoff=cutoff, mode="LIVE", available=False, reasons=sorted(set(reasons)), raw_input={"exhibition_rows": records, "after_cutoff_row_count": after_count},
-                                  mapping={"entry_courses": courses, "wakunari": False}, history=history_audit)
+                                  mapping={"entry_courses": courses, "wakunari": False}, history=history_audit, generation_context=generation_context)
         features = [float(history["course4_history_n"]), history["course4_history_makuri_rate_pct"], history["course4_history_makurizashi_rate_pct"]] + [course4[f] for f in FEATURE_ORDER[3:]]
         return self._response(race_code=race_code, cutoff=cutoff, mode="LIVE", available=True, reasons=[], features=features,
                               raw_input={"exhibition_rows": records, "after_cutoff_row_count": after_count},
-                              mapping={"entry_courses": courses, "wakunari": True, "course4_player_id": course4["player_id"]}, history=history_audit)
+                              mapping={"entry_courses": courses, "wakunari": True, "course4_player_id": course4["player_id"]}, history=history_audit, generation_context=generation_context)
 
 
 def build(race_code: str, prediction_cutoff, mode: str, input_contract_version: str = CONTRACT_VERSION):
