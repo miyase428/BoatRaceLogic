@@ -14,11 +14,14 @@ require_once __DIR__ . '/../logic/CorrectedWinRateLogic.php';
 require_once __DIR__ . '/../logic/AiWinRateLogic.php';
 require_once __DIR__ . '/../logic/AiWinHeadLogic.php';
 require_once __DIR__ . '/../logic/AiPlaceRateLogic.php';
+require_once __DIR__ . '/../logic/AppPerformanceTiming.php';
 
 class IndexController
 {
     public function handle(): array
     {
+        $performanceTiming = AppPerformanceTiming::current();
+        $performanceTiming?->begin('controller_total');
         // require_once で読み込んだ place_map.php の配列を取得
         $place_map = require __DIR__ . '/../../config/place_map.php';
 
@@ -57,6 +60,7 @@ class IndexController
 
         $formatted_date  = date('Ymd', strtotime($selected_date));
         $race_code       = $formatted_date . $selected_place . sprintf('%02d', $selected_race);
+        $performanceTiming?->setRaceCode($race_code);
 
         // 場名マップ（画面表示用）
         $place_names = [
@@ -82,14 +86,18 @@ class IndexController
         $aiPlaceRateLogic      = new AiPlaceRateLogic();
 
         // 1. 出走表データ
+        $performanceTiming?->begin('basic_score');
         [$entries, $results, $api_error] = $apiClient->fetchCalcScores($race_code);
+        $performanceTiming?->end('basic_score');
 
         // 1-2. 基本1着率
         // 通常時は従来どおり枠=コース。仮想進入モードだけ指定コースへ置き換える。
+        $performanceTiming?->begin('base_win_rate');
         $base_win_rate_data = $baseWinRateLogic->calculate(
             $race_code,
             $simulation_active ? $virtual_course_by_boat : []
         );
+        $performanceTiming?->end('base_win_rate');
 
         // -------------------------------------------------------------
         // 2. 展示情報の更新処理（「展示情報を更新」ボタン押下時）
@@ -107,7 +115,9 @@ class IndexController
         // -------------------------------------------------------------
         // 3. 展示データ（更新後は最新DBを取得）
         // -------------------------------------------------------------
+        $performanceTiming?->begin('exhibition');
         [$tenji_list, $tenji_error] = $apiClient->fetchTenji($race_code, $results, $selected_place);
+        $performanceTiming?->end('exhibition');
 
         // -------------------------------------------------------------
         // 3-2. 実際の展示進入マップ
@@ -199,15 +209,18 @@ class IndexController
         // -------------------------------------------------------------
         // 4. 決まり手データ
         // -------------------------------------------------------------
+        $performanceTiming?->begin('kimarite');
         [$kimarite_data, $kimarite_error] = $apiClient->fetchKimarite(
             $race_code,
             $effective_in_course
         );
+        $performanceTiming?->end('kimarite');
 
         // -------------------------------------------------------------
         // 5. 最終予想ロジック
         // 仮想進入時はtenji_courseだけ試算配置にし、展示値は実測値を維持する。
         // -------------------------------------------------------------
+        $performanceTiming?->begin('final_prediction');
         $tenji_test_data = $apiClient->fetchTenjiTest($race_code, $prediction_tenji_list);
         $final_predictions = $predictionLogic->buildFinalPredictions(
             $prediction_tenji_list,
@@ -216,6 +229,7 @@ class IndexController
             $results
         );
         $summary = $predictionLogic->buildSummary($final_predictions);
+        $performanceTiming?->end('final_prediction');
 
         // 最終予想の計算後だけ表示用に「枠 / 予想進入」を併記する。
         if ($prediction_entry_changed) {
@@ -230,6 +244,7 @@ class IndexController
         // 6. サム理論マスタ & ロジック適用
         // 展示値は実測のまま、仮想進入時だけコース配置を試算進入へ差し替える。
         // -------------------------------------------------------------
+        $performanceTiming?->begin('sum_processing');
         [$sam_master_data, $sam_error] = $apiClient->fetchSamMaster($selected_place);
         [$sam_applied_list, $overall_avg] = $samLogic->applySamTheory(
             $prediction_tenji_list,
@@ -238,11 +253,13 @@ class IndexController
         // 展示タイム差はAI確率へ二重に加算せず、SUM直下の表示専用サインとして使う。
         $exhibition_alert_data = $exhibitionAlertLogic->evaluate($prediction_tenji_list);
         $lane1_lap_relative_data = $lane1LapRelativeLogic->evaluate($prediction_tenji_list);
+        $performanceTiming?->end('sum_processing');
 
         // -------------------------------------------------------------
         // 7. スリット体系
         // 通常時は実展示、仮想進入時は展示STを保持したまま試算コースでPIDを再計算する。
         // -------------------------------------------------------------
+        $performanceTiming?->begin('slit_processing');
         if ($simulation_active) {
             [$slit_data, $slit_pattern] = $apiClient->fetchSlitVirtual(
                 $race_code,
@@ -252,6 +269,7 @@ class IndexController
             [$slit_data, $slit_pattern] = $apiClient->fetchSlit($race_code);
         }
         $feature_name = $slitLogic->getFeatureNames();
+        $performanceTiming?->end('slit_processing');
 
         // 「3の先攻め」は艇番ではなく3コース位置を表すため表示を明示する。
         if (($slit_pattern['name'] ?? '') === '3の先攻め') {
@@ -304,11 +322,14 @@ class IndexController
         }
 
         if ($correctedReady && count($seenCourses) === 6) {
+            $performanceTiming?->begin('corrected_win_rate');
             $corrected_win_rate_data = $correctedWinRateLogic->calculate(
                 $race_code,
                 $simulation_active ? $effective_in_course : null
             );
+            $performanceTiming?->end('corrected_win_rate');
         } else {
+            $performanceTiming?->skipped('corrected_win_rate', 'exhibition_not_ready');
             $corrected_win_rate_data = [
                 'status' => 'waiting',
                 'boats' => [],
@@ -339,11 +360,14 @@ class IndexController
         }
 
         if ($aiWinReady && count($aiSeenCourses) === 6) {
+            $performanceTiming?->begin('ai_win_rate_process');
             $ai_win_rate_data = $aiWinRateLogic->calculate(
                 $race_code,
                 $simulation_active ? $effective_in_course : null
             );
+            $performanceTiming?->end('ai_win_rate_process');
         } else {
+            $performanceTiming?->skipped('ai_win_rate_process', 'exhibition_not_ready');
             $ai_win_rate_data = [
                 'status' => 'waiting',
                 'boats' => [],
@@ -365,6 +389,7 @@ class IndexController
             && count($ai_win_rate_data['boats'] ?? []) === 6
             && count($final_predictions) === 6
         ) {
+            $performanceTiming?->begin('ai_place_rate_process');
             $ai_place_rate_data = $aiPlaceRateLogic->calculate(
                 $race_code,
                 (array)$ai_win_rate_data['boats'],
@@ -372,7 +397,9 @@ class IndexController
                 $prediction_course_by_boat,
                 (array)($summary['rank_boats'] ?? [])
             );
+            $performanceTiming?->end('ai_place_rate_process');
         } else {
+            $performanceTiming?->skipped('ai_place_rate_process', 'ai_win_not_ready');
             $ai_place_rate_data = [
                 'status' => 'waiting',
                 'boats' => [],
@@ -459,6 +486,8 @@ class IndexController
             'lane_colors'     => $lane_colors,
         ];
 
-        return array_merge($viewData, $summary);
+        $result = array_merge($viewData, $summary);
+        $performanceTiming?->end('controller_total');
+        return $result;
     }
 }

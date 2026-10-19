@@ -1,4 +1,10 @@
 <?php
+require_once __DIR__ . '/logic/AppPerformanceTiming.php';
+
+$performanceTiming = AppPerformanceTiming::startRequest('app.php');
+$performanceTiming = AppPerformanceTiming::current();
+$performanceTiming?->begin('app_total');
+
 require_once __DIR__ . '/controllers/IndexController.php';
 require_once __DIR__ . '/logic/AiTrioRateLogic.php';
 require_once __DIR__ . '/logic/AiTrioDisplayLogic.php';
@@ -14,7 +20,9 @@ require_once __DIR__ . '/logic/SecondPlaceProbabilityLogic.php';
 require_once __DIR__ . '/logic/ThirdPlaceProbabilityLogic.php';
 
 $controller = new IndexController();
+$performanceTiming?->begin('controller_handle');
 $viewData = $controller->handle();
+$performanceTiming?->end('controller_handle');
 
 // AI1着率 v5の確率と首位差で①の信頼度を表示する。
 // PredictionLogicや既存買い目は変更せず、表示専用で評価する。
@@ -89,6 +97,7 @@ if (!empty($simulation_active) && is_array($prediction_course_by_boat ?? null)) 
     $aiTrioCourseByBoat = $entry_course_by_boat;
 }
 
+$performanceTiming?->begin('ai_trio_rate');
 $aiTrioLogic = new AiTrioRateLogic();
 $aiTrioData = $aiTrioLogic->calculate(
     (string)($race_code ?? ''),
@@ -100,6 +109,7 @@ $aiTrioData = $aiTrioLogic->calculate(
 $aiTrioStatus = (string)($aiTrioData['status'] ?? 'error');
 $aiTrioError = (string)($aiTrioData['error'] ?? '');
 $aiTrioBoats = is_array($aiTrioData['boats'] ?? null) ? $aiTrioData['boats'] : [];
+$performanceTiming?->end('ai_trio_rate');
 
 // 表示だけは、AI着順モデルが作る120通りから集計した3連対率へ差し替える。
 // $aiTrioBoatsは既存の買い目・従来出目計算用として変更せず保持する。
@@ -115,6 +125,7 @@ $aiTrioDisplayStatus = (string)($aiTrioDisplayData['status'] ?? 'error');
 $aiTrioDisplaySource = (string)($aiTrioDisplayData['display_source'] ?? 'legacy_ai_trio');
 
 // 8点型の3着候補は、今回の展示進入に対応する直近3/6ヶ月3連対率を使う。
+$performanceTiming?->begin('recent_course_history');
 $recentCourseTrioLogic = new RecentCourseTrioRateLogic();
 $recentCourseTrioData = $recentCourseTrioLogic->calculate(
     (string)($race_code ?? ''),
@@ -123,8 +134,10 @@ $recentCourseTrioData = $recentCourseTrioLogic->calculate(
 $recentCourseTrioBoats = is_array($recentCourseTrioData['boats'] ?? null)
     ? $recentCourseTrioData['boats']
     : [];
+$performanceTiming?->end('recent_course_history');
 
 // 1号艇1着時の2着率。こちらもPC版と同じロジックを共用する。
+$performanceTiming?->begin('conditional_second_rate');
 $head1SecondLogic = new Head1SecondPlaceLogic();
 $head1SecondData = $head1SecondLogic->calculate(
     (string)($race_code ?? ''),
@@ -135,6 +148,7 @@ $head1SecondError = (string)($head1SecondData['error'] ?? '');
 $head1SecondBoats = is_array($head1SecondData['boats'] ?? null)
     ? $head1SecondData['boats']
     : [];
+$performanceTiming?->end('conditional_second_rate');
 
 // 120通り出目確率を1度だけ計算する。
 // 2着分布の集計はここでは行わず、app_main_analysis_panel.php 内の
@@ -146,6 +160,7 @@ if (count($aiTrioCourseByBoat) === 6) {
     $outcomeCourseByBoat = $prediction_course_by_boat;
 }
 
+$performanceTiming?->begin('trifecta_probability');
 $trifectaLogic = new TrifectaProbabilityLogic();
 $trifectaData = $trifectaLogic->calculate(
     (string)($race_code ?? ''),
@@ -156,6 +171,7 @@ $trifectaData = $trifectaLogic->calculate(
 $trifectaStatus = (string)($trifectaData['status'] ?? 'error');
 $trifectaError = (string)($trifectaData['error'] ?? '');
 $trifectaRows = is_array($trifectaData['rows'] ?? null) ? $trifectaData['rows'] : [];
+$performanceTiming?->end('trifecta_probability');
 
 // 本命買い目の2着候補はAI着順率v1を正式採用する。
 // 頭・切る艇・3着候補・点数は変えず、AI版が使えない場合だけ従来値へ戻す。
@@ -173,6 +189,7 @@ $appHead1ExactaV1 = false;
 
 // 基本情報は取得値だけに限定する。
 // 加工・評価結果はメイン情報へ集約し、計算ロジック自体は共用する。
+$performanceTiming?->begin('panel_render');
 ob_start();
 include __DIR__ . '/views/app_basic_info_panel.php';
 $appBasicInfoHtml = ob_get_clean();
@@ -180,6 +197,7 @@ $appBasicInfoHtml = ob_get_clean();
 ob_start();
 include __DIR__ . '/views/app_main_analysis_panel.php';
 $appMainAnalysisHtml = ob_get_clean();
+$performanceTiming?->end('panel_render');
 
 // app_main_analysis_panel.php がAI版の本命2着候補を反映した後に、
 // 8点型を別レイヤーで作る。
@@ -204,6 +222,7 @@ $appTrifectaError = $trifectaError;
 $appTrifectaRows = $trifectaRows;
 
 if ($appTrifectaStatus !== 'ok' || count($appTrifectaRows) !== 120) {
+    $performanceTiming?->begin('provisional_trifecta');
     $appTrifectaDisplayMode = 'provisional';
 
     // 展示前は枠なり進入を基本とする。仮想進入中だけ指定進入を使用する。
@@ -276,6 +295,9 @@ if ($appTrifectaStatus !== 'ok' || count($appTrifectaRows) !== 120) {
     $appTrifectaRows = is_array($appTrifectaData['rows'] ?? null)
         ? $appTrifectaData['rows']
         : [];
+    $performanceTiming?->end('provisional_trifecta');
+} else {
+    $performanceTiming?->skipped('provisional_trifecta', 'not_required');
 }
 
 // 2連単・120通りタブの最終確率を、AI着順率 v1 の同時120通りへ統一する。
@@ -305,6 +327,7 @@ $appHead1ExactaV1 = (string)($appTrifectaData['probability_source'] ?? '') === '
 
 // アプリの「AI条件付き2着率」でも、PCと同じ120通りから全頭コースを集約する。
 // 表示専用で、既存の本命・対抗・買い目ロジックには書き戻さない。
+$performanceTiming?->begin('conditional_rates_display');
 $appConditionalSecondByHead = [];
 $appThirdPlaceLogic = new ThirdPlaceProbabilityLogic();
 for ($appHeadCourse = 1; $appHeadCourse <= 6; $appHeadCourse++) {
@@ -327,11 +350,15 @@ for ($appHeadCourse = 1; $appHeadCourse <= 6; $appHeadCourse++) {
         'third_by_second_course' => $appThirdBySecondCourse,
     ];
 }
+$performanceTiming?->end('conditional_rates_display');
 
 // 既存アプリViewは土台として維持し、DOM上で「基本情報 / メイン情報」の2タブへ整理する。
+$performanceTiming?->begin('app_view_render');
 ob_start();
 include __DIR__ . '/views/app_view.php';
 $html = ob_get_clean();
+$performanceTiming?->end('app_view_render');
+$performanceTiming?->begin('html_assembly');
 
 // iPhoneのホーム画面アプリではCSSが残りやすいため、アプリ用CSSだけ版番号を付ける。
 $html = str_replace(
@@ -561,8 +588,27 @@ $tabsScript = <<<'HTML'
             }
         }
 
-        // コースサインは表示専用なので、取得完了を初期画面の表示条件にしない。
-        // 本体を先に操作可能にし、サインは取得でき次第追加表示する。
+        function hideLoading() {
+            overlay.classList.remove('is-visible');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+
+        // コースサインは画面表示に必要な情報として扱う。サイン側は成功・対象なし・
+        // 取得失敗・時間切れのいずれでもPromiseを解決するため、通信異常で
+        // オーバーレイが残り続けることはない。
+        function waitForCourseSignals() {
+            const ready = window.appCourseSignalsReady;
+            if (!ready || typeof ready.then !== 'function') return;
+
+            showLoading('コースサインを読み込み中…');
+            ready.then(function () {
+                // app_course_signals.js がrequestAnimationFrame後に解決するため、
+                // サインのDOM描画より先に読み込み中を終了しない。
+                hideLoading();
+            }, hideLoading);
+        }
+
+        waitForCourseSignals();
 
         document.querySelectorAll('.app-shell form').forEach(function (form) {
             form.addEventListener('submit', function (event) {
@@ -605,4 +651,7 @@ $tabsScript = str_replace('__MAIN_ANALYSIS_JSON__', $mainAnalysisJson, $tabsScri
 $tabsScript = str_replace('__LANE1_DECISION_SIGNAL_JSON__', $lane1DecisionSignalJson, $tabsScript);
 $html = str_replace('</body>', $tabsScript . "\n</body>", $html);
 
+$performanceTiming?->end('html_assembly');
+$performanceTiming?->end('app_total');
+$performanceTiming?->finish();
 echo $html;

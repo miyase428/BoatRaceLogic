@@ -213,7 +213,7 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#f4ecdf">
     <title>艇 BoatRace</title>
-    <link rel="stylesheet" href="/web/assets/css/home.css?v=20260907a">
+    <link rel="stylesheet" href="/web/assets/css/home.css?v=20261006-forward-status-f">
 </head>
 <body>
 <div class="home-shell">
@@ -301,7 +301,50 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
                 <div id="upset-pick-meta" class="pick-more"></div>
             </section>
 
-            <section class="search-card">
+            <div class="search-status-stack">
+                <section class="forward-status-card is-unavailable" id="forward-status-panel" aria-live="polite" aria-label="AI前方検証ステータス">
+                    <div class="forward-status-head">
+                        <div class="forward-status-title">
+                            <strong>AI前方検証</strong>
+                            <button type="button" class="forward-status-help" data-forward-help-open aria-label="AI前方検証の説明を開く" aria-haspopup="dialog">？</button>
+                        </div>
+                        <span class="forward-status-state"><span data-forward-icon>⚪</span> <span data-forward-label>状態を確認中</span></span>
+                    </div>
+                    <div class="forward-status-grid">
+                        <span><small>Gate C</small><b data-forward-gate>読込中</b></span>
+                        <span><small>eligible</small><b data-forward-eligible>—</b></span>
+                        <span><small>accepted</small><b data-forward-accepted>—</b></span>
+                        <span><small>異常</small><b data-forward-alert>確認中</b></span>
+                        <span><small>Official Epoch</small><b data-forward-epoch>—</b></span>
+                        <span><small>最終更新</small><b data-forward-updated>—</b></span>
+                    </div>
+                    <dialog class="forward-status-dialog" id="forward-status-help-dialog" aria-labelledby="forward-status-help-title">
+                        <div class="forward-status-dialog-head">
+                            <strong id="forward-status-help-title">AI前方検証の見方</strong>
+                            <button type="button" data-forward-help-close aria-label="説明を閉じる">×</button>
+                        </div>
+                        <div class="forward-status-dialog-body">
+                            <p><b data-forward-help-current>現在の状態を確認しています。</b></p>
+                            <div class="forward-status-legend" aria-label="ステータス色の意味">
+                                <strong>色の意味</strong>
+                                <span><i aria-hidden="true">🟡</i><b>黄</b> データ収集中・待機中</span>
+                                <span><i aria-hidden="true">🟢</i><b>緑</b> Gate C PASS・確認待ち</span>
+                                <span><i aria-hidden="true">🔴</i><b>赤</b> 異常または不一致・要確認</span>
+                                <span><i aria-hidden="true">🔵</i><b>青</b> Official Forward実施中</span>
+                                <span><i aria-hidden="true">⚪</i><b>白</b> 状態確認中・取得不能</span>
+                            </div>
+                            <ol>
+                                <li><b>eligible が2レース以上</b><br>開始後に、前方検証の対象条件を満たした異なるレースが2つ以上必要です。</li>
+                                <li><b>accepted が eligible と同数</b><br>各レースで18用途の予定記録と実記録が揃い、締切前・実装情報も正しいことを確認します。</li>
+                                <li><b>異常なし</b><br>対象抽出、時刻、記録の欠損や実装情報の不一致がない状態が必要です。</li>
+                            </ol>
+                            <p class="forward-status-dialog-next">条件が揃うと <b>Gate C PASS</b> になります。<br><b>Official Epochは自動開始せず</b>、証拠確認と明示的な承認後に開始します。</p>
+                            <p class="forward-status-dialog-note">通常は待つだけで、画面からの操作は不要です。</p>
+                        </div>
+                    </dialog>
+                </section>
+
+                <section class="search-card">
                 <form id="race-search-form">
                     <div class="search-card-head">
                         <div>
@@ -364,7 +407,8 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
                         <span id="search-result-label">本日の全レース</span>
                     </div>
                 </form>
-            </section>
+                </section>
+            </div>
         </aside>
 
         <div class="venue-column">
@@ -467,6 +511,7 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
 </div>
 <script src="/web/assets/js/home.js?v=20260907a" defer></script>
 <script src="/web/assets/js/home_deadline_emphasis.js?v=20260927-venue-ml-v2" defer></script>
+<script src="/web/assets/js/home_forward_status.js?v=20261006c" defer></script>
 <script src="/web/assets/js/home_navigation_loading.js?v=20260909a" defer></script>
 </body>
 </html>

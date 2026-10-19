@@ -1,0 +1,55 @@
+.course4-attack-type-panel {
+    margin: 16px 0;
+    padding: 14px 16px;
+    border: 1px solid #b8d3df;
+    border-radius: 8px;
+    background: #f3f8fc;
+    color: #334155;
+}
+
+.course4-attack-type-title {
+    margin: 0;
+    color: #135f8c;
+    font-size: 17px;
+}
+
+.course4-attack-type-note {
+    margin: 5px 0 11px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.course4-attack-type-body {
+    color: #64748b;
+    font-size: 14px;
+}
+
+.course4-attack-type-body.is-unavailable { color: #64748b; }
+.course4-attack-type-body.is-error { color: #a74932; }
+
+.course4-attack-type-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid #d7e3eb;
+}
+
+.course4-attack-type-row:first-child { border-top: 0; }
+.course4-attack-type-row span { color: #455f72; }
+.course4-attack-type-row strong { color: #135f8c; font-size: 17px; white-space: nowrap; }
+
+.app-tab-panel[data-panel="basic"] .course4-attack-type-panel {
+    margin: 10px 0;
+    padding: 11px;
+}
+
+.app-tab-panel[data-panel="basic"] .course4-attack-type-title { font-size: 15px; }
+.app-tab-panel[data-panel="basic"] .course4-attack-type-note { font-size: 11px; }
+
+@media (max-width: 420px) {
+    .course4-attack-type-panel { padding: 12px; }
+    .course4-attack-type-row { gap: 8px; }
+    .course4-attack-type-row span { font-size: 13px; }
+}

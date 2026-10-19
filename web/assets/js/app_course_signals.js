@@ -1,27 +1,39 @@
 (function () {
     'use strict';
 
-    const panel = document.getElementById('app-course-signals');
-    if (!panel) return;
-
-    const code = String(panel.dataset.raceCode || '').trim().toUpperCase();
-    const date = String(panel.dataset.date || '').trim();
-    const place = String(panel.dataset.place || '').trim().toUpperCase();
     let readyResolved = false;
     let resolveReady;
     window.appCourseSignalsReady = new Promise(function (resolve) {
         resolveReady = resolve;
     });
 
-    function markReady(displayed) {
+    function markReady(state) {
         if (readyResolved) return;
         readyResolved = true;
-        window.appCourseSignalsReadyState = displayed ? 'displayed' : 'finished';
-        resolveReady(!!displayed);
+        window.clearTimeout(loadTimeout);
+        const displayed = state === 'displayed';
+        window.appCourseSignalsReadyState = state;
+        resolveReady({state: state, displayed: displayed});
     }
 
+    const panel = document.getElementById('app-course-signals');
+    const loadTimeout = window.setTimeout(function () {
+        if (activeController) activeController.abort();
+        showError('timeout');
+    }, 17000);
+    let activeController = null;
+
+    if (!panel) {
+        markReady('unavailable');
+        return;
+    }
+
+    const code = String(panel.dataset.raceCode || '').trim().toUpperCase();
+    const date = String(panel.dataset.date || '').trim();
+    const place = String(panel.dataset.place || '').trim().toUpperCase();
+
     if (!/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/.test(code) || !date || !place) {
-        markReady(false);
+        markReady('unavailable');
         return;
     }
 
@@ -54,6 +66,21 @@
         node.textContent = text;
         parent.appendChild(node);
         return node;
+    }
+
+    function showError(reason) {
+        if (readyResolved) return;
+        panel.innerHTML = '';
+        appendText(panel, 'app-course-signals-title', '💡 コースサイン');
+        appendText(
+            panel,
+            'app-course-signal-error',
+            reason === 'timeout'
+                ? 'コースサインの取得が時間内に完了しませんでした。'
+                : 'コースサインを取得できませんでした。'
+        );
+        panel.hidden = false;
+        window.requestAnimationFrame(function () { markReady(reason); });
     }
 
     function makeBox(detail, course, placeName) {
@@ -197,6 +224,7 @@
     }
 
     function show(data) {
+        if (readyResolved) return;
         const name = String(data.place_name || place);
         const maps = [
             [1, data.lane1_matches],
@@ -211,7 +239,7 @@
             .map(function (item) { return [item[0], item[1] && item[1][code] ? item[1][code] : null]; })
             .filter(function (item) { return item[1]; });
         if (!details.length) {
-            markReady(false);
+            markReady('unavailable');
             return;
         }
 
@@ -219,13 +247,22 @@
         appendText(panel, 'app-course-signals-title', '💡 コースサイン');
         details.forEach(function (item) { panel.appendChild(makeBox(item[1], item[0], name)); });
         panel.hidden = false;
-        markReady(true);
+        // 読み込み完了は、各サインをDOMへ追加しただけではなく、描画フレームへ
+        // 反映されるタイミングで通知する。
+        window.requestAnimationFrame(function () { markReady('displayed'); });
     }
 
     function load(attempt) {
+        if (readyResolved) return;
         const forceRefresh = !!document.querySelector('.exhibition-update-message');
         const refreshQuery = forceRefresh ? '&refresh=1' : '';
-        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place) + refreshQuery, {cache: 'no-store'})
+        const controller = new AbortController();
+        activeController = controller;
+        fetch('/web/tamagawa_lane4_star_api.php?date=' + encodeURIComponent(date) + '&place=' + encodeURIComponent(place) + refreshQuery, {
+            cache: 'no-store',
+            credentials: 'same-origin',
+            signal: controller.signal
+        })
             .then(function (response) {
                 return response.json().then(function (data) {
                     if (!response.ok || !data || data.status !== 'ok') {
@@ -236,8 +273,12 @@
             })
             .then(show)
             .catch(function () {
+                if (readyResolved) return;
                 if (attempt < 2) window.setTimeout(function () { load(attempt + 1); }, 900 * (attempt + 1));
-                else markReady(false);
+                else showError('error');
+            })
+            .finally(function () {
+                if (activeController === controller) activeController = null;
             });
     }
 
