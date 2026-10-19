@@ -67,15 +67,23 @@ class FakeCore:
 
 
 class FakeGuard:
-    def __init__(self, deadlines, deadline_dir):
+    def __init__(self, deadlines, deadline_dir, existing_results=None, result_error=None, deadline_sequences=None):
         self.deadlines = deadlines
         self.deadline_dir = deadline_dir
+        self.existing_results = set(existing_results or ())
+        self.result_error = result_error
+        self.deadline_sequences = {race_code: list(values) for race_code, values in (deadline_sequences or {}).items()}
 
     def deadline(self, race_code):
+        sequence = self.deadline_sequences.get(race_code)
+        if sequence:
+            return sequence.pop(0)
         return self.deadlines.get(race_code)
 
     def result_exists(self, race_code):
-        return False
+        if self.result_error is not None:
+            raise self.result_error
+        return race_code in self.existing_results
 
 
 class Clock:
@@ -98,9 +106,15 @@ def assert_blocked(result, reason):
     assert result["blocked_reason"] == [reason], result
 
 
-def capture(state, name, race_code, deadline, clock_values, cutoff, store=None, deadlines=None, deadline_dir=None):
+def capture(state, name, race_code, deadline, clock_values, cutoff, store=None, deadlines=None, deadline_dir=None, existing_results=None, result_error=None, deadline_sequences=None):
     store = store or module.ForwardSnapshotStore(state / name)
-    guard = FakeGuard(deadlines if deadlines is not None else {race_code: deadline}, deadline_dir or state / "deadlines")
+    guard = FakeGuard(
+        deadlines if deadlines is not None else {race_code: deadline},
+        deadline_dir or state / "deadlines",
+        existing_results=existing_results,
+        result_error=result_error,
+        deadline_sequences=deadline_sequences,
+    )
     instance = module.AttackTypeSnapshotCapture(FakeCore(), store, guard, Clock(*clock_values))
     return instance.capture(race_code, cutoff), store
 
@@ -182,7 +196,41 @@ def main():
         assert result["summary"]["BLOCKED"] == 1, result
         assert all(str(path.resolve()).startswith(str(state.resolve())) for path in state.rglob("*"))
 
-    print("PASS: 10 synthetic cutoff-guard cases")
+        # 11. A persisted race result blocks a new STRICT snapshot before inference.
+        result_exists, _ = capture(
+            state, "case11", race, deadline, [before], cutoff,
+            existing_results={race},
+        )
+        assert_blocked(result_exists, "RESULT_ALREADY_EXISTS")
+        assert not list((state / "case11" / "strict_forward").glob("*.json"))
+
+        # 12. Failure to check results fails closed before inference and leaves no snapshot.
+        error_store = module.ForwardSnapshotStore(state / "case12")
+        try:
+            capture(
+                state, "case12", race, deadline, [before], cutoff,
+                store=error_store,
+                result_error=RuntimeError("synthetic-result-lookup-failure"),
+            )
+            raise AssertionError("result lookup failure must not continue to inference")
+        except RuntimeError as error:
+            assert str(error) == "synthetic-result-lookup-failure", error
+        assert not list((state / "case12" / "strict_forward").glob("*.json"))
+
+        # 13. A deadline that moves earlier between the two checks blocks the first write.
+        changed_deadline, _ = capture(
+            state, "case13", race, deadline, [before, before], cutoff,
+            deadline_sequences={race: [timestamp("2026-10-19T12:10:00+09:00"), timestamp("2026-10-19T11:58:00+09:00")]},
+        )
+        assert_blocked(changed_deadline, "DEADLINE_PASSED")
+        assert not list((state / "case13" / "strict_forward").glob("*.json"))
+
+        # 14. A timezone-less capture clock is rejected instead of comparing naive times.
+        timezone_missing, _ = capture(state, "case14", race, deadline, ["2026-10-19T11:59:00"], cutoff)
+        assert_blocked(timezone_missing, "CAPTURE_TIME_UNAVAILABLE")
+        assert not list((state / "case14" / "strict_forward").glob("*.json"))
+
+    print("PASS: 14 synthetic cutoff-guard cases")
 
 
 if __name__ == "__main__":
