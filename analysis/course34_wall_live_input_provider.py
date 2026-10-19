@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 OUT = ROOT / "output"
 sys.path.insert(0, str(ROOT))
+from course4_attack_ledger_generation_store import MODE_GENERATION, MODE_LEGACY, AttackTypeLedgerGenerationStore, GenerationContext, GenerationStoreError  # noqa: E402
 from course4_tenkai_canonical_input import CANONICAL_VERSION, SNAPSHOT_VERSION, StaticSnapshotStore, canonical_json, parse_cutoff, sha256, value  # noqa: E402
 
 CONTRACT_VERSION = "course34-wall-live-input/v1"
@@ -27,7 +28,15 @@ def subtract(left, right):
 
 
 class WallRLiveInputProvider:
-    def __init__(self, snapshot_store=None, exhibition_provider=None):
+    """Wall features have no ledger history; generation only pins exhibition input."""
+
+    def __init__(self, snapshot_store=None, exhibition_provider=None, *, ledger_mode=MODE_LEGACY,
+                 generation_root=None, generation_store_factory=AttackTypeLedgerGenerationStore):
+        if ledger_mode not in (MODE_LEGACY, MODE_GENERATION):
+            raise ValueError("INVALID_LEDGER_MODE")
+        self.ledger_mode = ledger_mode
+        self.generation_root = Path(generation_root).absolute() if generation_root is not None else None
+        self.generation_store_factory = generation_store_factory
         self.artifact = json.loads(ARTIFACT.read_text(encoding="utf-8"))
         self.manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         with BASELINE.open(encoding="utf-8") as handle:
@@ -45,9 +54,21 @@ class WallRLiveInputProvider:
             errors.append("CANONICAL_BASELINE_MISMATCH")
         if tuple(self.manifest.get("feature_order", ())) != self.feature_order:
             errors.append("FEATURE_SCHEMA_MISMATCH")
+        if self.ledger_mode == MODE_GENERATION and self.generation_root is None:
+            errors.append("GENERATION_CONTEXT_REQUIRED")
         return errors
 
-    def _response(self, race_code, cutoff, mode, available, reasons, vector=None, raw=None, mapping=None, snapshot=None):
+    def _ledger_identity(self, context: GenerationContext | None):
+        if self.ledger_mode == MODE_LEGACY:
+            return None
+        if context is None:
+            return {"mode": MODE_GENERATION, "unavailable": True}
+        return {"mode": MODE_GENERATION, "generation_id": context.generation_id, "sha256": context.ledger_sha256,
+                "manifest_sha256": context.manifest_sha256, "state_sha256": context.state_sha256,
+                "descriptor_sha256": context.descriptor_sha256, "activation_id": context.activation_id,
+                "activated_at": context.activated_at.isoformat()}
+
+    def _response(self, race_code, cutoff, mode, available, reasons, vector=None, raw=None, mapping=None, snapshot=None, context=None):
         payload = {
             "contract_version": CONTRACT_VERSION, "signal_id": "WALL_R", "stage": "POST_EXHIBITION",
             "mode": mode, "race_code": race_code, "prediction_cutoff": cutoff.isoformat(),
@@ -58,6 +79,8 @@ class WallRLiveInputProvider:
             "manifest_identity": {"path": str(MANIFEST.relative_to(REPO)), "sha256": self.identities["manifest"]},
             "raw_input": raw or {}, "entry_mapping": mapping or {}, "snapshot_identity": snapshot or {},
         }
+        if self.ledger_mode == MODE_GENERATION:
+            payload["ledger_identity"] = self._ledger_identity(context)
         payload["input_sha256"] = hashlib.sha256(canonical_json(payload).encode()).hexdigest()
         return payload
 
@@ -83,13 +106,19 @@ class WallRLiveInputProvider:
         vector = [value(row.get(f"feature_{name}")) for name in self.feature_order]
         return self._response(race_code, cutoff, "RESEARCH_REPLAY", True, [], vector, raw={"source_kind": row["source_kind"], "baseline_frozen": row["baseline_frozen"]}, mapping={"course3_player_id": row["course3_player_id"], "course4_player_id": row["course4_player_id"]})
 
-    def _exhibition(self, race_code, cutoff):
+    def _exhibition(self, race_code, cutoff, context):
         if self.exhibition_provider is None:
             from course4_attack_type_live_input_provider import AttackTypeLiveInputProvider
-            provider = AttackTypeLiveInputProvider()
+            provider = AttackTypeLiveInputProvider(ledger_mode=self.ledger_mode)
         else:
             provider = self.exhibition_provider
-        result = provider.build(race_code, cutoff.isoformat(), "LIVE")
+        if self.ledger_mode == MODE_GENERATION:
+            result = provider.build(race_code, cutoff.isoformat(), "LIVE", generation_context=context)
+            identity = result.get("ledger_identity", {})
+            if context is None or identity.get("generation_id") != context.generation_id or identity.get("sha256") != context.ledger_sha256 or identity.get("manifest_sha256") != context.manifest_sha256:
+                return None, result, ["GENERATION_CONTEXT_MISMATCH"]
+        else:
+            result = provider.build(race_code, cutoff.isoformat(), "LIVE")
         if not result.get("prediction_available"):
             return None, result, result.get("missing_reason") or ["EXHIBITION_CONTRACT_UNAVAILABLE"]
         records = result.get("raw_input", {}).get("exhibition_rows", [])
@@ -98,13 +127,13 @@ class WallRLiveInputProvider:
             return None, result, ["ENTRY_MAPPING_INCOMPLETE"]
         return by_course, result, []
 
-    def _live(self, race_code, cutoff):
+    def _live(self, race_code, cutoff, context):
         try:
             snapshot = self.store.read(race_code)
         except ValueError as error:
-            return self._response(race_code, cutoff, "LIVE", False, [str(error)])
+            return self._response(race_code, cutoff, "LIVE", False, [str(error)], context=context)
         if snapshot is None:
-            return self._response(race_code, cutoff, "LIVE", False, ["PROSPECTIVE_SNAPSHOT_NOT_FOUND"])
+            return self._response(race_code, cutoff, "LIVE", False, ["PROSPECTIVE_SNAPSHOT_NOT_FOUND"], context=context)
         reasons = []
         if snapshot.get("snapshot_version") != SNAPSHOT_VERSION or snapshot.get("canonical_version") != CANONICAL_VERSION:
             reasons.append("PROSPECTIVE_SNAPSHOT_VERSION_MISMATCH")
@@ -114,17 +143,25 @@ class WallRLiveInputProvider:
         c3, c4 = lanes.get("3"), lanes.get("4")
         if not isinstance(c3, dict) or not isinstance(c4, dict):
             reasons.append("PROSPECTIVE_SNAPSHOT_INCOMPLETE")
-        exhibit, exhibit_payload, exhibit_reasons = self._exhibition(race_code, cutoff)
+        exhibit, exhibit_payload, exhibit_reasons = self._exhibition(race_code, cutoff, context)
         reasons.extend(exhibit_reasons)
         if reasons:
-            return self._response(race_code, cutoff, "LIVE", False, reasons, raw={"snapshot_static": snapshot.get("lanes", {})}, mapping=exhibit_payload.get("entry_mapping", {}), snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")})
+            return self._response(race_code, cutoff, "LIVE", False, reasons, raw={"snapshot_static": snapshot.get("lanes", {})}, mapping=exhibit_payload.get("entry_mapping", {}), snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")}, context=context)
         if str(c3.get("player_id")) != str(exhibit[3].get("player_id")) or str(c4.get("player_id")) != str(exhibit[4].get("player_id")):
-            return self._response(race_code, cutoff, "LIVE", False, ["SNAPSHOT_ENTRY_MAPPING_MISMATCH"], snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")})
+            return self._response(race_code, cutoff, "LIVE", False, ["SNAPSHOT_ENTRY_MAPPING_MISMATCH"], snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")}, context=context)
         vector = self._features(c3, c4, exhibit)
         missing = [name for name, item in zip(self.feature_order, vector) if item is None]
         if missing:
-            return self._response(race_code, cutoff, "LIVE", False, ["MISSING_REQUIRED_FEATURE"], vector, raw={"missing_features": missing}, mapping=exhibit_payload.get("entry_mapping", {}), snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")})
-        return self._response(race_code, cutoff, "LIVE", True, [], vector, raw={"static_source": "prospective_first_write", "exhibition_source": "attack_type_post_exhibition_contract"}, mapping=exhibit_payload.get("entry_mapping", {}), snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")})
+            return self._response(race_code, cutoff, "LIVE", False, ["MISSING_REQUIRED_FEATURE"], vector, raw={"missing_features": missing}, mapping=exhibit_payload.get("entry_mapping", {}), snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")}, context=context)
+        return self._response(race_code, cutoff, "LIVE", True, [], vector, raw={"static_source": "prospective_first_write", "exhibition_source": "attack_type_post_exhibition_contract"}, mapping=exhibit_payload.get("entry_mapping", {}), snapshot={"path": str(self.store.path(race_code)), "sha256": snapshot.get("snapshot_sha256")}, context=context)
+
+    def _resolve_context(self, cutoff):
+        if self.ledger_mode != MODE_GENERATION:
+            return None
+        try:
+            return self.generation_store_factory(self.generation_root).resolve(mode=MODE_GENERATION, prediction_cutoff=cutoff)
+        except GenerationStoreError:
+            return None
 
     def build(self, race_code, prediction_cutoff, mode):
         race_code, mode = str(race_code).upper().strip(), str(mode).upper().strip()
@@ -133,10 +170,15 @@ class WallRLiveInputProvider:
         except ValueError:
             return {"feature_available": False, "missing_reason": ["PREDICTION_CUTOFF_TIMEZONE_REQUIRED"]}
         errors = self._errors()
+        if self.ledger_mode == MODE_GENERATION and mode != "LIVE":
+            errors.append("INVALID_MODE")
         if errors:
             return self._response(race_code, cutoff, mode, False, errors)
         if mode == "RESEARCH_REPLAY":
             return self._research(race_code, cutoff)
         if mode == "LIVE":
-            return self._live(race_code, cutoff)
+            context = self._resolve_context(cutoff)
+            if self.ledger_mode == MODE_GENERATION and context is None:
+                return self._response(race_code, cutoff, mode, False, ["GENERATION_CONTEXT_REQUIRED"])
+            return self._live(race_code, cutoff, context)
         return self._response(race_code, cutoff, mode, False, ["INVALID_MODE"])

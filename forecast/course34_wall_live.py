@@ -6,15 +6,22 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent; ANALYSIS = REPO / "analysis"; sys.path.insert(0, str(ANALYSIS))
 from course34_wall_live_input_provider import ARTIFACT, EXPECTED_ARTIFACT_SHA256, WallRLiveInputProvider
+from course4_attack_ledger_generation_store import MODE_GENERATION, MODE_LEGACY
 from course4_tenkai_binary_live import BinaryLiveInferenceCore
 
 FEATURE_ORDER = ("smoothed_avg_st_delta_34", "ex_st_delta_34", "avg_st_rank_delta_34", "st_profile_reliability_advantage_34", "exhibition_time_delta_34", "lap_time_delta_34", "around_time_delta_34", "straight_time_delta_34")
 
 class WallRLiveInferenceCore(BinaryLiveInferenceCore):
-    def __init__(self, provider=None, paths=None, expected_artifact=None):
+    def __init__(self, provider=None, paths=None, expected_artifact=None, *, ledger_mode=MODE_LEGACY,
+                 generation_root=None, generation_store_factory=None):
+        if ledger_mode not in (MODE_LEGACY, MODE_GENERATION):
+            raise ValueError("INVALID_LEDGER_MODE")
+        provider_kwargs = {"ledger_mode": ledger_mode, "generation_root": generation_root}
+        if generation_store_factory is not None:
+            provider_kwargs["generation_store_factory"] = generation_store_factory
         super().__init__(signal_id="WALL_R", probability_key="wall_probability", score_key="wall_score", artifact_path=ARTIFACT,
                          expected_artifact_sha256=EXPECTED_ARTIFACT_SHA256, expected_feature_order=FEATURE_ORDER,
-                         provider_factory=WallRLiveInputProvider, provider_source=ANALYSIS / "course34_wall_live_input_provider.py",
+                         provider_factory=lambda: WallRLiveInputProvider(**provider_kwargs), provider_source=ANALYSIS / "course34_wall_live_input_provider.py",
                          logic_source=Path(__file__), provider=provider, paths=paths, expected_artifact=expected_artifact)
 
 def predict(race_code, prediction_cutoff): return WallRLiveInferenceCore().predict(race_code, prediction_cutoff)

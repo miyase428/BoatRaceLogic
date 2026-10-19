@@ -146,6 +146,10 @@ class BinaryLiveInferenceCore:
             "feature_vector": vector, "feature_order": list(self.expected_feature_order),
             "input_sha256": source["input_sha256"], "provider_logic_identity": source.get("contract_version"),
         })
+        # A provider exposes this only for an explicit immutable-generation
+        # request.  Legacy responses remain byte-for-byte field-compatible.
+        if source.get("ledger_identity") is not None:
+            response["input_ledger_identity"] = source["ledger_identity"]
         return response
 
     def predict(self, race_code, prediction_cutoff):
