@@ -13,6 +13,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 import subprocess
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -107,6 +108,7 @@ def _validate_complete_finalized_races(raw_rows: list[dict], *, through_date: da
             player_id = str(raw["player_id"]).strip()
             actual_course = int(raw["actual_course"])
             final_rank = int(raw["final_rank"])
+            finalized_at = _utc_timestamp(str(raw["race_finalized_at"]), "RACE_FINALIZED_AT")
         except (KeyError, TypeError, ValueError) as error:
             raise GenerationBuilderError("FINALIZED_RACE_ROW_INVALID") from error
         if not race_code or not player_id or actual_course not in range(1, 7) or final_rank not in range(1, 7):
@@ -115,7 +117,8 @@ def _validate_complete_finalized_races(raw_rows: list[dict], *, through_date: da
             raise GenerationBuilderError("FINALIZED_RACE_OUTSIDE_THROUGH_DATE")
         item = dict(raw)
         item.update({"race_code": race_code, "race_date": race_day.isoformat(), "player_id": player_id,
-                     "actual_course": actual_course, "final_rank": final_rank})
+                     "actual_course": actual_course, "final_rank": final_rank,
+                     "race_finalized_at": finalized_at.isoformat()})
         by_race.setdefault(race_code, []).append(item)
 
     rows: list[dict] = []
@@ -125,6 +128,8 @@ def _validate_complete_finalized_races(raw_rows: list[dict], *, through_date: da
             raise GenerationBuilderError("RACE_FINALIZATION_NOT_COMPLETE")
         if len({item["player_id"] for item in entrants}) != 6 or {item["final_rank"] for item in entrants} != set(range(1, 7)):
             raise GenerationBuilderError("RACE_FINALIZATION_NOT_COMPLETE")
+        if len({item["race_date"] for item in entrants}) != 1:
+            raise GenerationBuilderError("RACE_IDENTITY_NOT_COMPLETE")
         c4 = [item for item in entrants if item["actual_course"] == 4]
         if len(c4) != 1:
             raise GenerationBuilderError("RACE_COURSE_MAPPING_NOT_COMPLETE")
@@ -156,7 +161,7 @@ def build_generation_ledger(*, baseline_rows: list[dict], baseline_source_manife
     without touching live artifacts.
     """
     observed = _utc_timestamp(observed_at, "DB_OBSERVED_AT")
-    if not isinstance(baseline_source_sha256, str) or len(baseline_source_sha256) != 64:
+    if not isinstance(baseline_source_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", baseline_source_sha256):
         raise GenerationBuilderError("BASELINE_SOURCE_SHA256_INVALID")
     baseline_by_id = {str(row.get("event_id", "")): row for row in baseline_rows}
     if not baseline_by_id or len(baseline_by_id) != len(baseline_rows):
