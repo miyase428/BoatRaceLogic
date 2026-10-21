@@ -34,6 +34,9 @@ assert.equal(merged.boats.length, 6);
 assert.equal(merged.boats[0].straight_time, null);
 assert.equal(merged.boats[0].availability.straight_time, 'not_published');
 assert.equal(adapter.parseStartDisplay(start(undefined, [2, 1, 3, 4, 5, 6]), DATE, RACE)[0].entry_course, '2');
+const changedEntry = adapter.parseStartDisplay(start(['.11', '.12', '.13', '.14', '.15', '.16'], [2, 1, 3, 4, 5, 6]), DATE, RACE);
+assert.equal(changedEntry.find((boat) => boat.lane === '1').start_timing, '.12');
+assert.equal(changedEntry.find((boat) => boat.lane === '2').start_timing, '.11');
 mustThrow('RACE_IDENTITY_MISMATCH', () => adapter.parseDirectInfo(direct().replace('20261021', '20261022'), DATE, RACE));
 mustThrow('PLAYER_ID_MISMATCH', () => adapter.parseDirectInfo(direct().replace('9006', '9005'), DATE, RACE));
 mustThrow('INVALID_EXHIBITION_TIME', () => adapter.parseDirectInfo(direct().replace('class="col3"', 'class="changed-column"'), DATE, RACE));
@@ -45,4 +48,49 @@ mustThrow('CROSS_PAGE_IDENTITY_MISMATCH', () => adapter.mergePublished(parsedDir
 mustThrow('EXHIBITION_TIME_MISMATCH', () => adapter.mergePublished(parsedDirect.boats, parsedStart, adapter.parseOriginalData(original().replace('6.71', '6.99'), DATE, RACE), { date: DATE, race: RACE, fetchedAt: 'x', sourceUrls: {} }));
 assert.equal(adapter.officialUrl(DATE, RACE, 2), 'https://boatrace-amagasaki.jp/modules/yosou/group-cyokuzen.php?day=20261021&race=1&kind=2&if=1');
 
-console.log('PASS: 14 synthetic Amagasaki official exhibition parser cases');
+function fakeFetcher(pages) {
+  return async (url) => {
+    const kind = new URL(url).searchParams.get('kind');
+    if (!pages[kind]) throw new Error(`unexpected kind ${kind}`);
+    return pages[kind];
+  };
+}
+
+(async () => {
+  const published = await adapter.capture(DATE, RACE, {
+    fetchPage: fakeFetcher({
+      0: { body: direct(), completedAt: '2026-10-21T00:00:01.000Z' },
+      1: { body: start(), completedAt: '2026-10-21T00:00:02.000Z' },
+      2: { body: original(), completedAt: '2026-10-21T00:00:03.000Z' },
+    }),
+    now: () => '2026-10-21T00:00:04.000Z',
+  });
+  assert.equal(published.fetched_at, '2026-10-21T00:00:04.000Z');
+  assert.deepEqual(published.page_fetched_at, {
+    direct_info: '2026-10-21T00:00:01.000Z', start_display: '2026-10-21T00:00:02.000Z', original_data: '2026-10-21T00:00:03.000Z',
+  });
+  assert.equal(published.start_timing_mapping, 'official_start_display_course_order');
+
+  const unpublished = await adapter.capture(DATE, RACE, {
+    fetchPage: fakeFetcher({ 0: { body: direct(['-.--', '-.--', '-.--', '-.--', '-.--', '-.--']), completedAt: '2026-10-21T00:05:00.000Z' } }),
+    now: () => { throw new Error('not_yet_published must not sample a later final timestamp'); },
+  });
+  assert.equal(unpublished.fetched_at, '2026-10-21T00:05:00.000Z');
+  assert.deepEqual(unpublished.page_fetched_at, { direct_info: '2026-10-21T00:05:00.000Z' });
+
+  await assert.rejects(
+    () => adapter.capture(DATE, RACE, {
+      fetchPage: fakeFetcher({
+        0: { body: direct(), completedAt: '2026-10-21T00:00:01.000Z' },
+        1: { body: start(), completedAt: '2026-10-21T00:00:02.000Z' },
+        2: { body: original(), completedAt: '2026-10-21T00:00:03.000Z' },
+      }),
+      now: () => '2026-10-21T00:00:02.500Z',
+    }),
+    (error) => error && error.code === 'FETCH_TIMESTAMP_BACKDATED',
+  );
+  console.log('PASS: 20 synthetic Amagasaki official exhibition parser cases');
+})().catch((error) => {
+  console.error(error.stack || error.message);
+  process.exitCode = 1;
+});

@@ -9,7 +9,9 @@
  * explicit CLI invocation uses at most three ordinary document requests:
  * direct information first, then start display and original data only after
  * six published exhibition times are confirmed.  It never retries 403, 429,
- * or 5xx responses.
+ * or 5xx responses.  A published result records completion only after all
+ * three documents have been parsed and cross-validated; it is never backdated
+ * to the first document response.
  */
 
 const https = require('https');
@@ -105,7 +107,12 @@ function parseStartDisplay(html, date, race) {
   if (startTimings.length !== 6 || startTimings.some((value) => !/^(?:F|L)?\.?\d{2}$/i.test(value))) {
     throw new ParseError('START_TIMING_MISMATCH', 'start display does not contain six valid raw ST values');
   }
-  boats.forEach((boat, index) => { boat.start_timing = startTimings[index]; });
+  // The official start-display column is presented in entry-course order, not
+  // necessarily source-table row (lane) order.  Bind its six values to the
+  // explicit, unique course labels before joining back to player IDs.  If that
+  // course contract or the count changes, fail closed rather than guessing.
+  [...boats].sort((left, right) => Number(left.entry_course) - Number(right.entry_course))
+    .forEach((boat, index) => { boat.start_timing = startTimings[index]; });
   return boats;
 }
 
@@ -161,6 +168,8 @@ function mergePublished(direct, start, original, metadata) {
     source_url: metadata.sourceUrls.direct_info, source_urls: metadata.sourceUrls,
     fetched_at: metadata.fetchedAt, race_date: metadata.date, race_no: metadata.race,
     race_code: `${metadata.date}${PLACE_CODE}${String(metadata.race).padStart(2, '0')}`,
+    start_timing_mapping: 'official_start_display_course_order',
+    page_fetched_at: metadata.pageFetchedAt,
     boats,
   };
 }
@@ -186,25 +195,60 @@ function fetchOnce(url) {
       let body = '';
       response.setEncoding('utf8');
       response.on('data', (chunk) => { body += chunk; });
-      response.on('end', () => resolve(body));
+      response.on('end', () => resolve({ body, completedAt: new Date().toISOString() }));
     });
     request.setTimeout(30000, () => request.destroy(new Error('official source timed out')));
     request.on('error', reject);
   });
 }
 
-async function capture(date, race) {
+function normaliseFetchResult(result) {
+  if (typeof result === 'string') return { body: result, completedAt: new Date().toISOString() };
+  if (!result || typeof result.body !== 'string' || typeof result.completedAt !== 'string') {
+    throw new ParseError('FETCH_RESULT_INVALID', 'fetch result must include body and completedAt');
+  }
+  const completedAt = new Date(result.completedAt);
+  if (Number.isNaN(completedAt.getTime()) || completedAt.toISOString() !== result.completedAt) {
+    throw new ParseError('FETCH_TIMESTAMP_INVALID', 'page completion time must be UTC ISO 8601');
+  }
+  return result;
+}
+
+async function capture(date, race, dependencies = {}) {
   if (!/^\d{8}$/.test(date) || !Number.isInteger(race) || race < 1 || race > 12) {
     throw new ParseError('INVALID_ARGUMENT', 'use --date YYYYMMDD and --race 1..12');
   }
+  const fetchPage = dependencies.fetchPage || fetchOnce;
+  const now = dependencies.now || (() => new Date().toISOString());
   const sourceUrls = { direct_info: officialUrl(date, race, 0), start_display: officialUrl(date, race, 1), original_data: officialUrl(date, race, 2) };
-  const direct = parseDirectInfo(await fetchOnce(sourceUrls.direct_info), date, race);
-  const fetchedAt = new Date().toISOString();
+  const directPage = normaliseFetchResult(await fetchPage(sourceUrls.direct_info));
+  const direct = parseDirectInfo(directPage.body, date, race);
   if (direct.status === 'not_yet_published') {
-    return { schema: 'official-exhibition/v1', status: 'not_yet_published', source: 'official_amagasaki', source_url: sourceUrls.direct_info, source_urls: { direct_info: sourceUrls.direct_info }, fetched_at: fetchedAt, race_date: date, race_no: race, race_code: `${date}${PLACE_CODE}${String(race).padStart(2, '0')}`, boats: [] };
+    return { schema: 'official-exhibition/v1', status: 'not_yet_published', source: 'official_amagasaki', source_url: sourceUrls.direct_info, source_urls: { direct_info: sourceUrls.direct_info }, fetched_at: directPage.completedAt, page_fetched_at: { direct_info: directPage.completedAt }, race_date: date, race_no: race, race_code: `${date}${PLACE_CODE}${String(race).padStart(2, '0')}`, boats: [] };
   }
-  const [startHtml, originalHtml] = await Promise.all([fetchOnce(sourceUrls.start_display), fetchOnce(sourceUrls.original_data)]);
-  return mergePublished(direct.boats, parseStartDisplay(startHtml, date, race), parseOriginalData(originalHtml, date, race), { sourceUrls, fetchedAt, date, race });
+  const [startPage, originalPage] = await Promise.all([
+    fetchPage(sourceUrls.start_display).then(normaliseFetchResult),
+    fetchPage(sourceUrls.original_data).then(normaliseFetchResult),
+  ]);
+  const start = parseStartDisplay(startPage.body, date, race);
+  const original = parseOriginalData(originalPage.body, date, race);
+  // Cross-page identity and exhibition-time validation complete before the
+  // final completion timestamp is sampled.
+  const result = mergePublished(direct.boats, start, original, {
+    sourceUrls,
+    pageFetchedAt: { direct_info: directPage.completedAt, start_display: startPage.completedAt, original_data: originalPage.completedAt },
+    fetchedAt: null, date, race,
+  });
+  const fetchedAt = now();
+  const finalAt = new Date(fetchedAt);
+  if (Number.isNaN(finalAt.getTime()) || finalAt.toISOString() !== fetchedAt) {
+    throw new ParseError('FETCH_TIMESTAMP_INVALID', 'final completion time must be UTC ISO 8601');
+  }
+  if ([directPage, startPage, originalPage].some((page) => new Date(page.completedAt).getTime() > finalAt.getTime())) {
+    throw new ParseError('FETCH_TIMESTAMP_BACKDATED', 'final completion time precedes a page completion time');
+  }
+  result.fetched_at = fetchedAt;
+  return result;
 }
 
 function readArgument(name) {
@@ -221,4 +265,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { ParseError, officialUrl, parseDirectInfo, parseStartDisplay, parseOriginalData, mergePublished };
+module.exports = { ParseError, officialUrl, parseDirectInfo, parseStartDisplay, parseOriginalData, mergePublished, capture };
