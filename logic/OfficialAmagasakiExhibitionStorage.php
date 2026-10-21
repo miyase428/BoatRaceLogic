@@ -209,38 +209,55 @@ final class OfficialAmagasakiExhibitionTransactionStore
     /** @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries @return array{status:string,comparison:string} */
     public function persist(array $payload, string $raceCode, array $raceEntries): array
     {
-        $rows = $this->validator->validateAndConvert($payload, $raceCode, $raceEntries);
         $begun = false;
         try {
             $this->repository->begin();
             $begun = true;
-            $existing = $this->repository->existingRows($raceCode);
-            $comparison = $this->comparison($existing, $rows);
-            if ($comparison !== 'none') {
+            $result = $this->persistWithinOpenTransaction($payload, $raceCode, $raceEntries);
+            if ($result['status'] !== 'saved') {
                 $this->repository->rollback();
                 $begun = false;
-                if (count($existing) !== 6) return ['status' => 'requires_review_partial', 'comparison' => $comparison];
-                if (!$this->repository->hasOfficialAudit($raceCode)) return ['status' => 'requires_review_source_unknown', 'comparison' => $comparison];
-                return ['status' => $comparison === 'exact' ? 'already_official' : 'requires_review_mismatch', 'comparison' => $comparison];
+                return $result;
             }
-            $averages = $this->repository->averages('AMG');
-            foreach ($rows as &$row) {
-                [$row['exhibition_score'], $row['exhibition_type']] = $this->score($averages, $row);
-            }
-            unset($row);
-            $audit = [
-                'audit_id' => bin2hex(random_bytes(16)), 'race_code' => $raceCode, 'source' => 'official_amagasaki',
-                'source_url' => (string)$payload['source_url'], 'fetched_at' => (string)$payload['fetched_at'], 'page_fetched_at' => $payload['page_fetched_at'],
-                'before_rows' => [], 'after_rows' => $rows, 'comparison_status' => 'none', 'result_status' => 'saved', 'error_reason' => null,
-            ];
-            $this->repository->insertSix($rows);
-            $this->repository->insertAudit($audit);
             $this->repository->commit();
-            return ['status' => 'saved', 'comparison' => 'none'];
+            return $result;
         } catch (Throwable) {
             if ($begun) $this->repository->rollback();
             return ['status' => 'rolled_back', 'comparison' => 'none'];
         }
+    }
+
+    /**
+     * Performs validation and writes only while a caller-owned transaction is
+     * open.  It lets the daytime integration commit the six rows, audit, and
+     * claimed attempt completion as one database transaction.
+     *
+     * @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries
+     * @return array{status:string,comparison:string}
+     */
+    public function persistWithinOpenTransaction(array $payload, string $raceCode, array $raceEntries): array
+    {
+        $rows = $this->validator->validateAndConvert($payload, $raceCode, $raceEntries);
+        $existing = $this->repository->existingRows($raceCode);
+        $comparison = $this->comparison($existing, $rows);
+        if ($comparison !== 'none') {
+            if (count($existing) !== 6) return ['status' => 'requires_review_partial', 'comparison' => $comparison];
+            if (!$this->repository->hasOfficialAudit($raceCode)) return ['status' => 'requires_review_source_unknown', 'comparison' => $comparison];
+            return ['status' => $comparison === 'exact' ? 'already_official' : 'requires_review_mismatch', 'comparison' => $comparison];
+        }
+        $averages = $this->repository->averages('AMG');
+        foreach ($rows as &$row) {
+            [$row['exhibition_score'], $row['exhibition_type']] = $this->score($averages, $row);
+        }
+        unset($row);
+        $audit = [
+            'audit_id' => bin2hex(random_bytes(16)), 'race_code' => $raceCode, 'source' => 'official_amagasaki',
+            'source_url' => (string)$payload['source_url'], 'fetched_at' => (string)$payload['fetched_at'], 'page_fetched_at' => $payload['page_fetched_at'],
+            'before_rows' => [], 'after_rows' => $rows, 'comparison_status' => 'none', 'result_status' => 'saved', 'error_reason' => null,
+        ];
+        $this->repository->insertSix($rows);
+        $this->repository->insertAudit($audit);
+        return ['status' => 'saved', 'comparison' => 'none'];
     }
 
     /** @param list<array<string,mixed>> $existing @param list<array<string,mixed>> $rows */
