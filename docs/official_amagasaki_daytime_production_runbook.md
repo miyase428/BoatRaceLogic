@@ -11,6 +11,12 @@
 - 部分行、品質不完全行、出所不明の6艇、公式監査済み6艇は補完しません。`20261021AMG01`も自動更新しません。
 - 23時の競艇日和データは`kyoteibiyori_nightly`として監査し、`official_amagasaki`やStrict Forwardの締切前証跡として扱いません。
 
+## 締切キャッシュと23時優先処理
+
+- 日中ジョブは`/tmp/boatrace_official_deadlines/deadlines_YYYYMMDD.json`にAMG全12Rの`HH:MM`がそろった場合だけ候補を作成します。欠損・破損・読込不能なら`OFFICIAL_DEADLINE_CACHE_UNAVAILABLE`で停止し、公式展示へ接続しません。
+- `analysis/prepare_official_amagasaki_deadline_cache.php --execute`は、共有制御行で日中公式取得が承認済みの場合だけ既存の`OfficialDeadlineLogic`を呼びます。同日AMGの全12Rキャッシュが完全なら外部アクセスをせず`CACHE_COMPLETE`を返します。日中ジョブと同じホスト・実行ユーザー（または同じ読取権限）で実行してください。
+- 専用23時ラッパーは、過去日の`last_date`処理より当日のAMGを先に処理し、当日内でもAMGを最優先にします。通常の過去日巡回、他23場、23時外のAMGにはこの優先化を適用しません。
+
 ## 導入前の必須条件
 
 1. 尼崎公式HPの自動取得条件・回数・頻度を確認し、承認済みであること。
@@ -44,27 +50,35 @@ psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -f analysis/sql/create_official_exhib
 psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -f analysis/sql/create_official_exhibition_nightly_backfill_v1.sql
 ```
 
-4. 共有制御行がすべて無効であることを確認し、公式HTTPを呼ばないdry-runを行います。
+4. **第1段階（有効化しない安全な配置）**として、共有制御行がすべて無効であることを確認し、公式HTTPを呼ばないdry-runを行います。cron登録はまだ行いません。
 
 ```bash
 psql "$BOATRACE_DB_DSN" -c "SELECT route_enabled, automation_approved, nightly_backfill_enabled, retry_interval_seconds FROM boat_race.official_exhibition_control_v1 WHERE control_key='amagasaki';"
 php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --dry-run
+php analysis/prepare_official_amagasaki_deadline_cache.php --date=YYYYMMDD --dry-run
 ```
 
-5. 公式HPの承認後、日中公式取得と23時補完を個別に有効化します。`retry_interval_seconds`には承認済み間隔のみを設定します。
+5. **第2段階（明示承認後の稼働）**では、公式HPの利用条件・頻度、実行ホスト・実行ユーザー、バックアップ復旧担当、AMG既存行監査を確認してから、日中公式取得と23時補完を個別に有効化します。`retry_interval_seconds`には承認済み間隔のみを設定します。
 
 ```bash
 psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -c "UPDATE boat_race.official_exhibition_control_v1 SET route_enabled=true, automation_approved=true, nightly_backfill_enabled=true, retry_interval_seconds=120, version=version+1, updated_at=NOW(), updated_by='APPROVED_OPERATOR' WHERE control_key='amagasaki';"
 ```
 
-6. 監視下で日中ジョブを単発実行し、成功後だけ日中1分周期のテンプレートを登録します。テンプレート出力自体はcrontabを変更しません。
+6. 締切キャッシュを、日中ジョブと同じ実行ユーザーで監視下に一度だけ準備します。出力が`prepared`または`ready`で、AMG全12Rがあることを確認します。
+
+```bash
+php analysis/prepare_official_amagasaki_deadline_cache.php --date=YYYYMMDD --execute
+php -r '$p="/tmp/boatrace_official_deadlines/deadlines_YYYYMMDD.json"; $j=json_decode(file_get_contents($p),true,512,JSON_THROW_ON_ERROR); $n=0; foreach ($j["deadlines"] as $k=>$v) if (preg_match("/^YYYYMMDDAMG(0[1-9]|1[0-2])$/",$k)&&preg_match("/^\\d{2}:\\d{2}$/",$v)) $n++; if ($n!==12) exit(1); echo "AMG deadlines: $n\\n";'
+```
+
+7. 監視下で日中ジョブを単発実行し、成功後だけ日中1分周期のテンプレートを登録します。テンプレート出力自体はcrontabを変更しません。
 
 ```bash
 php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --execute
 analysis/print_official_amagasaki_daytime_cron_template.sh --print
 ```
 
-7. 実行元・実行ユーザーが確定している場合だけ、既存23時ラッパーは`analysis/run_official_amagasaki_nightly_backfill.sh`を経由させます。過去日巡回やJST 23時台以外のAMGは自動補完されません。
+8. 実行元・実行ユーザーが確定している場合だけ、既存23時ラッパーは`analysis/run_official_amagasaki_nightly_backfill.sh`を経由させます。過去日巡回やJST 23時台以外のAMGは自動補完されません。
 
 ## 監視SQL
 

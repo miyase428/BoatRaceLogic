@@ -28,11 +28,41 @@ final class OfficialAmagasakiNightlyBackfillContext
         return new self(PHP_SAPI === 'cli' && in_array('--amagasaki-nightly-backfill', $argv, true));
     }
 
+    public function requested(): bool
+    {
+        return $this->requested;
+    }
+
     public function permits(string $raceCode): bool
     {
         if (!$this->requested || preg_match('/^(\d{8})AMG(0[1-9]|1[0-2])$/', $raceCode, $parts) !== 1) return false;
         $now = ($this->clock)()->setTimezone(new DateTimeZone('Asia/Tokyo'));
         return $now->format('Ymd') === $parts[1] && $now->format('H') === '23';
+    }
+}
+
+/** Pure ordering helper: no HTTP, DB, or clock mutation. */
+final class OfficialAmagasakiNightlyBackfillPriority
+{
+    /** @param list<string> $dates @return list<string> */
+    public static function dates(array $dates, string $today, bool $active): array
+    {
+        if (!$active) return $dates;
+        usort($dates, static function (string $left, string $right) use ($today): int {
+            $leftToday = $left === $today;
+            $rightToday = $right === $today;
+            if ($leftToday !== $rightToday) return $leftToday ? -1 : 1;
+            return strcmp($left, $right);
+        });
+        return $dates;
+    }
+
+    /** @param list<string> $stadiums @return list<string> */
+    public static function stadiums(array $stadiums, bool $active): array
+    {
+        if (!$active) return $stadiums;
+        usort($stadiums, static fn(string $left, string $right): int => ($left === 'AMG' ? 0 : 1) <=> ($right === 'AMG' ? 0 : 1));
+        return $stadiums;
     }
 }
 

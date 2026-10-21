@@ -586,6 +586,17 @@ $period = new DatePeriod(
     new DateInterval('P1D'),
     (new DateTime($today))->modify('+1 day')
 );
+$periodDates = iterator_to_array($period, false);
+// The dedicated 23:00 wrapper must not wait for a historical last_date
+// catch-up.  It handles today's AMG races first, then leaves the existing
+// chronological catch-up and all non-AMG behaviour intact.
+$todayAmagasakiPriority = $nightlyBackfillContext->permits($today . 'AMG01');
+if ($todayAmagasakiPriority) {
+    $byDate = [];
+    foreach ($periodDates as $periodDate) $byDate[$periodDate->format('Ymd')] = $periodDate;
+    $periodDates = array_values(array_map(static fn(string $date): DateTimeInterface => $byDate[$date], OfficialAmagasakiNightlyBackfillPriority::dates(array_keys($byDate), $today, true)));
+    log_message("=== 23時AMG補完優先: {$today} を過去日処理より先行 ===");
+}
 
 // ------------------------------------------------------------
 // 6時を過ぎたら次の日付には進まない
@@ -606,7 +617,7 @@ $max_consecutive_access_errors = 3;
 // ------------------------------------------------------------
 // 通常取得: 日付ごとの処理
 // ------------------------------------------------------------
-foreach ($period as $dateObj) {
+foreach ($periodDates as $dateObj) {
     $race_date = $dateObj->format('Ymd');
     $race_date_db = $dateObj->format('Y-m-d');
 
@@ -633,6 +644,10 @@ foreach ($period as $dateObj) {
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':race_date' => $race_date_db]);
     $stadiums = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if ($todayAmagasakiPriority && $race_date === $today && is_array($stadiums)) {
+        $stadiums = OfficialAmagasakiNightlyBackfillPriority::stadiums($stadiums, true);
+    }
 
     if (empty($stadiums)) {
         log_message("開催場なし（{$race_date}）");
