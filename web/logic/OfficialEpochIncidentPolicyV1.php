@@ -108,6 +108,52 @@ final class OfficialEpochIncidentPolicyV1
         ];
     }
 
+    /**
+     * Narrow, fail-closed classifier for the technical-incomplete recovery
+     * path.  The existing general classifier remains byte-for-byte compatible
+     * in its policy definition/identity: this method only admits the bounded
+     * Window-wide producer defect that has all required proof fields.
+     *
+     * @return array{accepted:bool,classification:string,severity:string,reason:string,actions:list<string>,requires_new_window:bool,requires_new_epoch:bool,requires_cg_reapproval:bool}
+     */
+    public static function classifyTechnicalIncompleteSchedulerFailure(array $context): array
+    {
+        $required = [
+            'incident_type' => 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY',
+            'affected_scope_kind' => 'WINDOW',
+            'formal_population_completeness_lost' => true,
+            'future_only_reconstruction_complete' => false,
+            'requires_new_window' => true,
+            'bounded_scope' => true,
+            'measurement_semantics_unchanged' => true,
+        ];
+        foreach ($required as $field => $expected) {
+            if (($context[$field] ?? null) !== $expected) {
+                return [
+                    'accepted' => false, 'classification' => 'BLOCKED_UNCLASSIFIED', 'severity' => 'CRITICAL',
+                    'reason' => 'TECHNICAL_INCOMPLETE_SCHEDULER_CLASSIFICATION_UNPROVEN_' . strtoupper($field),
+                    'actions' => ['INCIDENT_RECORD', 'QUARANTINE_EVIDENCE', 'PAUSE_NEW_CAPTURE', 'MAINTENANCE_HOLD', 'SUSPEND_OFFICIAL_EPOCH'],
+                    'requires_new_window' => true, 'requires_new_epoch' => false, 'requires_cg_reapproval' => true,
+                ];
+            }
+        }
+        $affectedCount = $context['affected_count'] ?? null;
+        if (!is_int($affectedCount) || $affectedCount < 1) {
+            return [
+                'accepted' => false, 'classification' => 'BLOCKED_UNCLASSIFIED', 'severity' => 'CRITICAL',
+                'reason' => 'TECHNICAL_INCOMPLETE_SCHEDULER_CLASSIFICATION_UNPROVEN_AFFECTED_COUNT',
+                'actions' => ['INCIDENT_RECORD', 'QUARANTINE_EVIDENCE', 'PAUSE_NEW_CAPTURE', 'MAINTENANCE_HOLD', 'SUSPEND_OFFICIAL_EPOCH'],
+                'requires_new_window' => true, 'requires_new_epoch' => false, 'requires_cg_reapproval' => true,
+            ];
+        }
+        return [
+            'accepted' => true, 'classification' => 'INCIDENT', 'severity' => 'MAJOR',
+            'reason' => 'BOUNDED_WINDOW_FORMAL_COMPLETENESS_LOSS',
+            'actions' => ['INCIDENT_RECORD', 'QUARANTINE_EVIDENCE', 'PAUSE_NEW_CAPTURE', 'ABORT_ACTIVE_WINDOW'],
+            'requires_new_window' => true, 'requires_new_epoch' => false, 'requires_cg_reapproval' => false,
+        ];
+    }
+
     /** @param array<string,mixed> $value */
     public static function canonicalJson(array $value): string
     {

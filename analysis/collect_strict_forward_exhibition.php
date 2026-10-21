@@ -13,6 +13,7 @@ date_default_timezone_set('Asia/Tokyo');
 
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_data_quality.php';
+require_once __DIR__ . '/../web/logic/StrictForwardExhibitionEligibilityState.php';
 require_once __DIR__ . '/../web/api/ApiClientProduction.php';
 require_once __DIR__ . '/../web/logic/FormalMeasurementWindowContext.php';
 require_once __DIR__ . '/../web/logic/GateA1ProspectiveInventory.php';
@@ -175,28 +176,7 @@ function cc30bCandidates(FormalMeasurementWindowContext $context, string $armedA
 /** @return array{complete:bool,complete_boats:int,recorded_at:string} */
 function cc30bExhibitionState(PDO $pdo, string $raceCode, string $venue, string $cutoff): array
 {
-    $straight = exhibitionRequiresStraight($venue) ? 'AND straight_time IS NOT NULL AND straight_time > 0' : '';
-    $sql = <<<SQL
-SELECT
-  COUNT(DISTINCT entry_course) FILTER (
-    WHERE entry_course BETWEEN 1 AND 6
-      AND player_id IS NOT NULL
-      AND exhibition_time IS NOT NULL AND exhibition_time > 0
-      AND start_timing IS NOT NULL
-      AND lap_time IS NOT NULL AND lap_time > 0
-      AND around_time IS NOT NULL AND around_time > 0
-      {$straight}
-      AND created_date < CAST(:cutoff AS timestamptz)
-  ) AS complete_boats,
-  MAX(created_date) AS recorded_at
-FROM boat_race.exhibition_live
-WHERE race_code = :race_code
-SQL;
-    $statement = $pdo->prepare($sql);
-    $statement->execute([':race_code' => $raceCode, ':cutoff' => $cutoff]);
-    $row = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
-    $boats = (int)($row['complete_boats'] ?? 0);
-    return ['complete' => $boats === 6, 'complete_boats' => $boats, 'recorded_at' => (string)($row['recorded_at'] ?? '')];
+    return StrictForwardExhibitionEligibilityState::forRace($pdo, $raceCode, $venue, $cutoff);
 }
 
 /** @return array{status:string,skip_reason:string} */

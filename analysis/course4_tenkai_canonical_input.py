@@ -85,7 +85,10 @@ class StaticSnapshotStore:
         payload = {**body, "snapshot_sha256": hashlib.sha256(canonical_json(body).encode()).hexdigest()}
         encoded = (canonical_json(payload) + "\n").encode()
         try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+            # Static snapshots are immutable data consumed by the read-only
+            # Apache inference API.  They contain no credentials and must be
+            # readable by that service user after the cron first-write.
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         except FileExistsError:
             saved = self.read(race_code)
             return {"saved": False, "already_exists": True, "path": str(path), "snapshot_sha256": saved["snapshot_sha256"]}

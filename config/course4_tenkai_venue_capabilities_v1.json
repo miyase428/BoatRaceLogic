@@ -1,0 +1,29 @@
+{
+  "version": "course4-tenkai-venue-capabilities/v1",
+  "default": {
+    "straight_time_available": true,
+    "model_variant": "FULL"
+  },
+  "venues": {
+    "SME": {
+      "name": "住之江",
+      "straight_time_available": false,
+      "model_variant": "NO_STRAIGHT"
+    },
+    "AMG": {
+      "name": "尼崎",
+      "straight_time_available": false,
+      "model_variant": "NO_STRAIGHT"
+    },
+    "TKY": {
+      "name": "徳山",
+      "straight_time_available": false,
+      "model_variant": "NO_STRAIGHT"
+    },
+    "EDG": {
+      "name": "江戸川",
+      "supported": false,
+      "model_variant": "UNSUPPORTED"
+    }
+  }
+}

@@ -424,12 +424,25 @@ final class StrictForwardOpportunityLedger
         $date = trim((string)($context['date'] ?? ''));
         if (!$this->validDate($date)) throw new InvalidArgumentException('invalid_eligibility_date');
         $observedAt = $this->timestamp($context['observed_at'] ?? null);
+        // The normal scheduler omits race_codes and retains its full-date
+        // behavior.  A late, DB-only observer may explicitly narrow the
+        // observation set without rediscovering Candidates or changing the
+        // terminal finalizer's all-candidate responsibility.
+        $scope = null;
+        if (array_key_exists('race_codes', $context)) {
+            $scope = [];
+            foreach ((array)$context['race_codes'] as $raceCode) {
+                $normalized = strtoupper(trim((string)$raceCode));
+                if (preg_match(self::CANDIDATE_PATTERN, $normalized) === 1) $scope[$normalized] = true;
+            }
+        }
         $ready = array_fill_keys(array_values(array_filter(array_map('strval', (array)($context['ready_race_codes'] ?? [])),
             static fn(string $code): bool => preg_match(self::CANDIDATE_PATTERN, $code) === 1)), true);
         $availability = strtoupper(trim((string)($context['input_availability'] ?? 'AVAILABLE')));
         $reason = trim((string)($context['reason'] ?? ''));
         foreach ($this->candidateRows($date) as $candidate) {
             $raceCode = (string)$candidate['race_code'];
+            if ($scope !== null && !isset($scope[$raceCode])) continue;
             $isComplete = isset($ready[$raceCode]);
             $eventStatus = $availability === 'AVAILABLE'
                 ? ($isComplete ? 'ELIGIBLE_OBSERVED' : 'EXHIBITION_INCOMPLETE_OBSERVED')
@@ -449,7 +462,9 @@ final class StrictForwardOpportunityLedger
                 ]);
             }
         }
-        $this->finalizeExpired(['date' => $date, 'observed_at' => $observedAt]);
+        if (($context['finalize_expired'] ?? true) !== false) {
+            $this->finalizeExpired(['date' => $date, 'observed_at' => $observedAt]);
+        }
     }
 
     /** @param array<string,mixed> $context */
@@ -459,9 +474,18 @@ final class StrictForwardOpportunityLedger
         $date = trim((string)($context['date'] ?? ''));
         if (!$this->validDate($date)) throw new InvalidArgumentException('invalid_finalization_date');
         $now = $this->timestamp($context['observed_at'] ?? null);
+        $scope = null;
+        if (array_key_exists('race_codes', $context)) {
+            $scope = [];
+            foreach ((array)$context['race_codes'] as $raceCode) {
+                $normalized = strtoupper(trim((string)$raceCode));
+                if (preg_match(self::CANDIDATE_PATTERN, $normalized) === 1) $scope[$normalized] = true;
+            }
+        }
         $allObservations = $this->observationsByRace($date);
         foreach ($this->candidateRows($date) as $candidate) {
             $raceCode = (string)$candidate['race_code'];
+            if ($scope !== null && !isset($scope[$raceCode])) continue;
             if ($this->beforeCutoff($now, (string)$candidate['cutoff_timestamp']) || is_file($this->resolutionPath($date, $raceCode))) continue;
             $events = $allObservations[$raceCode] ?? [];
             $inputFailure = array_filter($events, static fn(array $event): bool => ($event['eligibility_status'] ?? '') === 'ELIGIBILITY_INPUT_UNAVAILABLE');

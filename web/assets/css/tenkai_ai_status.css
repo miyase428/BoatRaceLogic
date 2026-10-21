@@ -1,0 +1,58 @@
+.tenkai-ai-status-card {
+    margin: 12px 0;
+    padding: 10px 13px;
+    border: 1px solid #c9d8e2;
+    border-left: 4px solid #5a8eaa;
+    border-radius: 8px;
+    background: #f7fafc;
+    color: #344a59;
+}
+
+.tenkai-ai-status-title { margin: 0 0 3px; font-size: 14px; font-weight: 800; color: #315c73; }
+.tenkai-ai-status-body { font-size: 13px; font-weight: 700; }
+.tenkai-ai-status-meta { min-height: 15px; margin-top: 2px; color: #697a85; font-size: 11px; }
+.tenkai-ai-status-card[data-tenkai-ai-state="captured"] { border-left-color: #4f8a65; background: #f4faf5; }
+.tenkai-ai-status-card[data-tenkai-ai-state="waiting_exhibition"],
+.tenkai-ai-status-card[data-tenkai-ai-state="waiting_eligibility"],
+.tenkai-ai-status-card[data-tenkai-ai-state="waiting_formal_capture"] { border-left-color: #b78c3b; background: #fffaf1; }
+.tenkai-ai-status-card[data-tenkai-ai-state="unavailable"] { border-left-color: #a36a62; background: #fff7f6; }
+.tenkai-ai-status-card[data-tenkai-ai-state="not_target"] { border-left-color: #87949c; background: #f8fafb; }
+
+.tenkai-ai-status-notice { margin-top: 7px; color: #697a85; font-size: 12px; font-weight: 700; }
+.tenkai-ai-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 10px;
+    border: 1px solid #c9d8e2;
+    border-radius: 7px;
+    overflow: hidden;
+    background: #fff;
+}
+/* The author-level grid rule otherwise overrides the browser's [hidden] rule. */
+.tenkai-ai-metric-grid[hidden],
+.tenkai-ai-status-note[hidden] { display: none; }
+.tenkai-ai-metric { min-width: 0; padding: 10px 9px; border-right: 1px solid #dbe5ea; border-bottom: 1px solid #dbe5ea; }
+.tenkai-ai-metric:nth-child(2n) { border-right: 0; }
+.tenkai-ai-metric:nth-last-child(-n + 2) { border-bottom: 0; }
+.tenkai-ai-metric-label { color: #526b7b; font-size: 12px; font-weight: 700; line-height: 1.35; }
+.tenkai-ai-metric strong { display: block; margin-top: 4px; color: #2f668a; font-size: 20px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tenkai-ai-metric--no-attack strong { color: #a7645f; }
+.tenkai-ai-help {
+    display: inline-grid;
+    width: 14px;
+    height: 14px;
+    place-items: center;
+    border: 1px solid #9aaab5;
+    border-radius: 50%;
+    color: #71818c;
+    font-size: 10px;
+    font-weight: 800;
+    vertical-align: 1px;
+}
+.tenkai-ai-status-note { margin: 9px 0 0; color: #697a85; font-size: 11px; line-height: 1.55; }
+
+@media (max-width: 420px) {
+    .tenkai-ai-status-card { margin: 10px 0; padding: 9px 11px; }
+    .tenkai-ai-metric { padding: 9px 8px; }
+    .tenkai-ai-metric strong { font-size: 19px; }
+}

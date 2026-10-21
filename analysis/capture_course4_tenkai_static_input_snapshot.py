@@ -11,7 +11,7 @@ import hashlib
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -22,7 +22,10 @@ from course34_wall_live_input_provider import CONTRACT_VERSION as WALL_CONTRACT_
 from course4_attack_a5_live_input_provider import CONTRACT_VERSION as A5_CONTRACT_VERSION
 
 CAPTURE_CONTRACT_VERSION = "course4-tenkai-static-capture/v1"
-SOURCE_CONTRACT = "race_master+race_entry+racer_results(target-date term)+player_stats+engine_specs; result guard separate"
+# The official deadline cache and race_code identify the target calendar day.
+# `race_master` is not yet populated for otherwise complete future entries, so
+# it must not be a prerequisite for a strictly pre-deadline static capture.
+SOURCE_CONTRACT = "race_code(target-date)+race_entry+racer_results(target-date term)+player_stats+engine_specs; result guard separate"
 RETRYABLE = {"ENTRY_INCOMPLETE", "STATIC_SOURCE_NOT_READY", "PLAYER_PROFILE_NOT_READY", "ENGINE_INPUT_NOT_READY"}
 PERMANENT = {"DEADLINE_PASSED", "RESULT_ALREADY_EXISTS", "OFFICIAL_DEADLINE_UNAVAILABLE", "SNAPSHOT_CONTRACT_MISMATCH", "PROSPECTIVE_SNAPSHOT_HASH_MISMATCH"}
 
@@ -57,15 +60,16 @@ class StaticSourceLoader:
     """Loads only pre-race static sources; no result/outcome tables."""
     def __init__(self, connect=None): self.connect = connect
     def load(self, race_code):
+        try:
+            race_date = date.fromisoformat(f"{race_code[:4]}-{race_code[4:6]}-{race_code[6:8]}")
+        except (TypeError, ValueError):
+            return None, "ENTRY_INCOMPLETE"
+        term = term_for(race_date)
         connect = self.connect
         if connect is None:
             from slit_validate_v2 import connect_db
             connect = connect_db
         with connect() as connection, connection.cursor() as cursor:
-            cursor.execute("SELECT race_date FROM boat_race.race_master WHERE race_code=%s", (race_code,))
-            item = cursor.fetchone()
-            if not item: return None, "ENTRY_INCOMPLETE"
-            race_date, term = item[0], term_for(item[0])
             cursor.execute("""
                 SELECT re.lane_number,re.player_id::text,re.motor_number,re.boat_number,
                        rr.average_start,rr.course3_entry,rr.course3_average_start,rr.course3_average_rank,

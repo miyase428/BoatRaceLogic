@@ -14,7 +14,9 @@
 
     <!-- CSS 分離版 -->
     <link rel="stylesheet" href="/web/assets/css/style.css?v=20260921-8point-ref">
-    <link rel="stylesheet" href="/web/assets/css/pc_prediction_panels.css?v=20261011-phase4-pc2">
+    <link rel="stylesheet" href="/web/assets/css/pc_prediction_panels.css?v=20261016-ai-prediction-revert-v1">
+    <link rel="stylesheet" href="/web/assets/css/course4_attack_type_race_detail.css?v=20261008-1">
+    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261021-tenkai-numeric-v4">
 </head>
 
 <body class="pc-web-page">
@@ -73,6 +75,8 @@
     </div>
 
     <?php include __DIR__ . '/air_prediction_panel.php'; ?>
+
+    <?php include __DIR__ . '/tenkai_ai_status_panel.php'; ?>
 
     <!-- ■ 総合出走・展示マトリクス -->
     <div class="matrix-header-area" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -803,6 +807,8 @@
 </div> <!-- container -->
 
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
+<script src="/web/assets/js/tenkai_ai_status.js?v=20261021-tenkai-numeric-v5"></script>
+    <script src="/web/assets/js/course4_attack_type_race_detail.js?v=20261016-display-off-v2"></script>
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

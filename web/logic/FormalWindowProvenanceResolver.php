@@ -15,6 +15,8 @@ require_once __DIR__ . '/MeasurementImplementationProvenance.php';
 final class FormalWindowProvenanceResolver
 {
     public const SCHEMA_VERSION = 'formal-window-provenance-resolution/v2';
+    public const EXPECTED_INVENTORY_CONTRACT_V1 = 'formal-evidence-aggregate/expected-inventory-v1-single-file';
+    public const EXPECTED_INVENTORY_CONTRACT_V2 = 'formal-evidence-aggregate/expected-inventory-v2-multi-day';
 
     /** @var array<string,string> */
     private array $files = [];
@@ -23,7 +25,13 @@ final class FormalWindowProvenanceResolver
     /** @var array<string,array<string,mixed>> */
     private array $pairByRaceUse = [];
 
-    public function __construct(private readonly string $windowRoot, private readonly string $windowId)
+    public function __construct(
+        private readonly string $windowRoot,
+        private readonly string $windowId,
+        private readonly string $expectedInventoryContract = self::EXPECTED_INVENTORY_CONTRACT_V1,
+        private readonly string $expectedInventoryStartDate = '',
+        private readonly string $captureThroughDate = '',
+    )
     {
     }
 
@@ -150,6 +158,12 @@ final class FormalWindowProvenanceResolver
     /** @return array{resolution:array<string,mixed>,candidate_by_race:array<string,array<string,mixed>>,eligibility_by_race:array<string,array<string,mixed>>} */
     private function expectedInventory(string $armedAt): array
     {
+        if ($this->expectedInventoryContract === self::EXPECTED_INVENTORY_CONTRACT_V2) {
+            return $this->expectedInventoryV2($armedAt);
+        }
+        if ($this->expectedInventoryContract !== self::EXPECTED_INVENTORY_CONTRACT_V1) {
+            $this->fail('PROVENANCE_EXPECTED_INVENTORY_CONTRACT_INVALID');
+        }
         $rows = $this->rows('opportunity/expected_inventory/', false);
         if (count($rows) !== 1) $this->fail('PROVENANCE_EXPECTED_INVENTORY_CARDINALITY_INVALID');
         $relative = array_key_first($rows); $inventory = $rows[$relative];
@@ -193,6 +207,93 @@ final class FormalWindowProvenanceResolver
                 'armed_at' => $armedAt,
                 'prospective_keyset_identity' => (string)($inventory['prospective_keyset_identity'] ?? ''),
             ]),
+            'candidate_by_race' => $candidateByRace,
+            'eligibility_by_race' => $eligibilityByRace,
+        ];
+    }
+
+    /**
+     * Explicit multi-day Expected inventory contract. Every calendar date in
+     * the declared range must contribute exactly one immutable inventory; a
+     * partial union is deliberately not accepted.
+     *
+     * @return array{resolution:array<string,mixed>,candidate_by_race:array<string,array<string,mixed>>,eligibility_by_race:array<string,array<string,mixed>>}
+     */
+    private function expectedInventoryV2(string $armedAt): array
+    {
+        if (!$this->validDate($this->expectedInventoryStartDate) || !$this->validDate($this->captureThroughDate)
+            || $this->expectedInventoryStartDate > $this->captureThroughDate) {
+            $this->fail('PROVENANCE_EXPECTED_INVENTORY_DATE_RANGE_INVALID');
+        }
+        $byDate = [];
+        foreach ($this->rows('opportunity/expected_inventory/', false) as $relative => $inventory) {
+            $date = (string)($inventory['target_date'] ?? '');
+            if (!$this->validDate($date) || $date < $this->expectedInventoryStartDate || $date > $this->captureThroughDate) continue;
+            if (($inventory['window_id'] ?? '') !== $this->windowId || ($inventory['armed_at'] ?? '') !== $armedAt
+                || !is_array($inventory['expected_entries'] ?? null)) {
+                $this->fail('PROVENANCE_EXPECTED_INVENTORY_BINDING_INVALID');
+            }
+            if (isset($byDate[$date])) $this->fail('PROVENANCE_EXPECTED_INVENTORY_DATE_DUPLICATE:' . $date);
+            $byDate[$date] = ['relative' => $relative, 'inventory' => $inventory];
+        }
+        $dates = [];
+        for ($cursor = new DateTimeImmutable($this->expectedInventoryStartDate, new DateTimeZone('Asia/Tokyo'));
+             $cursor <= new DateTimeImmutable($this->captureThroughDate, new DateTimeZone('Asia/Tokyo'));
+             $cursor = $cursor->modify('+1 day')) {
+            $date = $cursor->format('Y-m-d');
+            if (!isset($byDate[$date])) $this->fail('PROVENANCE_EXPECTED_INVENTORY_DATE_MISSING:' . $date);
+            $dates[] = $date;
+        }
+        $expected = [];
+        $references = [];
+        $framed = '';
+        foreach ($dates as $date) {
+            $relative = (string)$byDate[$date]['relative'];
+            $inventory = $byDate[$date]['inventory'];
+            $references[] = $this->reference($relative, ['target_date' => $date]);
+            $framed .= $date . "\0" . $relative . "\0" . $this->files[$relative] . "\n";
+            foreach ($inventory['expected_entries'] as $entry) {
+                if (!is_array($entry)) $this->fail('PROVENANCE_EXPECTED_INVENTORY_ENTRY_INVALID');
+                $race = (string)($entry['race_code'] ?? '');
+                if ($race === '' || isset($expected[$race])) $this->fail('PROVENANCE_EXPECTED_INVENTORY_KEYSET_INVALID');
+                if ((string)($entry['target_date'] ?? '') !== $date) $this->fail('PROVENANCE_EXPECTED_INVENTORY_ENTRY_DATE_INVALID:' . $race);
+                $expected[$race] = $entry;
+            }
+        }
+        ksort($expected, SORT_STRING);
+        $candidates = $this->rows('opportunity/candidates/', false);
+        $eligibility = $this->rows('opportunity/eligibility/', false);
+        $candidateByRace = $this->byRace($candidates, 'PROVENANCE_CANDIDATE_KEYSET_INVALID');
+        $eligibilityByRace = $this->byRace($eligibility, 'PROVENANCE_ELIGIBILITY_KEYSET_INVALID');
+        if (array_keys($expected) !== array_keys($candidateByRace) || array_keys($expected) !== array_keys($eligibilityByRace)) {
+            $this->fail('PROVENANCE_EXPECTED_CANDIDATE_ELIGIBILITY_KEYSET_MISMATCH');
+        }
+        foreach ($expected as $race => $entry) {
+            $candidate = $candidateByRace[$race]; $resolved = $eligibilityByRace[$race];
+            foreach (['race_code', 'venue', 'target_date', 'cutoff_timestamp', 'stable_candidate_key'] as $field) {
+                if (!hash_equals((string)($entry[$field] ?? ''), (string)($candidate[$field] ?? ''))
+                    || !hash_equals((string)($candidate[$field] ?? ''), (string)($resolved[$field] ?? ''))) {
+                    $this->fail('PROVENANCE_CANDIDATE_OR_ELIGIBILITY_BINDING_MISMATCH:' . $race . ':' . $field);
+                }
+            }
+            foreach ([$candidate, $resolved] as $row) {
+                if (($row['armed_at'] ?? '') !== $armedAt || !$this->after((string)($row['cutoff_timestamp'] ?? ''), $armedAt)) {
+                    $this->fail('PROVENANCE_PROSPECTIVE_BOUNDARY_INVALID:' . $race);
+                }
+            }
+        }
+        return [
+            'resolution' => [
+                'contract_version' => self::EXPECTED_INVENTORY_CONTRACT_V2,
+                'window_date_start' => $this->expectedInventoryStartDate,
+                'capture_through_date' => $this->captureThroughDate,
+                'expected_inventory_files' => $references,
+                'expected_inventory_union_sha256' => 'sha256:' . hash('sha256', $framed),
+                'expected_entry_count' => count($expected),
+                'candidate_count' => count($candidateByRace),
+                'eligibility_count' => count($eligibilityByRace),
+                'armed_at' => $armedAt,
+            ],
             'candidate_by_race' => $candidateByRace,
             'eligibility_by_race' => $eligibilityByRace,
         ];
@@ -373,6 +474,13 @@ final class FormalWindowProvenanceResolver
     {
         try { return $left !== '' && $right !== '' && new DateTimeImmutable($left) < new DateTimeImmutable($right); }
         catch (Throwable) { return false; }
+    }
+
+    private function validDate(string $value): bool
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) return false;
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value, new DateTimeZone('Asia/Tokyo'));
+        return $date instanceof DateTimeImmutable && $date->format('Y-m-d') === $value;
     }
 
     private static function identity(array $payload): string { return 'sha256:' . hash('sha256', self::canonicalJson($payload)); }

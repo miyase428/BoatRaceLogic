@@ -31,6 +31,13 @@ final class MeasurementImplementationProvenance
         // therefore measurement-critical, even though it never writes
         // formal evidence itself.
         'analysis/collect_strict_forward_exhibition.php',
+        // Late eligibility must remain part of the exact measurement
+        // implementation: a scheduler gap changes formal completeness even
+        // when the collector source itself is unchanged.
+        'analysis/finalize_strict_forward_late_eligibility.php',
+        'analysis/install_cc30c_late_eligibility_cron.sh',
+        'analysis/output/cc30c_late_eligibility_schedule_contract_v1.json',
+        'analysis/run_strict_forward_late_eligibility_cron.sh',
         'analysis/arm_operational_live_readiness.php',
         'analysis/declare_window_implementation_identity.php',
         'analysis/finalize_window_continuability_verification.php',
@@ -51,11 +58,14 @@ final class MeasurementImplementationProvenance
         'web/logic/FormalWindowProvenanceResolver.php',
         'web/logic/IdentitySeparatedFormalCloseV3.php',
         'web/logic/FormalMeasurementWindowLifecycle.php',
+        'web/logic/TechnicalIncompleteEvidenceAttestation.php',
         'web/logic/FormalMeasurementWindowContext.php',
         'web/logic/GateA1ProspectiveInventory.php',
         'web/logic/OfficialDeadlineLogic.php',
         'web/logic/PredictionForwardSnapshotStore.php',
         'web/logic/StrictForwardOpportunityLedger.php',
+        'web/logic/StrictForwardExhibitionEligibilityState.php',
+        'web/logic/StrictForwardLateEligibilityScheduleContract.php',
         'web/logic/StrictForwardAcceptedRace.php',
         'web/logic/StrictForwardReadinessLedger.php',
         'web/logic/TamagawaCenterSignalLogic.php',

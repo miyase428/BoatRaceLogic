@@ -108,6 +108,10 @@
             if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
             if (String(node.id || '').startsWith('stadium-characteristics-tabs-pc-')) {
                 basicNodes.add(node);
+            } else if (node.hasAttribute('data-tenkai-ai-panel')) {
+                // 展開AIは数値予測ではなく、展示・formal取得の状態だけを示す。
+                // 総合出走・展示と同じ「基本情報」タブへ置く。
+                basicNodes.add(node);
             } else if (isForwardValidationNode(node)) {
                 otherNodes.add(node);
             } else if (String(node.id || '') === 'air-prediction-panel') {

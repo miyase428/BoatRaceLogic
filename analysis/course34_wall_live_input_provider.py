@@ -27,33 +27,42 @@ def subtract(left, right):
 
 
 class WallRLiveInputProvider:
-    def __init__(self, snapshot_store=None, exhibition_provider=None):
-        self.artifact = json.loads(ARTIFACT.read_text(encoding="utf-8"))
+    def __init__(self, snapshot_store=None, exhibition_provider=None, *,
+                 artifact_path=ARTIFACT, expected_artifact_sha256=EXPECTED_ARTIFACT_SHA256,
+                 contract_version=CONTRACT_VERSION, manifest_feature_order=None,
+                 require_manifest_artifact=True):
+        self.artifact_path = Path(artifact_path)
+        self.expected_artifact_sha256 = str(expected_artifact_sha256)
+        self.contract_version = str(contract_version)
+        self.require_manifest_artifact = bool(require_manifest_artifact)
+        self.artifact = json.loads(self.artifact_path.read_text(encoding="utf-8"))
         self.manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         with BASELINE.open(encoding="utf-8") as handle:
             self.baseline = {row["race_code"]: row for row in csv.DictReader(handle)}
         self.store = snapshot_store or StaticSnapshotStore()
         self.exhibition_provider = exhibition_provider
         self.feature_order = tuple(self.artifact["feature_names"])
-        self.identities = {"artifact": sha256(ARTIFACT), "baseline": sha256(BASELINE), "manifest": sha256(MANIFEST)}
+        self.manifest_feature_order = tuple(manifest_feature_order or self.feature_order)
+        self.identities = {"artifact": sha256(self.artifact_path), "baseline": sha256(BASELINE), "manifest": sha256(MANIFEST)}
 
     def _errors(self):
         errors = []
-        if self.identities["artifact"] != EXPECTED_ARTIFACT_SHA256 or self.manifest.get("artifact_sha256") != self.identities["artifact"]:
+        if (self.identities["artifact"] != self.expected_artifact_sha256
+                or (self.require_manifest_artifact and self.manifest.get("artifact_sha256") != self.identities["artifact"])):
             errors.append("ARTIFACT_HASH_MISMATCH")
         if self.manifest.get("baseline_sha256") != self.identities["baseline"] or self.manifest.get("canonical_version") != CANONICAL_VERSION:
             errors.append("CANONICAL_BASELINE_MISMATCH")
-        if tuple(self.manifest.get("feature_order", ())) != self.feature_order:
+        if tuple(self.manifest.get("feature_order", ())) != self.manifest_feature_order:
             errors.append("FEATURE_SCHEMA_MISMATCH")
         return errors
 
     def _response(self, race_code, cutoff, mode, available, reasons, vector=None, raw=None, mapping=None, snapshot=None):
         payload = {
-            "contract_version": CONTRACT_VERSION, "signal_id": "WALL_R", "stage": "POST_EXHIBITION",
+            "contract_version": self.contract_version, "signal_id": "WALL_R", "stage": "POST_EXHIBITION",
             "mode": mode, "race_code": race_code, "prediction_cutoff": cutoff.isoformat(),
             "feature_order": list(self.feature_order), "feature_vector": vector, "feature_available": available,
             "missing_reason": sorted(set(reasons)), "blocked_reason": sorted(set(reasons)),
-            "artifact_identity": {"path": str(ARTIFACT.relative_to(REPO)), "sha256": self.identities["artifact"]},
+            "artifact_identity": {"path": str(self.artifact_path.relative_to(REPO)), "sha256": self.identities["artifact"]},
             "canonical_identity": {"path": str(BASELINE.relative_to(REPO)), "sha256": self.identities["baseline"], "version": CANONICAL_VERSION},
             "manifest_identity": {"path": str(MANIFEST.relative_to(REPO)), "sha256": self.identities["manifest"]},
             "raw_input": raw or {}, "entry_mapping": mapping or {}, "snapshot_identity": snapshot or {},
@@ -67,14 +76,17 @@ class WallRLiveInputProvider:
             weight = 0.0 if count is None else count / (count + 30.0)
             return course if base is None or course is None else base + weight * (course - base), weight
         s3, w3 = smooth(c3); s4, w4 = smooth(c4)
-        return [
-            subtract(s3, s4), subtract(value(exhibit[3].get("course4_ex_st")), value(exhibit[4].get("course4_ex_st"))),
-            subtract(value(c3.get("course_average_rank")), value(c4.get("course_average_rank"))), w4 - w3,
-            subtract(value(exhibit[3].get("course4_exhibition_time")), value(exhibit[4].get("course4_exhibition_time"))),
-            subtract(value(exhibit[3].get("course4_lap_time")), value(exhibit[4].get("course4_lap_time"))),
-            subtract(value(exhibit[3].get("course4_around_time")), value(exhibit[4].get("course4_around_time"))),
-            subtract(value(exhibit[3].get("course4_straight_time")), value(exhibit[4].get("course4_straight_time"))),
-        ]
+        values = {
+            "smoothed_avg_st_delta_34": subtract(s3, s4),
+            "ex_st_delta_34": subtract(value(exhibit[3].get("course4_ex_st")), value(exhibit[4].get("course4_ex_st"))),
+            "avg_st_rank_delta_34": subtract(value(c3.get("course_average_rank")), value(c4.get("course_average_rank"))),
+            "st_profile_reliability_advantage_34": w4 - w3,
+            "exhibition_time_delta_34": subtract(value(exhibit[3].get("course4_exhibition_time")), value(exhibit[4].get("course4_exhibition_time"))),
+            "lap_time_delta_34": subtract(value(exhibit[3].get("course4_lap_time")), value(exhibit[4].get("course4_lap_time"))),
+            "around_time_delta_34": subtract(value(exhibit[3].get("course4_around_time")), value(exhibit[4].get("course4_around_time"))),
+            "straight_time_delta_34": subtract(value(exhibit[3].get("course4_straight_time")), value(exhibit[4].get("course4_straight_time"))),
+        }
+        return [values[name] for name in self.feature_order]
 
     def _research(self, race_code, cutoff):
         row = self.baseline.get(race_code)
@@ -92,7 +104,11 @@ class WallRLiveInputProvider:
         result = provider.build(race_code, cutoff.isoformat(), "LIVE")
         if not result.get("prediction_available"):
             return None, result, result.get("missing_reason") or ["EXHIBITION_CONTRACT_UNAVAILABLE"]
-        records = result.get("raw_input", {}).get("exhibition_rows", [])
+        # Attack Type's frozen provider contract exposes raw source rows under
+        # `raw_input_payload`.  Keep the older key as a read-only compatibility
+        # fallback for isolated fixtures; LIVE never reconstructs exhibition.
+        raw_input = result.get("raw_input_payload", result.get("raw_input", {}))
+        records = raw_input.get("exhibition_rows", [])
         by_course = {int(record["entry_course"]): record for record in records if record.get("entry_course") in (3, 4)}
         if set(by_course) != {3, 4}:
             return None, result, ["ENTRY_MAPPING_INCOMPLETE"]

@@ -51,7 +51,11 @@ def now_iso() -> str:
 class AttackTypeLiveInferenceCore:
     """Frozen-artifact core; no ledger append and no feature/DB logic."""
 
-    def __init__(self, provider=None, paths=None, expected_identities=None):
+    def __init__(self, provider=None, paths=None, expected_identities=None, *,
+                 feature_order=FEATURE_ORDER, contract_version=CONTRACT_VERSION,
+                 provider_factory=AttackTypeLiveInputProvider,
+                 provider_source=ANALYSIS / "course4_attack_type_live_input_provider.py",
+                 spec_feature_key="final_feature_order", logic_source=None):
         paths = paths or {}
         self.paths = {
             "contract": Path(paths.get("contract", CONTRACT)),
@@ -61,6 +65,12 @@ class AttackTypeLiveInferenceCore:
             "ledger_manifest": Path(paths.get("ledger_manifest", MANIFEST)), "ledger_state": Path(paths.get("ledger_state", LEDGER_STATE)),
         }
         self.expected = dict(EXPECTED_IDENTITIES if expected_identities is None else expected_identities)
+        self.feature_order = tuple(feature_order)
+        self.contract_version = str(contract_version)
+        self.provider_factory = provider_factory
+        self.provider_source = Path(provider_source)
+        self.spec_feature_key = str(spec_feature_key)
+        self.logic_source = Path(logic_source or __file__)
         self.provider = provider
         self.contract = None
         self.artifact = None
@@ -90,7 +100,7 @@ class AttackTypeLiveInferenceCore:
             state = json.loads(self.paths["ledger_state"].read_text(encoding="utf-8")) if self.paths["ledger_state"].exists() else None
             contract_ledger = self.contract.get("ledger", {})
             identities_ok = (
-                self.contract.get("contract_version") == CONTRACT_VERSION
+                self.contract.get("contract_version") == self.contract_version
                 and self.contract.get("artifact", {}).get("sha256") == self.identities["artifact"]
                 and self.contract.get("spec", {}).get("sha256") == self.identities["spec"]
                 and ((contract_ledger.get("sha256") == self.identities["ledger"] and contract_ledger.get("manifest_sha256") == self.identities["ledger_manifest"]) or state is not None)
@@ -98,9 +108,9 @@ class AttackTypeLiveInferenceCore:
                 and (state is None or (state.get("ledger_sha256") == self.identities["ledger"] and state.get("manifest_sha256") == self.identities["ledger_manifest"] and state.get("baseline_source_sha256") == self.manifest.get("baseline_source_sha256") and state.get("ledger_version") == "v1"))
             )
             feature_ok = (
-                tuple(self.contract.get("feature_order", ())) == FEATURE_ORDER
-                and tuple(self.artifact.get("feature_order", ())) == FEATURE_ORDER
-                and tuple(spec.get("final_feature_order", ())) == FEATURE_ORDER
+                tuple(self.contract.get("feature_order", ())) == self.feature_order
+                and tuple(self.artifact.get("feature_order", ())) == self.feature_order
+                and tuple(spec.get(self.spec_feature_key, ())) == self.feature_order
                 and tuple(self.artifact.get("class_order", ())) == CLASS_ORDER
                 and self.artifact.get("reference_class") == 0
             )
@@ -109,8 +119,9 @@ class AttackTypeLiveInferenceCore:
             if not feature_ok:
                 return "INFERENCE_FEATURE_ORDER_MISMATCH"
             version_payload = {
-                "core_source_sha256": sha256(Path(__file__)),
-                "provider_source_sha256": sha256(ANALYSIS / "course4_attack_type_live_input_provider.py"),
+                "shared_core_source_sha256": sha256(Path(__file__)),
+                "signal_core_source_sha256": sha256(self.logic_source),
+                "provider_source_sha256": sha256(self.provider_source),
                 "contract_sha256": self.identities["contract"],
                 "artifact_sha256": self.identities["artifact"],
                 "spec_sha256": self.identities["spec"],
@@ -129,7 +140,7 @@ class AttackTypeLiveInferenceCore:
             "stage": "POST_EXHIBITION", "artifact_sha256": self.identities.get("artifact"),
             "spec_sha256": self.identities.get("spec"), "ledger_sha256": self.identities.get("ledger"),
             "ledger_manifest_sha256": self.identities.get("ledger_manifest"),
-            "input_contract_version": self.contract.get("contract_version") if self.contract else CONTRACT_VERSION,
+            "input_contract_version": self.contract.get("contract_version") if self.contract else self.contract_version,
             "input_contract_sha256": self.identities.get("contract"), "logic_version": self.logic_version,
             "generated_at": now_iso(),
         }
@@ -146,12 +157,12 @@ class AttackTypeLiveInferenceCore:
 
     def _provider(self):
         if self.provider is None:
-            self.provider = AttackTypeLiveInputProvider()
+            self.provider = self.provider_factory()
         return self.provider
 
     def _calculate(self, features, allow_replay_median):
         vector = np.asarray(features, dtype=float)
-        if vector.shape != (len(FEATURE_ORDER),):
+        if vector.shape != (len(self.feature_order),):
             raise ValueError("INFERENCE_FEATURE_ORDER_MISMATCH")
         if not allow_replay_median and not np.isfinite(vector).all():
             raise ValueError("INFERENCE_NONFINITE_INPUT")
@@ -177,10 +188,10 @@ class AttackTypeLiveInferenceCore:
     def _predict_mode(self, race_code, prediction_cutoff, mode):
         if self.load_error:
             return self._failure(race_code, prediction_cutoff, self.load_error)
-        provider_response = self._provider().build(race_code, prediction_cutoff, mode, CONTRACT_VERSION)
+        provider_response = self._provider().build(race_code, prediction_cutoff, mode, self.contract_version)
         if not provider_response.get("prediction_available"):
             return self._failure(race_code, prediction_cutoff, "MISSING_REQUIRED_FEATURE", provider_response)
-        if tuple(provider_response.get("feature_order", ())) != FEATURE_ORDER:
+        if tuple(provider_response.get("feature_order", ())) != self.feature_order:
             return self._failure(race_code, prediction_cutoff, "INFERENCE_FEATURE_ORDER_MISMATCH", provider_response)
         try:
             vector, probabilities = self._calculate(provider_response.get("feature_vector"), allow_replay_median=(mode == "RESEARCH_REPLAY"))

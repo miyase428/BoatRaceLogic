@@ -53,11 +53,23 @@ final class WindowDeclaredImplementationIdentity
     }
 
     /**
-     * Initial declaration only. Existing declarations are never replaced.
+     * Backward-compatible name for the explicit declaration/freeze operation.
      *
      * @return array{accepted:bool,status:string,reason:string,declaration:array<string,mixed>,implementation:array<string,string>}
      */
     public function declare(): array
+    {
+        return $this->freezeDeclaredIdentity();
+    }
+
+    /**
+     * Initial declaration only. Existing declarations are never replaced.
+     * This is the sole operation in this class permitted to create a
+     * Window-local implementation manifest/source freeze.
+     *
+     * @return array{accepted:bool,status:string,reason:string,declaration:array<string,mixed>,implementation:array<string,string>}
+     */
+    public function freezeDeclaredIdentity(): array
     {
         $window = $this->windowManifest();
         if ($window === []) return $this->blocked('WINDOW_MANIFEST_INVALID');
@@ -165,13 +177,20 @@ final class WindowDeclaredImplementationIdentity
         ]);
     }
 
+    /** Backward-compatible read-only assertion entrypoint. */
+    public function assertCurrent(): array
+    {
+        return $this->assertCurrentReadOnly();
+    }
+
     /**
-     * Re-freezes the current worktree, then permits formal measurement only
-     * when it exactly equals the immutable Window declaration.
+     * Permits formal measurement only when the current source identity
+     * exactly equals the immutable declaration. This operation is fully
+     * read-only: a mismatch must never create a Window-local freeze.
      *
      * @return array{accepted:bool,status:string,reason:string,declaration:array<string,mixed>,implementation:array<string,string>}
      */
-    public function assertCurrent(): array
+    public function assertCurrentReadOnly(): array
     {
         $window = $this->windowManifest();
         if ($window === []) return $this->blocked('WINDOW_MANIFEST_INVALID');
@@ -180,16 +199,14 @@ final class WindowDeclaredImplementationIdentity
         $declared = $this->read();
         if (!$declared['accepted']) return $declared;
         try {
-            $current = $this->provenance->freeze();
-            $verified = $this->provenance->verify($current['implementation_identity'], $current['manifest_ref'], $current['source_freeze_ref']);
+            $currentIdentity = $this->provenance->currentIdentityReadOnly();
         } catch (Throwable $error) {
-            return $this->blocked('CURRENT_IMPLEMENTATION_FREEZE_UNAVAILABLE:' . $error->getMessage(), $declared['declaration']);
+            return $this->blocked('CURRENT_IMPLEMENTATION_IDENTITY_UNAVAILABLE:' . $error->getMessage(), $declared['declaration']);
         }
-        if (!$verified['valid']) return $this->blocked('CURRENT_IMPLEMENTATION_FREEZE_INVALID:' . $verified['reason'], $declared['declaration'], $current);
-        foreach (['implementation_identity', 'manifest_schema_version', 'manifest_sha256', 'manifest_ref', 'source_freeze_sha256', 'source_freeze_ref'] as $key) {
-            if (!hash_equals((string)($declared['implementation'][$key] ?? ''), (string)($current[$key] ?? ''))) {
-                return $this->blocked('DECLARED_IMPLEMENTATION_IDENTITY_MISMATCH', $declared['declaration'], $current);
-            }
+        $current = $declared['implementation'];
+        $current['implementation_identity'] = $currentIdentity;
+        if (!hash_equals((string)($declared['implementation']['implementation_identity'] ?? ''), $currentIdentity)) {
+            return $this->blocked('DECLARED_IMPLEMENTATION_IDENTITY_MISMATCH', $declared['declaration'], $current);
         }
         return $this->accepted('DECLARED_IMPLEMENTATION_IDENTITY_MATCH', $declared['declaration'], $current);
     }
@@ -200,10 +217,10 @@ final class WindowDeclaredImplementationIdentity
     }
 
     /**
-     * A declaration or current-identity assertion may create Window-local
-     * provenance. Terminal Windows are historical evidence, so this guard
-     * runs before every such freeze. Historical read() remains deliberately
-     * available to evaluators and does not call this method.
+     * A declaration may create Window-local provenance. Terminal Windows are
+     * historical evidence, so both declaration and read-only assertion guard
+     * the effective state before proceeding. Historical read() remains
+     * deliberately available to evaluators and does not call this method.
      *
      * @param array<string,mixed> $window
      */

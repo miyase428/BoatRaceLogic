@@ -103,9 +103,11 @@ if (!is_string($appTrifectaJson)) {
     <meta name="apple-mobile-web-app-title" content="BoatRace">
     <title>BoatRace</title>
     <link rel="manifest" href="/web/manifest.webmanifest">
-    <link rel="stylesheet" href="/web/assets/css/app.css?v=20260921-8point-ref">
+    <link rel="stylesheet" href="/web/assets/css/app.css?v=20261016-ai-prediction-revert-v1">
     <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20261011-app-details-v6">
     <link rel="stylesheet" href="/web/assets/css/app_course_signals.css?v=20260917-0915">
+    <link rel="stylesheet" href="/web/assets/css/course4_attack_type_race_detail.css?v=20261008-1">
+    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261021-tenkai-numeric-v4">
 </head>
 <body>
 <div class="app-shell">
@@ -186,6 +188,7 @@ if (!is_string($appTrifectaJson)) {
                 hidden
                 aria-live="polite"
             ></div>
+            <?php include __DIR__ . '/tenkai_ai_status_panel.php'; ?>
         </div>
     </section>
 
@@ -343,9 +346,11 @@ if (!is_string($appTrifectaJson)) {
     'venue' => (string)($place_names[$selected_place] ?? $selected_place),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script src="/web/assets/js/app_recent_prediction_history.js?v=20260926-conditional-third-v1"></script>
-<script src="/web/assets/js/app_course_signals.js?v=20260927-venue-ml-v2"></script>
+<script src="/web/assets/js/app_course_signals.js?v=20261016-course-signals-ready-v1"></script>
+<script src="/web/assets/js/tenkai_ai_status.js?v=20261021-tenkai-numeric-v5"></script>
 <script src="/web/assets/js/app_current_meet.js?v=20261011-current-meet-summary-v3"></script>
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
+<script src="/web/assets/js/course4_attack_type_race_detail.js?v=20261016-display-off-v2"></script>
 <script>
 (function () {
     const payloadNode = document.getElementById('app-trifecta-data');

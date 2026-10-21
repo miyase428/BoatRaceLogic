@@ -109,15 +109,22 @@ button,input{font:inherit}
     gap:16px;
     align-items:start;
 }
-.search-column{min-width:0}
+.search-column{
+    min-width:0;
+    align-self:stretch;
+}
+.search-status-stack{
+    position:sticky;
+    top:14px;
+    min-width:0;
+}
 .search-card{
     border:1px solid var(--line);
     border-radius:14px;
     background:var(--panel);
     box-shadow:var(--shadow);
     overflow:hidden;
-    position:sticky;
-    top:14px;
+    position:static;
 }
 .search-card summary{
     list-style:none;
@@ -525,7 +532,129 @@ button,input{font:inherit}
 }
 .pick-more{padding:0 2px 2px}
 .pick-meta{padding:0 12px 9px;min-height:10px}
-.search-column>.search-card{margin-top:0}
+.search-status-stack>.search-card{margin-top:0}
+
+.forward-status-card{
+    margin:0 0 12px;
+    padding:13px 14px;
+    border:1px solid var(--line);
+    border-left:4px solid #8f969d;
+    border-radius:12px;
+    background:#fffdf9;
+    box-shadow:0 4px 14px rgba(72,55,35,.06);
+}
+.forward-status-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:10px;
+}
+.forward-status-head>strong{font-size:14px;color:#3b342d}
+.forward-status-title{display:flex;align-items:center;gap:7px}
+.forward-status-title>strong{font-size:14px;color:#3b342d}
+.forward-status-help{
+    display:inline-grid;
+    width:22px;
+    height:22px;
+    padding:0;
+    place-items:center;
+    border:1px solid #cfb989;
+    border-radius:50%;
+    background:#fffdf8;
+    color:#80662c;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+}
+.forward-status-help:hover{background:#fff3cf}
+.forward-status-help:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.forward-status-state{font-size:11px;font-weight:900;color:#64605b;text-align:right}
+.forward-status-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px 10px;
+}
+.forward-status-grid>span{min-width:0}
+.forward-status-grid small{
+    display:block;
+    margin-bottom:2px;
+    color:#8a8178;
+    font-size:9px;
+    font-weight:800;
+}
+.forward-status-grid b{
+    display:block;
+    overflow-wrap:anywhere;
+    color:#48413a;
+    font-size:11px;
+    line-height:1.35;
+}
+.forward-status-card.is-pending{border-left-color:#d3a33c;background:#fffaf0}
+.forward-status-card.is-pass{border-left-color:#4d9b66;background:#f5fbf6}
+.forward-status-card.is-blocked{border-left-color:#c75d54;background:#fff6f4}
+.forward-status-card.is-official{border-left-color:#4b86bd;background:#f4f9fd}
+.forward-status-card.is-blocked .forward-status-state,
+.forward-status-card.is-blocked [data-forward-alert]{color:#b13f36}
+.forward-status-card.is-pass .forward-status-state{color:#377a4d}
+.forward-status-card.is-pending .forward-status-state{color:#9a6b12}
+.forward-status-card.is-official .forward-status-state{color:#286899}
+.forward-status-dialog{
+    width:min(460px,calc(100vw - 28px));
+    max-height:calc(100vh - 40px);
+    padding:0;
+    overflow:auto;
+    border:1px solid #d9c9b2;
+    border-radius:14px;
+    background:#fffaf2;
+    color:#3f3933;
+    box-shadow:0 18px 60px rgba(45,35,25,.28);
+}
+.forward-status-dialog::backdrop{background:rgba(35,31,27,.46)}
+.forward-status-dialog-head{
+    position:sticky;
+    top:0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 16px;
+    border-bottom:1px solid #e2d5c3;
+    background:#fff7e8;
+}
+.forward-status-dialog-head strong{font-size:16px}
+.forward-status-dialog-head button{
+    width:30px;
+    height:30px;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:#eee3d4;
+    color:#554b40;
+    font-size:20px;
+    line-height:1;
+    cursor:pointer;
+}
+.forward-status-dialog-body{padding:15px 17px 17px;font-size:13px;line-height:1.6}
+.forward-status-dialog-body p{margin:0 0 12px}
+.forward-status-legend{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:5px;
+    margin:0 0 15px;
+    padding:10px 12px;
+    border:1px solid #e4d6c0;
+    border-radius:9px;
+    background:#fffdf8;
+}
+.forward-status-legend>strong{margin-bottom:2px;font-size:13px}
+.forward-status-legend span{display:flex;align-items:center;gap:5px;font-size:12px}
+.forward-status-legend i{font-style:normal}
+.forward-status-legend span b{min-width:20px}
+.forward-status-dialog-body ol{margin:0 0 14px;padding-left:22px}
+.forward-status-dialog-body li{margin-bottom:10px}
+.forward-status-dialog-next{padding:10px 12px;border-radius:9px;background:#f3ead8}
+.forward-status-dialog-note{margin-bottom:0!important;color:#756b60;font-size:12px}
 
 @media(max-width:1100px){
     .home-layout{grid-template-columns:285px minmax(0,1fr)}
@@ -534,7 +663,7 @@ button,input{font:inherit}
 
 @media(max-width:760px){
     .home-layout{grid-template-columns:1fr}
-    .search-card{position:static}
+    .search-status-stack{position:static}
     .venue-grid{grid-template-columns:1fr}
     .pick-card-head strong{font-size:17px}
     .pick-item-main strong{font-size:14px}
@@ -562,4 +691,8 @@ button,input{font:inherit}
     .race-button strong{font-size:13px}
     .race-button span{font-size:8px}
     .choice-grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .forward-status-card{padding:12px}
+    .forward-status-head{align-items:flex-start;flex-direction:column;gap:4px}
+    .forward-status-state{text-align:left}
+    .forward-status-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px}
 }

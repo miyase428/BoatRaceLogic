@@ -16,6 +16,8 @@ require_once __DIR__ . '/FormalWindowProvenanceResolver.php';
 final class FormalEvidenceAggregate
 {
     public const SCHEMA_VERSION = 'FORMAL_EVIDENCE_AGGREGATE_V2';
+    public const MULTI_DAY_SCHEMA_VERSION = 'FORMAL_EVIDENCE_AGGREGATE_V2_MULTI_DAY';
+    public const MULTI_DAY_CONTRACT_VERSION = FormalWindowProvenanceResolver::EXPECTED_INVENTORY_CONTRACT_V2;
 
     /**
      * @return array{schema_version:string,window_id:string,capture_through_date:string,generated_for_verification_only:bool,file_count:int,entries:list<array{relative_path:string,sha256:string}>,aggregate_sha256:string,referenced_implementation_identities:list<string>,excluded_auxiliary_provenance:list<string>}
@@ -81,6 +83,75 @@ final class FormalEvidenceAggregate
         return [
             'schema_version' => self::SCHEMA_VERSION,
             'window_id' => $windowId,
+            'capture_through_date' => $captureThroughDate,
+            'generated_for_verification_only' => true,
+            'file_count' => count($entries),
+            'entries' => $entries,
+            'aggregate_sha256' => 'sha256:' . hash('sha256', $framed),
+            'referenced_implementation_identities' => array_values(array_keys($references)),
+            'excluded_auxiliary_provenance' => $excluded,
+            'provenance_resolution' => $resolution,
+        ];
+    }
+
+    /**
+     * Versioned multi-day aggregate.  It leaves calculate() and its legacy
+     * single-inventory semantics untouched, while requiring one immutable
+     * Expected inventory for every date in the explicit inclusive range.
+     *
+     * @return array<string,mixed>
+     */
+    public static function calculateMultiDay(
+        string $windowRoot,
+        string $windowId,
+        string $windowStartDate,
+        string $captureThroughDate,
+    ): array {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $windowStartDate)
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $captureThroughDate)
+            || $windowStartDate > $captureThroughDate) {
+            throw new InvalidArgumentException('aggregate_multi_day_date_range_invalid');
+        }
+        $root = rtrim($windowRoot, DIRECTORY_SEPARATOR);
+        $files = [];
+        foreach (['validation_window_manifest.json', 'activation_record.json', 'declared_implementation_identity.json'] as $relative) {
+            self::addRequiredFile($files, $root, $relative);
+        }
+        self::addFile($files, $root, 'preflight.json');
+        $directories = [
+            'opportunity/candidates', 'opportunity/eligibility', 'opportunity/observations',
+            'opportunity/expected_inventory', 'opportunity/operational', 'opportunity/source_failures',
+            'opportunity/schedule_revisions', 'ledger/expected', 'ledger/records',
+            'ledger/operational', 'ledger/failures', 'comparative_policy',
+        ];
+        if (self::usesComparativeContractV1($root)) {
+            array_push($directories, 'input_snapshots', 'comparative/pairs', 'comparative/captures',
+                'comparative/failures', 'comparative/conflicts', 'comparative/evaluations');
+        }
+        foreach ($directories as $relativeDirectory) self::addEvidenceDirectory($files, $root, $relativeDirectory, $captureThroughDate);
+        $references = self::collectReachableImplementationReferences($root, $files);
+        foreach ($references as $reference) self::verifyAndAddProvenance($files, $root, $reference);
+        $resolution = self::hasComparativeCaptureEvidence($files)
+            ? (new FormalWindowProvenanceResolver(
+                $root,
+                $windowId,
+                self::MULTI_DAY_CONTRACT_VERSION,
+                $windowStartDate,
+                $captureThroughDate,
+            ))->resolve($files)
+            : [];
+        $excluded = self::auxiliaryProvenance($root, $files);
+        ksort($files, SORT_STRING);
+        $entries = []; $framed = '';
+        foreach ($files as $relative => $sha256) {
+            $entries[] = ['relative_path' => $relative, 'sha256' => $sha256];
+            $framed .= $relative . "\0" . $sha256 . "\n";
+        }
+        return [
+            'schema_version' => self::MULTI_DAY_SCHEMA_VERSION,
+            'contract_version' => self::MULTI_DAY_CONTRACT_VERSION,
+            'window_id' => $windowId,
+            'window_start_date' => $windowStartDate,
             'capture_through_date' => $captureThroughDate,
             'generated_for_verification_only' => true,
             'file_count' => count($entries),

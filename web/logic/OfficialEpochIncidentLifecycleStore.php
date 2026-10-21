@@ -19,6 +19,8 @@ final class OfficialEpochIncidentLifecycleStore
     /** Legacy v1 records remain readable; new critical resolutions use v2. */
     public const RESOLUTION_SCHEMA = OfficialEpochRecoveryLifecycleV1::RESOLUTION_SCHEMA;
     public const LEGACY_RESOLUTION_SCHEMA = 'official-epoch-incident-resolution/v1';
+    public const TECHNICAL_INCOMPLETE_RESOLUTION_SCHEMA = 'official-epoch-incident-resolution/v3';
+    public const TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY = 'FREEZE_CURRENT_AND_START_CLEAN_WINDOW';
     public const RESUME_SCHEMA = 'official-epoch-resume/v1';
     public const END_SCHEMA = 'official-epoch-end/v1';
 
@@ -107,6 +109,116 @@ final class OfficialEpochIncidentLifecycleStore
 
     /** @param array<string,mixed> $record @return array<string,mixed> */
     public function createIncident(array $record): array { return $this->create('official_epoch_incidents', (string)($record['incident_id'] ?? ''), $record, self::INCIDENT_SCHEMA, 'INCIDENT'); }
+
+    /**
+     * Builds the existing v1 incident envelope using the narrow MAJOR
+     * technical-incomplete classifier. The general incident classifier and
+     * its frozen policy identity remain unchanged.
+     *
+     * @param array<string,mixed> $input
+     * @return array{accepted:bool,status:string,reason:string,record:array<string,mixed>}
+     */
+    public function technicalIncompleteIncidentRecord(array $input): array
+    {
+        $classification = OfficialEpochIncidentPolicyV1::classifyTechnicalIncompleteSchedulerFailure($input);
+        if (empty($classification['accepted'])) return $this->blocked((string)$classification['reason']);
+        $base = $this->incidentRecord(array_merge($input, ['incident_type' => 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY']));
+        $base['severity'] = 'MAJOR';
+        $base['classification'] = 'INCIDENT';
+        $base['recommended_state_after'] = 'ACTIVE';
+        $base['window_action'] = 'ABORT_ACTIVE_WINDOW';
+        $base['evidence_action'] = 'QUARANTINE';
+        $base['evidence_status_projection'] = 'QUARANTINED';
+        $base['automatic_actions'] = $classification['actions'];
+        $base['requires_new_window'] = true;
+        $base['requires_new_epoch'] = false;
+        $base['requires_cg_reapproval'] = false;
+        $base['technical_incomplete_classification_reason'] = (string)$classification['reason'];
+        $base['record_hash'] = $this->hash(array_diff_key($base, ['record_hash' => true]));
+        return ['accepted' => true, 'status' => 'TECHNICAL_INCOMPLETE_INCIDENT_ELIGIBLE', 'reason' => '', 'record' => $base];
+    }
+
+    /**
+     * Versioned resolution for a bounded, evidence-preserving Window abort.
+     * It is intentionally separate from v2 suspended-Epoch recovery records.
+     *
+     * @param array<string,mixed> $input
+     * @return array{accepted:bool,status:string,reason:string,record:array<string,mixed>}
+     */
+    public function technicalIncompleteResolutionRecord(array $input): array
+    {
+        $required = ['epoch_id', 'incident_id', 'incident_hash', 'affected_window_id', 'detected_at', 'resolved_at', 'root_cause', 'old_implementation_identity'];
+        foreach ($required as $field) if (!is_string($input[$field] ?? null) || trim((string)$input[$field]) === '') return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_FIELD_MISSING_' . strtoupper($field));
+        $races = $input['affected_race_codes'] ?? null;
+        if (!is_array($races) || $races === []) return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_AFFECTED_RACES_INVALID');
+        $normalized = [];
+        foreach ($races as $race) {
+            $race = strtoupper(trim((string)$race));
+            if (preg_match('/^\d{8}[A-Z0-9]{3}\d{2}$/', $race) !== 1 || isset($normalized[$race])) return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_AFFECTED_RACES_INVALID');
+            $normalized[$race] = true;
+        }
+        $races = array_keys($normalized); sort($races, SORT_STRING);
+        $status = (string)($input['resolution_status'] ?? 'PREPARED_FOR_ROLLOVER');
+        if (!in_array($status, ['PREPARED_FOR_ROLLOVER', 'RESOLVED'], true)
+            || ($input['incident_type'] ?? 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY') !== 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY'
+            || ($input['severity'] ?? 'MAJOR') !== 'MAJOR'
+            || ($input['repair_reconstructibility'] ?? 'PARTIAL') !== 'PARTIAL'
+            || !empty($input['historical_repair_performed'])
+            || empty($input['requires_new_window']) || !empty($input['requires_new_epoch'])
+            || ($input['recovery_strategy'] ?? self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY) !== self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY
+            || !self::validHash((string)$input['incident_hash'])
+            || !self::validHash((string)$input['old_implementation_identity'])) {
+            return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_INPUT_INVALID');
+        }
+        $newIdentity = $input['new_implementation_identity'] ?? null;
+        if ($newIdentity !== null && (!is_string($newIdentity) || !self::validHash($newIdentity))) return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_NEW_IDENTITY_INVALID');
+        if ($status === 'RESOLVED' && ($newIdentity === null || empty($input['root_cause_fixed']))) return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_RESOLVED_FIELDS_MISSING');
+        $key = [
+            'schema_version' => self::TECHNICAL_INCOMPLETE_RESOLUTION_SCHEMA,
+            'epoch_id' => (string)$input['epoch_id'], 'incident_hash' => (string)$input['incident_hash'],
+            'affected_window_id' => (string)$input['affected_window_id'], 'old_implementation_identity' => (string)$input['old_implementation_identity'],
+            'new_implementation_identity' => $newIdentity, 'resolution_status' => $status,
+        ];
+        $record = $key + [
+            'resolution_id' => 'official-epoch-resolution-v3-' . substr(hash('sha256', OfficialEpochPolicyV1::canonicalJson($key)), 0, 16),
+            'resolution_key' => $this->hash($key), 'incident_id' => (string)$input['incident_id'],
+            'incident_type' => 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY', 'severity' => 'MAJOR',
+            'detected_at' => (string)$input['detected_at'], 'resolved_at' => (string)$input['resolved_at'],
+            'root_cause' => (string)$input['root_cause'], 'root_cause_fixed' => !empty($input['root_cause_fixed']),
+            'affected_race_codes' => $races, 'affected_count' => count($races),
+            'repair_reconstructibility' => 'PARTIAL', 'historical_repair_performed' => false,
+            'requires_new_window' => true, 'requires_new_epoch' => false,
+            'recovery_strategy' => self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY,
+            'resolution_status' => $status,
+            'evidence_retention_policy' => 'QUARANTINED_RETAINED_NONCANONICAL_NOT_INVALIDATED',
+            'formal_evaluation_eligible' => false, 'successor_copy_permitted' => false,
+            'new_implementation_identity' => $newIdentity,
+            'created_at' => (string)($input['created_at'] ?? $input['resolved_at']),
+        ];
+        $record['record_hash'] = $this->hash($record);
+        return ['accepted' => true, 'status' => 'TECHNICAL_INCOMPLETE_RESOLUTION_ELIGIBLE', 'reason' => '', 'record' => $record];
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function createTechnicalIncompleteResolution(array $input): array
+    {
+        return $this->withGlobalLock(function () use ($input): array {
+            $prepared = $this->technicalIncompleteResolutionRecord($input);
+            if (empty($prepared['accepted'])) return $prepared;
+            $record = $prepared['record'];
+            $projection = $this->project((string)$record['epoch_id']);
+            if (empty($projection['valid']) || ($projection['state'] ?? '') !== 'ACTIVE') return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_EPOCH_NOT_ACTIVE');
+            $incident = $this->incidentForId((string)$record['incident_id']);
+            if ($incident === []
+                || !hash_equals((string)$record['incident_hash'], (string)($incident['record_hash'] ?? ''))
+                || ($incident['incident_type'] ?? '') !== 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY'
+                || ($incident['severity'] ?? '') !== 'MAJOR'
+                || ($incident['source_window_id'] ?? '') !== $record['affected_window_id']) {
+                return $this->blocked('TECHNICAL_INCOMPLETE_RESOLUTION_INCIDENT_CROSS_BINDING_INVALID');
+            }
+            return $this->createUnlocked('official_epoch_incident_resolutions', (string)$record['resolution_id'], $record, self::TECHNICAL_INCOMPLETE_RESOLUTION_SCHEMA, 'TECHNICAL_INCOMPLETE_RESOLUTION');
+        });
+    }
 
     /** @param array<string,mixed> $input @return array<string,mixed> */
     public function resolutionRecord(array $input): array
@@ -246,7 +358,19 @@ final class OfficialEpochIncidentLifecycleStore
 
     private function stateHash(string $epoch, string $previous, string $state, string $recordHash): string { return 'sha256:' . hash('sha256', OfficialEpochPolicyV1::canonicalJson(['epoch_id' => $epoch, 'previous_state_hash' => $previous, 'state' => $state, 'record_hash' => $recordHash])); }
     private function recovery(): OfficialEpochRecoveryLifecycleV1 { return new OfficialEpochRecoveryLifecycleV1(dirname($this->lifecycleRoot, 3), $this->lifecycleRoot); }
+    /** @return array<string,mixed> */
+    private function incidentForId(string $incidentId): array
+    {
+        if (preg_match('/^[A-Za-z0-9._-]+$/', $incidentId) !== 1) return [];
+        $path = rtrim($this->lifecycleRoot, '/') . '/official_epoch_incidents/' . $incidentId . '.json';
+        try { $row = json_decode((string)file_get_contents($path), true, 512, JSON_THROW_ON_ERROR); }
+        catch (Throwable) { return []; }
+        if (!is_array($row) || ($row['schema_version'] ?? '') !== self::INCIDENT_SCHEMA) return [];
+        $payload = $row; unset($payload['record_hash']);
+        return hash_equals($this->hash($payload), (string)($row['record_hash'] ?? '')) ? $row : [];
+    }
     private function resolveLifecycleRef(string $ref): string { $ref = ltrim($ref, '/'); return $ref === '' || str_contains($ref, '..') ? '' : rtrim($this->lifecycleRoot, '/') . '/' . preg_replace('#^lifecycle/#', '', $ref); }
     /** @param array<string,mixed> $value */ private function hash(array $value): string { return 'sha256:' . hash('sha256', OfficialEpochPolicyV1::canonicalJson($value)); }
+    private static function validHash(string $value): bool { return preg_match('/^sha256:[a-f0-9]{64}$/', $value) === 1; }
     /** @return array<string,mixed> */ private function blocked(string $reason): array { return ['accepted' => false, 'status' => 'OFFICIAL_EPOCH_LIFECYCLE_BLOCKED', 'reason' => $reason, 'record' => []]; }
 }

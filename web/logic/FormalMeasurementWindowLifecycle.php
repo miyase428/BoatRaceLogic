@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/FormalEvidenceAggregate.php';
 require_once __DIR__ . '/OfficialEpochStartStore.php';
 require_once __DIR__ . '/OfficialEpochRecoveryLifecycleV1.php';
+require_once __DIR__ . '/TechnicalIncompleteEvidenceAttestation.php';
 
 /**
  * Lifecycle v2 state kept outside a measurement Window.
@@ -18,9 +19,13 @@ final class FormalMeasurementWindowLifecycle
     public const CLOSURE_SCHEMA_VERSION = 'formal-measurement-window-closure/v2';
     public const IDENTITY_SEPARATED_CLOSURE_SCHEMA_VERSION = 'formal-measurement-window-closure/v3';
     public const ABORT_SCHEMA_VERSION = 'formal-measurement-window-abort/v1';
+    public const TECHNICAL_INCOMPLETE_ABORT_SCHEMA_VERSION = 'formal-measurement-window-abort/v2';
     public const ABORT_REASON_A1_EXPECTED_INVENTORY_BOOTSTRAP_INVALID = 'A1_EXPECTED_INVENTORY_BOOTSTRAP_INVALID';
     public const ABORT_REASON_A1_DEADLINE_SNAPSHOT_SEMANTIC_CONFLICT = 'A1_DEADLINE_SNAPSHOT_SEMANTIC_CONFLICT';
     public const ABORT_REASON_COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG = 'COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG';
+    public const ABORT_REASON_FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT = 'FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT';
+    public const TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY = 'FREEZE_CURRENT_AND_START_CLEAN_WINDOW';
+    public const TECHNICAL_INCOMPLETE_EVIDENCE_RETENTION_POLICY = 'RETAIN_DIAGNOSTIC_NATURAL_EVIDENCE_NO_SUCCESSOR_COPY';
     public const POINTER_TRANSITION_SCHEMA_VERSION = 'formal-measurement-pointer-transition/v2';
     public const BOOTSTRAP_AUTHORIZATION_VERSION = 'bootstrap-close-authorization/v1';
 
@@ -150,6 +155,183 @@ final class FormalMeasurementWindowLifecycle
         $abort['abort_record_hash'] = 'sha256:' . hash('sha256', $this->canonicalJson($abort));
         if (!$this->writeCreateOnly($this->abortPath($windowId), $this->canonicalJson($abort) . "\n")) return $this->abortBlocked('ABORT_CREATE_FAILED');
         return ['accepted' => true, 'status' => 'ABORT_CREATED', 'reason' => '', 'abort' => $abort];
+    }
+
+    /**
+     * Builds the proposed Official-Epoch technical-incomplete abort record.
+     * This function is pure: it neither resolves the production pointer nor
+     * creates an external lifecycle file.
+     *
+     * @param array<string,mixed> $input
+     * @return array{accepted:bool,status:string,reason:string,abort:array<string,mixed>}
+     */
+    public function technicalIncompleteAbortV2Record(array $input): array
+    {
+        $required = [
+            'window_id', 'epoch_id', 'armed_at', 'aborted_at', 'capture_through_date', 'window_start_date',
+            'incident_id', 'incident_hash', 'affected_keyset_hash', 'final_evidence_hash',
+            'verified_final_evidence_hash', 'old_implementation_identity', 'activation_implementation_identity',
+            'previous_pointer_identity', 'closing_tool_implementation_identity',
+        ];
+        foreach ($required as $field) if (!is_string($input[$field] ?? null) || trim((string)$input[$field]) === '') return $this->abortBlocked('ABORT_V2_FIELD_MISSING_' . strtoupper($field));
+        $races = $input['affected_race_codes'] ?? null;
+        if (!is_array($races) || $races === []) return $this->abortBlocked('ABORT_V2_AFFECTED_RACES_INVALID');
+        $normalized = [];
+        foreach ($races as $race) {
+            $race = strtoupper(trim((string)$race));
+            if (preg_match('/^\d{8}[A-Z0-9]{3}\d{2}$/', $race) !== 1 || isset($normalized[$race])) return $this->abortBlocked('ABORT_V2_AFFECTED_RACES_INVALID');
+            $normalized[$race] = true;
+        }
+        $races = array_keys($normalized); sort($races, SORT_STRING);
+        $hashFields = ['incident_hash', 'affected_keyset_hash', 'final_evidence_hash', 'verified_final_evidence_hash', 'old_implementation_identity', 'activation_implementation_identity', 'previous_pointer_identity', 'closing_tool_implementation_identity'];
+        foreach ($hashFields as $field) if (!self::validHash((string)$input[$field])) return $this->abortBlocked('ABORT_V2_HASH_INVALID_' . strtoupper($field));
+        $attestationMode = array_key_exists('evidence_attestation_schema', $input)
+            || array_key_exists('evidence_attestation_sha256', $input);
+        if ($attestationMode) {
+            foreach (['evidence_attestation_schema','evidence_attestation_sha256','missing_resolution_keyset_sha256','completeness_status'] as $field) {
+                if (!is_string($input[$field] ?? null) || trim((string)$input[$field]) === '') return $this->abortBlocked('ABORT_V2_FIELD_MISSING_' . strtoupper($field));
+            }
+            if (($input['evidence_attestation_schema'] ?? '') !== TechnicalIncompleteEvidenceAttestation::SCHEMA_VERSION
+                || ($input['completeness_status'] ?? '') !== TechnicalIncompleteEvidenceAttestation::COMPLETENESS_STATUS
+                || !self::validHash((string)$input['evidence_attestation_sha256'])
+                || !self::validHash((string)$input['missing_resolution_keyset_sha256'])
+                || !hash_equals((string)$input['evidence_attestation_sha256'], (string)$input['final_evidence_hash'])) {
+                return $this->abortBlocked('ABORT_V2_ATTESTATION_INPUT_INVALID');
+            }
+        }
+        if (!preg_match('/^[A-Za-z0-9._-]+$/', (string)$input['window_id'])
+            || !preg_match('/^[A-Za-z0-9._-]+$/', (string)$input['incident_id'])
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$input['capture_through_date'])
+            || !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$input['window_start_date'])
+            || (string)$input['window_start_date'] > (string)$input['capture_through_date']
+            || !hash_equals((string)$input['final_evidence_hash'], (string)$input['verified_final_evidence_hash'])
+            || !empty($input['historical_repair_performed'])
+            || ($input['recovery_strategy'] ?? self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY) !== self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY
+            || ($input['evidence_retention_policy'] ?? self::TECHNICAL_INCOMPLETE_EVIDENCE_RETENTION_POLICY) !== self::TECHNICAL_INCOMPLETE_EVIDENCE_RETENTION_POLICY
+            || empty($input['successor_required'])
+            || ($input['repair_reconstructibility'] ?? 'PARTIAL') !== 'PARTIAL'
+            || (int)($input['missing_resolution_count'] ?? -1) !== count($races)) {
+            return $this->abortBlocked('ABORT_V2_INPUT_INVALID');
+        }
+        $abort = [
+            'schema_version' => self::TECHNICAL_INCOMPLETE_ABORT_SCHEMA_VERSION,
+            'window_id' => (string)$input['window_id'], 'epoch_id' => (string)$input['epoch_id'],
+            'terminal_state' => 'ABORTED', 'armed_at' => (string)$input['armed_at'], 'aborted_at' => (string)$input['aborted_at'],
+            'capture_through_date' => (string)$input['capture_through_date'], 'window_start_date' => (string)$input['window_start_date'],
+            'reason' => self::ABORT_REASON_FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT,
+            'abort_reason' => self::ABORT_REASON_FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT,
+            'failure_code' => (string)($input['failure_code'] ?? 'LATE_ELIGIBILITY_PRODUCER_SCHEDULE_GAP'),
+            'failure_details' => (string)($input['failure_details'] ?? ''),
+            'incident_id' => (string)$input['incident_id'], 'incident_hash' => (string)$input['incident_hash'],
+            'affected_race_codes' => $races, 'affected_keyset_hash' => (string)$input['affected_keyset_hash'],
+            'missing_resolution_count' => count($races), 'repair_reconstructibility' => 'PARTIAL',
+            'historical_repair_performed' => false,
+            'recovery_strategy' => self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY,
+            'evidence_retention_policy' => self::TECHNICAL_INCOMPLETE_EVIDENCE_RETENTION_POLICY,
+            'formal_evaluation_eligible' => false, 'production_adoption_eligible' => false,
+            'successor_copy_permitted' => false, 'successor_required' => true,
+            'evidence_basis' => $attestationMode ? 'TECHNICAL_INCOMPLETE_ATTESTATION' : 'COMPLETE_FORMAL_AGGREGATE',
+            'formal_evidence_aggregate_sha256' => $attestationMode ? null : (string)$input['final_evidence_hash'],
+            'final_evidence_hash' => (string)$input['final_evidence_hash'],
+            'raw_evidence_sha256' => (string)($input['raw_evidence_sha256'] ?? ''),
+            'canonical_membership_sha256' => (string)($input['canonical_membership_sha256'] ?? ''),
+            'old_implementation_identity' => (string)$input['old_implementation_identity'],
+            'declared_implementation_identity' => (string)$input['old_implementation_identity'],
+            'activation_implementation_identity' => (string)$input['activation_implementation_identity'],
+            'previous_pointer_identity' => (string)$input['previous_pointer_identity'],
+            'closing_tool_implementation_identity' => (string)$input['closing_tool_implementation_identity'],
+            'official_epoch' => 'YES',
+        ];
+        if ($attestationMode) {
+            $abort['evidence_attestation_schema'] = (string)$input['evidence_attestation_schema'];
+            $abort['evidence_attestation_sha256'] = (string)$input['evidence_attestation_sha256'];
+            $abort['missing_resolution_keyset_sha256'] = (string)$input['missing_resolution_keyset_sha256'];
+            $abort['completeness_status'] = TechnicalIncompleteEvidenceAttestation::COMPLETENESS_STATUS;
+        }
+        $abort['abort_record_hash'] = 'sha256:' . hash('sha256', $this->canonicalJson($abort));
+        return ['accepted' => true, 'status' => 'ABORT_V2_ELIGIBLE', 'reason' => '', 'abort' => $abort];
+    }
+
+    /**
+     * Create-only production commit for a v2 technical-incomplete abort.
+     * It is not invoked by the implementation-gate phase.
+     *
+     * @param array<string,mixed> $input
+     * @return array{accepted:bool,status:string,reason:string,abort:array<string,mixed>}
+     */
+    public function createTechnicalIncompleteAbortV2(array $input): array
+    {
+        $prepared = $this->technicalIncompleteAbortV2Record($input);
+        if (!$prepared['accepted']) return $prepared;
+        $abort = $prepared['abort']; $windowId = (string)$abort['window_id'];
+        $existing = $this->readAbort($windowId);
+        if ($existing !== []) {
+            if ($this->validAbortV2($existing, $windowId) && hash_equals((string)$existing['abort_record_hash'], (string)$abort['abort_record_hash'])) return ['accepted' => true, 'status' => 'ABORT_V2_ALREADY_EXISTS', 'reason' => '', 'abort' => $existing];
+            return $this->abortBlocked('BLOCKED_ABORT_CONFLICT', $existing);
+        }
+        try {
+            $context = FormalMeasurementWindowContext::production($this->repoRoot);
+            $resolved = $context->resolve(); $manifest = $resolved['manifest'] ?? [];
+            $pointerBytes = @file_get_contents($this->repoRoot . '/' . FormalMeasurementWindowContext::POINTER_RELATIVE_PATH);
+            if (!$resolved['accepted'] || !hash_equals($windowId, (string)($resolved['window_id'] ?? ''))
+                || ($manifest['activation_state'] ?? '') !== 'ACTIVE' || ($manifest['status'] ?? '') !== 'ACTIVE'
+                || !is_string($pointerBytes) || !hash_equals((string)$abort['previous_pointer_identity'], 'sha256:' . hash('sha256', $pointerBytes))) return $this->abortBlocked('ABORT_V2_CONTEXT_OR_POINTER_UNVERIFIED');
+            $epoch = (new OfficialEpochStartStore($this->repoRoot . '/var/strict_forward_live_readiness/lifecycle'))->existing();
+            if ($epoch === [] || !hash_equals((string)$abort['epoch_id'], (string)($epoch['epoch_id'] ?? ''))) return $this->abortBlocked('ABORT_V2_EPOCH_UNVERIFIED');
+            $declaration = $context->declaration()->read(); $activation = $context->activationHold()->readActivation();
+            $declared = (string)($declaration['declaration']['implementation_identity'] ?? '');
+            $activated = (string)($activation['implementation_identity'] ?? '');
+            if (!$declaration['accepted'] || !hash_equals($declared, (string)$abort['old_implementation_identity'])
+                || !hash_equals($activated, (string)$abort['activation_implementation_identity']) || !hash_equals($declared, $activated)) return $this->abortBlocked('ABORT_V2_DECLARED_ACTIVATION_IDENTITY_MISMATCH');
+            if (($abort['evidence_basis'] ?? '') === 'TECHNICAL_INCOMPLETE_ATTESTATION') {
+                $store = new TechnicalIncompleteEvidenceAttestation($this->repoRoot);
+                $attestation = $store->read($windowId);
+                $rootCause = is_array($attestation['root_cause_binding'] ?? null) ? $attestation['root_cause_binding'] : [];
+                $verifiedAttestation = [];
+                if ($store->valid($attestation, $windowId)) {
+                    $verifiedAttestation = $store->build(dirname($context->windowManifestPath()), [
+                        'window_id' => (string)$attestation['window_id'],
+                        'epoch_id' => (string)$attestation['epoch_id'],
+                        'attested_at' => (string)$attestation['attested_at'],
+                        'implementation_identity' => (string)$attestation['implementation_identity'],
+                        'window_start_date' => (string)$attestation['window_start_date'],
+                        'capture_through_date' => (string)$attestation['capture_through_date'],
+                        'required_inventory_dates' => $attestation['required_inventory_dates'] ?? [],
+                        'boundary_contract_path' => (string)$attestation['boundary_contract_path'],
+                        'boundary_contract_sha256' => (string)$attestation['boundary_contract_sha256'],
+                        'incident_id' => (string)($rootCause['incident_id'] ?? ''),
+                        'incident_hash' => (string)($rootCause['incident_hash'] ?? ''),
+                        'incident_type' => (string)($rootCause['incident_type'] ?? ''),
+                        'severity' => (string)($rootCause['severity'] ?? ''),
+                        'repair_reconstructibility' => (string)($rootCause['repair_reconstructibility'] ?? ''),
+                        'recovery_strategy' => (string)($rootCause['recovery_strategy'] ?? ''),
+                        'historical_repair_performed' => (bool)($rootCause['historical_repair_performed'] ?? true),
+                        'missing_resolution_keys' => $attestation['missing_resolution_keys'] ?? [],
+                        'missing_resolution_race_codes' => $attestation['missing_resolution_race_codes'] ?? [],
+                    ]);
+                }
+                if (!$store->valid($attestation, $windowId)
+                    || !hash_equals((string)($attestation['attestation_sha256'] ?? ''), (string)($verifiedAttestation['attestation_sha256'] ?? ''))
+                    || !hash_equals((string)$abort['evidence_attestation_sha256'], (string)($attestation['attestation_sha256'] ?? ''))
+                    || !hash_equals((string)$abort['final_evidence_hash'], (string)($attestation['attestation_sha256'] ?? ''))
+                    || !hash_equals((string)$abort['missing_resolution_keyset_sha256'], (string)($attestation['missing_resolution_keyset_sha256'] ?? ''))
+                    || (int)$abort['missing_resolution_count'] !== (int)($attestation['missing_resolution_count'] ?? -1)
+                    || !hash_equals((string)$abort['incident_id'], (string)($rootCause['incident_id'] ?? ''))
+                    || !hash_equals((string)$abort['incident_hash'], (string)($rootCause['incident_hash'] ?? ''))
+                    || !hash_equals((string)$abort['old_implementation_identity'], (string)($attestation['implementation_identity'] ?? ''))) {
+                    return $this->abortBlocked('ABORT_V2_EVIDENCE_ATTESTATION_MISMATCH');
+                }
+            } else {
+                $aggregate = FormalEvidenceAggregate::calculateMultiDay(dirname($context->windowManifestPath()), $windowId, (string)$abort['window_start_date'], (string)$abort['capture_through_date']);
+                if (!hash_equals((string)$aggregate['aggregate_sha256'], (string)$abort['final_evidence_hash'])) return $this->abortBlocked('ABORT_V2_EVIDENCE_AGGREGATE_MISMATCH');
+            }
+            $incidentPath = $this->repoRoot . '/var/strict_forward_live_readiness/lifecycle/official_epoch_incidents/' . (string)$abort['incident_id'] . '.json';
+            $incident = json_decode((string)@file_get_contents($incidentPath), true);
+            if (!is_array($incident) || !hash_equals((string)$abort['incident_hash'], (string)($incident['record_hash'] ?? ''))
+                || ($incident['incident_type'] ?? '') !== 'SCHEDULER_FAILURE_MISSED_OPPORTUNITY' || ($incident['severity'] ?? '') !== 'MAJOR') return $this->abortBlocked('ABORT_V2_INCIDENT_UNVERIFIED');
+        } catch (Throwable $error) { return $this->abortBlocked('ABORT_V2_CONTEXT_UNAVAILABLE:' . $error->getMessage()); }
+        if (!$this->writeCreateOnly($this->abortPath($windowId), $this->canonicalJson($abort) . "\n")) return $this->abortBlocked('ABORT_V2_CREATE_FAILED');
+        return ['accepted' => true, 'status' => 'ABORT_V2_CREATED', 'reason' => '', 'abort' => $abort];
     }
 
     /**
@@ -490,11 +672,45 @@ final class FormalMeasurementWindowLifecycle
     }
     private function validAbort(array $row, string $windowId): bool
     {
+        if (($row['schema_version'] ?? '') === self::TECHNICAL_INCOMPLETE_ABORT_SCHEMA_VERSION) return $this->validAbortV2($row, $windowId);
         return ($row['schema_version'] ?? '') === self::ABORT_SCHEMA_VERSION
             && ($row['window_id'] ?? '') === $windowId
             && self::validAbortReason((string)($row['abort_reason'] ?? ''))
             && ($row['official_epoch'] ?? '') === 'NO'
             && is_string($row['abort_record_hash'] ?? null);
+    }
+    private function validAbortV2(array $row, string $windowId): bool
+    {
+        $required = ['epoch_id', 'armed_at', 'aborted_at', 'capture_through_date', 'window_start_date', 'incident_id', 'incident_hash', 'affected_keyset_hash', 'final_evidence_hash', 'old_implementation_identity', 'activation_implementation_identity', 'previous_pointer_identity', 'closing_tool_implementation_identity', 'abort_record_hash'];
+        foreach ($required as $field) if (!is_string($row[$field] ?? null) || trim((string)$row[$field]) === '') return false;
+        if (($row['window_id'] ?? '') !== $windowId
+            || ($row['terminal_state'] ?? '') !== 'ABORTED'
+            || ($row['abort_reason'] ?? '') !== self::ABORT_REASON_FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT
+            || ($row['official_epoch'] ?? '') !== 'YES'
+            || !is_array($row['affected_race_codes'] ?? null)
+            || (int)($row['missing_resolution_count'] ?? -1) !== count($row['affected_race_codes'])
+            || ($row['repair_reconstructibility'] ?? '') !== 'PARTIAL'
+            || !empty($row['historical_repair_performed'])
+            || ($row['recovery_strategy'] ?? '') !== self::TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY
+            || ($row['evidence_retention_policy'] ?? '') !== self::TECHNICAL_INCOMPLETE_EVIDENCE_RETENTION_POLICY
+            || empty($row['successor_required'])
+            || !empty($row['formal_evaluation_eligible'])
+            || !empty($row['production_adoption_eligible'])
+            || !empty($row['successor_copy_permitted'])) return false;
+        foreach (['incident_hash', 'affected_keyset_hash', 'final_evidence_hash', 'old_implementation_identity', 'activation_implementation_identity', 'previous_pointer_identity', 'closing_tool_implementation_identity', 'abort_record_hash'] as $field) if (!self::validHash((string)$row[$field])) return false;
+        $basis = (string)($row['evidence_basis'] ?? 'COMPLETE_FORMAL_AGGREGATE');
+        if ($basis === 'TECHNICAL_INCOMPLETE_ATTESTATION') {
+            if (($row['evidence_attestation_schema'] ?? '') !== TechnicalIncompleteEvidenceAttestation::SCHEMA_VERSION
+                || ($row['completeness_status'] ?? '') !== TechnicalIncompleteEvidenceAttestation::COMPLETENESS_STATUS
+                || !self::validHash((string)($row['evidence_attestation_sha256'] ?? ''))
+                || !self::validHash((string)($row['missing_resolution_keyset_sha256'] ?? ''))
+                || !hash_equals((string)$row['evidence_attestation_sha256'], (string)$row['final_evidence_hash'])
+                || $row['formal_evidence_aggregate_sha256'] !== null) return false;
+        } elseif ($basis !== 'COMPLETE_FORMAL_AGGREGATE'
+            || !self::validHash((string)($row['formal_evidence_aggregate_sha256'] ?? ''))
+            || !hash_equals((string)$row['formal_evidence_aggregate_sha256'], (string)$row['final_evidence_hash'])) return false;
+        $payload = $row; unset($payload['abort_record_hash']);
+        return hash_equals((string)$row['abort_record_hash'], 'sha256:' . hash('sha256', $this->canonicalJson($payload)));
     }
     private static function validAbortReason(string $reason): bool
     {
@@ -504,6 +720,7 @@ final class FormalMeasurementWindowLifecycle
             self::ABORT_REASON_COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG,
         ], true);
     }
+    private static function validHash(string $value): bool { return preg_match('/^sha256:[a-f0-9]{64}$/', $value) === 1; }
     private function verifiedLegacyWindow(FormalMeasurementWindowContext $context, array $activation, array $declaration): bool
     {
         if (($activation['activation_schema_version'] ?? '') !== WindowActivationHold::ACTIVATION_SCHEMA_VERSION
