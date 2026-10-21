@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This wrapper does not enable the official route.  The PHP entry point exits
-# before any official request unless the operator has explicitly supplied both
-# required environment switches after approval.
+# This wrapper does not configure a route. The PHP entry point reads the
+# shared PostgreSQL control record, so independent processes cannot disagree.
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="${OFFICIAL_AMAGASAKI_LOG_DIR:-$ROOT_DIR/logs}"
 LOCK_DIR="${OFFICIAL_AMAGASAKI_LOCK_DIR:-$ROOT_DIR/var/official_amagasaki}"

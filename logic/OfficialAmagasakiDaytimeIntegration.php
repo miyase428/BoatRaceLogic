@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/OfficialAmagasakiDaytimeFlow.php';
 require_once __DIR__ . '/OfficialAmagasakiAttemptRepository.php';
+require_once __DIR__ . '/OfficialAmagasakiWriteBarrier.php';
 
 /** The adapter result is intentionally explicit: no exception is a success. */
 interface OfficialAmagasakiPayloadFetcher
@@ -39,7 +40,7 @@ final class PdoOfficialAmagasakiClaimedPersistence implements OfficialAmagasakiC
     private OfficialAmagasakiExhibitionTransactionStore $storage;
     private PdoOfficialAmagasakiAttemptRepository $attempts;
 
-    public function __construct(private readonly PDO $pdo, OfficialAmagasakiExhibitionValidator $validator, ?PdoOfficialAmagasakiAttemptRepository $attempts = null)
+    public function __construct(private readonly PDO $pdo, OfficialAmagasakiExhibitionValidator $validator, ?PdoOfficialAmagasakiAttemptRepository $attempts = null, private readonly ?int $retryIntervalSeconds = null)
     {
         $this->exhibitions = new PdoOfficialExhibitionRepository($pdo);
         $this->storage = new OfficialAmagasakiExhibitionTransactionStore($this->exhibitions, $validator);
@@ -52,9 +53,10 @@ final class PdoOfficialAmagasakiClaimedPersistence implements OfficialAmagasakiC
         try {
             $this->pdo->beginTransaction();
             $begun = true;
+            OfficialAmagasakiWriteBarrier::lock($this->pdo, $raceCode);
             $saved = $this->storage->persistWithinOpenTransaction($payload, $raceCode, $raceEntries);
             $outcome = $saved['status'] === 'saved' ? 'saved' : $this->stateOutcomeForStorageStatus($saved['status']);
-            $completed = OfficialAmagasakiAttemptState::complete($claimedState, $claimToken, $outcome, $finishedAt, null, false);
+            $completed = OfficialAmagasakiAttemptState::complete($claimedState, $claimToken, $outcome, $finishedAt, $this->retryIntervalSeconds, false);
             if (!$this->attempts->complete($claimedState, $claimToken, $completed)) {
                 throw new RuntimeException('attempt_completion_compare_and_swap_failed');
             }

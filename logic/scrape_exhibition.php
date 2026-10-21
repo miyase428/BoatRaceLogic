@@ -4,7 +4,7 @@ date_default_timezone_set('Asia/Tokyo');
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/exhibition_source_guard.php';
 require_once __DIR__ . '/exhibition_data_quality.php';
-require_once __DIR__ . '/OfficialAmagasakiLegacyWriteGuard.php';
+require_once __DIR__ . '/OfficialAmagasakiWriteBarrier.php';
 
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
@@ -243,10 +243,8 @@ function fetchExhibitionData(string $url, string $placeCode): array
 
 function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array $data): void
 {
-    $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $raceCode, 'nightly');
-    if (!$officialGuard['allow_legacy']) {
-        throw new RuntimeException('OFFICIAL_AMAGASAKI_LEGACY_WRITE_BLOCKED:' . $officialGuard['reason']);
-    }
+    $writeTransaction = officialAmagasakiBeginLegacyWrite($pdo, $raceCode, 'nightly');
+    try {
     $avgSql = "
         SELECT
             AVG(exhibition_time) AS avg_exh,
@@ -344,6 +342,11 @@ function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array
             ':exhibition_score' => $score,
             ':exhibition_type'  => $type,
         ]);
+    }
+    officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, true);
+    } catch (Throwable $error) {
+        officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, false);
+        throw $error;
     }
 }
 

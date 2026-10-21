@@ -14,12 +14,13 @@ $race_code = $_POST["race_code"]
         ?? $_GET["race_code"]
         ?? "";
 $pdo = null;
+$officialLegacyWriteTransaction = false;
 
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_source_guard.php';
 require_once __DIR__ . '/../logic/exhibition_data_quality.php';
-require_once __DIR__ . '/../logic/OfficialAmagasakiLegacyWriteGuard.php';
+require_once __DIR__ . '/../logic/OfficialAmagasakiWriteBarrier.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -190,6 +191,10 @@ try {
         throw new Exception("展示情報が全項目そろっていないため、保存せず次回更新対象にします");
     }
 
+    // The first check was before fetching. Repeat it under the same per-race
+    // lock used by the official writer before any legacy upsert can occur.
+    $officialLegacyWriteTransaction = officialAmagasakiBeginLegacyWrite($pdo, $race_code, 'web');
+
     // ------------------------------------------------------------
     // 過去の場平均
     // ------------------------------------------------------------
@@ -299,6 +304,9 @@ try {
         ]);
     }
 
+    officialAmagasakiFinishLegacyWrite($pdo, $officialLegacyWriteTransaction, true);
+    $officialLegacyWriteTransaction = false;
+
     log_message("{$race_code} 更新完了");
 
     ob_end_clean();
@@ -311,6 +319,11 @@ try {
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 } catch (Throwable $e) {
+
+    if ($pdo instanceof PDO && $officialLegacyWriteTransaction) {
+        officialAmagasakiFinishLegacyWrite($pdo, true, false);
+        $officialLegacyWriteTransaction = false;
+    }
 
     $errorMessage = $e->getMessage();
     log_message("エラー発生: " . $errorMessage);

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/OfficialExhibitionSourceRouter.php';
+require_once __DIR__ . '/OfficialAmagasakiOperationalStateRepository.php';
 
 /**
  * Separates a future AMG cut-over from the existing policy-only source router.
@@ -14,18 +15,18 @@ require_once __DIR__ . '/OfficialExhibitionSourceRouter.php';
  */
 final class OfficialAmagasakiOperationalPolicy
 {
-    public const ROUTE_ENABLED_ENV = 'OFFICIAL_AMAGASAKI_ROUTE_ENABLED';
-    public const AUTOMATION_APPROVED_ENV = 'OFFICIAL_AMAGASAKI_AUTOMATION_APPROVED';
-
     public function __construct(
         private readonly bool $routeEnabled,
         private readonly bool $automationApproved,
+        private readonly ?int $retryIntervalSeconds = null,
+        private readonly string $controlStatus = 'ok',
     ) {
     }
 
-    public static function fromEnvironment(): self
+    public static function fromPdo(PDO $pdo): self
     {
-        return new self(self::environmentFlag(self::ROUTE_ENABLED_ENV), self::environmentFlag(self::AUTOMATION_APPROVED_ENV));
+        $state = (new PdoOfficialAmagasakiOperationalStateRepository($pdo))->load();
+        return new self($state['route_enabled'], $state['automation_approved'], $state['retry_interval_seconds'], $state['status']);
     }
 
     /** @return array{mode:string,reason:string,source:string,entry:string} */
@@ -38,7 +39,16 @@ final class OfficialAmagasakiOperationalPolicy
             throw new InvalidArgumentException('unknown exhibition entry');
         }
         $target = $matches[2] === 'AMG' && $matches[1] >= OfficialExhibitionSourceRouter::OFFICIAL_START_DATE;
-        if (!$target || !$this->routeEnabled) {
+        if (!$target) {
+            return ['mode' => 'legacy', 'reason' => 'LEGACY_ROUTE', 'source' => 'kyoteibiyori', 'entry' => $entry];
+        }
+        // Before migration the existing path remains untouched. Once the
+        // shared table exists, a missing/corrupt control row is never treated
+        // as permission to write a potentially official AMG race.
+        if ($this->controlStatus === 'invalid') {
+            return ['mode' => 'blocked', 'reason' => 'OFFICIAL_CONTROL_STATE_INVALID', 'source' => 'official_amagasaki', 'entry' => $entry];
+        }
+        if (!$this->routeEnabled) {
             return ['mode' => 'legacy', 'reason' => !$target ? 'LEGACY_ROUTE' : 'OFFICIAL_ROUTE_DISABLED', 'source' => 'kyoteibiyori', 'entry' => $entry];
         }
         if (!$this->automationApproved) {
@@ -49,9 +59,6 @@ final class OfficialAmagasakiOperationalPolicy
 
     public function routeEnabled(): bool { return $this->routeEnabled; }
     public function automationApproved(): bool { return $this->automationApproved; }
-
-    private static function environmentFlag(string $name): bool
-    {
-        return filter_var((string)getenv($name), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true;
-    }
+    public function retryIntervalSeconds(): ?int { return $this->retryIntervalSeconds; }
+    public function controlStatus(): string { return $this->controlStatus; }
 }

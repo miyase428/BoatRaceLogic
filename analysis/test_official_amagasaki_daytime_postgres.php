@@ -102,11 +102,29 @@ CREATE TABLE IF NOT EXISTS boat_race.exhibition_live (
 SQL);
 $pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_audit_v1.sql'));
 $pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_attempt_state_v1.sql'));
+$pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_control_v1.sql'));
+// This fixture may run after another isolated test; always establish the
+// disabled deployment default instead of inheriting a prior test's control row.
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = false, automation_approved = false, retry_interval_seconds = NULL, updated_by = 'fixture-reset' WHERE control_key = 'amagasaki'");
 
 $attempts = new PdoOfficialAmagasakiAttemptRepository($pdo);
 $validator = new OfficialAmagasakiExhibitionValidator();
 $persistence = new PdoOfficialAmagasakiClaimedPersistence($pdo, $validator, $attempts);
 $cases = 0;
+
+// 1–4: every process reads the same control row; missing/corrupt state blocks
+// only the future AMG cut-over and never silently enables it.
+$policy = OfficialAmagasakiOperationalPolicy::fromPdo($pdo);
+pgAssert($policy->decide('20261021AMG01', 'daytime')['mode'] === 'legacy', 'installed disabled control retains legacy route'); $cases++;
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = false, retry_interval_seconds = NULL WHERE control_key = 'amagasaki'");
+$policy = OfficialAmagasakiOperationalPolicy::fromPdo($pdo);
+pgAssert($policy->decide('20261021AMG01', 'web')['reason'] === 'OFFICIAL_AUTOMATION_NOT_APPROVED', 'route and approval remain independent'); $cases++;
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET automation_approved = true, retry_interval_seconds = 120 WHERE control_key = 'amagasaki'");
+$policy = OfficialAmagasakiOperationalPolicy::fromPdo($pdo);
+pgAssert($policy->decide('20261021AMG01', 'retry')['mode'] === 'official' && $policy->retryIntervalSeconds() === 120, 'cron and web can resolve the same approved retry policy'); $cases++;
+$pdo->exec("DELETE FROM boat_race.official_exhibition_control_v1 WHERE control_key = 'amagasaki'");
+pgAssert(OfficialAmagasakiOperationalPolicy::fromPdo($pdo)->decide('20261021AMG01', 'nightly')['reason'] === 'OFFICIAL_CONTROL_STATE_INVALID', 'missing installed control row fails closed'); $cases++;
+$pdo->exec("INSERT INTO boat_race.official_exhibition_control_v1 (control_key, route_enabled, automation_approved, retry_interval_seconds, updated_by) VALUES ('amagasaki', true, true, 120, 'fixture')");
 
 // 1–2: atomic initial claim and stale competing claim.
 pgReset($pdo); $race = '20261021AMG01'; $first = pgClaim($attempts, $race, 'claim-one');
@@ -136,7 +154,25 @@ pgAssert($result['committed'] && pgCount($pdo, 'boat_race.exhibition_live', $rac
 $savedCandidate = $candidate; $savedCandidate['existing_status'] = 'already_official'; $savedCandidate['attempt_state'] = $attempts->load($race);
 pgAssert($flow->plan($savedCandidate, new DateTimeImmutable('2026-10-21T10:05:30Z'))['action'] === 'skip', 'audited saved race is not claimed again'); $cases++;
 
-// 8: any one of the six row inserts failing rolls back the complete set and state completion.
+// 8–9: a second connection cannot take the same save lock, and an audited
+// official race remains protected even after route_enabled is turned off.
+$pdo->beginTransaction();
+OfficialAmagasakiWriteBarrier::lock($pdo, $race);
+$otherLockPdo = new PDO($dsn, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$tryLock = $otherLockPdo->prepare('SELECT pg_try_advisory_xact_lock(hashtext(CAST(:race_code AS text)))');
+$tryLock->execute([':race_code' => $race]);
+pgAssert(!in_array($tryLock->fetchColumn(), [true, 't', '1', 1], true), 'legacy connection cannot enter official save critical section'); $cases++;
+$pdo->rollBack();
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = false, automation_approved = false WHERE control_key = 'amagasaki'");
+try {
+    officialAmagasakiBeginLegacyWrite($pdo, $race, 'web');
+    throw new RuntimeException('audited official row unexpectedly allowed legacy write');
+} catch (RuntimeException $error) {
+    pgAssert(str_contains($error->getMessage(), 'OFFICIAL_AUDITED_ROWS_PROTECTED'), 'audited official row stays protected after route disable'); $cases++;
+}
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = true, retry_interval_seconds = 120 WHERE control_key = 'amagasaki'");
+
+// 10: any one of the six row inserts failing rolls back the complete set and state completion.
 pgReset($pdo); $race = '20261021AMG02'; $claimed = pgClaim($attempts, $race, 'insert-fail');
 $pdo->exec('ALTER TABLE boat_race.exhibition_live ADD CONSTRAINT phase2m_reject_lane CHECK (entry_course <> 4)');
 $result = $persistence->persistAndComplete(pgPayload($race), $race, pgEntries(), $claimed, 'insert-fail', new DateTimeImmutable('2026-10-21T10:00:01Z'));

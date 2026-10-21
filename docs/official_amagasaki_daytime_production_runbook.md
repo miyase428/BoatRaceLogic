@@ -1,6 +1,6 @@
 # 尼崎公式展示・本番導入パッケージ
 
-このパッケージは、`20261021`以降の`AMG`だけを対象にします。通常状態では既存の取得経路を維持し、公式HPには接続しません。公式ルーティングと自動取得承認の二つを明示して初めて、尼崎対象レースを日中ジョブが所有します。ほかの23場と、2026-10-20以前の尼崎は既存経路のままです。
+このパッケージは、`20261021`以降の`AMG`だけを対象にします。共有PostgreSQLの制御行が通常状態（`route_enabled=false`）なら既存の取得経路を維持し、公式HPには接続しません。公式ルーティングと自動取得承認の二つを同じ制御行で明示して初めて、尼崎対象レースを日中ジョブが所有します。ほかの23場と、2026-10-20以前の尼崎は既存経路のままです。
 
 ## 導入前に必ず満たす条件
 
@@ -29,19 +29,21 @@ pg_dump "$BOATRACE_DB_DSN" --schema=boat_race --format=custom --file="/secure/ba
 ```bash
 psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -f analysis/sql/create_official_exhibition_audit_v1.sql
 psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -f analysis/sql/create_official_exhibition_attempt_state_v1.sql
+psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -f analysis/sql/create_official_exhibition_control_v1.sql
 ```
 
-4. 事前確認SQLを再実行し、二つの追加テーブルだけが存在することを確認する。次に、公式サイトへ接続しないdry-runを行う。
+4. 事前確認SQLを再実行し、三つの追加テーブルと、無効状態の`amagasaki`制御行を確認する。次に、公式サイトへ接続しないdry-runを行う。
 
 ```bash
 php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --dry-run
 ```
 
-5. 初回運用は、利用条件の承認後だけ、監視下で単発実行する。二つの環境変数を同時に与えない限り、実行モードは公式取得前に停止する。
+5. 初回運用は、利用条件の承認後だけ、DB運用担当者が共有制御行を更新してから監視下で単発実行する。`retry_interval_seconds`は承認済みのアクセス間隔だけを設定する。NULLのままなら未公開時の再試行はしない。
 
 ```bash
-OFFICIAL_AMAGASAKI_ROUTE_ENABLED=1 OFFICIAL_AMAGASAKI_AUTOMATION_APPROVED=1 \
-  php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --execute
+psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 \
+  -c "UPDATE boat_race.official_exhibition_control_v1 SET route_enabled=true, automation_approved=true, retry_interval_seconds=120, version=version+1, updated_at=NOW(), updated_by='APPROVED_OPERATOR' WHERE control_key='amagasaki';"
+php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --execute
 ```
 
 6. 単発運用で監査・attempt状態・ログを確認してから、1分周期のテンプレートを出力する。テンプレート出力自体はcrontabを変更しない。
@@ -52,20 +54,21 @@ analysis/print_official_amagasaki_daytime_cron_template.sh --print
 
 ## 競合・上書き防止
 
-`OFFICIAL_AMAGASAKI_ROUTE_ENABLED=1`かつ`OFFICIAL_AMAGASAKI_AUTOMATION_APPROVED=1`のとき、nightly、Web個別更新、error URL retry、Strict Forward collectorの既存取得経路は、AMG対象レースを公式日中ジョブ所有として保存前に停止します。監査済み公式行は、切替後にフラグを落としても既存経路から上書きしません。
+共有制御行で`route_enabled=true`かつ`automation_approved=true`のとき、nightly、Web個別更新、error URL retry、Strict Forward collectorの既存取得経路は、AMG対象レースを公式日中ジョブ所有として保存前に停止します。nightly・Web・retryは外部取得前にも確認し、保存直前には同じレース単位のPostgreSQL advisory lockを取得して制御行と公式監査を再確認します。公式保存側も同じlockをトランザクション内で取得するため、取得中の競合書込みは保存できません。
 
 完全な既存6艇で監査がない行は`EXISTING_SOURCE_UNKNOWN_REQUIRES_REVIEW`として停止します。これは既存値を公式値と偽装しないためで、別レースの取得を止めません。
 
-公式ルートを有効にしたのに自動取得承認がない場合は、競艇日和への自動フォールバックをせず`OFFICIAL_AUTOMATION_NOT_APPROVED`で停止します。フラグを設定しない通常状態では現行の取得を変更しません。
+公式ルートを有効にしたのに自動取得承認がない場合は、競艇日和への自動フォールバックをせず`OFFICIAL_AUTOMATION_NOT_APPROVED`で停止します。制御テーブルが導入済みなのに制御行が欠損・不正の場合も`OFFICIAL_CONTROL_STATE_INVALID`で停止します。テーブル導入前、または`route_enabled=false`の通常状態では現行の取得を変更しません。
 
 ## 監視と緊急停止
 
 - ログ: `logs/official_amagasaki_daytime.log`
+- 共有切替状態: `boat_race.official_exhibition_control_v1`
 - DB監査: `boat_race.exhibition_source_audit_v1`
 - 試行状態: `boat_race.official_exhibition_attempt_state_v1`
 - 取得開始は締切10〜8分前、未公開だけは5〜2分前に一度だけ再試行する。2分前以降は開始しない。
 
-緊急停止は、日中cron登録だけを外し、二つの環境変数をジョブ環境から外す。既存データや監査テーブルを削除しない。DB復旧が必要な場合は導入前バックアップをDB運用担当者の手順で復元し、先に日中cronを停止する。
+緊急停止は、まず共有制御行を`route_enabled=false, automation_approved=false`へ戻し、次に日中cron登録を外す。既存データや監査テーブルを削除しない。DB復旧が必要な場合は導入前バックアップをDB運用担当者の手順で復元し、先に日中cronを停止する。
 
 ## 意図的に今回の対象外とする事項
 

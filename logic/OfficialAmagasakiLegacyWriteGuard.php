@@ -47,15 +47,12 @@ final class OfficialAmagasakiLegacyWriteGuard
 /** @return array{allow_legacy:bool,reason:string,mode:string} */
 function officialAmagasakiLegacyWriteDecision(PDO $pdo, string $raceCode, string $entry): array
 {
-    static $guards = [];
-    $id = spl_object_id($pdo);
-    if (!isset($guards[$id])) {
-        $guards[$id] = new OfficialAmagasakiLegacyWriteGuard(
-            OfficialAmagasakiOperationalPolicy::fromEnvironment(),
-            new PdoOfficialAmagasakiAuditStatusReader($pdo),
-        );
-    }
-    return $guards[$id]->legacyWriteDecision($raceCode, $entry);
+    // Do not cache the policy: this function is also called at the write
+    // boundary, after a potentially long legacy fetch.
+    return (new OfficialAmagasakiLegacyWriteGuard(
+        OfficialAmagasakiOperationalPolicy::fromPdo($pdo),
+        new PdoOfficialAmagasakiAuditStatusReader($pdo),
+    ))->legacyWriteDecision($raceCode, $entry);
 }
 
 final class PdoOfficialAmagasakiAuditStatusReader implements OfficialAmagasakiAuditStatusReader

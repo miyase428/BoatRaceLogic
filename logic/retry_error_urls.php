@@ -20,7 +20,7 @@ require_once __DIR__ . '/../common/safeGoto.php';
 require_once __DIR__ . '/../common/exhibition_calc.php';
 require_once __DIR__ . '/../common/save_exhibition.php';
 require_once __DIR__ . '/../common/db_connect.php';
-require_once __DIR__ . '/OfficialAmagasakiLegacyWriteGuard.php';
+require_once __DIR__ . '/OfficialAmagasakiWriteBarrier.php';
 
 $placeMap = require __DIR__ . '/../config/place_map.php';
 
@@ -131,7 +131,15 @@ foreach ($urls as $url) {
         $results[] = $calc;
     }
 
-    save_exhibition($pdo, $race_code, $results);
+    try {
+        $writeTransaction = officialAmagasakiBeginLegacyWrite($pdo, $canonicalRaceCode, 'retry');
+        save_exhibition($pdo, $race_code, $results);
+        officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, true);
+    } catch (Throwable $error) {
+        if (isset($writeTransaction)) officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, false);
+        log_message("尼崎公式管理対象または保存競合のため既存リトライを保留: {$canonicalRaceCode} " . $error->getMessage());
+        continue;
+    }
 
     log_message("保存完了: {$race_code}");
 

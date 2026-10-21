@@ -290,7 +290,7 @@ function cc30bMain(array $argv, ?string $repoOverride = null): int
             return 1;
         }
         $client = new ApiClientProduction();
-        $officialLegacyGuard = new OfficialAmagasakiLegacyWriteGuard(OfficialAmagasakiOperationalPolicy::fromEnvironment(), new PdoOfficialAmagasakiAuditStatusReader($pdo));
+        $officialLegacyGuard = new OfficialAmagasakiLegacyWriteGuard(OfficialAmagasakiOperationalPolicy::fromPdo($pdo), new PdoOfficialAmagasakiAuditStatusReader($pdo));
         foreach ($candidates as $candidate) {
             $race = (string)$candidate['race_code'];
             $venue = (string)$candidate['venue'];
