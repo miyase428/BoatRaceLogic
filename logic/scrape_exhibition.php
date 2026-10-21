@@ -4,6 +4,7 @@ date_default_timezone_set('Asia/Tokyo');
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/exhibition_source_guard.php';
 require_once __DIR__ . '/exhibition_data_quality.php';
+require_once __DIR__ . '/OfficialAmagasakiLegacyWriteGuard.php';
 
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
@@ -242,6 +243,10 @@ function fetchExhibitionData(string $url, string $placeCode): array
 
 function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array $data): void
 {
+    $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $raceCode, 'nightly');
+    if (!$officialGuard['allow_legacy']) {
+        throw new RuntimeException('OFFICIAL_AMAGASAKI_LEGACY_WRITE_BLOCKED:' . $officialGuard['reason']);
+    }
     $avgSql = "
         SELECT
             AVG(exhibition_time) AS avg_exh,
@@ -412,6 +417,15 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
         $raceCode = $info['race_code'];
         $placeCode = $info['place_code'];
         $raceNo = $info['race_no'];
+
+        $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $raceCode, 'retry');
+        if (!$officialGuard['allow_legacy']) {
+            // Keep the legacy URL queued.  It must never be reinterpreted as
+            // an official request or silently removed on a cut-over block.
+            $remaining[] = $url;
+            log_message("エラー再試行スキップ: {$raceCode} {$officialGuard['reason']}");
+            continue;
+        }
 
         if (getRegisteredExhibitionCount($pdo, $raceCode) >= 6) {
             log_message("エラー再試行スキップ: {$raceCode} は6艇分登録済み");
@@ -587,6 +601,12 @@ foreach ($period as $dateObj) {
             for ($race_no = 1; $race_no <= 12; $race_no++) {
                 $race_no2  = str_pad((string)$race_no, 2, '0', STR_PAD_LEFT);
                 $race_code = $race_date . $place_code . $race_no2;
+
+                $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, 'nightly');
+                if (!$officialGuard['allow_legacy']) {
+                    log_message("{$race_code} 既存取得を停止: {$officialGuard['reason']}");
+                    continue;
+                }
 
                 if (getRegisteredExhibitionCount($pdo, $race_code) >= 6) {
                     log_message("{$race_code} は6艇分登録済みのためスキップ");

@@ -19,6 +19,7 @@ require_once __DIR__ . '/../web/logic/FormalMeasurementWindowContext.php';
 require_once __DIR__ . '/../web/logic/GateA1ProspectiveInventory.php';
 require_once __DIR__ . '/../web/logic/OfficialEpochLifecycleV1.php';
 require_once __DIR__ . '/../web/logic/OfficialEpochWindowBindingRuntimeAuthorization.php';
+require_once __DIR__ . '/../logic/OfficialAmagasakiLegacyWriteGuard.php';
 
 const CC30B_COLLECTOR_SCHEMA = 'strict-forward-exhibition-collector/v2';
 const CC30B_FETCH_OPEN_SECONDS = 15 * 60;
@@ -289,6 +290,7 @@ function cc30bMain(array $argv, ?string $repoOverride = null): int
             return 1;
         }
         $client = new ApiClientProduction();
+        $officialLegacyGuard = new OfficialAmagasakiLegacyWriteGuard(OfficialAmagasakiOperationalPolicy::fromEnvironment(), new PdoOfficialAmagasakiAuditStatusReader($pdo));
         foreach ($candidates as $candidate) {
             $race = (string)$candidate['race_code'];
             $venue = (string)$candidate['venue'];
@@ -298,6 +300,10 @@ function cc30bMain(array $argv, ?string $repoOverride = null): int
                 $cutoff = new DateTimeImmutable($cutoffText);
                 $before = cc30bExhibitionState($pdo, $race, $venue, $cutoffText);
                 $decision = cc30bFetchDecision($attemptAt, $cutoff, $before['complete'], isset($supported[$venue]));
+                $officialDecision = $officialLegacyGuard->legacyWriteDecision($race, 'strict_forward');
+                if (!$officialDecision['allow_legacy']) {
+                    $decision = ['status' => 'OFFICIAL_AMAGASAKI_OWNED', 'skip_reason' => $officialDecision['reason']];
+                }
                 $counts[$decision['status']] = ($counts[$decision['status']] ?? 0) + 1;
                 $event = ['epoch_id' => $epoch['epoch_id'], 'window_id' => $window['window_id'], 'race_code' => $race, 'venue' => $venue, 'cutoff' => $cutoffText, 'attempt_started_at' => $attemptAt->format(DATE_ATOM), 'remaining_seconds_at_start' => $cutoff->getTimestamp() - $attemptAt->getTimestamp(), 'complete_boats' => $before['complete_boats'], 'status' => $decision['status'], 'skip_reason' => $decision['skip_reason']];
                 if ($decision['status'] !== 'FETCH_ELIGIBLE') {

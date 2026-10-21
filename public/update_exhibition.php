@@ -19,6 +19,7 @@ require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_source_guard.php';
 require_once __DIR__ . '/../logic/exhibition_data_quality.php';
+require_once __DIR__ . '/../logic/OfficialAmagasakiLegacyWriteGuard.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -107,6 +108,20 @@ try {
 
     if ($race_code == "") {
         throw new Exception("race_codeがありません");
+    }
+
+    $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, 'web');
+    if (!$officialGuard['allow_legacy']) {
+        ob_end_clean();
+        header("Content-Type: application/json; charset=UTF-8");
+        echo json_encode([
+            "success" => false,
+            "race_code" => $race_code,
+            "blocked" => true,
+            "reason" => $officialGuard['reason'],
+            "message" => "尼崎公式展示の管理対象のため、既存取得では更新しません"
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     // 正しい展示を持つレースでは再スクレイピングしない。
