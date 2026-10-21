@@ -25,9 +25,36 @@
 4. DBバックアップと復旧担当者を確定していること。
 5. Strict Forwardの`DECLARED_IMPLEMENTATION_IDENTITY_MISMATCH`を別問題として維持し、認可を変更しないこと。
 
+## 第1段階の安全な配置
+
+この段階では公式HTTP、23時補完、cron登録を有効化しません。本番の作業ツリーをcheckout・reset・cleanせず、GitHubのレビュー済み参照から別ディレクトリで差分を作り、検査後にだけ明示的に適用します。
+
+```bash
+# 本番ホスト上。保護領域は運用担当者が事前に作成します。
+export BOATRACE_ROOT=/var/www/html/boatrace
+export BOATRACE_SAFE=/secure/backups/amagasaki-phase1-$(date +%Y%m%dT%H%M%S)
+export AMG_REF=codex/official-exhibition-amagasaki-final-integration
+mkdir -p "$BOATRACE_SAFE"
+git -C "$BOATRACE_ROOT" status --porcelain=v1 > "$BOATRACE_SAFE/status-before.txt"
+git -C "$BOATRACE_ROOT" diff --binary > "$BOATRACE_SAFE/tracked-before.patch"
+git -C "$BOATRACE_ROOT" ls-files --others --exclude-standard > "$BOATRACE_SAFE/untracked-before.txt"
+```
+
+`status-before.txt`、`tracked-before.patch`、`untracked-before.txt`を確認してから、別の一時cloneでレビュー済み参照のパッチを作ります。アクティブな本番ツリーで`pull`、`checkout`、`reset`、`clean`、`stash`は実行しません。
+
+```bash
+git clone --branch "$AMG_REF" --single-branch https://github.com/miyase428/BoatRaceLogic.git "$BOATRACE_SAFE/release"
+git -C "$BOATRACE_SAFE/release" diff --binary b4416ed09a6cca2351e33391b1d3306b97a2fa37..HEAD > "$BOATRACE_SAFE/amagasaki-phase1.patch"
+git -C "$BOATRACE_ROOT" apply --check "$BOATRACE_SAFE/amagasaki-phase1.patch"
+# 上のcheckが成功し、対象一覧を人手確認して承認された場合だけ適用する。
+git -C "$BOATRACE_ROOT" apply "$BOATRACE_SAFE/amagasaki-phase1.patch"
+```
+
+適用直後も共有制御行は全てfalseのままにし、`git status --porcelain=v1`を`status-before.txt`と比較します。既存の変更と未追跡ファイルが一つでも欠けた場合は、後続のSQL・cron作業を中止し、バックアップパッチを使う前に原因を確認します。
+
 ## 承認後の適用順序
 
-1. 対象DBを確認するだけの事前照会を行います。
+1. 対象DBを確認するだけの事前照会を行います。DBバックアップはスキーマ適用より先に行います。
 
 ```bash
 psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 \
