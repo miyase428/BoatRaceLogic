@@ -122,7 +122,12 @@ SQL);
             ':race_code' => (string)$state['race_code'], ':source' => (string)$state['source'], ':outcome' => (string)$state['outcome'],
             ':attempt_started_at' => $state['attempt_started_at'], ':attempt_finished_at' => $state['attempt_finished_at'],
             ':retry_not_before' => $state['retry_not_before'], ':attempt_count' => (int)$state['attempt_count'],
-            ':terminal' => (bool)$state['terminal'], ':manual_review_required' => (bool)$state['manual_review_required'],
+            // PDO PostgreSQL serialises PHP false as an empty string when
+            // execute() receives a parameter array.  Use PostgreSQL's
+            // explicit boolean literals so CAS INSERT/UPDATE cannot fail
+            // before the state transition is evaluated.
+            ':terminal' => (bool)$state['terminal'] ? 'true' : 'false',
+            ':manual_review_required' => (bool)$state['manual_review_required'] ? 'true' : 'false',
             ':last_error_reason' => $state['last_error_reason'], ':claim_token' => $state['claim_token'],
             ':claim_expires_at' => $state['claim_expires_at'], ':version' => (int)$state['version'],
         ];
