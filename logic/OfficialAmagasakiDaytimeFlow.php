@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/OfficialExhibitionSourceRouter.php';
 require_once __DIR__ . '/OfficialAmagasakiExhibitionStorage.php';
+require_once __DIR__ . '/OfficialAmagasakiAttemptState.php';
 
 /**
  * Deterministic decision layer for a future AMG daytime job.  It performs no
@@ -17,26 +18,34 @@ final class OfficialAmagasakiDaytimeFlow
         private readonly OfficialExhibitionSourceRouter $router,
         private readonly OfficialAmagasakiExhibitionValidator $validator,
         private readonly int $cutoffSafetySeconds = 120,
+        private readonly ?int $minimumRetryIntervalSeconds = null,
+        private readonly bool $serverRetryApproved = false,
+        private readonly int $claimLeaseSeconds = 90,
     ) {
-        if ($this->cutoffSafetySeconds < 0) throw new InvalidArgumentException('negative cutoff safety');
+        if ($this->cutoffSafetySeconds < 0
+            || ($this->minimumRetryIntervalSeconds !== null && $this->minimumRetryIntervalSeconds < 0)
+            || $this->claimLeaseSeconds <= 0) {
+            throw new InvalidArgumentException('invalid daytime attempt policy');
+        }
     }
 
     /**
-     * @param array{race_code:string,deadline:string,existing_status:string,official_attempted:bool} $candidate
-     * @return array{action:string,reason:string,source:string,deadline:string}
+     * @param array{race_code:string,deadline:string,existing_status:string,attempt_state?:array<string,mixed>|null} $candidate
+     * @return array{action:string,reason:string,source:string,deadline:string,state:array<string,mixed>}
      */
     public function plan(array $candidate, DateTimeImmutable $now): array
     {
         $route = $this->router->route($candidate['race_code'], 'strict_forward');
-        $base = ['source' => $route['source'], 'deadline' => $candidate['deadline']];
+        $normalised = OfficialAmagasakiAttemptState::normalise($candidate['race_code'], $candidate['attempt_state'] ?? null);
+        $base = ['source' => $route['source'], 'deadline' => $candidate['deadline'], 'state' => $normalised['state']];
         if ($route['source'] !== 'official_amagasaki') return $base + ['action' => 'not_owned', 'reason' => 'LEGACY_SOURCE_REMAINS_UNCHANGED'];
         if ($route['action'] !== 'official_fetch') return $base + ['action' => 'blocked', 'reason' => $route['reason']];
+        if (!$normalised['valid']) return $base + ['action' => 'blocked', 'reason' => $normalised['reason']];
         if (!in_array($candidate['existing_status'], ['none', 'already_official', 'partial', 'source_unknown', 'mismatch'], true)) {
             return $base + ['action' => 'blocked', 'reason' => 'EXISTING_STATUS_INVALID'];
         }
         if ($candidate['existing_status'] === 'already_official') return $base + ['action' => 'skip', 'reason' => 'OFFICIAL_SIX_BOATS_ALREADY_AUDITED'];
         if ($candidate['existing_status'] !== 'none') return $base + ['action' => 'review', 'reason' => 'EXISTING_ROWS_REQUIRE_AUDIT_REVIEW'];
-        if ($candidate['official_attempted']) return $base + ['action' => 'skip', 'reason' => 'OFFICIAL_ATTEMPT_ALREADY_RECORDED'];
         try {
             $deadline = new DateTimeImmutable($candidate['deadline']);
         } catch (Throwable) {
@@ -45,7 +54,42 @@ final class OfficialAmagasakiDaytimeFlow
         if ($deadline->getTimestamp() - $now->getTimestamp() <= $this->cutoffSafetySeconds) {
             return $base + ['action' => 'skip', 'reason' => 'CUTOFF_SAFETY_WINDOW_CLOSED'];
         }
-        return $base + ['action' => 'fetch_once', 'reason' => 'OFFICIAL_AMG_DAYTIME_CANDIDATE'];
+        $state = $normalised['state'];
+        if ($state['outcome'] === 'in_progress') {
+            $expiry = OfficialAmagasakiAttemptState::timestamp((string)$state['claim_expires_at']);
+            return $base + ['action' => $expiry !== null && $expiry >= $now ? 'skip' : 'review', 'reason' => $expiry !== null && $expiry >= $now ? 'ATTEMPT_ALREADY_CLAIMED' : 'STALE_ATTEMPT_CLAIM_REQUIRES_REVIEW'];
+        }
+        if ($state['terminal'] || (int)$state['attempt_count'] >= OfficialAmagasakiAttemptState::MAX_ATTEMPTS) {
+            return $base + ['action' => $state['manual_review_required'] ? 'review' : 'skip', 'reason' => $state['manual_review_required'] ? 'ATTEMPT_MANUAL_REVIEW_REQUIRED' : 'RETRY_LIMIT_REACHED'];
+        }
+        $seconds = $deadline->getTimestamp() - $now->getTimestamp();
+        if ($state['outcome'] === 'not_attempted') {
+            if ($seconds <= 600 && $seconds > 480) return $base + ['action' => 'claim_first', 'reason' => 'FIRST_FETCH_WINDOW'];
+            return $base + ['action' => 'skip', 'reason' => $seconds > 600 ? 'BEFORE_FIRST_FETCH_WINDOW' : 'FIRST_FETCH_WINDOW_MISSED'];
+        }
+        if ($state['outcome'] === 'not_yet_published') {
+            $retryAt = OfficialAmagasakiAttemptState::timestamp((string)$state['retry_not_before']);
+            if ($retryAt === null) return $base + ['action' => 'blocked', 'reason' => 'RETRY_NOT_BEFORE_INVALID'];
+            if ($now < $retryAt) return $base + ['action' => 'skip', 'reason' => 'RETRY_NOT_BEFORE_REACHED'];
+            if ($seconds <= 300 && $seconds > 120) return $base + ['action' => 'claim_retry', 'reason' => 'RETRY_FETCH_WINDOW'];
+            return $base + ['action' => 'skip', 'reason' => $seconds > 300 ? 'BEFORE_RETRY_FETCH_WINDOW' : 'RETRY_FETCH_WINDOW_MISSED'];
+        }
+        return $base + ['action' => 'review', 'reason' => 'ATTEMPT_OUTCOME_REQUIRES_REVIEW'];
+    }
+
+    /** @return array{claimed:bool,state:array<string,mixed>,reason:string} */
+    public function claim(array $plan, DateTimeImmutable $startedAt, OfficialAmagasakiAttemptClaimStore $store, string $token): array
+    {
+        if (!in_array($plan['action'] ?? '', ['claim_first', 'claim_retry'], true)) return ['claimed' => false, 'state' => $plan['state'] ?? [], 'reason' => 'PLAN_NOT_CLAIMABLE'];
+        $state = OfficialAmagasakiAttemptState::claim((array)$plan['state'], $startedAt, $token, $this->claimLeaseSeconds);
+        $claimed = $store->claim((string)$state['race_code'], (int)$plan['state']['version'], $state);
+        return ['claimed' => $claimed, 'state' => $claimed ? $state : (array)$plan['state'], 'reason' => $claimed ? '' : 'ATOMIC_CLAIM_REJECTED'];
+    }
+
+    /** @return array<string,mixed> */
+    public function completeClaim(array $state, string $token, string $outcome, DateTimeImmutable $finishedAt): array
+    {
+        return OfficialAmagasakiAttemptState::complete($state, $token, $outcome, $finishedAt, $this->minimumRetryIntervalSeconds, $this->serverRetryApproved);
     }
 
     /**
