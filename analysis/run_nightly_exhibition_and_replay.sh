@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET_DATE="$(date '+%Y-%m-%d')"
 
 cd "$ROOT_DIR"
-/usr/bin/php logic/scrape_exhibition.php
+/usr/bin/bash analysis/run_official_amagasaki_nightly_backfill.sh
 SCRAPE_EXIT=$?
 
 # 一部欠測があっても、今回までに6艇分そろったレースは再現対象にする。

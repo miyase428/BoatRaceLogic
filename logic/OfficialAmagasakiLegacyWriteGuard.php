@@ -10,6 +10,8 @@ interface OfficialAmagasakiAuditStatusReader
     public function hasSavedOfficialAudit(string $raceCode): bool;
     /** @return int Number of complete legacy rows, never inferred from dates. */
     public function completeRowCount(string $raceCode): int;
+    /** @return int All physical rows, including partial or invalid rows. */
+    public function rawRowCount(string $raceCode): int;
 }
 
 /**
@@ -34,6 +36,12 @@ final class OfficialAmagasakiLegacyWriteGuard
             return ['allow_legacy' => false, 'reason' => 'OFFICIAL_AUDITED_ROWS_PROTECTED', 'mode' => 'protected'];
         }
         if ($decision['mode'] === 'legacy') return ['allow_legacy' => true, 'reason' => $decision['reason'], 'mode' => 'legacy'];
+        if ($decision['mode'] === 'nightly_backfill') {
+            if ($this->audit->rawRowCount($raceCode) !== 0) {
+                return ['allow_legacy' => false, 'reason' => 'EXISTING_ROWS_REQUIRE_REVIEW', 'mode' => 'review'];
+            }
+            return ['allow_legacy' => true, 'reason' => $decision['reason'], 'mode' => 'nightly_backfill'];
+        }
         if ($decision['mode'] === 'blocked') {
             return ['allow_legacy' => false, 'reason' => $decision['reason'], 'mode' => 'blocked'];
         }
@@ -79,6 +87,13 @@ final class PdoOfficialAmagasakiAuditStatusReader implements OfficialAmagasakiAu
     public function completeRowCount(string $raceCode): int
     {
         $statement = $this->pdo->prepare('SELECT COUNT(DISTINCT entry_course) FROM boat_race.exhibition_live WHERE race_code = :race_code AND player_id IS NOT NULL AND exhibition_time > 0 AND start_timing IS NOT NULL AND lap_time > 0 AND around_time > 0');
+        $statement->execute([':race_code' => $raceCode]);
+        return (int)$statement->fetchColumn();
+    }
+
+    public function rawRowCount(string $raceCode): int
+    {
+        $statement = $this->pdo->prepare('SELECT COUNT(*) FROM boat_race.exhibition_live WHERE race_code = :race_code');
         $statement->execute([':race_code' => $raceCode]);
         return (int)$statement->fetchColumn();
     }

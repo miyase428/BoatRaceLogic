@@ -12,6 +12,7 @@ final class GuardAuditFixture implements OfficialAmagasakiAuditStatusReader
     public function auditTableAvailable(): bool { return $this->available; }
     public function hasSavedOfficialAudit(string $raceCode): bool { return $this->official[$raceCode] ?? false; }
     public function completeRowCount(string $raceCode): int { return $this->complete[$raceCode] ?? 0; }
+    public function rawRowCount(string $raceCode): int { return $this->complete[$raceCode] ?? 0; }
 }
 function policyAssert(bool $value, string $message): void { if (!$value) throw new RuntimeException($message); }
 
@@ -21,6 +22,7 @@ $guard = new OfficialAmagasakiLegacyWriteGuard(new OfficialAmagasakiOperationalP
 policyAssert($guard->legacyWriteDecision('20261021AMG02', 'nightly')['allow_legacy'], 'route disabled preserves existing AMG legacy path'); $cases++;
 policyAssert($guard->legacyWriteDecision('20261021TMG02', 'web')['allow_legacy'], 'other venues preserve legacy path'); $cases++;
 policyAssert($guard->legacyWriteDecision('20261020AMG02', 'retry')['allow_legacy'], 'old AMG preserves legacy path'); $cases++;
+policyAssert($guard->legacyWriteDecision('20261021AMG03', 'nightly_backfill')['allow_legacy'], 'disabled cut-over preserves the pre-existing nightly AMG path'); $cases++;
 
 $guard = new OfficialAmagasakiLegacyWriteGuard(new OfficialAmagasakiOperationalPolicy(true, false), $audit);
 $result = $guard->legacyWriteDecision('20261021AMG02', 'web');
@@ -35,13 +37,24 @@ policyAssert(!$result['allow_legacy'] && $result['reason'] === 'EXISTING_SOURCE_
 $audit->official['20261021AMG03'] = true;
 $result = $guard->legacyWriteDecision('20261021AMG03', 'nightly');
 policyAssert(!$result['allow_legacy'] && $result['reason'] === 'OFFICIAL_AUDITED_ROWS_PROTECTED', 'audited official rows are protected at legacy save boundary'); $cases++;
+
+$guard = new OfficialAmagasakiLegacyWriteGuard(new OfficialAmagasakiOperationalPolicy(true, false, null, 'ok', true), $audit);
+$result = $guard->legacyWriteDecision('20261021AMG05', 'nightly_backfill');
+policyAssert($result['allow_legacy'] && $result['mode'] === 'nightly_backfill', 'approved nightly backfill is independent from official HTTP approval'); $cases++;
+$audit->complete['20261021AMG06'] = 1;
+$result = $guard->legacyWriteDecision('20261021AMG06', 'nightly_backfill');
+policyAssert(!$result['allow_legacy'] && $result['reason'] === 'EXISTING_ROWS_REQUIRE_REVIEW', 'nightly backfill never overwrites partial rows'); $cases++;
+$guard = new OfficialAmagasakiLegacyWriteGuard(new OfficialAmagasakiOperationalPolicy(true, true, null, 'ok', false), $audit);
+$result = $guard->legacyWriteDecision('20261021AMG07', 'nightly_backfill');
+policyAssert(!$result['allow_legacy'] && $result['reason'] === 'OFFICIAL_NIGHTLY_BACKFILL_NOT_ENABLED', 'nightly backfill requires its own shared control switch'); $cases++;
+
 $audit->available = false;
 $result = $guard->legacyWriteDecision('20261021AMG04', 'nightly');
 policyAssert(!$result['allow_legacy'] && $result['reason'] === 'OFFICIAL_DAYTIME_WORKER_OWNS_RACE', 'missing audit migration never enables legacy overwrite after cut-over'); $cases++;
 
 $root = realpath(__DIR__ . '/..');
 $expectations = [
-    'logic/scrape_exhibition.php' => ["officialAmagasakiLegacyWriteDecision(\$pdo, \$race_code, 'nightly')", "officialAmagasakiLegacyWriteDecision(\$pdo, \$raceCode, 'retry')"],
+    'logic/scrape_exhibition.php' => ["officialAmagasakiLegacyWriteDecision(\$pdo, \$race_code, \$nightlyEntry)", "officialAmagasakiLegacyWriteDecision(\$pdo, \$raceCode, 'retry')"],
     'public/update_exhibition.php' => ["officialAmagasakiLegacyWriteDecision(\$pdo, \$race_code, 'web')"],
     'logic/retry_error_urls.php' => ["officialAmagasakiLegacyWriteDecision(\$pdo, \$canonicalRaceCode, 'retry')"],
     'analysis/collect_strict_forward_exhibition.php' => ["legacyWriteDecision(\$race, 'strict_forward')"],
@@ -50,6 +63,8 @@ foreach ($expectations as $path => $needles) {
     $source = (string)file_get_contents($root . '/' . $path);
     foreach ($needles as $needle) policyAssert(str_contains($source, $needle), $path . ' uses the AMG legacy-write guard at its route boundary');
 }
+policyAssert(str_contains((string)file_get_contents($root . '/logic/scrape_exhibition.php'), "'nightly_backfill'"), 'nightly scraper selects the dedicated backfill entry only through its context'); $cases++;
+policyAssert(str_contains((string)file_get_contents($root . '/analysis/run_nightly_exhibition_and_replay.sh'), 'run_official_amagasaki_nightly_backfill.sh'), '23:00 wrapper uses the dedicated nightly backfill route'); $cases++;
 $cases += 5;
 
 echo "PASS {$cases} isolated operational policy cases\n";

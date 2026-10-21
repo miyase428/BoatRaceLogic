@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS boat_race.official_exhibition_control_v1 (
     control_key varchar(32) PRIMARY KEY CHECK (control_key = 'amagasaki'),
     route_enabled boolean NOT NULL DEFAULT false,
     automation_approved boolean NOT NULL DEFAULT false,
+    nightly_backfill_enabled boolean NOT NULL DEFAULT false,
     retry_interval_seconds integer,
     version integer NOT NULL DEFAULT 1 CHECK (version >= 1),
     updated_at timestamptz NOT NULL DEFAULT NOW(),

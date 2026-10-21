@@ -20,13 +20,14 @@ final class OfficialAmagasakiOperationalPolicy
         private readonly bool $automationApproved,
         private readonly ?int $retryIntervalSeconds = null,
         private readonly string $controlStatus = 'ok',
+        private readonly bool $nightlyBackfillEnabled = false,
     ) {
     }
 
     public static function fromPdo(PDO $pdo): self
     {
         $state = (new PdoOfficialAmagasakiOperationalStateRepository($pdo))->load();
-        return new self($state['route_enabled'], $state['automation_approved'], $state['retry_interval_seconds'], $state['status']);
+        return new self($state['route_enabled'], $state['automation_approved'], $state['retry_interval_seconds'], $state['status'], $state['nightly_backfill_enabled']);
     }
 
     /** @return array{mode:string,reason:string,source:string,entry:string} */
@@ -35,7 +36,7 @@ final class OfficialAmagasakiOperationalPolicy
         if (!preg_match('/^(\d{8})([A-Z]{3})(0[1-9]|1[0-2])$/', $raceCode, $matches)) {
             throw new InvalidArgumentException('invalid race_code');
         }
-        if (!in_array($entry, ['nightly', 'web', 'retry', 'strict_forward', 'daytime'], true)) {
+        if (!in_array($entry, ['nightly', 'nightly_backfill', 'web', 'retry', 'strict_forward', 'daytime'], true)) {
             throw new InvalidArgumentException('unknown exhibition entry');
         }
         $target = $matches[2] === 'AMG' && $matches[1] >= OfficialExhibitionSourceRouter::OFFICIAL_START_DATE;
@@ -51,6 +52,12 @@ final class OfficialAmagasakiOperationalPolicy
         if (!$this->routeEnabled) {
             return ['mode' => 'legacy', 'reason' => !$target ? 'LEGACY_ROUTE' : 'OFFICIAL_ROUTE_DISABLED', 'source' => 'kyoteibiyori', 'entry' => $entry];
         }
+        if ($entry === 'nightly_backfill') {
+            if (!$this->nightlyBackfillEnabled) {
+                return ['mode' => 'blocked', 'reason' => 'OFFICIAL_NIGHTLY_BACKFILL_NOT_ENABLED', 'source' => 'kyoteibiyori_nightly', 'entry' => $entry];
+            }
+            return ['mode' => 'nightly_backfill', 'reason' => 'OFFICIAL_NIGHTLY_BACKFILL_OWNER', 'source' => 'kyoteibiyori_nightly', 'entry' => $entry];
+        }
         if (!$this->automationApproved) {
             return ['mode' => 'blocked', 'reason' => 'OFFICIAL_AUTOMATION_NOT_APPROVED', 'source' => 'official_amagasaki', 'entry' => $entry];
         }
@@ -61,4 +68,5 @@ final class OfficialAmagasakiOperationalPolicy
     public function automationApproved(): bool { return $this->automationApproved; }
     public function retryIntervalSeconds(): ?int { return $this->retryIntervalSeconds; }
     public function controlStatus(): string { return $this->controlStatus; }
+    public function nightlyBackfillEnabled(): bool { return $this->nightlyBackfillEnabled; }
 }

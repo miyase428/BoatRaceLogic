@@ -8,6 +8,7 @@ declare(strict_types=1);
  * connection string and creates no connection when this file is imported.
  */
 require_once __DIR__ . '/../logic/OfficialAmagasakiDaytimeIntegration.php';
+require_once __DIR__ . '/../logic/OfficialAmagasakiNightlyBackfill.php';
 
 function pgAssert(bool $condition, string $message): void
 {
@@ -77,7 +78,7 @@ if (!is_string($dsn) || $dsn === '') {
     fwrite(STDERR, "PHASE2M_PG_DSN must name a disposable PostgreSQL cluster\n");
     exit(2);
 }
-if (preg_match('#(?:^|[;:])host=/tmp/boatrace-phase2m-pg-[^;]+(?:;|$)#', $dsn) !== 1) {
+if (preg_match('#(?:^|[;:])host=/tmp/boatrace-phase2(?:m|n)(?:-[a-z]+)?-pg-[^;]+(?:;|$)#', $dsn) !== 1) {
     fwrite(STDERR, "refusing a non-Phase-2M PostgreSQL DSN\n");
     exit(2);
 }
@@ -94,6 +95,7 @@ CREATE TABLE IF NOT EXISTS boat_race.exhibition_live (
     lap_time double precision NOT NULL,
     around_time double precision NOT NULL,
     straight_time double precision NULL,
+    updated_date timestamptz NULL,
     exhibition_score double precision NOT NULL,
     exhibition_type varchar(32) NOT NULL,
     created_date timestamptz NOT NULL,
@@ -103,9 +105,10 @@ SQL);
 $pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_audit_v1.sql'));
 $pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_attempt_state_v1.sql'));
 $pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_control_v1.sql'));
+$pdo->exec((string)file_get_contents(__DIR__ . '/sql/create_official_exhibition_nightly_backfill_v1.sql'));
 // This fixture may run after another isolated test; always establish the
 // disabled deployment default instead of inheriting a prior test's control row.
-$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = false, automation_approved = false, retry_interval_seconds = NULL, updated_by = 'fixture-reset' WHERE control_key = 'amagasaki'");
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = false, automation_approved = false, nightly_backfill_enabled = false, retry_interval_seconds = NULL, updated_by = 'fixture-reset' WHERE control_key = 'amagasaki'");
 
 $attempts = new PdoOfficialAmagasakiAttemptRepository($pdo);
 $validator = new OfficialAmagasakiExhibitionValidator();
@@ -116,7 +119,7 @@ $cases = 0;
 // only the future AMG cut-over and never silently enables it.
 $policy = OfficialAmagasakiOperationalPolicy::fromPdo($pdo);
 pgAssert($policy->decide('20261021AMG01', 'daytime')['mode'] === 'legacy', 'installed disabled control retains legacy route'); $cases++;
-$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = false, retry_interval_seconds = NULL WHERE control_key = 'amagasaki'");
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = false, nightly_backfill_enabled = false, retry_interval_seconds = NULL WHERE control_key = 'amagasaki'");
 $policy = OfficialAmagasakiOperationalPolicy::fromPdo($pdo);
 pgAssert($policy->decide('20261021AMG01', 'web')['reason'] === 'OFFICIAL_AUTOMATION_NOT_APPROVED', 'route and approval remain independent'); $cases++;
 $pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET automation_approved = true, retry_interval_seconds = 120 WHERE control_key = 'amagasaki'");
@@ -124,7 +127,7 @@ $policy = OfficialAmagasakiOperationalPolicy::fromPdo($pdo);
 pgAssert($policy->decide('20261021AMG01', 'retry')['mode'] === 'official' && $policy->retryIntervalSeconds() === 120, 'cron and web can resolve the same approved retry policy'); $cases++;
 $pdo->exec("DELETE FROM boat_race.official_exhibition_control_v1 WHERE control_key = 'amagasaki'");
 pgAssert(OfficialAmagasakiOperationalPolicy::fromPdo($pdo)->decide('20261021AMG01', 'nightly')['reason'] === 'OFFICIAL_CONTROL_STATE_INVALID', 'missing installed control row fails closed'); $cases++;
-$pdo->exec("INSERT INTO boat_race.official_exhibition_control_v1 (control_key, route_enabled, automation_approved, retry_interval_seconds, updated_by) VALUES ('amagasaki', true, true, 120, 'fixture')");
+$pdo->exec("INSERT INTO boat_race.official_exhibition_control_v1 (control_key, route_enabled, automation_approved, nightly_backfill_enabled, retry_interval_seconds, updated_by) VALUES ('amagasaki', true, true, false, 120, 'fixture')");
 
 // 1–2: atomic initial claim and stale competing claim.
 pgReset($pdo); $race = '20261021AMG01'; $first = pgClaim($attempts, $race, 'claim-one');
@@ -170,7 +173,7 @@ try {
 } catch (RuntimeException $error) {
     pgAssert(str_contains($error->getMessage(), 'OFFICIAL_AUDITED_ROWS_PROTECTED'), 'audited official row stays protected after route disable'); $cases++;
 }
-$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = true, retry_interval_seconds = 120 WHERE control_key = 'amagasaki'");
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = true, nightly_backfill_enabled = false, retry_interval_seconds = 120 WHERE control_key = 'amagasaki'");
 
 // 10: any one of the six row inserts failing rolls back the complete set and state completion.
 pgReset($pdo); $race = '20261021AMG02'; $claimed = pgClaim($attempts, $race, 'insert-fail');
@@ -222,5 +225,35 @@ pgReset($pdo); $race = '20261021AMG08';
 $runner = new OfficialAmagasakiDaytimeIntegration($flow, $attempts, new PgFixtureFetcher(['outcome' => 'published', 'payload' => pgPayload($race, '2026-10-21T10:08:00.001Z')]), $persistence, static fn(): DateTimeImmutable => new DateTimeImmutable('2026-10-21T10:08:00.001Z'));
 $events = $runner->run([['race_code' => $race, 'deadline' => '2026-10-21T10:10:00Z', 'prediction_cutoff' => '2026-10-21T10:08:00.000Z', 'existing_status' => 'none', 'race_entries' => pgEntries()]], new DateTimeImmutable('2026-10-21T10:00:00Z'), false);
 pgAssert($events[0]['reason'] === 'PAYLOAD_OR_TIME_REJECTED' && pgCount($pdo, 'boat_race.exhibition_live', $race) === 0 && pgCount($pdo, 'boat_race.exhibition_source_audit_v1', $race) === 0, 'post-cutoff payload is not persisted as forward evidence'); $cases++;
+
+
+// 15–18: permitted 23:00 backfill only inserts an absent race, records its
+// own source, and rolls back when its provenance write cannot commit.
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET route_enabled = true, automation_approved = false, nightly_backfill_enabled = true, retry_interval_seconds = NULL WHERE control_key = 'amagasaki'");
+$backfill = new PdoOfficialAmagasakiNightlyBackfillPersistence($pdo);
+$nightlyContext = new OfficialAmagasakiNightlyBackfillContext(true, static fn(): DateTimeImmutable => new DateTimeImmutable('2026-10-21T23:10:00+09:00'));
+pgReset($pdo); $race = '20261021AMG10';
+$nightRows = array_map(static fn(int $lane): array => ['entry_course' => $lane, 'player_id' => (string)(8200 + $lane), 'exhibition_time' => 6.80 + $lane / 100, 'start_timing' => 0.01 * $lane, 'lap_time' => 37.10 + $lane / 100, 'around_time' => 11.20 + $lane / 100, 'straight_time' => null, 'exhibition_score' => 0.0, 'exhibition_type' => 'fixture'], range(1, 6));
+$result = $backfill->persist($race, $nightRows, 'https://fixture.invalid/kyoteibiyori', new DateTimeImmutable('2026-10-21T14:00:00Z'), $nightlyContext);
+$source = $pdo->prepare('SELECT source FROM boat_race.exhibition_source_audit_v1 WHERE race_code = :race_code'); $source->execute([':race_code' => $race]);
+pgAssert($result['status'] === 'saved' && pgCount($pdo, 'boat_race.exhibition_live', $race) === 6 && $source->fetchColumn() === 'kyoteibiyori_nightly', 'nightly backfill saves six absent rows and distinct provenance atomically'); $cases++;
+$result = $backfill->persist($race, $nightRows, 'https://fixture.invalid/kyoteibiyori', new DateTimeImmutable('2026-10-21T14:01:00Z'), $nightlyContext);
+pgAssert($result['status'] === 'skipped' && $result['reason'] === 'EXISTING_ROWS_REQUIRE_REVIEW', 'nightly backfill cannot overwrite its own prior rows'); $cases++;
+pgReset($pdo); $officialRace = '20261021AMG09'; $officialClaim = pgClaim($attempts, $officialRace, 'official-before-night');
+$officialSaved = $persistence->persistAndComplete(pgPayload($officialRace), $officialRace, pgEntries(), $officialClaim, 'official-before-night', new DateTimeImmutable('2026-10-21T10:00:01Z'));
+$result = $backfill->persist($officialRace, $nightRows, 'https://fixture.invalid/kyoteibiyori', new DateTimeImmutable('2026-10-21T14:01:00Z'), $nightlyContext);
+pgAssert($officialSaved['committed'] && $result['status'] === 'skipped' && $result['reason'] === 'OFFICIAL_AUDITED_ROWS_PROTECTED', 'officially audited six rows are never backfilled at 23:00'); $cases++;
+pgReset($pdo); $race = '20261021AMG11';
+$pdo->exec("INSERT INTO boat_race.exhibition_live (race_code, entry_course, player_id, exhibition_time, start_timing, lap_time, around_time, straight_time, exhibition_score, exhibition_type, created_date, updated_date) VALUES ('20261021AMG11', 1, '8201', 6.81, 0.01, 37.11, 11.21, NULL, 0, 'fixture', NOW(), NOW())");
+$result = $backfill->persist($race, $nightRows, 'https://fixture.invalid/kyoteibiyori', new DateTimeImmutable('2026-10-21T14:00:00Z'), $nightlyContext);
+pgAssert($result['status'] === 'skipped' && $result['reason'] === 'EXISTING_ROWS_REQUIRE_REVIEW' && pgCount($pdo, 'boat_race.exhibition_live', $race) === 1, 'nightly backfill never overwrites partial or low-quality rows'); $cases++;
+pgReset($pdo); $race = '20261021AMG12';
+$pdo->exec("ALTER TABLE boat_race.exhibition_source_audit_v1 ADD CONSTRAINT phase2m_reject_nightly CHECK (source <> 'kyoteibiyori_nightly')");
+$result = $backfill->persist($race, $nightRows, 'https://fixture.invalid/kyoteibiyori', new DateTimeImmutable('2026-10-21T14:00:00Z'), $nightlyContext);
+pgAssert($result['status'] === 'rolled_back' && pgCount($pdo, 'boat_race.exhibition_live', $race) === 0, 'nightly audit failure rolls back all six rows'); $cases++;
+$pdo->exec('ALTER TABLE boat_race.exhibition_source_audit_v1 DROP CONSTRAINT phase2m_reject_nightly');
+$pdo->exec("UPDATE boat_race.official_exhibition_control_v1 SET nightly_backfill_enabled = false WHERE control_key = 'amagasaki'");
+$result = $backfill->persist('20261021AMG09', $nightRows, 'https://fixture.invalid/kyoteibiyori', new DateTimeImmutable('2026-10-21T14:00:00Z'), $nightlyContext);
+pgAssert($result['status'] === 'skipped' && $result['reason'] === 'OFFICIAL_NIGHTLY_BACKFILL_NOT_ENABLED', 'nightly backfill fails closed when its dedicated control is disabled'); $cases++;
 
 echo "PASS {$cases} disposable PostgreSQL PDO integration cases\n";

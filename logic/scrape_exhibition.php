@@ -5,6 +5,7 @@ require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/exhibition_source_guard.php';
 require_once __DIR__ . '/exhibition_data_quality.php';
 require_once __DIR__ . '/OfficialAmagasakiWriteBarrier.php';
+require_once __DIR__ . '/OfficialAmagasakiNightlyBackfill.php';
 
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
@@ -241,9 +242,52 @@ function fetchExhibitionData(string $url, string $placeCode): array
     ];
 }
 
-function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array $data): void
+/** @return list<array<string,mixed>> */
+function officialAmagasakiNightlyCalculatedResults(PDO $pdo, string $placeCode, array $data): array
 {
-    $writeTransaction = officialAmagasakiBeginLegacyWrite($pdo, $raceCode, 'nightly');
+    $average = $pdo->prepare('SELECT AVG(exhibition_time) AS avg_exh, AVG(lap_time) AS avg_lap, AVG(around_time) AS avg_around, AVG(straight_time) AS avg_straight FROM boat_race.exhibition_live WHERE race_code LIKE :place_prefix');
+    $average->execute([':place_prefix' => "%{$placeCode}%"]);
+    $avg = $average->fetch(PDO::FETCH_ASSOC) ?: [];
+    $results = [];
+    foreach ($data as $row) {
+        $exhibition = toFloatOrZero($row['exhibition_time']);
+        $lap = toFloatOrZero($row['lap_time']);
+        $around = toFloatOrZero($row['around_time']);
+        $straight = toFloatOrZero($row['straight_time']);
+        $diffStraight = (float)($avg['avg_straight'] ?? 0) - $straight;
+        $diffAround = (float)($avg['avg_around'] ?? 0) - $around;
+        $diffLap = (float)($avg['avg_lap'] ?? 0) - $lap;
+        $diffExhibition = (float)($avg['avg_exh'] ?? 0) - $exhibition;
+        $results[] = [
+            'entry_course' => (int)$row['entry_course'], 'player_id' => (string)$row['player_id'],
+            'exhibition_time' => $exhibition, 'start_timing' => convertStartTiming($row['start_timing']),
+            'lap_time' => $lap, 'around_time' => $around, 'straight_time' => toNullOrFloat($row['straight_time']),
+            'exhibition_score' => $diffStraight * 0.4 + $diffAround * 0.3 + $diffLap * 0.2 + $diffExhibition * 0.1,
+            'exhibition_type' => $diffStraight > 0.10 ? '伸び型' : ($diffAround > 0.10 ? '差し型' : 'バランス'),
+        ];
+    }
+    return $results;
+}
+
+function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array $data, ?OfficialAmagasakiNightlyBackfillContext $nightlyBackfill = null, string $sourceUrl = '', string $entry = 'nightly'): void
+{
+    if ($nightlyBackfill?->permits($raceCode)) {
+        $nightlyDecision = OfficialAmagasakiOperationalPolicy::fromPdo($pdo)->decide($raceCode, 'nightly_backfill');
+        if ($nightlyDecision['mode'] === 'nightly_backfill') {
+            $result = (new PdoOfficialAmagasakiNightlyBackfillPersistence($pdo))->persist(
+                $raceCode,
+                officialAmagasakiNightlyCalculatedResults($pdo, $placeCode, $data),
+                $sourceUrl,
+                new DateTimeImmutable('now', new DateTimeZone('UTC')),
+                $nightlyBackfill,
+            );
+            if ($result['status'] !== 'saved') throw new RuntimeException('OFFICIAL_AMAGASAKI_NIGHTLY_BACKFILL_NOT_SAVED:' . $result['reason']);
+            return;
+        }
+        if ($nightlyDecision['mode'] === 'blocked') throw new RuntimeException('OFFICIAL_AMAGASAKI_NIGHTLY_BACKFILL_NOT_SAVED:' . $nightlyDecision['reason']);
+        // Before the cut-over, retain the original nightly saver and source.
+    }
+    $writeTransaction = officialAmagasakiBeginLegacyWrite($pdo, $raceCode, $entry);
     try {
     $avgSql = "
         SELECT
@@ -495,6 +539,9 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
 // ------------------------------------------------------------
 // 日付ループ設定（last_date → 今日まで）
 // ------------------------------------------------------------
+// A normal invocation remains the generic nightly route. Only the dedicated
+// wrapper adds the explicit context that can request same-day AMG backfill.
+$nightlyBackfillContext = OfficialAmagasakiNightlyBackfillContext::fromCommandLine($argv ?? []);
 $config = require __DIR__ . '/../config/last_date.php';
 
 $start_date = $config['last_date'];
@@ -605,7 +652,8 @@ foreach ($period as $dateObj) {
                 $race_no2  = str_pad((string)$race_no, 2, '0', STR_PAD_LEFT);
                 $race_code = $race_date . $place_code . $race_no2;
 
-                $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, 'nightly');
+                $nightlyEntry = $nightlyBackfillContext->permits($race_code) ? 'nightly_backfill' : 'nightly';
+                $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, $nightlyEntry);
                 if (!$officialGuard['allow_legacy']) {
                     log_message("{$race_code} 既存取得を停止: {$officialGuard['reason']}");
                     continue;
@@ -681,7 +729,7 @@ foreach ($period as $dateObj) {
                 $consecutive_access_errors = 0;
 
                 try {
-                    saveExhibitionData($pdo, $race_code, $place_code, $result['data']);
+                    saveExhibitionData($pdo, $race_code, $place_code, $result['data'], $nightlyBackfillContext, $url, $nightlyEntry);
                     log_message("{$race_code} 登録完了");
                 } catch (Throwable $e) {
                     log_message("DB登録エラー（{$race_code}）: " . $e->getMessage());
