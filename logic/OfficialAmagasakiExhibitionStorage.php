@@ -218,6 +218,18 @@ final class OfficialAmagasakiExhibitionTransactionStore
         return $this->persistWithAuditMarker($payload, $raceCode, $raceEntries, 'late_manual_history_import', 'POST_DEADLINE_MANUAL_IMPORT');
     }
 
+    /** Explicit user-requested fetch; its audit distinguishes pre/post deadline collection. */
+    public function persistManualWithinOpenTransaction(array $payload, string $raceCode, array $raceEntries, bool $afterDeadline): array
+    {
+        return $this->persistWithinOpenTransactionWithAuditMarker(
+            $payload,
+            $raceCode,
+            $raceEntries,
+            $afterDeadline ? 'manual_official_postdeadline' : 'manual_official_predeadline',
+            $afterDeadline ? 'POST_DEADLINE_MANUAL_FETCH' : null,
+        );
+    }
+
     /** @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries @return array{status:string,comparison:string} */
     private function persistWithAuditMarker(array $payload, string $raceCode, array $raceEntries, string $comparisonStatus, ?string $errorReason): array
     {

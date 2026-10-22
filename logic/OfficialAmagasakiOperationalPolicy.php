@@ -36,7 +36,7 @@ final class OfficialAmagasakiOperationalPolicy
         if (!preg_match('/^(\d{8})([A-Z]{3})(0[1-9]|1[0-2])$/', $raceCode, $matches)) {
             throw new InvalidArgumentException('invalid race_code');
         }
-        if (!in_array($entry, ['nightly', 'nightly_backfill', 'web', 'retry', 'strict_forward', 'daytime'], true)) {
+        if (!in_array($entry, ['nightly', 'nightly_backfill', 'web', 'manual', 'retry', 'strict_forward', 'daytime'], true)) {
             throw new InvalidArgumentException('unknown exhibition entry');
         }
         $target = $matches[2] === 'AMG' && $matches[1] >= OfficialExhibitionSourceRouter::OFFICIAL_START_DATE;
@@ -50,7 +50,15 @@ final class OfficialAmagasakiOperationalPolicy
             return ['mode' => 'blocked', 'reason' => 'OFFICIAL_CONTROL_STATE_INVALID', 'source' => 'official_amagasaki', 'entry' => $entry];
         }
         if (!$this->routeEnabled) {
+            if ($entry === 'manual') {
+                return ['mode' => 'blocked', 'reason' => 'OFFICIAL_MANUAL_ROUTE_DISABLED', 'source' => 'official_amagasaki', 'entry' => $entry];
+            }
             return ['mode' => 'legacy', 'reason' => !$target ? 'LEGACY_ROUTE' : 'OFFICIAL_ROUTE_DISABLED', 'source' => 'kyoteibiyori', 'entry' => $entry];
+        }
+        // A browser action is an explicit, one-race request.  It deliberately
+        // does not share the scheduler's automation approval flag.
+        if ($entry === 'manual') {
+            return ['mode' => 'manual_official', 'reason' => 'OFFICIAL_MANUAL_REQUEST', 'source' => 'official_amagasaki', 'entry' => $entry];
         }
         if ($entry === 'nightly_backfill') {
             if (!$this->nightlyBackfillEnabled) {
