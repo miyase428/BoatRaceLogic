@@ -21,7 +21,9 @@ function start(st = ['.11', '.21', '.08', '.03', '.13', '.12'], courses = [1, 2,
   return page(ids.map((id, i) => `<tr><td class="col1">${courses[i]}</td><td class="col2">${i + 1}</td><td><span class="com-toban">${id}</span></td></tr>`).join('') + st.map((value) => `<span class="st_area">${value}</span>`).join(''));
 }
 function original(overrides = {}) {
-  return page(ids.map((id, i) => `<tr><td class="col1">${i + 1}</td><td><span class="com-toban">${id}</span></td><td class="col5">${times[i]}</td><td class="col6">37.${10 + i}</td><td class="col7">11.${30 + i}</td></tr>`).join('')).replaceAll('37.12', overrides.lap || '37.12');
+  const header = '<table><thead><tr><th class="col1">枠</th><th class="col5">展示</th><th class="col6">一周</th><th class="col7">まわり足</th></tr><tr><th class="col1">番</th><th class="col5">タイム</th><th class="col6">データ</th><th class="col7">データ</th></tr></thead>';
+  const boats = ids.map((id, i) => `<tr><td class="col1">${i + 1}</td><td><ul><li class="com-toban"><span class="grade">${i === 2 ? 'A1' : 'B1'}</span> ${id}</li></ul></td><td class="col5">${times[i]}</td><td class="col6">37.${10 + i}</td><td class="col7">11.${30 + i}</td></tr>`).join('');
+  return page(`${header}<tbody>${boats}</tbody></table>`).replaceAll('37.12', overrides.lap || '37.12');
 }
 function mustThrow(code, fn) { assert.throws(fn, (error) => error && error.code === code); }
 
@@ -32,6 +34,14 @@ const parsedStart = adapter.parseStartDisplay(start(['F.01', 'L.02', '.03', '.04
 assert.equal(parsedStart[0].start_timing, 'F.01');
 assert.equal(parsedStart[1].start_timing, 'L.02');
 const parsedOriginal = adapter.parseOriginalData(original(), DATE, RACE);
+assert.deepEqual(parsedOriginal, [
+  { lane: '1', player_id: '9001', exhibition_time: '6.71', lap_time: '37.10', around_time: '11.30' },
+  { lane: '2', player_id: '9002', exhibition_time: '6.72', lap_time: '37.11', around_time: '11.31' },
+  { lane: '3', player_id: '9003', exhibition_time: '6.73', lap_time: '37.12', around_time: '11.32' },
+  { lane: '4', player_id: '9004', exhibition_time: '6.74', lap_time: '37.13', around_time: '11.33' },
+  { lane: '5', player_id: '9005', exhibition_time: '6.75', lap_time: '37.14', around_time: '11.34' },
+  { lane: '6', player_id: '9006', exhibition_time: '6.76', lap_time: '37.15', around_time: '11.35' },
+]);
 const merged = adapter.mergePublished(parsedDirect.boats, parsedStart, parsedOriginal, { date: DATE, race: RACE, fetchedAt: '2026-10-21T00:00:00.000Z', sourceUrls: { direct_info: 'd', start_display: 's', original_data: 'o' } });
 assert.equal(merged.boats.length, 6);
 assert.equal(merged.boats[0].straight_time, null);

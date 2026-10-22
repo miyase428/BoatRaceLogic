@@ -61,6 +61,17 @@ function allRows(html) {
   return String(html).match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
 }
 
+function bodyRows(html) {
+  const bodies = String(html).match(/<tbody\b[^>]*>[\s\S]*?<\/tbody>/gi) || [];
+  return bodies.flatMap((body) => allRows(body));
+}
+
+function playerIdFromToban(row) {
+  const match = String(row).match(/<li\b[^>]*class=["'][^"']*\bcom-toban\b[^"']*["'][^>]*>[\s\S]*?<\/li>/i);
+  const id = match ? text(match[0]).match(/\b(\d{4,6})\b/) : null;
+  return id ? id[1] : '';
+}
+
 function parsePageIdentity(html, expectedDate, expectedRace) {
   const day = (String(html).match(/\bdata-day\s*=\s*["'](\d{8})["']/i) || [])[1];
   const race = (String(html).match(/\bdata-race\s*=\s*["'](\d{1,2})["']/i) || [])[1];
@@ -125,9 +136,12 @@ function parseStartDisplay(html, date, race) {
 
 function parseOriginalData(html, date, race) {
   parsePageIdentity(html, date, race);
-  const boats = allRows(html).map((row) => ({
+  // The original-data page has multi-row table headers.  Restrict parsing to
+  // tbody so header cells never become phantom boats.  Its com-toban element
+  // contains an inner grade span before the actual registration number.
+  const boats = bodyRows(html).map((row) => ({
     lane: classCell(row, 'col1'),
-    player_id: text((row.match(/<[^>]*class=["'][^"']*com-toban[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i) || [''])[0]),
+    player_id: playerIdFromToban(row),
     exhibition_time: classCell(row, 'col5'),
     lap_time: classCell(row, 'col6'),
     around_time: classCell(row, 'col7'),
