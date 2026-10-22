@@ -1,12 +1,12 @@
-# 尼崎公式展示・日中公式取得と23時補完の導入手順
+# 尼崎公式展示・Web手動取得と23時補完の導入手順
 
-対象は`20261021`以降の`AMG`だけです。日中は尼崎公式HP、23時JST台は日中に保存できなかった同日レースだけを競艇日和で補完します。ほかの23場と2026-10-20以前の尼崎は既存経路のままです。
+対象は`20261021`以降の`AMG`だけです。日中はWeb/PWAの「展示情報を更新」を押したレースだけ尼崎公式HPから取得し、23時JST台は保存できなかった同日レースだけを競艇日和で補完します。公式パーサー未対応の23場は手動画面で未対応を明示し、日中の競艇日和へフォールバックしません。
 
 この文書のSQL、cron、公式HTTPアクセスは**明示承認後だけ**実行します。コードを配置しただけでは共有制御行が無効なので、公式アクセスも夜間補完も始まりません。
 
 ## 保存条件
 
-- 日中公式: 承認済みの公式アクセス間隔で、締切10〜8分前に初回、未公開時だけ締切5〜2分前に一度だけ再試行します。締切2分前以降は開始しません。
+- 日中公式: Web/PWAのCSRF確認済みPOSTを受けた1レースだけ取得します。定期ジョブと自動再試行は使いません。締切前後は監査マーカーで区別します。
 - 23時補完: 専用ラッパー、JST 23:00〜23:59、当日のAMG、`nightly_backfill_enabled=true`、公式監査なし、`exhibition_live`の物理行数ゼロをすべて満たす場合だけ保存します。
 - 部分行、品質不完全行、出所不明の6艇、公式監査済み6艇は補完しません。`20261021AMG01`も自動更新しません。
 - 23時の競艇日和データは`kyoteibiyori_nightly`として監査し、`official_amagasaki`やStrict Forwardの締切前証跡として扱いません。
@@ -19,8 +19,8 @@
 
 ## 導入前の必須条件
 
-1. 尼崎公式HPの自動取得条件・回数・頻度を確認し、承認済みであること。
-2. 日中・23時ジョブの実行ホスト、実行ユーザー、ログ出力先が確定していること。
+1. 尼崎公式HPの手動取得条件・回数・頻度を確認し、承認済みであること。
+2. Web手動処理と23時ジョブの実行ホスト、実行ユーザー、ログ出力先が確定していること。
 3. `20261021AMG01`を含む既存AMG行を読み取り監査し、出所不明行の人手判断が済んでいること。
 4. DBバックアップと復旧担当者を確定していること。
 5. Strict Forwardの`DECLARED_IMPLEMENTATION_IDENTITY_MISMATCH`を別問題として維持し、認可を変更しないこと。
@@ -85,20 +85,20 @@ php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --dry-run
 php analysis/prepare_official_amagasaki_deadline_cache.php --date=YYYYMMDD --dry-run
 ```
 
-5. **第2段階（明示承認後の稼働）**では、公式HPの利用条件・頻度、実行ホスト・実行ユーザー、バックアップ復旧担当、AMG既存行監査を確認してから、日中公式取得と23時補完を個別に有効化します。`retry_interval_seconds`には承認済み間隔のみを設定します。
+5. **第2段階（明示承認後の稼働）**では、公式HPの利用条件・頻度、実行ホスト・実行ユーザー、バックアップ復旧担当、AMG既存行監査を確認してから、手動公式取得と23時補完を個別に有効化します。定期自動取得は無効のままにします。
 
 ```bash
-psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -c "UPDATE boat_race.official_exhibition_control_v1 SET route_enabled=true, automation_approved=true, nightly_backfill_enabled=true, retry_interval_seconds=120, version=version+1, updated_at=NOW(), updated_by='APPROVED_OPERATOR' WHERE control_key='amagasaki';"
+psql "$BOATRACE_DB_DSN" -v ON_ERROR_STOP=1 -c "UPDATE boat_race.official_exhibition_control_v1 SET route_enabled=true, automation_approved=false, nightly_backfill_enabled=true, retry_interval_seconds=NULL, version=version+1, updated_at=NOW(), updated_by='APPROVED_OPERATOR' WHERE control_key='amagasaki';"
 ```
 
-6. 締切キャッシュを、日中ジョブと同じ実行ユーザーで監視下に一度だけ準備します。出力が`prepared`または`ready`で、AMG全12Rがあることを確認します。
+6. 締切キャッシュをWeb処理から読める権限で一日一度だけ準備します。出力が`prepared`または`ready`で、AMG全12Rがあることを確認します。Web手動処理は診断HTML保存を無効にし、`www-data`へ0700ディレクトリの権限を与えません。
 
 ```bash
 php analysis/prepare_official_amagasaki_deadline_cache.php --date=YYYYMMDD --execute
 php -r '$p="/tmp/boatrace_official_deadlines/deadlines_YYYYMMDD.json"; $j=json_decode(file_get_contents($p),true,512,JSON_THROW_ON_ERROR); $n=0; foreach ($j["deadlines"] as $k=>$v) if (preg_match("/^YYYYMMDDAMG(0[1-9]|1[0-2])$/",$k)&&preg_match("/^\\d{2}:\\d{2}$/",$v)) $n++; if ($n!==12) exit(1); echo "AMG deadlines: $n\\n";'
 ```
 
-7. 監視下の単発試験では、必ず`--only-race=NN`を指定します。候補一覧を読む処理以外では、指定外レースはclaim、公式HTTP、DB保存へ到達しません。まずdry-runで対象レースだけが出力されることを確認します。診断HTMLを保存する場合は、実行ユーザーが所有するWeb公開外の`/var/lib/boatrace/official-exhibition-diagnostics`を事前に`0700`で作成し、承認済み単発実行でだけ`--capture-diagnostic-html`を付けます。
+7. CLI単発診断はWeb手動取得とは分離します。診断HTMLを保存する場合は、実行ユーザーが所有するWeb公開外の`/var/lib/boatrace/official-exhibition-diagnostics`を`0700`のまま使用し、承認済みCLI単発実行でだけ`--capture-diagnostic-html`を付けます。
 
 ```bash
 php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --only-race=NN --dry-run
@@ -107,7 +107,7 @@ php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --only-race=
 analysis/print_official_amagasaki_daytime_cron_template.sh --print
 ```
 
-8. 実行元・実行ユーザーが確定している場合だけ、既存23時ラッパーは`analysis/run_official_amagasaki_nightly_backfill.sh`を経由させます。過去日巡回やJST 23時台以外のAMGは自動補完されません。
+8. 現在のユーザーcrontabは`23:10 run_late_replay_cron.sh`だけで、尼崎補完ラッパーへ接続されていません。承認後にこの1行を`23:10 run_nightly_exhibition_and_replay.sh`へ置き換えます。新旧を並行登録すると夜間再現が二重になるため禁止します。ラッパーは`run_official_amagasaki_nightly_backfill.sh`を一度実行してから夜間再現へ進みます。
 
 ## 監視SQL
 

@@ -280,6 +280,12 @@ SQL;
         $debug = 'HTTP STATUS: ' . $httpCode . "\nRACE_CODE: " . $raceCode;
         if (!is_array($json) || ($json['success'] ?? false) !== true) {
             $reason = is_array($json) ? (string)($json['reason'] ?? '原因不明のエラー') : '更新APIから正しい応答がありません。';
+            if ($reason === 'OFFICIAL_EXHIBITION_UNSUPPORTED_VENUE') {
+                return ['展示情報の更新に失敗しました: この競艇場は公式展示取得に未対応です。', $debug];
+            }
+            if (str_starts_with($reason, 'EXISTING_') || str_starts_with($reason, 'OFFICIAL_AUDIT_')) {
+                return ['展示情報の更新に失敗しました: 既存展示または監査記録の確認が必要です。', $debug . "\nREASON: " . $reason];
+            }
             return ['展示情報の更新に失敗しました: ' . $reason, $debug];
         }
         return [(($json['status'] ?? '') === 'already_saved') ? '公式展示情報は保存済みです。' : '公式展示情報を保存しました。', $debug];

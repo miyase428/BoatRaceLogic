@@ -103,14 +103,30 @@ class IndexController
 
         if (isset($_POST["update_exhibition"])) {
             $target_race_code = $_POST["race_code"] ?? $race_code;
+            $submittedCsrfToken = (string)($_POST['official_manual_csrf_token'] ?? '');
 
-            // 展示API経由等でスクレイピング・DB登録を実行
-            [$update_message, $debug_msg] = $apiClient->updateOfficialExhibitionManually(
-                $target_race_code,
-                (string)($_POST['official_manual_csrf_token'] ?? ''),
-                session_name(),
-                session_id(),
-            );
+            if (!OfficialExhibitionManualRequest::validatePost($submittedCsrfToken)) {
+                $update_message = '展示情報の更新に失敗しました: 手動操作の確認に失敗しました。';
+                $debug_msg = 'MANUAL_CSRF_VALIDATION_FAILED';
+            } else {
+                $sessionName = session_name();
+                $sessionId = session_id();
+                // The child endpoint reopens this same session. Release the
+                // outer request's file lock before starting the HTTP call.
+                OfficialExhibitionManualRequest::closeForInternalRequest();
+                // The official adapter can use one 30-second request followed
+                // by two parallel 30-second requests. Keep this explicit
+                // manual action within the client's 75-second HTTP timeout.
+                set_time_limit(90);
+
+                // 展示API経由等でスクレイピング・DB登録を実行
+                [$update_message, $debug_msg] = $apiClient->updateOfficialExhibitionManually(
+                    $target_race_code,
+                    $submittedCsrfToken,
+                    $sessionName,
+                    $sessionId,
+                );
+            }
         }
 
         // -------------------------------------------------------------

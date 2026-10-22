@@ -4,6 +4,10 @@ declare(strict_types=1);
 date_default_timezone_set('Asia/Tokyo');
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
+// The adapter makes at most three requests: one, then two in parallel. PHP's
+// Apache default is 30 seconds, so this endpoint needs a bounded allowance
+// larger than the adapter's 60-second worst-case sequence.
+set_time_limit(80);
 
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../web/logic/OfficialExhibitionManualRequest.php';
@@ -23,7 +27,10 @@ try {
     $service = new OfficialAmagasakiManualExhibitionUpdate(
         $pdo,
         OfficialAmagasakiOperationalPolicy::fromPdo($pdo),
-        new NodeOfficialAmagasakiPayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_amagasaki.js', true),
+        // Apache runs as www-data while the diagnostic directory is 0700 and
+        // owned by the operator. Manual Web requests therefore do not capture
+        // HTML. This keeps least privilege without weakening the directory.
+        new NodeOfficialAmagasakiPayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_amagasaki.js', false),
         rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines',
     );
     $result = $service->run($raceCode);

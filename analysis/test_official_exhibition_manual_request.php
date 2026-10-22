@@ -14,4 +14,6 @@ manualRequestAssert(!OfficialExhibitionManualRequest::validatePost($token), 'GET
 $_SERVER['REQUEST_METHOD'] = 'POST';
 manualRequestAssert(!OfficialExhibitionManualRequest::validatePost(str_repeat('0', 64)), 'incorrect token is rejected'); $cases++;
 manualRequestAssert(OfficialExhibitionManualRequest::validatePost($token), 'same-session POST token is accepted'); $cases++;
+OfficialExhibitionManualRequest::closeForInternalRequest();
+manualRequestAssert(session_status() !== PHP_SESSION_ACTIVE, 'outer request releases the session lock before internal HTTP'); $cases++;
 echo "PASS {$cases} manual request CSRF cases\n";

@@ -36,4 +36,15 @@ final class OfficialExhibitionManualRequest
         return is_string($expected) && preg_match('/^[a-f0-9]{64}$/', $expected) === 1
             && hash_equals($expected, $token);
     }
+
+    /**
+     * Persist the CSRF token and release PHP's file-session lock before the
+     * controller makes a localhost request carrying the same session ID.
+     */
+    public static function closeForInternalRequest(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+    }
 }
