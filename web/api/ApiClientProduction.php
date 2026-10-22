@@ -257,6 +257,37 @@ SQL;
      * 呼び出し側は75秒まで待つ。
      * update_exhibition.php が返すJSONの成功/失敗内容を画面メッセージへ反映する。
      */
+    /** Browser-initiated AMG official request. Collectors never call this. */
+    public function updateOfficialExhibitionManually(string $raceCode, string $csrfToken, string $sessionName, string $sessionId): array
+    {
+        if ($raceCode === '' || $csrfToken === '' || $sessionId === '') {
+            return ['展示情報の更新に失敗しました: 手動操作の確認情報が不足しています。', 'manual request credentials missing'];
+        }
+        $ch = curl_init('http://127.0.0.1:80/update_official_exhibition_manual.php');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(['race_code' => $raceCode, 'csrf_token' => $csrfToken]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Cookie: ' . $sessionName . '=' . rawurlencode($sessionId)]);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 75);
+        $response = curl_exec($ch);
+        $errno = curl_errno($ch);
+        $error = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($errno !== 0) return ['展示情報の更新に失敗しました: ' . $error, 'manual cURL error ' . $errno];
+        $json = is_string($response) ? json_decode($response, true) : null;
+        $debug = 'HTTP STATUS: ' . $httpCode . "\nRACE_CODE: " . $raceCode;
+        if (!is_array($json) || ($json['success'] ?? false) !== true) {
+            $reason = is_array($json) ? (string)($json['reason'] ?? '原因不明のエラー') : '更新APIから正しい応答がありません。';
+            if (str_starts_with($reason, 'EXISTING_') || str_starts_with($reason, 'OFFICIAL_AUDIT_')) {
+                return ['展示情報の更新に失敗しました: 既存展示の確認が必要です。', $debug . "\nREASON: " . $reason];
+            }
+            return ['展示情報の更新に失敗しました: ' . $reason, $debug];
+        }
+        return [(($json['status'] ?? '') === 'already_saved') ? '展示情報は保存済みです。' : '公式展示情報を保存しました。', $debug];
+    }
+
     public function updateExhibition(string $race_code): array
     {
         if ($race_code === '') {

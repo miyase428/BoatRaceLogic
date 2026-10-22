@@ -4,6 +4,8 @@ require_once __DIR__ . '/../../config/place_map.php';
 
 require_once __DIR__ . '/../api/ApiClientProduction.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
+require_once __DIR__ . '/../logic/OfficialExhibitionManualRequest.php';
+require_once __DIR__ . '/../../logic/OfficialExhibitionManualRoute.php';
 require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/ExhibitionAlertLogic.php';
@@ -96,12 +98,30 @@ class IndexController
         // -------------------------------------------------------------
         $update_message = '';
         $debug_msg = '';
+        $officialManualCsrfToken = OfficialExhibitionManualRequest::token();
 
         if (isset($_POST["update_exhibition"])) {
             $target_race_code = $_POST["race_code"] ?? $race_code;
-
-            // 展示API経由等でスクレイピング・DB登録を実行
-            [$update_message, $debug_msg] = $apiClient->updateExhibition($target_race_code);
+            $route = OfficialExhibitionManualRoute::decide((string)$target_race_code);
+            if ($route['source'] !== 'official_amagasaki') {
+                // Official adapters do not yet exist for the other venues.
+                // Keep their established manual Kyotei Biyori route unchanged.
+                [$update_message, $debug_msg] = $apiClient->updateExhibition($target_race_code);
+            } elseif (!OfficialExhibitionManualRequest::validatePost((string)($_POST['official_manual_csrf_token'] ?? ''))) {
+                $update_message = '展示情報の更新に失敗しました: 手動操作の確認に失敗しました。';
+                $debug_msg = 'MANUAL_CSRF_VALIDATION_FAILED';
+            } else {
+                $sessionName = session_name();
+                $sessionId = session_id();
+                OfficialExhibitionManualRequest::closeForInternalRequest();
+                set_time_limit(90);
+                [$update_message, $debug_msg] = $apiClient->updateOfficialExhibitionManually(
+                    (string)$target_race_code,
+                    (string)$_POST['official_manual_csrf_token'],
+                    $sessionName,
+                    $sessionId,
+                );
+            }
         }
 
         // -------------------------------------------------------------
@@ -444,6 +464,7 @@ class IndexController
             'tenji_error'     => $tenji_error,
             'update_message'  => $update_message,
             'debug_msg'       => $debug_msg,
+            'official_manual_csrf_token' => $officialManualCsrfToken,
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
             'overall_avg'       => $overall_avg,
