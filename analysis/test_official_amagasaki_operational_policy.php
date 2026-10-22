@@ -65,6 +65,12 @@ foreach ($expectations as $path => $needles) {
 }
 policyAssert(str_contains((string)file_get_contents($root . '/logic/scrape_exhibition.php'), "'nightly_backfill'"), 'nightly scraper selects the dedicated backfill entry only through its context'); $cases++;
 policyAssert(str_contains((string)file_get_contents($root . '/analysis/run_nightly_exhibition_and_replay.sh'), 'run_official_amagasaki_nightly_backfill.sh'), '23:00 wrapper uses the dedicated nightly backfill route'); $cases++;
+$nightlyWrapper = (string)file_get_contents($root . '/analysis/run_nightly_exhibition_and_replay.sh');
+policyAssert(preg_match('/^[[:space:]]*[^#\n]*run_late_replay_cron\.sh/m', $nightlyWrapper) !== 1, '23:00 wrapper does not duplicate the replay already owned by the scraper'); $cases++;
+$scraperSource = (string)file_get_contents($root . '/logic/scrape_exhibition.php');
+policyAssert(substr_count($scraperSource, 'register_shutdown_function($run_nightly_replay)') === 1, 'scraper registers one shutdown replay path'); $cases++;
+policyAssert(substr_count($scraperSource, '$run_nightly_replay();') === 1, 'scraper has one explicit normal-completion replay call'); $cases++;
+policyAssert(strpos($scraperSource, '$nightly_replay_ran = true;') < strpos($scraperSource, "exec(\$command"), 'replay guard is set before the child process starts'); $cases++;
 $cases += 5;
 
 echo "PASS {$cases} isolated operational policy cases\n";

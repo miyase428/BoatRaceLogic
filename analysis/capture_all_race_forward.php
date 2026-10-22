@@ -39,7 +39,10 @@ const DEADLINE_SAFETY_MINUTES = 2;
 const MAX_SCRAPES_PER_RUN = 24;
 
 $dryRun = in_array('--dry-run', $argv, true);
-$dbOnly = in_array('--db-only', $argv, true);
+// The nationwide operating policy permits daytime exhibition acquisition
+// only through an explicit Web/PWA action. This process continues to compute
+// and persist predictions from rows already present in exhibition_live.
+$dbOnly = true;
 $dateText = date('Y-m-d');
 $datePrefix = date('Ymd');
 $now = new DateTimeImmutable('now');

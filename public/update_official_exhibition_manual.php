@@ -11,11 +11,17 @@ set_time_limit(80);
 
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../web/logic/OfficialExhibitionManualRequest.php';
+require_once __DIR__ . '/../web/logic/OfficialExhibitionManualAccess.php';
 require_once __DIR__ . '/../logic/OfficialAmagasakiOperationalPolicy.php';
 require_once __DIR__ . '/../logic/NodeOfficialAmagasakiPayloadFetcher.php';
 require_once __DIR__ . '/../logic/OfficialAmagasakiManualExhibitionUpdate.php';
 
 header('Content-Type: application/json; charset=UTF-8');
+if (!OfficialExhibitionManualAccess::isLoopback(trim((string)($_SERVER['REMOTE_ADDR'] ?? '')))) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'reason' => 'MANUAL_OFFICIAL_INTERNAL_ENDPOINT_ONLY'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 if (!OfficialExhibitionManualRequest::validatePost((string)($_POST['csrf_token'] ?? ''))) {
     http_response_code(403);
     echo json_encode(['success' => false, 'reason' => 'MANUAL_CSRF_VALIDATION_FAILED'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

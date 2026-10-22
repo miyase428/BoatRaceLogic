@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../config/place_map.php';
 require_once __DIR__ . '/../api/ApiClientProduction.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
 require_once __DIR__ . '/../logic/OfficialExhibitionManualRequest.php';
+require_once __DIR__ . '/../logic/OfficialExhibitionManualAccess.php';
 require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/ExhibitionAlertLogic.php';
@@ -104,8 +105,12 @@ class IndexController
         if (isset($_POST["update_exhibition"])) {
             $target_race_code = $_POST["race_code"] ?? $race_code;
             $submittedCsrfToken = (string)($_POST['official_manual_csrf_token'] ?? '');
+            $manualAccess = OfficialExhibitionManualAccess::authorize($_SERVER);
 
-            if (!OfficialExhibitionManualRequest::validatePost($submittedCsrfToken)) {
+            if (!$manualAccess['allowed']) {
+                $update_message = '展示情報の更新に失敗しました: 許可された接続から操作してください。';
+                $debug_msg = $manualAccess['reason'];
+            } elseif (!OfficialExhibitionManualRequest::validatePost($submittedCsrfToken)) {
                 $update_message = '展示情報の更新に失敗しました: 手動操作の確認に失敗しました。';
                 $debug_msg = 'MANUAL_CSRF_VALIDATION_FAILED';
             } else {

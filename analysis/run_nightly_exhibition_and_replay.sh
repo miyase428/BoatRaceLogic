@@ -1,20 +1,11 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
-# Raspberry Piの既存23時処理を1回だけ実行し、完了後に未保存レースを夜間再現する。
+# The scraper owns the single late-replay invocation. It invokes replay once
+# on normal completion and also from its guarded shutdown handler on an early
+# PHP exit. Calling run_late_replay_cron.sh here would run the same replay a
+# second time.
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-TARGET_DATE="$(date '+%Y-%m-%d')"
-
 cd "$ROOT_DIR"
-/usr/bin/bash analysis/run_official_amagasaki_nightly_backfill.sh
-SCRAPE_EXIT=$?
-
-# 一部欠測があっても、今回までに6艇分そろったレースは再現対象にする。
-/usr/bin/bash analysis/run_late_replay_cron.sh "$TARGET_DATE"
-REPLAY_EXIT=$?
-
-if (( SCRAPE_EXIT != 0 )); then
-    exit "$SCRAPE_EXIT"
-fi
-exit "$REPLAY_EXIT"
+exec /usr/bin/bash analysis/run_official_amagasaki_nightly_backfill.sh

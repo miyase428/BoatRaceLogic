@@ -19,6 +19,19 @@ require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_source_guard.php';
 require_once __DIR__ . '/../logic/exhibition_data_quality.php';
 require_once __DIR__ . '/../logic/OfficialAmagasakiWriteBarrier.php';
+require_once __DIR__ . '/../web/logic/OfficialExhibitionManualAccess.php';
+
+// Legacy update calls are retained only for explicitly reviewed localhost
+// integrations. Browser/PWA manual official updates use the dedicated CSRF
+// endpoint; remote callers must never start the legacy daytime scraper.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+    || !OfficialExhibitionManualAccess::isLoopback(trim((string)($_SERVER['REMOTE_ADDR'] ?? '')))) {
+    ob_end_clean();
+    http_response_code(403);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['success' => false, 'reason' => 'LEGACY_EXHIBITION_UPDATE_INTERNAL_ONLY'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 
 // ------------------------------------------------------------
 // ログ出力関数

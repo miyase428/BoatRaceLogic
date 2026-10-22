@@ -181,10 +181,11 @@ function cc30bExhibitionState(PDO $pdo, string $raceCode, string $venue, string 
 }
 
 /** @return array{status:string,skip_reason:string} */
-function cc30bFetchDecision(DateTimeImmutable $now, DateTimeImmutable $cutoff, bool $complete, bool $supported): array
+function cc30bFetchDecision(DateTimeImmutable $now, DateTimeImmutable $cutoff, bool $complete, bool $supported, bool $automaticFetchEnabled = false): array
 {
     if (!$supported) return ['status' => 'UNSUPPORTED_VENUE', 'skip_reason' => 'UNSUPPORTED_VENUE'];
     if ($complete) return ['status' => 'ALREADY_SATISFIED', 'skip_reason' => ''];
+    if (!$automaticFetchEnabled) return ['status' => 'AUTOMATIC_FETCH_DETACHED', 'skip_reason' => 'MANUAL_EXHIBITION_ONLY'];
     $seconds = $cutoff->getTimestamp() - $now->getTimestamp();
     if ($seconds > CC30B_FETCH_OPEN_SECONDS) return ['status' => 'TOO_EARLY', 'skip_reason' => 'BEFORE_FETCH_WINDOW'];
     if ($seconds < CC30B_FETCH_CLOSE_SECONDS) return ['status' => 'TOO_LATE', 'skip_reason' => 'AFTER_FETCH_WINDOW'];
@@ -202,16 +203,9 @@ function cc30bPostFetchDecision(bool $existingPathReportedSuccess, bool $complet
 /** @return array{ok:bool,message:string} */
 function cc30bFetchViaExistingPath(ApiClientProduction $client, string $raceCode): array
 {
-    // Strict Forward must only read exhibition data that already exists.  It
-    // never impersonates an explicit browser action or starts an official
-    // AMG request.  Formal-evidence availability may therefore be lower when
-    // the user has not manually saved exhibition data before the cutoff.
-    if (preg_match('/^\d{8}AMG(?:0[1-9]|1[0-2])$/', $raceCode) === 1 && substr($raceCode, 0, 8) >= '20261021') {
-        return ['ok' => false, 'message' => 'AUTOMATIC_EXHIBITION_FETCH_DETACHED'];
-    }
-    [$message] = $client->updateExhibition($raceCode);
-    $message = (string)$message;
-    return ['ok' => !str_starts_with($message, '展示情報の更新に失敗しました:'), 'message' => $message];
+    // Safety backstop: Strict Forward reads existing exhibition rows only.
+    // No venue may start an external exhibition request from this collector.
+    return ['ok' => false, 'message' => 'AUTOMATIC_EXHIBITION_FETCH_DETACHED'];
 }
 
 /** @param array<string,int> $counts */
@@ -222,6 +216,7 @@ function cc30bSummary(string $status, DateTimeImmutable $started, DateTimeImmuta
         'epoch_id' => $epochId, 'window_id' => $windowId, 'started_at' => $started->format(DATE_ATOM), 'finished_at' => $finished->format(DATE_ATOM),
         'candidate_count' => $candidateCount, 'too_early' => $counts['TOO_EARLY'] ?? 0, 'fetch_eligible' => $counts['FETCH_ELIGIBLE'] ?? 0,
         'already_satisfied' => $counts['ALREADY_SATISFIED'] ?? 0, 'fetch_attempted' => $counts['FETCH_ATTEMPTED'] ?? 0,
+        'automatic_fetch_detached' => $counts['AUTOMATIC_FETCH_DETACHED'] ?? 0,
         'fetch_success' => $counts['FETCHED_COMPLETE'] ?? 0, 'fetch_failed' => $counts['FETCH_FAILED'] ?? 0,
         'too_late' => $counts['TOO_LATE'] ?? 0, 'retry_pending' => $counts['RETRY_PENDING'] ?? 0,
     ]);

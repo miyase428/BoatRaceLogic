@@ -52,14 +52,14 @@ cc30bAssert(!cc30bValidateCandidate($bad, $armed)['valid'], '15_prearmed_candida
 $bad = cc30bTestCandidate(); $bad['deadline_snapshot_identity'] = 'broken';
 cc30bAssert(!cc30bValidateCandidate($bad, $armed)['valid'], '16_candidate_provenance_corruption_fatal', $results);
 
-cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:29:59+09:00', $tz), $cutoff, false, true)['status'] === 'TOO_EARLY', '17_before_window_too_early', $results);
-cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:30:00+09:00', $tz), $cutoff, false, true)['status'] === 'FETCH_ELIGIBLE', '18_start_boundary_fetch_eligible', $results);
-cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, false, true)['status'] === 'FETCH_ELIGIBLE', '19_inside_window_fetch_eligible', $results);
-cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:41:00+09:00', $tz), $cutoff, false, true)['status'] === 'FETCH_ELIGIBLE', '20_end_boundary_fetch_eligible', $results);
-cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:41:01+09:00', $tz), $cutoff, false, true)['status'] === 'TOO_LATE', '21_after_window_too_late', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:29:59+09:00', $tz), $cutoff, false, true, true)['status'] === 'TOO_EARLY', '17_before_window_too_early', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:30:00+09:00', $tz), $cutoff, false, true, true)['status'] === 'FETCH_ELIGIBLE', '18_start_boundary_fetch_eligible', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, false, true, true)['status'] === 'FETCH_ELIGIBLE', '19_inside_window_fetch_eligible', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:41:00+09:00', $tz), $cutoff, false, true, true)['status'] === 'FETCH_ELIGIBLE', '20_end_boundary_fetch_eligible', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:41:01+09:00', $tz), $cutoff, false, true, true)['status'] === 'TOO_LATE', '21_after_window_too_late', $results);
 cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, true, true)['status'] === 'ALREADY_SATISFIED', '22_complete_exhibition_skip', $results);
 cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, false, false)['status'] === 'UNSUPPORTED_VENUE', '23_unsupported_race_local', $results);
-cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T13:36:00Z'), $cutoff, false, true)['status'] === 'FETCH_ELIGIBLE', '24_offset_aware_jst_instant', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T13:36:00Z'), $cutoff, false, true, true)['status'] === 'FETCH_ELIGIBLE', '24_offset_aware_jst_instant', $results);
 cc30bAssert(cc30bPostFetchDecision(true, true)['status'] === 'FETCHED_COMPLETE', '25_existing_path_complete', $results);
 cc30bAssert(cc30bPostFetchDecision(true, false)['status'] === 'RETRY_PENDING', '26_same_race_retry_possible', $results);
 cc30bAssert(cc30bPostFetchDecision(false, false)['status'] === 'FETCH_FAILED', '27_scraper_failure_race_local', $results);
@@ -67,7 +67,7 @@ cc30bAssert(cc30bPostFetchDecision(false, false)['status'] === 'FETCH_FAILED', '
 $supported = cc30bSupportedVenues();
 cc30bAssert($supported === ['TMG', 'TDA', 'OMR', 'SMS', 'SME', 'KRY', 'BWK', 'ASY', 'AMG', 'HWJ', 'EDG', 'MKN'], '28_all_twelve_venues_mapped', $results);
 $chain = [];
-foreach ([['EDG', false], ['TDA', true], ['SMS', true]] as [$venue, $available]) $chain[] = cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, false, $available)['status'];
+foreach ([['EDG', false], ['TDA', true], ['SMS', true]] as [$venue, $available]) $chain[] = cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, false, $available, true)['status'];
 cc30bAssert($chain === ['UNSUPPORTED_VENUE', 'FETCH_ELIGIBLE', 'FETCH_ELIGIBLE'], '29_race_local_failure_does_not_stop_following', $results);
 
 $source = (string)file_get_contents(__DIR__ . '/collect_strict_forward_exhibition.php');
@@ -84,6 +84,8 @@ cc30bAssert(!str_contains($source, 'OfficialEpochIncidentLifecycleStore->'), '39
 cc30bAssert(cc30bArguments(['collector', '--dry-run', '--now=2099-12-28T22:36:00+09:00'])['dry_run'], '40_dry_run_argument', $results);
 try { cc30bArguments(['collector', '--now=2099-12-28T22:36:00+09:00']); $nowOverrideBlocked = false; } catch (Throwable) { $nowOverrideBlocked = true; }
 cc30bAssert($nowOverrideBlocked, '41_now_override_dry_run_only', $results);
+cc30bAssert(cc30bFetchDecision(new DateTimeImmutable('2099-12-28T22:36:00+09:00', $tz), $cutoff, false, true)['status'] === 'AUTOMATIC_FETCH_DETACHED', '42_nationwide_daytime_fetch_is_manual_only', $results);
+cc30bAssert(cc30bFetchViaExistingPath(new ApiClientProduction(), '20991228TDA09')['message'] === 'AUTOMATIC_EXHIBITION_FETCH_DETACHED', '43_fetch_path_backstop_never_calls_external_source', $results);
 
 $pass = count(array_filter($results, static fn(array $row): bool => $row[1]));
 echo json_encode(['total' => count($results), 'pass' => $pass, 'fail' => count($results) - $pass, 'tests' => $results], JSON_UNESCAPED_SLASHES) . PHP_EOL;
