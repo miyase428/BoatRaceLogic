@@ -11,6 +11,7 @@ final class FakeOfficialRepository implements OfficialExhibitionRepository
     public bool $audit = false;
     public bool $failInsert = false;
     public bool $failAudit = false;
+    /** @var array<string,mixed>|null */ public ?array $lastAudit = null;
     public int $begins = 0;
     public int $commits = 0;
     public int $rollbacks = 0;
@@ -21,7 +22,7 @@ final class FakeOfficialRepository implements OfficialExhibitionRepository
     public function averages(string $placeCode): array { return ['avg_exh' => 6.90, 'avg_lap' => 38.00, 'avg_around' => 11.60, 'avg_straight' => 0.0]; }
     public function begin(): void { $this->begins++; $this->snapshotRows = $this->rows; $this->snapshotAudit = $this->audit; }
     public function insertSix(array $rows): void { if ($this->failInsert) throw new RuntimeException('insert failed'); $this->rows = $rows; }
-    public function insertAudit(array $audit): void { if ($this->failAudit) throw new RuntimeException('audit failed'); $this->audit = true; }
+    public function insertAudit(array $audit): void { if ($this->failAudit) throw new RuntimeException('audit failed'); $this->audit = true; $this->lastAudit = $audit; }
     public function commit(): void { $this->commits++; }
     public function rollback(): void { $this->rollbacks++; $this->rows = $this->snapshotRows; $this->audit = $this->snapshotAudit; }
 }
@@ -73,6 +74,10 @@ $bad = payload(); $bad['boats'][0]['straight_time'] = '6.70'; expectFailure(fn()
 
 $repo = new FakeOfficialRepository(); $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
 check($store->persist(payload(), '20261021AMG01', entries())['status'] === 'saved' && $repo->commits === 1 && count($repo->rows) === 6 && $repo->audit, 'new six rows and audit commit atomically'); $cases++;
+$repo = new FakeOfficialRepository(); $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
+check($store->persistLateHistory(payload(), '20261021AMG01', entries())['status'] === 'saved' && $repo->lastAudit['comparison_status'] === 'late_manual_history_import' && $repo->lastAudit['error_reason'] === 'POST_DEADLINE_MANUAL_IMPORT', 'late history has an explicit audit marker while retaining atomic storage'); $cases++;
+$repo = new FakeOfficialRepository(); $repo->failAudit = true; $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
+check($store->persistLateHistory(payload(), '20261021AMG01', entries())['status'] === 'rolled_back' && $repo->rollbacks === 1 && $repo->rows === [] && !$repo->audit, 'late-history audit failure rolls back all six rows'); $cases++;
 $repo = new FakeOfficialRepository(); $repo->rows = array_slice($converted, 0, 3); $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
 check($store->persist(payload(), '20261021AMG01', entries())['status'] === 'requires_review_partial' && $repo->rollbacks === 1, 'partial data is not overwritten'); $cases++;
 $repo = new FakeOfficialRepository(); $repo->rows = $converted; $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);

@@ -209,11 +209,23 @@ final class OfficialAmagasakiExhibitionTransactionStore
     /** @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries @return array{status:string,comparison:string} */
     public function persist(array $payload, string $raceCode, array $raceEntries): array
     {
+        return $this->persistWithAuditMarker($payload, $raceCode, $raceEntries, 'none', null);
+    }
+
+    /** @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries @return array{status:string,comparison:string} */
+    public function persistLateHistory(array $payload, string $raceCode, array $raceEntries): array
+    {
+        return $this->persistWithAuditMarker($payload, $raceCode, $raceEntries, 'late_manual_history_import', 'POST_DEADLINE_MANUAL_IMPORT');
+    }
+
+    /** @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries @return array{status:string,comparison:string} */
+    private function persistWithAuditMarker(array $payload, string $raceCode, array $raceEntries, string $comparisonStatus, ?string $errorReason): array
+    {
         $begun = false;
         try {
             $this->repository->begin();
             $begun = true;
-            $result = $this->persistWithinOpenTransaction($payload, $raceCode, $raceEntries);
+            $result = $this->persistWithinOpenTransactionWithAuditMarker($payload, $raceCode, $raceEntries, $comparisonStatus, $errorReason);
             if ($result['status'] !== 'saved') {
                 $this->repository->rollback();
                 $begun = false;
@@ -237,6 +249,26 @@ final class OfficialAmagasakiExhibitionTransactionStore
      */
     public function persistWithinOpenTransaction(array $payload, string $raceCode, array $raceEntries): array
     {
+        return $this->persistWithinOpenTransactionWithAuditMarker($payload, $raceCode, $raceEntries, 'none', null);
+    }
+
+    /**
+     * Stores a verified historical payload after the race deadline.  The
+     * caller owns the transaction and must separately prove the late-import
+     * conditions; the audit marker prevents this path from being described as
+     * a normal forward collection.
+     *
+     * @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries
+     * @return array{status:string,comparison:string}
+     */
+    public function persistLateHistoryWithinOpenTransaction(array $payload, string $raceCode, array $raceEntries): array
+    {
+        return $this->persistWithinOpenTransactionWithAuditMarker($payload, $raceCode, $raceEntries, 'late_manual_history_import', 'POST_DEADLINE_MANUAL_IMPORT');
+    }
+
+    /** @param array<string,mixed> $payload @param list<array<string,mixed>> $raceEntries @return array{status:string,comparison:string} */
+    private function persistWithinOpenTransactionWithAuditMarker(array $payload, string $raceCode, array $raceEntries, string $comparisonStatus, ?string $errorReason): array
+    {
         $rows = $this->validator->validateAndConvert($payload, $raceCode, $raceEntries);
         $existing = $this->repository->existingRows($raceCode);
         $comparison = $this->comparison($existing, $rows);
@@ -253,7 +285,7 @@ final class OfficialAmagasakiExhibitionTransactionStore
         $audit = [
             'audit_id' => bin2hex(random_bytes(16)), 'race_code' => $raceCode, 'source' => 'official_amagasaki',
             'source_url' => (string)$payload['source_url'], 'fetched_at' => (string)$payload['fetched_at'], 'page_fetched_at' => $payload['page_fetched_at'],
-            'before_rows' => [], 'after_rows' => $rows, 'comparison_status' => 'none', 'result_status' => 'saved', 'error_reason' => null,
+            'before_rows' => [], 'after_rows' => $rows, 'comparison_status' => $comparisonStatus, 'result_status' => 'saved', 'error_reason' => $errorReason,
         ];
         $this->repository->insertSix($rows);
         $this->repository->insertAudit($audit);
