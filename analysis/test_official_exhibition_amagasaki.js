@@ -164,13 +164,37 @@ function fakeFetcher(pages) {
     } finally {
       fs.rmSync(failureDir, { recursive: true, force: true });
     }
+
+    const siblingFailureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'amg-diagnostic-sibling-failure-test-'));
+    try {
+      const siblingDiagnostic = adapter.createDiagnosticStore(siblingFailureDir, 60);
+      let releaseStart;
+      const delayedStart = new Promise((resolve) => { releaseStart = resolve; });
+      await assert.rejects(
+        () => adapter.capture(DATE, RACE, {
+          fetchPage: async (url) => {
+            const kind = new URL(url).searchParams.get('kind');
+            if (kind === '0') return { body: direct(), completedAt: '2026-10-21T00:00:01.000Z' };
+            if (kind === '1') return delayedStart;
+            throw new Error('synthetic original-data transport failure');
+          },
+          diagnosticStore: siblingDiagnostic,
+        }),
+        /synthetic original-data transport failure/,
+      );
+      releaseStart({ body: start(), completedAt: '2026-10-21T00:00:02.000Z' });
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(fs.readdirSync(siblingFailureDir).filter((name) => name.endsWith('.html')).length, 2, 'received sibling page remains available when its concurrent page fails');
+    } finally {
+      fs.rmSync(siblingFailureDir, { recursive: true, force: true });
+    }
   } finally {
     fs.rmSync(diagnosticDir, { recursive: true, force: true });
     if (priorAppEnv === undefined) delete process.env.APP_ENV;
     else process.env.APP_ENV = priorAppEnv;
   }
 
-  console.log('PASS: 23 synthetic Amagasaki official exhibition parser cases');
+  console.log('PASS: 24 synthetic Amagasaki official exhibition parser cases');
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exitCode = 1;

@@ -344,12 +344,18 @@ async function capture(date, race, dependencies = {}) {
   if (direct.status === 'not_yet_published') {
     return { schema: 'official-exhibition/v1', status: 'not_yet_published', source: 'official_amagasaki', source_url: sourceUrls.direct_info, source_urls: { direct_info: sourceUrls.direct_info }, fetched_at: directPage.completedAt, page_fetched_at: { direct_info: directPage.completedAt }, race_date: date, race_no: race, race_code: `${date}${PLACE_CODE}${String(race).padStart(2, '0')}`, boats: [] };
   }
+  // These pages may complete in either order.  Record each completed page in
+  // its own promise chain so a failure in its sibling cannot discard HTML
+  // that was already received and is needed for offline diagnosis.
+  const fetchAndRecord = async (kind) => {
+    const page = normaliseFetchResult(await fetchPage(sourceUrls[kind]));
+    record(kind, page);
+    return page;
+  };
   const [startPage, originalPage] = await Promise.all([
-    fetchPage(sourceUrls.start_display).then(normaliseFetchResult),
-    fetchPage(sourceUrls.original_data).then(normaliseFetchResult),
+    fetchAndRecord('start_display'),
+    fetchAndRecord('original_data'),
   ]);
-  record('start_display', startPage);
-  record('original_data', originalPage);
   const start = parseStartDisplay(startPage.body, date, race);
   const original = parseOriginalData(originalPage.body, date, race);
   // Cross-page identity and exhibition-time validation complete before the
