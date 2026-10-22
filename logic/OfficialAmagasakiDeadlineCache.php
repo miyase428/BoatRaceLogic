@@ -23,9 +23,15 @@ final class OfficialAmagasakiDeadlineCache
         if (!is_array($value) || ($value['date'] ?? null) !== $date || !is_array($value['deadlines'] ?? null)) return null;
         for ($race = 1; $race <= 12; $race++) {
             $code = $date . 'AMG' . sprintf('%02d', $race);
-            if (!is_string($value['deadlines'][$code] ?? null) || preg_match('/^\d{2}:\d{2}$/', $value['deadlines'][$code]) !== 1) return null;
+            if (!self::isValidTime($value['deadlines'][$code] ?? null)) return null;
         }
         return $value;
+    }
+
+    public static function isValidTime(mixed $value): bool
+    {
+        if (!is_string($value) || preg_match('/^(\d{2}):(\d{2})$/', $value, $matches) !== 1) return false;
+        return (int)$matches[1] <= 23 && (int)$matches[2] <= 59;
     }
 }
 

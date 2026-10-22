@@ -13,6 +13,8 @@ final class OfficialAmagasakiManualExhibitionUpdate
         private readonly PDO $pdo,
         private readonly NodeOfficialAmagasakiPayloadFetcher $fetcher,
         private readonly string $deadlineDirectory,
+        private readonly ?Closure $deadlineLoader = null,
+        private readonly ?Closure $clock = null,
     ) {}
 
     /** @return array{status:string,reason:string,comparison?:string} */
@@ -28,6 +30,7 @@ final class OfficialAmagasakiManualExhibitionUpdate
         if ($existing['status'] !== 'absent') return $existing;
         $deadline = $this->deadline($raceCode);
         if ($deadline === null) return ['status' => 'blocked', 'reason' => 'OFFICIAL_DEADLINE_CACHE_UNAVAILABLE'];
+        if ($this->now() >= $deadline) return ['status' => 'no_save', 'reason' => 'OFFICIAL_MANUAL_DEADLINE_PASSED'];
         $fetched = $this->fetcher->fetch($raceCode);
         if (($fetched['outcome'] ?? null) !== 'published' || !is_array($fetched['payload'] ?? null)) {
             return ['status' => 'no_save', 'reason' => strtoupper((string)($fetched['outcome'] ?? 'parse_error'))];
@@ -115,8 +118,42 @@ final class OfficialAmagasakiManualExhibitionUpdate
     {
         $date = substr($raceCode, 0, 8);
         $cache = OfficialAmagasakiDeadlineCache::readComplete($this->deadlineDirectory, $date);
-        $time = is_array($cache) ? ($cache['deadlines'][$raceCode] ?? null) : null;
-        if (!is_string($time) || preg_match('/^\d{2}:\d{2}$/', $time) !== 1) return null;
+        $time = $this->completeDeadlineTime($cache, $date, $raceCode);
+        if ($time === null) {
+            try {
+                $loaded = $this->deadlineLoader !== null
+                    ? ($this->deadlineLoader)($date)
+                    : $this->loadOfficialDeadlines($date);
+            } catch (Throwable) {
+                return null;
+            }
+            $time = $this->completeDeadlineTime($loaded, $date, $raceCode);
+        }
+        if ($time === null) return null;
         return new DateTimeImmutable(substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2) . ' ' . $time . ':00', new DateTimeZone('Asia/Tokyo'));
+    }
+
+    /** @return array<string,mixed> */
+    private function loadOfficialDeadlines(string $date): array
+    {
+        require_once __DIR__ . '/../web/logic/OfficialDeadlineLogic.php';
+        return (new OfficialDeadlineLogic())->load($date, ['AMG'], false);
+    }
+
+    private function completeDeadlineTime(mixed $value, string $date, string $raceCode): ?string
+    {
+        if (!is_array($value) || ($value['date'] ?? null) !== $date || !is_array($value['deadlines'] ?? null)) return null;
+        foreach (range(1, 12) as $race) {
+            $code = $date . 'AMG' . sprintf('%02d', $race);
+            if (!OfficialAmagasakiDeadlineCache::isValidTime($value['deadlines'][$code] ?? null)) return null;
+        }
+        $time = $value['deadlines'][$raceCode] ?? null;
+        return OfficialAmagasakiDeadlineCache::isValidTime($time) ? $time : null;
+    }
+
+    private function now(): DateTimeImmutable
+    {
+        if ($this->clock !== null) return ($this->clock)();
+        return new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo'));
     }
 }
