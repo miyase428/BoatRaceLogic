@@ -18,6 +18,8 @@ $dryRun = true;
 $execute = false;
 $fixturePath = null;
 $nowOverride = null;
+$captureDiagnosticHtml = false;
+$diagnosticRetentionSeconds = 86400;
 $deadlineCacheDirectory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines';
 foreach (array_slice($argv, 1) as $arg) {
     if (str_starts_with($arg, '--date=')) $date = substr($arg, 7);
@@ -26,9 +28,13 @@ foreach (array_slice($argv, 1) as $arg) {
     elseif (str_starts_with($arg, '--fixture-fetch-json=')) $fixturePath = substr($arg, strlen('--fixture-fetch-json='));
     elseif (str_starts_with($arg, '--now=')) $nowOverride = substr($arg, strlen('--now='));
     elseif (str_starts_with($arg, '--deadline-cache-dir=')) $deadlineCacheDirectory = substr($arg, strlen('--deadline-cache-dir='));
+    elseif ($arg === '--capture-diagnostic-html') $captureDiagnosticHtml = true;
+    elseif (str_starts_with($arg, '--diagnostic-retention-seconds=')) $diagnosticRetentionSeconds = (int)substr($arg, strlen('--diagnostic-retention-seconds='));
     else { fwrite(STDERR, "Usage: php analysis/run_official_amagasaki_daytime_job.php [--date=YYYYMMDD] [--dry-run|--execute]\n"); exit(2); }
 }
 if (!preg_match('/^\d{8}$/', $date)) { fwrite(STDERR, "DATE_INVALID\n"); exit(2); }
+if ($diagnosticRetentionSeconds < 60 || $diagnosticRetentionSeconds > 604800) { fwrite(STDERR, "DIAGNOSTIC_RETENTION_INVALID\n"); exit(2); }
+if ($captureDiagnosticHtml && !$execute) { fwrite(STDERR, "DIAGNOSTIC_CAPTURE_REQUIRES_EXECUTE\n"); exit(2); }
 if (($fixturePath !== null || $nowOverride !== null || $deadlineCacheDirectory !== rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines') && getenv('APP_ENV') !== 'isolated_test') {
     fwrite(STDERR, "TEST_HOOK_REQUIRES_ISOLATED_TEST_ENVIRONMENT\n");
     exit(2);
@@ -61,7 +67,7 @@ try {
     $validator = new OfficialAmagasakiExhibitionValidator();
     $flow = new OfficialAmagasakiDaytimeFlow(new OfficialExhibitionSourceRouter(true), $validator, 120, $policy->retryIntervalSeconds());
     $fetcher = $fixturePath === null
-        ? new NodeOfficialAmagasakiPayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_amagasaki.js')
+        ? new NodeOfficialAmagasakiPayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_amagasaki.js', $captureDiagnosticHtml, $diagnosticRetentionSeconds)
         : new IsolatedFixtureAmagasakiPayloadFetcher($fixture);
     $integration = new OfficialAmagasakiDaytimeIntegration(
         $flow,

@@ -3,6 +3,9 @@
 
 // Fully synthetic parser tests: no network, DB, model, or production path.
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const adapter = require('../playwright/official_exhibition_amagasaki');
 
 const DATE = '20261021';
@@ -89,7 +92,64 @@ function fakeFetcher(pages) {
     }),
     (error) => error && error.code === 'FETCH_TIMESTAMP_BACKDATED',
   );
-  console.log('PASS: 20 synthetic Amagasaki official exhibition parser cases');
+
+  const priorAppEnv = process.env.APP_ENV;
+  process.env.APP_ENV = 'isolated_test';
+  const insecureDiagnosticDir = fs.mkdtempSync(path.join(os.tmpdir(), 'amg-diagnostic-insecure-test-'));
+  try {
+    fs.chmodSync(insecureDiagnosticDir, 0o755);
+    assert.throws(() => adapter.createDiagnosticStore(insecureDiagnosticDir, 60), (error) => error && error.code === 'DIAGNOSTIC_DIRECTORY_INVALID');
+  } finally {
+    fs.rmSync(insecureDiagnosticDir, { recursive: true, force: true });
+  }
+  const diagnosticDir = fs.mkdtempSync(path.join(os.tmpdir(), 'amg-diagnostic-test-'));
+  try {
+    const diagnostic = adapter.createDiagnosticStore(diagnosticDir, 60);
+    await adapter.capture(DATE, RACE, {
+      fetchPage: fakeFetcher({
+        0: { body: direct(), completedAt: '2026-10-21T00:00:01.000Z' },
+        1: { body: start(), completedAt: '2026-10-21T00:00:02.000Z' },
+        2: { body: original(), completedAt: '2026-10-21T00:00:03.000Z' },
+      }),
+      now: () => '2026-10-21T00:00:04.000Z',
+      diagnosticStore: diagnostic,
+    });
+    const stored = fs.readdirSync(diagnosticDir).sort();
+    assert.equal(stored.length, 6);
+    const htmlFile = stored.find((name) => name.endsWith('.html'));
+    const metadataFile = stored.find((name) => name.endsWith('.json'));
+    assert.ok(htmlFile && metadataFile);
+    assert.equal(fs.statSync(path.join(diagnosticDir, htmlFile)).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(path.join(diagnosticDir, metadataFile)).mode & 0o777, 0o600);
+    const metadata = JSON.parse(fs.readFileSync(path.join(diagnosticDir, metadataFile), 'utf8'));
+    assert.equal(metadata.source, 'official_amagasaki');
+    assert.equal(metadata.completed_at, '2026-10-21T00:00:01.000Z');
+    assert.throws(
+      () => diagnostic.record({ date: DATE, race: RACE, kind: 'direct_info', url: 'https://example.invalid/', body: 'x'.repeat(adapter.MAX_DIAGNOSTIC_HTML_BYTES + 1), completedAt: '2026-10-21T00:00:01.000Z' }),
+      (error) => error && error.code === 'DIAGNOSTIC_CAPTURE_REJECTED',
+    );
+
+    const failureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'amg-diagnostic-failure-test-'));
+    try {
+      const failureDiagnostic = adapter.createDiagnosticStore(failureDir, 60);
+      await assert.rejects(
+        () => adapter.capture(DATE, RACE, {
+          fetchPage: fakeFetcher({ 0: { body: page('<tr><td class="col1">1</td></tr>'), completedAt: '2026-10-21T00:00:01.000Z' } }),
+          diagnosticStore: failureDiagnostic,
+        }),
+        (error) => error && error.code === 'INCOMPLETE_BOATS',
+      );
+      assert.equal(fs.readdirSync(failureDir).filter((name) => name.endsWith('.html')).length, 1, 'received direct page remains available for offline diagnosis');
+    } finally {
+      fs.rmSync(failureDir, { recursive: true, force: true });
+    }
+  } finally {
+    fs.rmSync(diagnosticDir, { recursive: true, force: true });
+    if (priorAppEnv === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = priorAppEnv;
+  }
+
+  console.log('PASS: 23 synthetic Amagasaki official exhibition parser cases');
 })().catch((error) => {
   console.error(error.stack || error.message);
   process.exitCode = 1;

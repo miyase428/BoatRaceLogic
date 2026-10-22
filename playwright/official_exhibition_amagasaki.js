@@ -15,9 +15,16 @@
  */
 
 const https = require('https');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
 
 const BASE_URL = 'https://boatrace-amagasaki.jp/modules/yosou/group-cyokuzen.php';
 const PLACE_CODE = 'AMG';
+const DIAGNOSTIC_DIRECTORY = '/var/lib/boatrace/official-exhibition-diagnostics';
+const MAX_DIAGNOSTIC_HTML_BYTES = 2 * 1024 * 1024;
+const DEFAULT_DIAGNOSTIC_RETENTION_SECONDS = 24 * 60 * 60;
 
 class ParseError extends Error {
   constructor(code, message) {
@@ -214,14 +221,88 @@ function normaliseFetchResult(result) {
   return result;
 }
 
+function diagnosticDirectory(directory) {
+  const resolved = path.resolve(directory);
+  if (process.env.APP_ENV === 'isolated_test') {
+    const temporaryRoot = `${path.resolve(os.tmpdir())}${path.sep}`;
+    if (!resolved.startsWith(temporaryRoot)) throw new ParseError('DIAGNOSTIC_DIRECTORY_INVALID', 'isolated diagnostic directory must be under the temporary directory');
+    return resolved;
+  }
+  if (resolved !== DIAGNOSTIC_DIRECTORY) throw new ParseError('DIAGNOSTIC_DIRECTORY_INVALID', 'diagnostic directory is not the approved non-web path');
+  return resolved;
+}
+
+function createDiagnosticStore(directory, retentionSeconds = DEFAULT_DIAGNOSTIC_RETENTION_SECONDS) {
+  const target = diagnosticDirectory(directory);
+  if (!Number.isInteger(retentionSeconds) || retentionSeconds < 60 || retentionSeconds > 7 * 24 * 60 * 60) {
+    throw new ParseError('DIAGNOSTIC_RETENTION_INVALID', 'diagnostic retention is outside the permitted range');
+  }
+  let info;
+  try { info = fs.lstatSync(target); } catch (_) { throw new ParseError('DIAGNOSTIC_DIRECTORY_INVALID', 'diagnostic directory is unavailable'); }
+  if (!info.isDirectory() || info.isSymbolicLink() || (info.mode & 0o777) !== 0o700) {
+    throw new ParseError('DIAGNOSTIC_DIRECTORY_INVALID', 'diagnostic directory must be a non-symlink 0700 directory');
+  }
+  const prefix = 'amg_official_';
+  const cleanup = () => {
+    const expires = Date.now() - (retentionSeconds * 1000);
+    for (const name of fs.readdirSync(target)) {
+      if (!/^amg_official_[0-9]{8}_r(?:0[1-9]|1[0-2])_(?:direct_info|start_display|original_data)_[0-9]{13}_[a-f0-9]{16}\.(?:html|json)$/.test(name)) continue;
+      const candidate = path.join(target, name);
+      const candidateInfo = fs.lstatSync(candidate);
+      if (candidateInfo.isFile() && !candidateInfo.isSymbolicLink() && candidateInfo.mtimeMs < expires) fs.unlinkSync(candidate);
+    }
+  };
+  const writeExclusive = (filename, contents) => {
+    const temporary = path.join(target, `.${filename}.${crypto.randomBytes(8).toString('hex')}.tmp`);
+    try {
+      const handle = fs.openSync(temporary, 'wx', 0o600);
+      try {
+        fs.writeFileSync(handle, contents, { encoding: 'utf8' });
+        fs.fsyncSync(handle);
+      } finally {
+        fs.closeSync(handle);
+      }
+      fs.renameSync(temporary, path.join(target, filename));
+    } catch (error) {
+      try { fs.unlinkSync(temporary); } catch (_) { /* preserve the original error */ }
+      throw error;
+    }
+  };
+  cleanup();
+  return {
+    record({ date, race, kind, url, body, completedAt }) {
+      if (!['direct_info', 'start_display', 'original_data'].includes(kind) || typeof body !== 'string' || Buffer.byteLength(body, 'utf8') > MAX_DIAGNOSTIC_HTML_BYTES) {
+        throw new ParseError('DIAGNOSTIC_CAPTURE_REJECTED', 'received diagnostic page is invalid or exceeds the size limit');
+      }
+      const completed = new Date(completedAt);
+      if (Number.isNaN(completed.getTime()) || completed.toISOString() !== completedAt) throw new ParseError('DIAGNOSTIC_CAPTURE_REJECTED', 'diagnostic completion time is invalid');
+      const name = `${prefix}${date}_r${String(race).padStart(2, '0')}_${kind}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
+      const htmlName = `${name}.html`;
+      try {
+        writeExclusive(htmlName, body);
+        writeExclusive(`${name}.json`, JSON.stringify({ schema: 'official-exhibition-diagnostic/v1', source: 'official_amagasaki', race_code: `${date}${PLACE_CODE}${String(race).padStart(2, '0')}`, kind, source_url: url, completed_at: completedAt, captured_at: new Date().toISOString(), bytes: Buffer.byteLength(body, 'utf8') }) + '\n');
+      } catch (error) {
+        try { fs.unlinkSync(path.join(target, htmlName)); } catch (_) { /* preserve the original error */ }
+        throw error;
+      }
+    },
+  };
+}
+
 async function capture(date, race, dependencies = {}) {
   if (!/^\d{8}$/.test(date) || !Number.isInteger(race) || race < 1 || race > 12) {
     throw new ParseError('INVALID_ARGUMENT', 'use --date YYYYMMDD and --race 1..12');
   }
   const fetchPage = dependencies.fetchPage || fetchOnce;
   const now = dependencies.now || (() => new Date().toISOString());
+  const diagnosticStore = dependencies.diagnosticStore || null;
   const sourceUrls = { direct_info: officialUrl(date, race, 0), start_display: officialUrl(date, race, 1), original_data: officialUrl(date, race, 2) };
+  if (diagnosticStore !== null && typeof diagnosticStore.record !== 'function') throw new ParseError('DIAGNOSTIC_CAPTURE_REJECTED', 'diagnostic store is invalid');
+  const record = (kind, page) => {
+    if (diagnosticStore !== null) diagnosticStore.record({ date, race, kind, url: sourceUrls[kind], body: page.body, completedAt: page.completedAt });
+  };
   const directPage = normaliseFetchResult(await fetchPage(sourceUrls.direct_info));
+  record('direct_info', directPage);
   const direct = parseDirectInfo(directPage.body, date, race);
   if (direct.status === 'not_yet_published') {
     return { schema: 'official-exhibition/v1', status: 'not_yet_published', source: 'official_amagasaki', source_url: sourceUrls.direct_info, source_urls: { direct_info: sourceUrls.direct_info }, fetched_at: directPage.completedAt, page_fetched_at: { direct_info: directPage.completedAt }, race_date: date, race_no: race, race_code: `${date}${PLACE_CODE}${String(race).padStart(2, '0')}`, boats: [] };
@@ -230,6 +311,8 @@ async function capture(date, race, dependencies = {}) {
     fetchPage(sourceUrls.start_display).then(normaliseFetchResult),
     fetchPage(sourceUrls.original_data).then(normaliseFetchResult),
   ]);
+  record('start_display', startPage);
+  record('original_data', originalPage);
   const start = parseStartDisplay(startPage.body, date, race);
   const original = parseOriginalData(originalPage.body, date, race);
   // Cross-page identity and exhibition-time validation complete before the
@@ -259,10 +342,22 @@ function readArgument(name) {
 if (require.main === module) {
   const date = readArgument('--date');
   const race = Number(readArgument('--race'));
-  capture(date, race).then((result) => process.stdout.write(`${JSON.stringify(result)}\n`)).catch((error) => {
-    process.stderr.write(`${error.code || 'ERROR'}: ${error.message}\n`);
+  const diagnosticDirectoryArgument = readArgument('--diagnostic-html-dir');
+  const diagnosticRetentionArgument = readArgument('--diagnostic-retention-seconds');
+  let diagnosticStore = null;
+  try {
+    if (diagnosticDirectoryArgument !== null || diagnosticRetentionArgument !== null) {
+      if (diagnosticDirectoryArgument === null || diagnosticRetentionArgument === null || !/^\d+$/.test(diagnosticRetentionArgument)) throw new ParseError('DIAGNOSTIC_ARGUMENT_INVALID', 'both diagnostic arguments are required');
+      diagnosticStore = createDiagnosticStore(diagnosticDirectoryArgument, Number(diagnosticRetentionArgument));
+    }
+  } catch (error) {
+    process.stderr.write(`${error.code || 'ERROR'}\n`);
+    process.exitCode = 1;
+  }
+  if (process.exitCode !== 1) capture(date, race, { diagnosticStore }).then((result) => process.stdout.write(`${JSON.stringify(result)}\n`)).catch((error) => {
+    process.stderr.write(`${error.code || 'ERROR'}\n`);
     process.exitCode = 1;
   });
 }
 
-module.exports = { ParseError, officialUrl, parseDirectInfo, parseStartDisplay, parseOriginalData, mergePublished, capture };
+module.exports = { ParseError, officialUrl, parseDirectInfo, parseStartDisplay, parseOriginalData, mergePublished, capture, createDiagnosticStore, DIAGNOSTIC_DIRECTORY, MAX_DIAGNOSTIC_HTML_BYTES };

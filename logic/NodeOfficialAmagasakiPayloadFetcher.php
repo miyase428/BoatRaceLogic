@@ -11,7 +11,14 @@ require_once __DIR__ . '/OfficialAmagasakiDaytimeIntegration.php';
  */
 final class NodeOfficialAmagasakiPayloadFetcher implements OfficialAmagasakiPayloadFetcher
 {
-    public function __construct(private readonly string $nodeBinary, private readonly string $adapterPath)
+    public const DIAGNOSTIC_HTML_DIRECTORY = '/var/lib/boatrace/official-exhibition-diagnostics';
+
+    public function __construct(
+        private readonly string $nodeBinary,
+        private readonly string $adapterPath,
+        private readonly bool $captureDiagnosticHtml = false,
+        private readonly int $diagnosticRetentionSeconds = 86400,
+    )
     {
     }
 
@@ -22,6 +29,12 @@ final class NodeOfficialAmagasakiPayloadFetcher implements OfficialAmagasakiPayl
         }
         if (!is_file($this->adapterPath)) return ['outcome' => 'parse_error', 'error_reason' => 'OFFICIAL_ADAPTER_UNAVAILABLE'];
         $command = [$this->nodeBinary, $this->adapterPath, '--date', $matches[1], '--race', (string)(int)$matches[2]];
+        if ($this->captureDiagnosticHtml) {
+            $command[] = '--diagnostic-html-dir';
+            $command[] = self::DIAGNOSTIC_HTML_DIRECTORY;
+            $command[] = '--diagnostic-retention-seconds';
+            $command[] = (string)$this->diagnosticRetentionSeconds;
+        }
         $pipes = [];
         $process = @proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
         if (!is_resource($process)) return ['outcome' => 'server_error', 'error_reason' => 'OFFICIAL_ADAPTER_START_FAILED'];
