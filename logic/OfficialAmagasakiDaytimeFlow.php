@@ -87,9 +87,9 @@ final class OfficialAmagasakiDaytimeFlow
     }
 
     /** @return array<string,mixed> */
-    public function completeClaim(array $state, string $token, string $outcome, DateTimeImmutable $finishedAt): array
+    public function completeClaim(array $state, string $token, string $outcome, DateTimeImmutable $finishedAt, ?string $errorReason = null): array
     {
-        return OfficialAmagasakiAttemptState::complete($state, $token, $outcome, $finishedAt, $this->minimumRetryIntervalSeconds, $this->serverRetryApproved);
+        return OfficialAmagasakiAttemptState::complete($state, $token, $outcome, $finishedAt, $this->minimumRetryIntervalSeconds, $this->serverRetryApproved, $errorReason);
     }
 
     /**

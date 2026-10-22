@@ -125,8 +125,11 @@ final class OfficialAmagasakiDaytimeIntegration
             $finished = $this->nowUtc();
             $outcome = (string)($result['outcome'] ?? 'parse_error');
             if ($outcome !== 'published') {
-                $completed = $this->completeWithoutSave($claimed['state'], $token, $outcome, $finished);
-                $events[] = array_merge($event, ['action' => $completed ? 'no_save' : 'review', 'reason' => $completed ? strtoupper($outcome) : 'ATTEMPT_COMPLETION_CAS_FAILED']);
+                $normalisedOutcome = in_array($outcome, ['not_yet_published', 'http_restricted', 'server_error', 'parse_error', 'validation_error', 'source_unknown'], true)
+                    ? $outcome : 'parse_error';
+                $errorReason = OfficialAmagasakiAttemptState::safeErrorReason($result['error_reason'] ?? null, strtoupper($normalisedOutcome));
+                $completed = $this->completeWithoutSave($claimed['state'], $token, $normalisedOutcome, $finished, $errorReason);
+                $events[] = array_merge($event, ['action' => $completed ? 'no_save' : 'review', 'reason' => $completed ? strtoupper($normalisedOutcome) : 'ATTEMPT_COMPLETION_CAS_FAILED', 'error_reason' => $errorReason]);
                 continue;
             }
 
@@ -146,13 +149,13 @@ final class OfficialAmagasakiDaytimeIntegration
     }
 
     /** @param array<string,mixed> $claimedState */
-    private function completeWithoutSave(array $claimedState, string $token, string $outcome, DateTimeImmutable $finished): bool
+    private function completeWithoutSave(array $claimedState, string $token, string $outcome, DateTimeImmutable $finished, ?string $errorReason = null): bool
     {
         $normalisedOutcome = match ($outcome) {
             'not_yet_published', 'http_restricted', 'server_error', 'parse_error', 'validation_error', 'source_unknown' => $outcome,
             default => 'parse_error',
         };
-        $completed = $this->flow->completeClaim($claimedState, $token, $normalisedOutcome, $finished);
+        $completed = $this->flow->completeClaim($claimedState, $token, $normalisedOutcome, $finished, $errorReason);
         return $this->attempts->complete($claimedState, $token, $completed);
     }
 

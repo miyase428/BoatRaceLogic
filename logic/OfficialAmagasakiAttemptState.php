@@ -12,6 +12,17 @@ final class OfficialAmagasakiAttemptState
     public const SOURCE = 'official_amagasaki';
     public const MAX_ATTEMPTS = 2;
 
+    /** @var list<string> */
+    private const SAFE_ERROR_REASONS = [
+        'RACE_CODE_INVALID', 'OFFICIAL_ADAPTER_UNAVAILABLE', 'OFFICIAL_ADAPTER_START_FAILED',
+        'OFFICIAL_ADAPTER_FAILED', 'OFFICIAL_ADAPTER_JSON_INVALID', 'OFFICIAL_ADAPTER_STATUS_INVALID',
+        'RACE_IDENTITY_MISMATCH', 'INCOMPLETE_BOATS', 'PLAYER_ID_MISMATCH', 'LANE_MISMATCH',
+        'INVALID_EXHIBITION_TIME', 'ENTRY_COURSE_MISMATCH', 'START_TIMING_MISMATCH',
+        'ORIGINAL_DATA_INCOMPLETE', 'CROSS_PAGE_IDENTITY_MISMATCH', 'EXHIBITION_TIME_MISMATCH',
+        'HTTP_RESTRICTED', 'CAPTCHA', 'AUTH_REQUIRED', 'HTTP_ERROR', 'NETWORK_ERROR',
+        'PARSE_ERROR', 'VALIDATION_ERROR', 'SERVER_ERROR', 'SOURCE_UNKNOWN',
+    ];
+
     /** @return array<string,mixed> */
     public static function initial(string $raceCode): array
     {
@@ -78,7 +89,7 @@ final class OfficialAmagasakiAttemptState
     }
 
     /** @return array<string,mixed> */
-    public static function complete(array $state, string $token, string $outcome, DateTimeImmutable $finishedAt, ?int $retryIntervalSeconds, bool $serverRetryAllowed): array
+    public static function complete(array $state, string $token, string $outcome, DateTimeImmutable $finishedAt, ?int $retryIntervalSeconds, bool $serverRetryAllowed, ?string $errorReason = null): array
     {
         if (($state['outcome'] ?? null) !== 'in_progress' || !hash_equals((string)($state['claim_token'] ?? ''), $token)) {
             throw new InvalidArgumentException('attempt claim token mismatch');
@@ -102,7 +113,7 @@ final class OfficialAmagasakiAttemptState
             $state['retry_not_before'] = self::format($finishedAt->modify('+' . $retryIntervalSeconds . ' seconds'));
         } elseif (in_array($outcome, ['http_restricted', 'server_error', 'parse_error', 'validation_error', 'source_unknown'], true)) {
             $state['manual_review_required'] = true;
-            $state['last_error_reason'] = strtoupper($outcome);
+            $state['last_error_reason'] = self::safeErrorReason($errorReason, strtoupper($outcome));
         }
         $state['version'] = (int)$state['version'] + 1;
         return $state;
@@ -115,6 +126,20 @@ final class OfficialAmagasakiAttemptState
     }
 
     public static function format(DateTimeImmutable $value): string { return $value->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\\TH:i:s.v\\Z'); }
+
+    /**
+     * Keep persistent diagnostics to a small, reviewed code set.  Node's
+     * stderr may include page content or transport details and must never be
+     * copied into the production attempt record.
+     */
+    public static function safeErrorReason(?string $reason, string $fallback): string
+    {
+        $candidate = strtoupper(trim((string)$reason));
+        if (preg_match('/^([A-Z][A-Z0-9_]{2,79})(?::|\\s|$)/', $candidate, $matches)) {
+            $candidate = $matches[1];
+        }
+        return in_array($candidate, self::SAFE_ERROR_REASONS, true) ? $candidate : strtoupper($fallback);
+    }
 }
 
 interface OfficialAmagasakiAttemptClaimStore

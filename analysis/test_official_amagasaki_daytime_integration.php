@@ -95,6 +95,16 @@ $runner = integrationRunner(true, $attempts, $fetcher, $persistence, atRemaining
 $result = $runner->run([integrationCandidate()], atRemaining(600), false);
 integrationAssert($result[0]['action'] === 'no_save' && $attempts->states['20261021AMG01']['manual_review_required'] && $persistence->calls === 0, 'restricted official response never saves or falls back'); $cases++;
 
+$attempts = new IntegrationAttemptRepository(); $fetcher = new IntegrationFetcher(); $fetcher->responses[] = ['outcome' => 'parse_error', 'error_reason' => 'RACE_IDENTITY_MISMATCH: expected 20261022/1, got ?/?']; $persistence = new IntegrationPersistence($attempts);
+$runner = integrationRunner(true, $attempts, $fetcher, $persistence, atRemaining(599));
+$result = $runner->run([integrationCandidate()], atRemaining(600), false);
+integrationAssert($result[0]['reason'] === 'PARSE_ERROR' && $result[0]['error_reason'] === 'RACE_IDENTITY_MISMATCH' && $attempts->states['20261021AMG01']['last_error_reason'] === 'RACE_IDENTITY_MISMATCH' && $attempts->states['20261021AMG01']['terminal'] === true, 'reviewed parser code is persisted without raw adapter text'); $cases++;
+
+$attempts = new IntegrationAttemptRepository(); $fetcher = new IntegrationFetcher(); $fetcher->responses[] = ['outcome' => 'parse_error', 'error_reason' => 'raw-detail-not-for-database']; $persistence = new IntegrationPersistence($attempts);
+$runner = integrationRunner(true, $attempts, $fetcher, $persistence, atRemaining(599));
+$result = $runner->run([integrationCandidate()], atRemaining(600), false);
+integrationAssert($result[0]['error_reason'] === 'PARSE_ERROR' && $attempts->states['20261021AMG01']['last_error_reason'] === 'PARSE_ERROR', 'unreviewed adapter text never reaches events or persistent state'); $cases++;
+
 $attempts = new IntegrationAttemptRepository(); $fetcher = new IntegrationFetcher(); $fetcher->responses[] = ['outcome' => 'published', 'payload' => integrationPayload('2026-10-21T10:08:00.001Z')]; $persistence = new IntegrationPersistence($attempts);
 $runner = integrationRunner(true, $attempts, $fetcher, $persistence, new DateTimeImmutable('2026-10-21T10:08:00.001Z'));
 $result = $runner->run([integrationCandidate()], atRemaining(600), false);
