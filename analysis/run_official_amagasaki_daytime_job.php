@@ -18,6 +18,7 @@ $dryRun = true;
 $execute = false;
 $fixturePath = null;
 $nowOverride = null;
+$onlyRace = null;
 $captureDiagnosticHtml = false;
 $diagnosticRetentionSeconds = 86400;
 $deadlineCacheDirectory = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines';
@@ -27,10 +28,15 @@ foreach (array_slice($argv, 1) as $arg) {
     elseif ($arg === '--execute') { $dryRun = false; $execute = true; }
     elseif (str_starts_with($arg, '--fixture-fetch-json=')) $fixturePath = substr($arg, strlen('--fixture-fetch-json='));
     elseif (str_starts_with($arg, '--now=')) $nowOverride = substr($arg, strlen('--now='));
+    elseif (str_starts_with($arg, '--only-race=')) {
+        $value = substr($arg, strlen('--only-race='));
+        if (!preg_match('/^(0[1-9]|1[0-2])$/', $value)) { fwrite(STDERR, "ONLY_RACE_INVALID\n"); exit(2); }
+        $onlyRace = (int)$value;
+    }
     elseif (str_starts_with($arg, '--deadline-cache-dir=')) $deadlineCacheDirectory = substr($arg, strlen('--deadline-cache-dir='));
     elseif ($arg === '--capture-diagnostic-html') $captureDiagnosticHtml = true;
     elseif (str_starts_with($arg, '--diagnostic-retention-seconds=')) $diagnosticRetentionSeconds = (int)substr($arg, strlen('--diagnostic-retention-seconds='));
-    else { fwrite(STDERR, "Usage: php analysis/run_official_amagasaki_daytime_job.php [--date=YYYYMMDD] [--dry-run|--execute]\n"); exit(2); }
+    else { fwrite(STDERR, "Usage: php analysis/run_official_amagasaki_daytime_job.php [--date=YYYYMMDD] [--only-race=01..12] [--dry-run|--execute]\n"); exit(2); }
 }
 if (!preg_match('/^\d{8}$/', $date)) { fwrite(STDERR, "DATE_INVALID\n"); exit(2); }
 if ($diagnosticRetentionSeconds < 60 || $diagnosticRetentionSeconds > 604800) { fwrite(STDERR, "DIAGNOSTIC_RETENTION_INVALID\n"); exit(2); }
@@ -77,8 +83,8 @@ try {
         $fixturePath === null ? null : static fn() => $now->modify('+1 second'),
     );
     $job = new OfficialAmagasakiDaytimeJob($policy, new PdoOfficialAmagasakiDaytimeCandidateSource($pdo, $deadlineCacheDirectory), $integration);
-    $events = $job->run($date, $now, $dryRun);
-    echo json_encode(['date' => $date, 'dry_run' => $dryRun, 'events' => $events], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+    $events = $job->run($date, $now, $dryRun, $onlyRace);
+    echo json_encode(['date' => $date, 'only_race' => $onlyRace, 'dry_run' => $dryRun, 'events' => $events], JSON_UNESCAPED_SLASHES) . PHP_EOL;
     exit(0);
 } catch (Throwable $error) {
     fwrite(STDERR, 'OFFICIAL_AMAGASAKI_DAYTIME_JOB_FAILED:' . get_class($error) . ':' . $error->getMessage() . PHP_EOL);

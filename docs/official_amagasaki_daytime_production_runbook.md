@@ -98,10 +98,12 @@ php analysis/prepare_official_amagasaki_deadline_cache.php --date=YYYYMMDD --exe
 php -r '$p="/tmp/boatrace_official_deadlines/deadlines_YYYYMMDD.json"; $j=json_decode(file_get_contents($p),true,512,JSON_THROW_ON_ERROR); $n=0; foreach ($j["deadlines"] as $k=>$v) if (preg_match("/^YYYYMMDDAMG(0[1-9]|1[0-2])$/",$k)&&preg_match("/^\\d{2}:\\d{2}$/",$v)) $n++; if ($n!==12) exit(1); echo "AMG deadlines: $n\\n";'
 ```
 
-7. 監視下で日中ジョブを単発実行し、成功後だけ日中1分周期のテンプレートを登録します。テンプレート出力自体はcrontabを変更しません。
+7. 監視下の単発試験では、必ず`--only-race=NN`を指定します。候補一覧を読む処理以外では、指定外レースはclaim、公式HTTP、DB保存へ到達しません。まずdry-runで対象レースだけが出力されることを確認します。診断HTMLを保存する場合は、実行ユーザーが所有するWeb公開外の`/var/lib/boatrace/official-exhibition-diagnostics`を事前に`0700`で作成し、承認済み単発実行でだけ`--capture-diagnostic-html`を付けます。
 
 ```bash
-php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --execute
+php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --only-race=NN --dry-run
+# 出力がYYYYMMDDAMGNNだけであることを確認し、明示承認後に一度だけ実行する。
+php analysis/run_official_amagasaki_daytime_job.php --date=YYYYMMDD --only-race=NN --execute --capture-diagnostic-html
 analysis/print_official_amagasaki_daytime_cron_template.sh --print
 ```
 

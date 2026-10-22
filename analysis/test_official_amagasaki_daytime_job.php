@@ -17,4 +17,17 @@ $missing = $builder->build('20261021', array_slice($rows, 0, 5), ['20261021AMG02
 jobAssert($missing === [], 'incomplete race entry never becomes a candidate'); $cases++;
 $badDeadline = $builder->build('20261021', $rows, ['20261021AMG02' => 'bad'], static fn(string $race): string => 'none');
 jobAssert($badDeadline === [], 'invalid deadline never becomes a candidate'); $cases++;
+$single = OfficialAmagasakiDaytimeJob::selectCandidates([
+    ['race_code' => '20261021AMG01'],
+    ['race_code' => '20261021AMG04'],
+    ['race_code' => '20261021AMG12'],
+], '20261021', 4);
+jobAssert(count($single) === 1 && $single[0]['race_code'] === '20261021AMG04', 'only-race passes exactly one AMG candidate to the integration boundary'); $cases++;
+jobAssert(OfficialAmagasakiDaytimeJob::selectCandidates([['race_code' => '20261021AMG01']], '20261021', 4) === [], 'unavailable only-race cannot fall through to another race'); $cases++;
+try {
+    OfficialAmagasakiDaytimeJob::selectCandidates([], '20261021', 13);
+    throw new RuntimeException('invalid only-race unexpectedly accepted');
+} catch (InvalidArgumentException) {
+    $cases++;
+}
 echo "PASS {$cases} isolated daytime job planning cases\n";

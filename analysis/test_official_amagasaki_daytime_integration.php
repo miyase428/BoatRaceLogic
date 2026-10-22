@@ -7,9 +7,10 @@ require_once __DIR__ . '/../logic/OfficialAmagasakiDaytimeIntegration.php';
 final class IntegrationAttemptRepository implements OfficialAmagasakiAttemptRepository
 {
     /** @var array<string,array<string,mixed>> */ public array $states = [];
+    public int $loads = 0;
     public int $claims = 0;
     public int $completions = 0;
-    public function load(string $raceCode): ?array { return $this->states[$raceCode] ?? null; }
+    public function load(string $raceCode): ?array { $this->loads++; return $this->states[$raceCode] ?? null; }
     public function claim(string $raceCode, int $expectedVersion, array $state): bool
     {
         $current = $this->states[$raceCode] ?? OfficialAmagasakiAttemptState::initial($raceCode);
@@ -74,7 +75,16 @@ integrationAssert($result[0]['reason'] === 'OFFICIAL_AUTOMATION_NOT_APPROVED' &&
 $attempts = new IntegrationAttemptRepository(); $fetcher = new IntegrationFetcher(); $persistence = new IntegrationPersistence($attempts);
 $runner = integrationRunner(true, $attempts, $fetcher, $persistence, atRemaining(599));
 $result = $runner->run([integrationCandidate()], atRemaining(600), true);
-integrationAssert($result[0]['action'] === 'claim_first' && $fetcher->calls === 0 && $attempts->claims === 0 && $persistence->calls === 0, 'dry run only plans'); $cases++;
+integrationAssert($result[0]['action'] === 'claim_first' && $fetcher->calls === 0 && $attempts->claims === 0 && $persistence->calls === 0 && $attempts->loads === 1, 'dry run reads current state but only plans'); $cases++;
+
+$attempts = new IntegrationAttemptRepository();
+$claimed = OfficialAmagasakiAttemptState::claim(OfficialAmagasakiAttemptState::initial('20261021AMG01'), atRemaining(600), 'prior-worker', 90);
+$terminal = OfficialAmagasakiAttemptState::complete($claimed, 'prior-worker', 'parse_error', atRemaining(599), null, false, 'RACE_IDENTITY_MISMATCH');
+$attempts->states['20261021AMG01'] = $terminal;
+$fetcher = new IntegrationFetcher(); $persistence = new IntegrationPersistence($attempts);
+$runner = integrationRunner(true, $attempts, $fetcher, $persistence, atRemaining(599));
+$result = $runner->run([integrationCandidate()], atRemaining(590), true);
+integrationAssert($result[0]['action'] === 'review' && $result[0]['reason'] === 'ATTEMPT_MANUAL_REVIEW_REQUIRED' && $fetcher->calls === 0 && $attempts->claims === 0 && $persistence->calls === 0 && $attempts->loads === 1 && $attempts->states['20261021AMG01'] === $terminal, 'dry run preserves a terminal AMG01 parser failure without claim or mutation'); $cases++;
 
 $attempts = new IntegrationAttemptRepository(); $fetcher = new IntegrationFetcher(); $fetcher->responses[] = ['outcome' => 'published', 'payload' => integrationPayload()]; $persistence = new IntegrationPersistence($attempts);
 $runner = integrationRunner(true, $attempts, $fetcher, $persistence, atRemaining(599));

@@ -108,11 +108,29 @@ final class OfficialAmagasakiDaytimeJob
     }
 
     /** @return list<array<string,mixed>> */
-    public function run(string $date, DateTimeImmutable $now, bool $dryRun): array
+    public function run(string $date, DateTimeImmutable $now, bool $dryRun, ?int $onlyRace = null): array
     {
         $route = $this->policy->decide($date . 'AMG01', 'daytime');
         if ($route['mode'] === 'legacy') return [['action' => 'skip', 'reason' => 'OFFICIAL_ROUTE_DISABLED', 'dry_run' => $dryRun]];
         if ($route['mode'] !== 'official') return [['action' => 'blocked', 'reason' => $route['reason'], 'dry_run' => $dryRun]];
-        return $this->integration->run($this->candidates->candidates($date), $now, $dryRun);
+        return $this->integration->run(self::selectCandidates($this->candidates->candidates($date), $date, $onlyRace), $now, $dryRun);
+    }
+
+    /**
+     * Restricts the side-effecting integration boundary to one explicitly
+     * selected AMG race.  Candidate-source reads may still inspect the daily
+     * schedule, but excluded races never reach claim, fetch, or persistence.
+     *
+     * @param list<array<string,mixed>> $candidates
+     * @return list<array<string,mixed>>
+     */
+    public static function selectCandidates(array $candidates, string $date, ?int $onlyRace): array
+    {
+        if ($onlyRace === null) return $candidates;
+        if ($onlyRace < 1 || $onlyRace > 12 || !preg_match('/^\d{8}$/', $date)) {
+            throw new InvalidArgumentException('only race must be between 01 and 12 for a valid date');
+        }
+        $target = $date . 'AMG' . str_pad((string)$onlyRace, 2, '0', STR_PAD_LEFT);
+        return array_values(array_filter($candidates, static fn(array $candidate): bool => ($candidate['race_code'] ?? null) === $target));
     }
 }

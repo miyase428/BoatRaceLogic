@@ -104,7 +104,11 @@ final class OfficialAmagasakiDaytimeIntegration
         $events = [];
         foreach ($candidates as $candidate) {
             $state = $candidate['attempt_state'] ?? null;
-            if (!$dryRun && $state === null) $state = $this->attempts->load($candidate['race_code']);
+            // A dry run must make the same plan as execution while remaining
+            // read-only.  Loading the persisted state is a SELECT-only
+            // operation; claims, fetches, and persistence remain below the
+            // explicit dry-run return path.
+            if ($state === null) $state = $this->attempts->load($candidate['race_code']);
             $planCandidate = $candidate;
             $planCandidate['attempt_state'] = $state;
             $plan = $this->flow->plan($planCandidate, $now);
