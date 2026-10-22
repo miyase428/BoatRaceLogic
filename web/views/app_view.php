@@ -169,6 +169,7 @@ if (!is_string($appTrifectaJson)) {
 
             <form method="POST" action="<?= htmlspecialchars($appPostUrl, ENT_QUOTES, 'UTF-8') ?>" style="margin-top:7px;">
                 <input type="hidden" name="race_code" value="<?= htmlspecialchars((string)$race_code, ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="official_manual_csrf_token" value="<?= htmlspecialchars((string)($official_manual_csrf_token ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <button class="app-btn app-btn-secondary" style="width:100%;" type="submit" name="update_exhibition" value="1">🔄 展示情報を更新</button>
             </form>
 

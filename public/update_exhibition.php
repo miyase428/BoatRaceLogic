@@ -10,9 +10,7 @@ ob_start();
 
 // catch節でも参照できるよう、リクエストされたレースを先に保持する。
 // 外部サイトの一時的な応答不良時でも、保存済みの正しい展示を消さないために使う。
-$race_code = $_POST["race_code"]
-        ?? $_GET["race_code"]
-        ?? "";
+$race_code = $_POST["race_code"] ?? "";
 $pdo = null;
 $officialLegacyWriteTransaction = false;
 
@@ -21,8 +19,6 @@ require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_source_guard.php';
 require_once __DIR__ . '/../logic/exhibition_data_quality.php';
 require_once __DIR__ . '/../logic/OfficialAmagasakiWriteBarrier.php';
-require_once __DIR__ . '/../logic/NodeOfficialAmagasakiPayloadFetcher.php';
-require_once __DIR__ . '/../logic/OfficialAmagasakiManualExhibitionUpdate.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -113,33 +109,14 @@ try {
         throw new Exception("race_codeがありません");
     }
 
-    // The update button is the only daytime exhibition-fetch trigger.  It
-    // never falls back to Kyotei Biyori: venues without an official adapter
-    // return an explicit unsupported response instead.
-    $manualRoute = OfficialExhibitionManualRoute::decide(OfficialAmagasakiOperationalPolicy::fromPdo($pdo), $race_code);
-    if (!$manualRoute['supported']) {
-        throw new Exception('OFFICIAL_EXHIBITION_UNSUPPORTED:' . $manualRoute['reason']);
+    // This endpoint is used by internal collectors as well as older clients.
+    // It must never become a route into the official adapter.  The only
+    // official route is update_official_exhibition_manual.php, which checks a
+    // browser session and CSRF token.
+    if (preg_match('/^\d{8}AMG(?:0[1-9]|1[0-2])$/', $race_code) === 1
+        && substr($race_code, 0, 8) >= '20261021') {
+        throw new Exception('AUTOMATIC_AMAGASAKI_EXHIBITION_FETCH_DETACHED');
     }
-    $manual = new OfficialAmagasakiManualExhibitionUpdate(
-        $pdo,
-        OfficialAmagasakiOperationalPolicy::fromPdo($pdo),
-        new NodeOfficialAmagasakiPayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_amagasaki.js', true),
-        rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines',
-    );
-    $manualResult = $manual->run($race_code);
-    if (!in_array($manualResult['status'], ['saved', 'cached_or_review'], true)) {
-        throw new Exception('OFFICIAL_EXHIBITION_NOT_SAVED:' . $manualResult['reason']);
-    }
-    ob_end_clean();
-    header("Content-Type: application/json; charset=UTF-8");
-    echo json_encode([
-        'success' => true,
-        'race_code' => $race_code,
-        'cached' => $manualResult['status'] === 'cached_or_review',
-        'source' => 'official_amagasaki',
-        'message' => $manualResult['status'] === 'saved' ? '公式展示情報を保存しました' : '展示情報は既存データを保持しています',
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
 
     $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, 'web');
     if (!$officialGuard['allow_legacy']) {

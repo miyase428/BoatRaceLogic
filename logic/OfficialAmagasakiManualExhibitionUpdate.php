@@ -22,15 +22,14 @@ final class OfficialAmagasakiManualExhibitionUpdate
     {
         $route = OfficialExhibitionManualRoute::decide($this->policy, $raceCode);
         if (!$route['supported']) return ['status' => 'blocked', 'reason' => $route['reason']];
-        $existing = $this->pdo->prepare('SELECT COUNT(*) FROM boat_race.exhibition_live WHERE race_code = :race');
-        $existing->execute([':race' => $raceCode]);
-        if ((int)$existing->fetchColumn() !== 0) return ['status' => 'cached_or_review', 'reason' => 'EXISTING_ROWS_REQUIRE_REVIEW'];
-        $deadline = $this->deadline($raceCode);
-        if ($deadline === null) return ['status' => 'blocked', 'reason' => 'OFFICIAL_DEADLINE_CACHE_UNAVAILABLE'];
         $entries = $this->pdo->prepare('SELECT lane_number::int AS lane_number, player_id::text AS player_id FROM boat_race.race_entry WHERE race_code = :race ORDER BY lane_number');
         $entries->execute([':race' => $raceCode]);
         $raceEntries = $entries->fetchAll(PDO::FETCH_ASSOC) ?: [];
         if (count($raceEntries) !== 6) return ['status' => 'blocked', 'reason' => 'RACE_ENTRY_INCOMPLETE'];
+        $existing = $this->existingState($raceCode, $raceEntries, false);
+        if ($existing['status'] !== 'absent') return $existing;
+        $deadline = $this->deadline($raceCode);
+        if ($deadline === null) return ['status' => 'blocked', 'reason' => 'OFFICIAL_DEADLINE_CACHE_UNAVAILABLE'];
         $fetched = $this->fetcher->fetch($raceCode);
         if (($fetched['outcome'] ?? null) !== 'published' || !is_array($fetched['payload'] ?? null)) {
             return ['status' => 'no_save', 'reason' => strtoupper((string)($fetched['outcome'] ?? 'parse_error'))];
@@ -41,9 +40,8 @@ final class OfficialAmagasakiManualExhibitionUpdate
         try {
             $this->pdo->beginTransaction(); $begun = true;
             OfficialAmagasakiWriteBarrier::lock($this->pdo, $raceCode);
-            $again = $this->pdo->prepare('SELECT entry_course FROM boat_race.exhibition_live WHERE race_code = :race FOR UPDATE');
-            $again->execute([':race' => $raceCode]);
-            if (($again->fetchAll(PDO::FETCH_COLUMN) ?: []) !== []) { $this->pdo->rollBack(); return ['status' => 'cached_or_review', 'reason' => 'EXISTING_ROWS_REQUIRE_REVIEW']; }
+            $again = $this->existingState($raceCode, $raceEntries, true);
+            if ($again['status'] !== 'absent') { $this->pdo->rollBack(); return $again; }
             $store = new OfficialAmagasakiExhibitionTransactionStore(new PdoOfficialExhibitionRepository($this->pdo), new OfficialAmagasakiExhibitionValidator());
             $result = $store->persistManualWithinOpenTransaction($payload, $raceCode, $raceEntries, $completed > $deadline);
             if ($result['status'] !== 'saved') { $this->pdo->rollBack(); return ['status' => 'no_save', 'reason' => $result['status'], 'comparison' => $result['comparison']]; }
@@ -53,6 +51,57 @@ final class OfficialAmagasakiManualExhibitionUpdate
             if ($begun && $this->pdo->inTransaction()) $this->pdo->rollBack();
             return ['status' => 'no_save', 'reason' => 'MANUAL_OFFICIAL_TRANSACTION_FAILED'];
         }
+    }
+
+    /** @param list<array<string,mixed>> $raceEntries @return array{status:string,reason:string,comparison?:string} */
+    private function existingState(string $raceCode, array $raceEntries, bool $forUpdate): array
+    {
+        $rowsSql = 'SELECT entry_course, player_id, exhibition_time, start_timing, lap_time, around_time, straight_time FROM boat_race.exhibition_live WHERE race_code = :race ORDER BY entry_course' . ($forUpdate ? ' FOR UPDATE' : '');
+        $rowsStmt = $this->pdo->prepare($rowsSql);
+        $rowsStmt->execute([':race' => $raceCode]);
+        $rows = $rowsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $auditStmt = $this->pdo->prepare("SELECT after_rows FROM boat_race.exhibition_source_audit_v1 WHERE race_code = :race AND source = 'official_amagasaki' AND result_status = 'saved' ORDER BY db_saved_at DESC NULLS LAST LIMIT 1");
+        $auditStmt->execute([':race' => $raceCode]);
+        $audit = $auditStmt->fetch(PDO::FETCH_ASSOC);
+        if ($rows === [] && $audit === false) return ['status' => 'absent', 'reason' => 'NO_EXISTING_ROWS'];
+        if ($rows === [] || $audit === false) return ['status' => 'review', 'reason' => $rows === [] ? 'OFFICIAL_AUDIT_WITHOUT_ROWS' : 'EXISTING_ROWS_WITHOUT_OFFICIAL_AUDIT'];
+        $expectedPlayers = array_column($raceEntries, 'player_id');
+        $courses = []; $players = [];
+        foreach ($rows as $row) {
+            $course = (int)($row['entry_course'] ?? 0); $player = (string)($row['player_id'] ?? '');
+            if ($course < 1 || $course > 6 || isset($courses[$course]) || !in_array($player, $expectedPlayers, true) || isset($players[$player])
+                || !is_numeric($row['exhibition_time'] ?? null) || (float)$row['exhibition_time'] <= 0
+                || !is_numeric($row['start_timing'] ?? null) || !is_numeric($row['lap_time'] ?? null) || (float)$row['lap_time'] <= 0
+                || !is_numeric($row['around_time'] ?? null) || (float)$row['around_time'] <= 0) {
+                return ['status' => 'review', 'reason' => 'EXISTING_ROWS_INVALID'];
+            }
+            $courses[$course] = true; $players[$player] = true;
+        }
+        if (count($rows) !== 6 || count($courses) !== 6 || count($players) !== 6) return ['status' => 'review', 'reason' => 'EXISTING_ROWS_INCOMPLETE'];
+        $after = json_decode((string)($audit['after_rows'] ?? ''), true);
+        if (!is_array($after) || count($after) !== 6) return ['status' => 'review', 'reason' => 'OFFICIAL_AUDIT_ROWS_INVALID'];
+        $auditRows = [];
+        foreach ($after as $row) {
+            if (!is_array($row)) return ['status' => 'review', 'reason' => 'OFFICIAL_AUDIT_ROWS_INVALID'];
+            $player = (string)($row['player_id'] ?? '');
+            if ($player === '' || isset($auditRows[$player])) return ['status' => 'review', 'reason' => 'OFFICIAL_AUDIT_ROWS_INVALID'];
+            $auditRows[$player] = $row;
+        }
+        foreach ($rows as $row) {
+            $auditRow = $auditRows[(string)$row['player_id']] ?? null;
+            if (!is_array($auditRow) || (int)($auditRow['entry_course'] ?? 0) !== (int)$row['entry_course']) {
+                return ['status' => 'review', 'reason' => 'OFFICIAL_AUDIT_ROW_MISMATCH'];
+            }
+            foreach (['exhibition_time', 'start_timing', 'lap_time', 'around_time'] as $field) {
+                if (!is_numeric($auditRow[$field] ?? null) || abs((float)$auditRow[$field] - (float)$row[$field]) > 0.00001) {
+                    return ['status' => 'review', 'reason' => 'OFFICIAL_AUDIT_VALUE_MISMATCH'];
+                }
+            }
+            if (($auditRow['straight_time'] ?? null) !== ($row['straight_time'] ?? null)) {
+                return ['status' => 'review', 'reason' => 'OFFICIAL_AUDIT_VALUE_MISMATCH'];
+            }
+        }
+        return ['status' => 'already_saved', 'reason' => 'OFFICIAL_SIX_BOATS_ALREADY_SAVED', 'comparison' => 'official_audit_match'];
     }
 
     private function deadline(string $raceCode): ?DateTimeImmutable

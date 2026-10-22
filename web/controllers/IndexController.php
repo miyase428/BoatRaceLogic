@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../config/place_map.php';
 
 require_once __DIR__ . '/../api/ApiClientProduction.php';
 require_once __DIR__ . '/../logic/ExhibitionLogic.php';
+require_once __DIR__ . '/../logic/OfficialExhibitionManualRequest.php';
 require_once __DIR__ . '/../logic/PredictionLogicProduction.php';
 require_once __DIR__ . '/../logic/SamLogic.php';
 require_once __DIR__ . '/../logic/ExhibitionAlertLogic.php';
@@ -96,12 +97,20 @@ class IndexController
         // -------------------------------------------------------------
         $update_message = '';
         $debug_msg = '';
+        // Start the browser session before forwarding its CSRF-bound manual
+        // request to the localhost-only endpoint.
+        $officialManualCsrfToken = OfficialExhibitionManualRequest::token();
 
         if (isset($_POST["update_exhibition"])) {
             $target_race_code = $_POST["race_code"] ?? $race_code;
 
             // 展示API経由等でスクレイピング・DB登録を実行
-            [$update_message, $debug_msg] = $apiClient->updateExhibition($target_race_code);
+            [$update_message, $debug_msg] = $apiClient->updateOfficialExhibitionManually(
+                $target_race_code,
+                (string)($_POST['official_manual_csrf_token'] ?? ''),
+                session_name(),
+                session_id(),
+            );
         }
 
         // -------------------------------------------------------------
@@ -444,6 +453,7 @@ class IndexController
             'tenji_error'     => $tenji_error,
             'update_message'  => $update_message,
             'debug_msg'       => $debug_msg,
+            'official_manual_csrf_token' => $officialManualCsrfToken,
             'final_predictions' => $final_predictions,
             'sam_applied_list'  => $sam_applied_list,
             'overall_avg'       => $overall_avg,

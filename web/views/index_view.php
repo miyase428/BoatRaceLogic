@@ -85,6 +85,7 @@
         <!-- 展示情報を更新するフォーム -->
         <form method="POST" action="" style="margin: 0;">
             <input type="hidden" name="race_code" value="<?= htmlspecialchars($race_code) ?>">
+            <input type="hidden" name="official_manual_csrf_token" value="<?= htmlspecialchars((string)($official_manual_csrf_token ?? ''), ENT_QUOTES, 'UTF-8') ?>">
             <button type="submit" name="update_exhibition" value="1" style="background-color: #0284c7; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
                 🔄 展示情報を更新
             </button>

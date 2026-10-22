@@ -202,6 +202,13 @@ function cc30bPostFetchDecision(bool $existingPathReportedSuccess, bool $complet
 /** @return array{ok:bool,message:string} */
 function cc30bFetchViaExistingPath(ApiClientProduction $client, string $raceCode): array
 {
+    // Strict Forward must only read exhibition data that already exists.  It
+    // never impersonates an explicit browser action or starts an official
+    // AMG request.  Formal-evidence availability may therefore be lower when
+    // the user has not manually saved exhibition data before the cutoff.
+    if (preg_match('/^\d{8}AMG(?:0[1-9]|1[0-2])$/', $raceCode) === 1 && substr($raceCode, 0, 8) >= '20261021') {
+        return ['ok' => false, 'message' => 'AUTOMATIC_EXHIBITION_FETCH_DETACHED'];
+    }
     [$message] = $client->updateExhibition($raceCode);
     $message = (string)$message;
     return ['ok' => !str_starts_with($message, '展示情報の更新に失敗しました:'), 'message' => $message];

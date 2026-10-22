@@ -78,6 +78,10 @@ $repo = new FakeOfficialRepository(); $store = new OfficialAmagasakiExhibitionTr
 check($store->persistLateHistory(payload(), '20261021AMG01', entries())['status'] === 'saved' && $repo->lastAudit['comparison_status'] === 'late_manual_history_import' && $repo->lastAudit['error_reason'] === 'POST_DEADLINE_MANUAL_IMPORT', 'late history has an explicit audit marker while retaining atomic storage'); $cases++;
 $repo = new FakeOfficialRepository(); $repo->failAudit = true; $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
 check($store->persistLateHistory(payload(), '20261021AMG01', entries())['status'] === 'rolled_back' && $repo->rollbacks === 1 && $repo->rows === [] && !$repo->audit, 'late-history audit failure rolls back all six rows'); $cases++;
+$repo = new FakeOfficialRepository(); $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
+check($store->persistManualWithinOpenTransaction(payload(), '20261021AMG01', entries(), false)['status'] === 'saved' && $repo->lastAudit['comparison_status'] === 'manual_official_predeadline', 'manual pre-deadline audit marker is explicit'); $cases++;
+$repo = new FakeOfficialRepository(); $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
+check($store->persistManualWithinOpenTransaction(payload(), '20261021AMG01', entries(), true)['status'] === 'saved' && $repo->lastAudit['comparison_status'] === 'manual_official_postdeadline' && $repo->lastAudit['error_reason'] === 'POST_DEADLINE_MANUAL_FETCH', 'manual post-deadline audit marker prevents forward provenance confusion'); $cases++;
 $repo = new FakeOfficialRepository(); $repo->rows = array_slice($converted, 0, 3); $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
 check($store->persist(payload(), '20261021AMG01', entries())['status'] === 'requires_review_partial' && $repo->rollbacks === 1, 'partial data is not overwritten'); $cases++;
 $repo = new FakeOfficialRepository(); $repo->rows = $converted; $store = new OfficialAmagasakiExhibitionTransactionStore($repo, $validator);
