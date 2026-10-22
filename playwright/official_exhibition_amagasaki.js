@@ -72,6 +72,30 @@ function playerIdFromToban(row) {
   return id ? id[1] : '';
 }
 
+function racerRows(html) {
+  return allRows(html).filter((row) => /\bcom-toban\b/i.test(row));
+}
+
+function startTimingsByLane(html) {
+  const markers = [...String(html).matchAll(/<img\b[^>]*\bsrc=["'][^"']*img_boat_([1-6])\.png[^"']*["'][^>]*>|<span\b[^>]*class=["'][^"']*\bst_area\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi)];
+  const timings = [];
+  let lane = null;
+  for (const marker of markers) {
+    if (marker[1] !== undefined) {
+      if (lane !== null) throw new ParseError('START_TIMING_MISMATCH', 'official start display has a boat image without ST');
+      lane = marker[1];
+      continue;
+    }
+    const value = text(marker[2]);
+    if (lane === null || !/^(?:F|L)?\.?\d{2}$/i.test(value)) throw new ParseError('START_TIMING_MISMATCH', 'start display does not contain valid lane-bound ST values');
+    timings.push({ lane, start_timing: value });
+    lane = null;
+  }
+  const lanes = new Set(timings.map((timing) => timing.lane));
+  if (lane !== null || timings.length !== 6 || lanes.size !== 6) throw new ParseError('START_TIMING_MISMATCH', 'start display does not contain six lane-bound ST values');
+  return timings;
+}
+
 function parsePageIdentity(html, expectedDate, expectedRace) {
   const day = (String(html).match(/\bdata-day\s*=\s*["'](\d{8})["']/i) || [])[1];
   const race = (String(html).match(/\bdata-race\s*=\s*["'](\d{1,2})["']/i) || [])[1];
@@ -94,9 +118,9 @@ function requireSixUnique(rows, context) {
 
 function parseDirectInfo(html, date, race) {
   parsePageIdentity(html, date, race);
-  const rows = allRows(html).map((row) => ({
+  const rows = racerRows(html).map((row) => ({
     lane: classCell(row, 'col1'),
-    player_id: text((row.match(/<[^>]*class=["'][^"']*com-toban[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i) || [''])[0]),
+    player_id: playerIdFromToban(row),
     exhibition_time: classCell(row, 'col3'),
   })).filter((row) => row.player_id || row.lane || row.exhibition_time);
   requireSixUnique(rows, 'direct information');
@@ -110,27 +134,26 @@ function parseDirectInfo(html, date, race) {
 
 function parseStartDisplay(html, date, race) {
   parsePageIdentity(html, date, race);
-  const boats = allRows(html).map((row) => ({
+  const boats = racerRows(html).map((row) => ({
     lane: classCell(row, 'col2'),
     entry_course: classCell(row, 'col1'),
-    player_id: text((row.match(/<[^>]*class=["'][^"']*com-toban[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i) || [''])[0]),
+    player_id: playerIdFromToban(row),
   })).filter((row) => row.player_id || row.lane || row.entry_course);
   requireSixUnique(boats, 'start display');
   const courses = new Set(boats.map((boat) => boat.entry_course));
   if (courses.size !== 6 || [...courses].some((course) => !/^[1-6]$/.test(course))) {
     throw new ParseError('ENTRY_COURSE_MISMATCH', 'start display does not contain unique courses one through six');
   }
-  const startTimings = [...String(html).matchAll(/<span\b[^>]*class=["'][^"']*st_area[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi)]
-    .map((match) => text(match[1]));
-  if (startTimings.length !== 6 || startTimings.some((value) => !/^(?:F|L)?\.?\d{2}$/i.test(value))) {
-    throw new ParseError('START_TIMING_MISMATCH', 'start display does not contain six valid raw ST values');
+  const timings = startTimingsByLane(html);
+  const timingByLane = new Map(timings.map((timing) => [timing.lane, timing.start_timing]));
+  // The official display emits boat images and ST values in entry-course
+  // order.  Require that visual order to agree with the separately labelled
+  // rows, then bind each ST to its explicit boat-image lane.
+  const courseOrderedLanes = [...boats].sort((left, right) => Number(left.entry_course) - Number(right.entry_course)).map((boat) => boat.lane);
+  if (JSON.stringify(timings.map((timing) => timing.lane)) !== JSON.stringify(courseOrderedLanes)) {
+    throw new ParseError('START_TIMING_LANE_MISMATCH', 'boat-image order disagrees with labelled entry courses');
   }
-  // The official start-display column is presented in entry-course order, not
-  // necessarily source-table row (lane) order.  Bind its six values to the
-  // explicit, unique course labels before joining back to player IDs.  If that
-  // course contract or the count changes, fail closed rather than guessing.
-  [...boats].sort((left, right) => Number(left.entry_course) - Number(right.entry_course))
-    .forEach((boat, index) => { boat.start_timing = startTimings[index]; });
+  boats.forEach((boat) => { boat.start_timing = timingByLane.get(boat.lane); });
   return boats;
 }
 

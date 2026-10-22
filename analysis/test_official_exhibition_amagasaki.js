@@ -15,10 +15,15 @@ const times = ['6.71', '6.72', '6.73', '6.74', '6.75', '6.76'];
 
 function page(body) { return `<main data-day="${DATE}" data-race="${RACE}">${body}</main>`; }
 function direct(values = times) {
-  return page(values.map((value, i) => `<tr><td class="col1">${i + 1}</td><td><span class="com-toban">${ids[i]}</span></td><td class="col3">${value}</td></tr>`).join(''));
+  const header = '<table><thead><tr><th class="col1">枠</th><th class="col2">級別 / 登番</th><th class="col3">展示</th></tr></thead>';
+  const boats = values.map((value, i) => `<tbody><tr><td class="col1" rowspan="2">${i + 1}</td><td class="col2" rowspan="2"><ul><li class="com-toban"><span class="grade">${i === 2 ? 'A1' : 'B1'}</span> ${ids[i]}</li></ul></td><td class="col3" rowspan="2">${value}</td></tr><tr><td class="history">-</td></tr></tbody>`).join('');
+  return page(`${header}${boats}</table>`);
 }
 function start(st = ['.11', '.21', '.08', '.03', '.13', '.12'], courses = [1, 2, 3, 4, 5, 6]) {
-  return page(ids.map((id, i) => `<tr><td class="col1">${courses[i]}</td><td class="col2">${i + 1}</td><td><span class="com-toban">${id}</span></td></tr>`).join('') + st.map((value) => `<span class="st_area">${value}</span>`).join(''));
+  const rows = ids.map((id, i) => `<tr><td class="col1">${courses[i]}</td><td class="col2">${i + 1}</td><td><ul><li class="com-toban"><span class="grade">${i === 2 ? 'A1' : 'B1'}</span> ${id}</li></ul></td></tr>`).join('');
+  const visualOrder = courses.map((course, index) => ({ course, lane: index + 1 })).sort((left, right) => left.course - right.course);
+  const water = visualOrder.map(({ lane }, index) => `<div class="suimen_div"><div class="com-yosou-boat"><img src="/cdn/img_boat_${lane}.png"></div><span class="st_area">${st[index]}</span></div>`).join('');
+  return page(`<table><thead><tr><th class="col1">コース</th><th class="col2">枠</th></tr></thead><tbody>${rows}</tbody></table>${water}`);
 }
 function original(overrides = {}) {
   const header = '<table><thead><tr><th class="col1">枠</th><th class="col5">展示</th><th class="col6">一周</th><th class="col7">まわり足</th></tr><tr><th class="col1">番</th><th class="col5">タイム</th><th class="col6">データ</th><th class="col7">データ</th></tr></thead>';
@@ -50,9 +55,15 @@ assert.equal(adapter.parseStartDisplay(start(undefined, [2, 1, 3, 4, 5, 6]), DAT
 const changedEntry = adapter.parseStartDisplay(start(['.11', '.12', '.13', '.14', '.15', '.16'], [2, 1, 3, 4, 5, 6]), DATE, RACE);
 assert.equal(changedEntry.find((boat) => boat.lane === '1').start_timing, '.12');
 assert.equal(changedEntry.find((boat) => boat.lane === '2').start_timing, '.11');
+const actualStyleEntry = adapter.parseStartDisplay(start(['.13', '.12', '.06', '.02', 'F.04', '.13'], [1, 2, 3, 4, 6, 5]), DATE, RACE);
+assert.deepEqual(actualStyleEntry.find((boat) => boat.lane === '5'), { lane: '5', entry_course: '6', player_id: '9005', start_timing: '.13' });
+assert.deepEqual(actualStyleEntry.find((boat) => boat.lane === '6'), { lane: '6', entry_course: '5', player_id: '9006', start_timing: 'F.04' });
+const imageOrderMismatch = start(['.13', '.12', '.06', '.02', 'F.04', '.13'], [1, 2, 3, 4, 6, 5])
+  .replace('img_boat_6.png', 'img_boat_x.png').replace('img_boat_5.png', 'img_boat_6.png').replace('img_boat_x.png', 'img_boat_5.png');
+mustThrow('START_TIMING_LANE_MISMATCH', () => adapter.parseStartDisplay(imageOrderMismatch, DATE, RACE));
 mustThrow('RACE_IDENTITY_MISMATCH', () => adapter.parseDirectInfo(direct().replace('20261021', '20261022'), DATE, RACE));
 mustThrow('PLAYER_ID_MISMATCH', () => adapter.parseDirectInfo(direct().replace('9006', '9005'), DATE, RACE));
-mustThrow('INVALID_EXHIBITION_TIME', () => adapter.parseDirectInfo(direct().replace('class="col3"', 'class="changed-column"'), DATE, RACE));
+mustThrow('INVALID_EXHIBITION_TIME', () => adapter.parseDirectInfo(direct().replaceAll('class="col3"', 'class="changed-column"'), DATE, RACE));
 mustThrow('ENTRY_COURSE_MISMATCH', () => adapter.parseStartDisplay(start().replace('class="col1">6', 'class="col1">5'), DATE, RACE));
 mustThrow('START_TIMING_MISMATCH', () => adapter.parseStartDisplay(start(['.11']), DATE, RACE));
 mustThrow('ORIGINAL_DATA_INCOMPLETE', () => adapter.parseOriginalData(original({ lap: '-.--' }), DATE, RACE));
