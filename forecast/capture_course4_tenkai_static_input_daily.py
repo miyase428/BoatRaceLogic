@@ -22,8 +22,26 @@ def git_head(): return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd
 
 
 class DailyStaticSnapshotBatch:
-    def __init__(self, capture=None, guard=None, campaign_path=CAMPAIGN, snapshot_root=SNAPSHOT_ROOT):
+    def __init__(self, capture=None, guard=None, campaign_path=CAMPAIGN, snapshot_root=SNAPSHOT_ROOT, deadline_preparer=None):
         self.guard, self.capture, self.campaign_path, self.snapshot_root = guard or StaticSnapshotGuard(), capture or Course4TenkaiStaticSnapshotCapture(), Path(campaign_path), Path(snapshot_root)
+        self.deadline_preparer = deadline_preparer or self._prepare_missing_deadline_cache
+
+    def _prepare_missing_deadline_cache(self, date_text):
+        command = ["/usr/bin/php", str(REPO / "analysis" / "prepare_course4_tenkai_deadline_cache.php"), f"--date={date_text}"]
+        try:
+            result = subprocess.run(command, cwd=REPO, text=True, capture_output=True, timeout=300, check=False)
+            payload = json.loads(result.stdout) if result.stdout.strip() else {}
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return {"ok": False, "status": "OFFICIAL_DEADLINE_UNAVAILABLE"}
+        return payload if result.returncode == 0 and isinstance(payload, dict) else {"ok": False, "status": str(payload.get("status", "OFFICIAL_DEADLINE_UNAVAILABLE"))}
+
+    @staticmethod
+    def _read_cache(path):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) and isinstance(data.get("deadlines"), dict) else None
+        except (OSError, ValueError):
+            return None
     def _campaign(self, results):
         root = self.snapshot_root / "static_v1"; snapshots = sorted(root.glob("*.json")) if root.exists() else []
         first = None
@@ -50,11 +68,15 @@ class DailyStaticSnapshotBatch:
         prefix = str(date_text).replace("-", "")
         cutoff = prediction_cutoff or now_iso()
         cache = self.guard.deadline_dir / f"deadlines_{prefix}.json"
-        try: data = json.loads(cache.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        data = self._read_cache(cache)
+        preparation = None
+        if data is None:
+            preparation = self.deadline_preparer(prefix)
+            data = self._read_cache(cache)
+        if data is None:
             summary = {"created": 0, "existing": 0, "retryable_unavailable": 0, "permanent_unavailable": 1, "deadline_passed": 0, "result_finalized": 0, "error": 0}
             campaign = self._campaign(summary)
-            return {"date": str(date_text), "status": "OFFICIAL_DEADLINE_UNAVAILABLE", "results": [], "summary": summary, "campaign": campaign}
+            return {"date": str(date_text), "status": "OFFICIAL_DEADLINE_UNAVAILABLE", "deadline_preparation": preparation, "results": [], "summary": summary, "campaign": campaign}
         codes = sorted(str(code).upper() for code in data.get("deadlines", {}) if str(code).upper().startswith(prefix))
         results = []
         for code in codes:
