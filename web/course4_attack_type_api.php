@@ -1,11 +1,15 @@
 <?php
 declare(strict_types=1);
 /** Read-only adapter for the frozen 4C Attack Type Python core. */
+require_once __DIR__ . '/logic/TenkaiAiLiveDeadlineGuard.php';
 header('Content-Type: application/json; charset=utf-8');
 date_default_timezone_set('Asia/Tokyo');
 function apiOut(int $status, array $body): never { http_response_code($status); echo json_encode($body, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); exit; }
 $race = strtoupper(trim((string)($_GET['race_code'] ?? '')));
 if (preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $race) !== 1) apiOut(400,['success'=>false,'error_code'=>'INVALID_RACE_CODE','error_message'=>'race_code is invalid']);
+$deadlineRoot=PHP_SAPI==='cli'&&is_string(getenv('TENKAI_AI_DEADLINE_ROOT'))&&getenv('TENKAI_AI_DEADLINE_ROOT')!==''?getenv('TENKAI_AI_DEADLINE_ROOT'):null;
+$deadlineReason=(new TenkaiAiLiveDeadlineGuard($deadlineRoot?:null))->reason($race);
+if($deadlineReason!==null)apiOut(200,['success'=>true,'prediction_available'=>false,'race_code'=>$race,'stage'=>'POST_EXHIBITION','reason_code'=>$deadlineReason,'reason_message'=>$deadlineReason,'generated_at'=>null]);
 $cutoff=(new DateTimeImmutable('now',new DateTimeZone('Asia/Tokyo')))->format(DATE_ATOM);
 $root=dirname(__DIR__); $python='/usr/bin/python3';
 $capabilityPath=$root.'/config/course4_tenkai_venue_capabilities_v1.json';

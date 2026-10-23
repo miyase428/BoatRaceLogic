@@ -1,6 +1,7 @@
 (function (root) {
     'use strict';
     const STATUS_ENDPOINT = '/web/tenkai_ai_status_api.php';
+    const POSTDEADLINE_ENDPOINT = '/web/tenkai_ai_postdeadline_api.php';
     const WALL_ENDPOINT = '/web/course34_wall_api.php';
     const ATTACK_TYPE_ENDPOINT = '/web/course4_attack_type_api.php';
     const STATUS_TEXT = Object.freeze({WAITING_EXHIBITION: '展示データ待ち', WAITING_ELIGIBILITY: '判定待ち', WAITING_FORMAL_CAPTURE: '判定待ち', FORMAL_CAPTURED: '正式データ取得済み', NOT_TARGET: '対象外', UNAVAILABLE: '展開AIを取得できませんでした'});
@@ -20,6 +21,7 @@
     }
     function timeText(value) { const date = new Date(String(value || '')); return Number.isNaN(date.getTime()) ? '' : String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0') + '取得'; }
     function percent(value) { return (value * 100).toFixed(1) + '%'; }
+    function shortVersion(value) { const text = String(value || ''); return text ? text.slice(0, 12) : ''; }
     function active(panel, token, raceCode) { return panel.dataset.tenkaiAiRequest === token && String(panel.dataset.raceCode || '').trim().toUpperCase() === raceCode; }
     function ui(panel) { return {body: panel.querySelector('[data-tenkai-ai-status]'), meta: panel.querySelector('[data-tenkai-ai-meta]'), notice: panel.querySelector('[data-tenkai-ai-numeric-notice]'), grid: panel.querySelector('[data-tenkai-ai-grid]'), footer: panel.querySelector('[data-tenkai-ai-footer]')}; }
     function hideNumeric(panel) { const view = ui(panel); if (view.grid) { view.grid.hidden = true; view.grid.querySelectorAll('[data-tenkai-ai-value]').forEach(node => { node.textContent = '—'; }); } if (view.footer) view.footer.hidden = true; }
@@ -50,12 +52,47 @@
         setNotice(panel, ''); view.grid.hidden = false; view.footer.hidden = false;
         if (!formalCaptured) { if (view.body) view.body.textContent = '予測データ取得済み'; if (view.meta) view.meta.textContent = ''; panel.dataset.tenkaiAiState = 'captured'; }
     }
+    function validPostDeadlinePayload(data, raceCode) {
+        return !!data && data.success === true && data.api_version === 'tenkai-ai-postdeadline-display/v1'
+            && data.race_code === raceCode && typeof data.phase === 'string' && typeof data.display_mode === 'string';
+    }
+    function renderPostDeadline(panel, data) {
+        const view = ui(panel); const components = data.components || {}; const wall = components.wall || {}; const attack = components.attack || {};
+        const values = {
+            wall: wall.prediction_available ? wall.wall_probability : null,
+            makuri: attack.prediction_available && attack.probabilities ? attack.probabilities.makuri_success : null,
+            makurizashi: attack.prediction_available && attack.probabilities ? attack.probabilities.makurizashi_success : null,
+            'no-attack': attack.prediction_available && attack.probabilities ? attack.probabilities.no_attack_success : null
+        };
+        const available = Object.values(values).some(finiteProbability);
+        if (!available || !view.grid || !view.footer) {
+            renderNumericWaiting(panel, '予測データ不足', 'waiting_prediction');
+            const reasons = [wall.reason_code, attack.reason_code].filter(Boolean).join(' / ');
+            if (reasons) setNotice(panel, reasons);
+            return;
+        }
+        Object.keys(values).forEach(key => { const node = view.grid.querySelector('[data-tenkai-ai-value="' + key + '"]'); if (node) node.textContent = finiteProbability(values[key]) ? percent(values[key]) : '—'; });
+        view.grid.hidden = false; view.footer.hidden = false;
+        const formal = attack.kind === 'FORMAL_PREDICTION'; const reference = wall.kind === 'POST_RACE_REFERENCE' || attack.kind === 'POST_RACE_REFERENCE';
+        if (view.body) view.body.textContent = formal && reference ? '締切前予測＋事後参考分析' : (formal ? '締切前の予測を再表示' : '展開AI｜事後参考分析');
+        const times = [];
+        if (formal && attack.prediction_generated_at) times.push(timeText(attack.prediction_generated_at));
+        const version = shortVersion((formal ? attack : (attack.prediction_available ? attack : wall)).logic_version);
+        if (version) times.push('モデル ' + version);
+        if (view.meta) view.meta.textContent = times.join('・');
+        if (reference) setNotice(panel, data.reference && data.reference.notice ? data.reference.notice : '締切後の参考値です。正式予測には含まれません。');
+        else setNotice(panel, '締切前に保存された確率を再計算せず表示しています。');
+        panel.dataset.tenkaiAiState = reference ? 'post_reference' : 'formal_redisplay'; panel.setAttribute('aria-busy', 'false');
+    }
     async function fetchJson(url) { const response = await fetch(url, {cache: 'no-store', credentials: 'same-origin'}); let data; try { data = await response.json(); } catch (_) { throw new Error('MALFORMED_JSON'); } if (!response.ok) throw new Error('HTTP_ERROR'); return data; }
     function unavailableReason(data) { return String((data && (data.reason_code || data.reason_message)) || ''); }
     async function load(panel) {
         const raceCode = String(panel.dataset.raceCode || '').trim().toUpperCase(); const token = String(Number(panel.dataset.tenkaiAiRequest || '0') + 1); panel.dataset.tenkaiAiRequest = token; hideNumeric(panel); setNotice(panel, '');
         if (!validRaceCode(raceCode)) { renderUnavailable(panel); return; }
         try {
+            const post = await fetchJson(POSTDEADLINE_ENDPOINT + '?race_code=' + encodeURIComponent(raceCode)); if (!active(panel, token, raceCode)) return;
+            if (!validPostDeadlinePayload(post, raceCode)) { renderUnavailable(panel); return; }
+            if (post.phase !== 'PRE_DEADLINE') { renderPostDeadline(panel, post); return; }
             const status = await fetchJson(STATUS_ENDPOINT + '?race_code=' + encodeURIComponent(raceCode)); if (!active(panel, token, raceCode)) return;
             if (!validStatusPayload(status, raceCode)) { renderUnavailable(panel); return; }
             const formalCaptured = renderStatus(panel, status);
@@ -76,6 +113,6 @@
         } catch (_) { if (active(panel, token, raceCode)) renderUnavailable(panel); }
     }
     function mountAll() { document.querySelectorAll('[data-tenkai-ai-panel]').forEach(panel => { if (panel.dataset.tenkaiAiMounted === '1') return; panel.dataset.tenkaiAiMounted = '1'; load(panel); }); }
-    root.Cc30cTenkaiAiStatus = Object.freeze({mountAll, load, validStatusPayload, validWallPayload, validAttackPayload, statusText: STATUS_TEXT});
+    root.Cc30cTenkaiAiStatus = Object.freeze({mountAll, load, validStatusPayload, validWallPayload, validAttackPayload, validPostDeadlinePayload, statusText: STATUS_TEXT});
     if (typeof document !== 'undefined') { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountAll); else mountAll(); }
 }(typeof window !== 'undefined' ? window : globalThis));

@@ -348,7 +348,7 @@ if (!is_string($appTrifectaJson)) {
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
 <script src="/web/assets/js/app_recent_prediction_history.js?v=20260926-conditional-third-v1"></script>
 <script src="/web/assets/js/app_course_signals.js?v=20261016-course-signals-ready-v1"></script>
-<script src="/web/assets/js/tenkai_ai_status.js?v=20261021-tenkai-numeric-v5"></script>
+<script src="/web/assets/js/tenkai_ai_status.js?v=20261023-postdeadline-v1"></script>
 <script src="/web/assets/js/app_current_meet.js?v=20261011-current-meet-summary-v3"></script>
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
 <script src="/web/assets/js/course4_attack_type_race_detail.js?v=20261016-display-off-v2"></script>

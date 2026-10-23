@@ -808,7 +808,7 @@
 </div> <!-- container -->
 
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
-<script src="/web/assets/js/tenkai_ai_status.js?v=20261021-tenkai-numeric-v5"></script>
+<script src="/web/assets/js/tenkai_ai_status.js?v=20261023-postdeadline-v1"></script>
     <script src="/web/assets/js/course4_attack_type_race_detail.js?v=20261016-display-off-v2"></script>
 <script>
 if ('serviceWorker' in navigator) {

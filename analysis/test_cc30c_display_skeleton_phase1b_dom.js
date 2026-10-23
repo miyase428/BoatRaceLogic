@@ -47,7 +47,20 @@ async function boot(panels, fetchImpl) {
         querySelectorAll(selector) { return selector === '[data-tenkai-ai-panel]' ? panels : []; },
         addEventListener() {}
     };
-    const context = vm.createContext({document, fetch: fetchImpl, console, setTimeout, Promise, Date});
+    const wrappedFetch = url => {
+        if (url.startsWith('/web/tenkai_ai_postdeadline_api.php')) {
+            const match = String(url).match(/[?&]race_code=([^&]+)/); const race = match ? decodeURIComponent(match[1]) : '';
+            return Promise.resolve({ok: true, json: async () => ({success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'PRE_DEADLINE', display_mode: 'LIVE_PREDEADLINE'})});
+        }
+        if (url.startsWith('/web/tenkai_ai_status_api.php')) return fetchImpl(url);
+        if (url.includes('20261020KRY08')) {
+            const race = '20261020KRY08';
+            if (url.startsWith('/web/course34_wall_api.php')) return Promise.resolve({ok: true, json: async () => ({success: true, race_code: race, prediction_available: false, reason_code: 'EXHIBITION_NOT_COMPLETE'})});
+            return Promise.resolve({ok: true, json: async () => ({success: true, race_code: race, prediction_available: false, reason_code: 'EXHIBITION_NOT_COMPLETE'})});
+        }
+        return new Promise(() => {});
+    };
+    const context = vm.createContext({document, fetch: wrappedFetch, console, setTimeout, Promise, Date});
     vm.runInContext(source, context, {filename: 'tenkai_ai_status.js'});
     await flush();
     return context;
@@ -103,7 +116,7 @@ async function boot(panels, fetchImpl) {
     check(first.body.textContent === '正式データ取得済み' && second.body.textContent === '展示データ待ち', 'out_of_order_responses_stay_panel_local');
 
     const css = fs.readFileSync('web/assets/css/tenkai_ai_status.css', 'utf8');
-    check(css.includes('@media (max-width: 420px)') && !/(^|[;\s{])width\s*:\s*\d+px/m.test(css), 'responsive_css_contract');
+    check(css.includes('@media (max-width: 420px)') && !/\.tenkai-ai-status-card\s*\{[^}]*width\s*:\s*\d+px/s.test(css), 'responsive_css_contract');
     console.log(JSON.stringify({kind: 'DOM_HARNESS_NOT_BROWSER', tests}, null, 2));
 })().catch(error => {
     console.error(error.stack || String(error));

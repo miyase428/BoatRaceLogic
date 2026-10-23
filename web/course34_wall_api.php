@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/logic/TenkaiAiLiveDeadlineGuard.php';
+
 /**
  * Read-only public adapter for the frozen WALL-R LIVE core.
  * It deliberately exposes the binary probability only; percentile scores and
@@ -27,6 +29,9 @@ $race = strtoupper(trim((string)($_GET['race_code'] ?? '')));
 if (preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $race) !== 1) {
     wallApiOut(400, ['success' => false, 'error_code' => 'INVALID_RACE_CODE']);
 }
+$deadlineRoot = PHP_SAPI === 'cli' && is_string(getenv('TENKAI_AI_DEADLINE_ROOT')) && getenv('TENKAI_AI_DEADLINE_ROOT') !== '' ? getenv('TENKAI_AI_DEADLINE_ROOT') : null;
+$deadlineReason = (new TenkaiAiLiveDeadlineGuard($deadlineRoot ?: null))->reason($race);
+if ($deadlineReason !== null) wallApiOut(200, ['success' => true, 'prediction_available' => false, 'race_code' => $race, 'stage' => 'POST_EXHIBITION', 'reason_code' => $deadlineReason]);
 
 $root = dirname(__DIR__);
 $python = '/usr/bin/python3';

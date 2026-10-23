@@ -52,9 +52,12 @@ function attack(raceCode, available, reason) {
     return available ? {success: true, prediction_available: true, race_code: raceCode, stage: 'POST_EXHIBITION', probabilities: {no_attack_success: 0.766, makuri_success: 0.148, makurizashi_success: 0.086}} : {success: true, prediction_available: false, race_code: raceCode, stage: 'POST_EXHIBITION', reason_code: reason};
 }
 async function flush() { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); }
-async function boot(panels, fetchImpl) {
+function preDeadline(raceCode) { return {success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: raceCode, phase: 'PRE_DEADLINE', display_mode: 'LIVE_PREDEADLINE'}; }
+async function boot(panels, fetchImpl, postPayload) {
     const document = {readyState: 'complete', querySelectorAll(selector) { return selector === '[data-tenkai-ai-panel]' ? panels : []; }, addEventListener() {}};
-    const context = vm.createContext({document, fetch: fetchImpl, console, Promise, Date, setTimeout});
+    const wrappedFetch = url => url.startsWith('/web/tenkai_ai_postdeadline_api.php')
+        ? response(postPayload || preDeadline(panels[0].dataset.raceCode)) : fetchImpl(url);
+    const context = vm.createContext({document, fetch: wrappedFetch, console, Promise, Date, setTimeout});
     vm.runInContext(source, context, {filename: 'tenkai_ai_status.js'});
     await flush();
     return context;
@@ -75,6 +78,24 @@ async function boot(panels, fetchImpl) {
     check(normal.values.makuri.textContent === '14.8%', 'makuri_probability', normal.values.makuri.textContent);
     check(normal.values.makurizashi.textContent === '8.6%', 'makurizashi_probability', normal.values.makurizashi.textContent);
     check(normal.values['no-attack'].textContent === '76.6%', 'no_attack_probability', normal.values['no-attack'].textContent);
+
+    const reference = makePanel(race);
+    await boot([reference], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
+        success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'POST_RACE_REFERENCE',
+        components: {wall: {prediction_available: false, reason_code: 'PROSPECTIVE_SNAPSHOT_NOT_FOUND'}, attack: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: 'reference-model-v1', probabilities: {no_attack_success: .7, makuri_success: .2, makurizashi_success: .1}}},
+        reference: {notice: '締切後に取得した展示情報などを現在のモデルで計算した参考値です。当時の正式予測や前方検証の実績には含まれません。'}
+    });
+    check(reference.body.textContent === '展開AI｜事後参考分析', 'post_reference_label');
+    check(reference.values.wall.textContent === '—' && reference.values.makuri.textContent === '20.0%', 'post_reference_partial_components');
+    check(reference.notice.textContent.includes('正式予測や前方検証の実績には含まれません'), 'post_reference_warning');
+
+    const redisplay = makePanel(race);
+    await boot([redisplay], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
+        success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'FORMAL_REDISPLAY',
+        components: {wall: {prediction_available: false, reason_code: 'FORMAL_WALL_NOT_STORED'}, attack: {prediction_available: true, kind: 'FORMAL_PREDICTION', prediction_generated_at: '2026-10-20T16:48:00+09:00', logic_version: 'formal-model-v1', probabilities: {no_attack_success: .8, makuri_success: .15, makurizashi_success: .05}}}, reference: {}
+    });
+    check(redisplay.body.textContent === '締切前の予測を再表示', 'formal_redisplay_label');
+    check(redisplay.values.makuri.textContent === '15.0%' && redisplay.meta.textContent.includes('16:48取得'), 'formal_redisplay_values_unchanged');
 
     const waiting = makePanel('20261020KRY08'); let waitingNumericCalls = 0;
     await boot([waiting], async url => {
@@ -135,6 +156,7 @@ async function boot(panels, fetchImpl) {
     check(sequence.length === 1, 'stale_initial_status_pending');
     switchPanel.dataset.raceCode = '20261020KRY08';
     const newer = context.Cc30cTenkaiAiStatus.load(switchPanel);
+    await flush();
     check(sequence.length === 2, 'stale_new_status_pending');
     sequence[1].resolve(response(status('20261020KRY08', 'WAITING_EXHIBITION')));
     await flush();

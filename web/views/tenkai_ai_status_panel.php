@@ -31,5 +31,5 @@
             <strong data-tenkai-ai-value="no-attack">—</strong>
         </div>
     </div>
-    <p class="tenkai-ai-status-note" data-tenkai-ai-footer hidden>展示後の情報をもとに、4コースの攻撃パターン（まくり・まくり差し等）の成功見込みを予測します。レース展開により「攻撃成功なし」が高くなる場合があります。</p>
+    <p class="tenkai-ai-status-note" data-tenkai-ai-footer hidden>展示後の情報をもとに、4コースの攻撃パターン（まくり・まくり差し等）の成功見込みを表示します。事後参考分析は正式な前方予測・検証実績には含まれません。</p>
 </section>
