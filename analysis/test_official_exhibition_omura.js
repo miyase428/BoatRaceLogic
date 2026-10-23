@@ -23,3 +23,23 @@ assert.throws(() => p.mergePublished(parsedStart.boats, p.parseDirectInfo(direct
   await assert.rejects(() => p.capture('20261023', 2, { fetchPage: async (url) => ({ body: url.includes('start.php') ? start : url.includes('chokuzen.php') ? direct.replace('6.80', '6.81') : detail, completedAt: '2026-10-23T06:47:00.000Z' }), now: () => '2026-10-23T06:48:00.000Z' }), /disagree/); cases++;
   console.log(`PASS ${cases} Omura parser cases`);
 })().catch((error) => { console.error(error.stack || String(error)); process.exitCode = 1; });
+
+async function courseChangeFixture(race, expectedIds, expectedCourses, expectedSt) {
+  const dir = path.join(__dirname, 'fixtures', `official_omura_20261023_${String(race).padStart(2, '0')}`);
+  const fixtureStart = fs.readFileSync(path.join(dir, 'start.html'), 'utf8');
+  const fixtureDirect = fs.readFileSync(path.join(dir, 'chokuzen.html'), 'utf8');
+  const fixtureDetail = fs.readFileSync(path.join(dir, 'detail.html'), 'utf8');
+  const value = await p.capture('20261023', race, { fetchPage: async (url) => ({ body: url.includes('start.php') ? fixtureStart : url.includes('chokuzen.php') ? fixtureDirect : fixtureDetail, completedAt: '2026-10-23T06:00:00.000Z' }), now: () => '2026-10-23T06:00:01.000Z' });
+  assert.deepEqual(value.boats.map((boat) => boat.player_id), expectedIds);
+  assert.deepEqual(value.boats.map((boat) => boat.entry_course), expectedCourses);
+  assert.deepEqual(value.boats.map((boat) => boat.start_timing), expectedSt);
+  return value;
+}
+
+(async () => {
+  const omr05 = await courseChangeFixture(5, ['5326', '3455', '3257', '5070', '3746', '3857'], [1, 3, 2, 4, 5, 6], ['F.08', 'F.07', 'F.11', '.02', '.15', '.24']);
+  assert.equal(omr05.boats.find((boat) => boat.lane === 2).entry_course, 3);
+  const omr06 = await courseChangeFixture(6, ['4234', '5064', '3868', '3662', '5287', '3946'], [1, 4, 5, 3, 6, 2], ['.16', '.18', '.19', '.15', '.37', '.01']);
+  assert.equal(omr06.boats.find((boat) => boat.lane === 6).entry_course, 2);
+  console.log('PASS 2 Omura course-change fixture cases');
+})().catch((error) => { console.error(error.stack || String(error)); process.exitCode = 1; });

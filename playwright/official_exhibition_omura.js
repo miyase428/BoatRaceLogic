@@ -13,7 +13,7 @@ const validTime = (value) => /^\d+\.\d{2}$/.test(value) && Number(value) > 0;
 function assertIdentity(html, date, race, page) {
   const race2 = String(Number(race)).padStart(2, '0');
   const dateEvidence = new RegExp(`<option\\b[^>]*value=["'][^"']*[?&]day=${date}(?:[&"'])[^>]*\\bselected(?:=[^ >]*)?[^>]*>|<option\\b[^>]*\\bselected(?:=[^ >]*)?[^>]*value=["'][^"']*[?&]day=${date}(?:[&"'])`, 'i');
-  const activeRace = new RegExp(`<li\\b[^>]*class=["'][^"']*\\bactive\\b[^"']*["'][^>]*>[\\s\\S]{0,160}?${page}\\.php\\?[^"']*day=${date}[^"']*race=${race2}[\\s\\S]{0,80}?2R`, 'i');
+  const activeRace = new RegExp(`<li\\b[^>]*class=["'][^"']*\\bactive\\b[^"']*["'][^>]*>[\\s\\S]{0,160}?${page}\\.php\\?[^"']*day=${date}[^"']*race=${race2}[\\s\\S]{0,80}?${Number(race)}R`, 'i');
   const heading = new RegExp(`<th\\b[^>]*>\\s*${Number(race)}R\\s*<\\/th>`, 'i');
   if (!dateEvidence.test(html) || !activeRace.test(html) || !heading.test(html)) throw new ParseError('RACE_IDENTITY_MISMATCH', `${page}: date or race identity is not independently present in response`);
 }

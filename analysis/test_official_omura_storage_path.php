@@ -33,7 +33,7 @@ function payload(): array {
     $boats = [];
     foreach (range(1, 6) as $lane) {
         $boats[] = ['lane' => $lane, 'entry_course' => $lane, 'player_id' => (string)(5100 + $lane), 'exhibition_time' => '6.8' . $lane,
-            'start_timing' => $lane === 1 ? 'F.01' : ($lane === 2 ? 'L.02' : ($lane === 3 ? '0.00' : '.0' . $lane)),
+            'start_timing' => $lane === 1 ? 'F.08' : ($lane === 2 ? 'F.07' : ($lane === 3 ? 'F.11' : ($lane === 4 ? 'L.02' : ($lane === 5 ? '0.00' : '.0' . $lane)))),
             'lap_time' => '37.' . (10 + $lane), 'around_time' => '11.' . (20 + $lane), 'straight_time' => '6.' . (70 + $lane)];
     }
     return ['schema' => 'official-exhibition/v1', 'status' => 'published', 'source' => 'official_omura', 'source_url' => 'https://example.invalid/direct',
@@ -46,7 +46,7 @@ $cases = 0;
 $validator = new OfficialOmuraExhibitionValidator();
 $valid = payload();
 $converted = $validator->validateAndConvert($valid, '20261021OMR01', entries());
-check(count($converted) === 6 && $converted[0]['start_timing'] === -0.01 && $converted[1]['start_timing'] === 0.02 && $converted[2]['start_timing'] === 0.0, 'F/L/0.00 conversion'); $cases++;
+check(count($converted) === 6 && $converted[0]['start_timing'] === -0.08 && $converted[1]['start_timing'] === -0.07 && $converted[2]['start_timing'] === -0.11 && $converted[3]['start_timing'] === 0.02 && $converted[4]['start_timing'] === 0.0, 'F values are negative and L/0.00 conversion is preserved'); $cases++;
 check($validator->isForwardEligible($valid, '2026-10-21T10:00:03.000Z'), 'completion at cutoff is eligible'); $cases++;
 check(!$validator->isForwardEligible($valid, '2026-10-21T10:00:02.999Z'), 'post-cutoff completion rejected'); $cases++;
 $bad = payload(); $bad['page_fetched_at']['detail'] = '2026-10-21T10:00:04.000Z'; expectFailure(fn() => $validator->validateAndConvert($bad, '20261021OMR01', entries()), 'timestamp reversal must fail'); $cases++;
