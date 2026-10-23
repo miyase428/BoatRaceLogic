@@ -68,16 +68,22 @@ class DailyStaticSnapshotBatch:
         prefix = str(date_text).replace("-", "")
         cutoff = prediction_cutoff or now_iso()
         cache = self.guard.deadline_dir / f"deadlines_{prefix}.json"
+        # The preparer validates race_entry against the cache on every scheduled
+        # run.  It performs no official request for complete venues and returns
+        # only verified venues when another venue is temporarily unavailable.
+        preparation = self.deadline_preparer(prefix)
         data = self._read_cache(cache)
-        preparation = None
-        if data is None:
-            preparation = self.deadline_preparer(prefix)
-            data = self._read_cache(cache)
-        if data is None:
+        ready_codes = preparation.get("ready_race_codes", []) if isinstance(preparation, dict) else []
+        if data is None or not isinstance(ready_codes, list):
             summary = {"created": 0, "existing": 0, "retryable_unavailable": 0, "permanent_unavailable": 1, "deadline_passed": 0, "result_finalized": 0, "error": 0}
             campaign = self._campaign(summary)
-            return {"date": str(date_text), "status": "OFFICIAL_DEADLINE_UNAVAILABLE", "deadline_preparation": preparation, "results": [], "summary": summary, "campaign": campaign}
-        codes = sorted(str(code).upper() for code in data.get("deadlines", {}) if str(code).upper().startswith(prefix))
+            status = preparation.get("status", "OFFICIAL_DEADLINE_UNAVAILABLE") if isinstance(preparation, dict) else "OFFICIAL_DEADLINE_UNAVAILABLE"
+            return {"date": str(date_text), "status": status, "deadline_preparation": preparation, "results": [], "summary": summary, "campaign": campaign}
+        codes = sorted(str(code).upper() for code in ready_codes if isinstance(code, str) and str(code).upper().startswith(prefix) and isinstance(data.get("deadlines", {}).get(str(code).upper()), str))
+        if not codes:
+            summary = {"created": 0, "existing": 0, "retryable_unavailable": 0, "permanent_unavailable": 1, "deadline_passed": 0, "result_finalized": 0, "error": 0}
+            campaign = self._campaign(summary)
+            return {"date": str(date_text), "status": str(preparation.get("status", "OFFICIAL_DEADLINE_UNAVAILABLE")), "deadline_preparation": preparation, "results": [], "summary": summary, "campaign": campaign}
         results = []
         for code in codes:
             try: results.append(self.capture.capture(code, cutoff))
@@ -92,7 +98,8 @@ class DailyStaticSnapshotBatch:
             else:
                 summary["permanent_unavailable"] += 1; summary["deadline_passed"] += reason == "DEADLINE_PASSED"; summary["result_finalized"] += reason == "RESULT_ALREADY_EXISTS"
         campaign = self._campaign(summary)
-        return {"date": str(date_text), "prediction_cutoff": cutoff, "race_n": len(codes), "results": results, "summary": summary, "campaign": campaign}
+        status = "OK" if preparation.get("status") == "READY" else "OFFICIAL_DEADLINE_PARTIAL"
+        return {"date": str(date_text), "status": status, "prediction_cutoff": cutoff, "deadline_preparation": preparation, "race_n": len(codes), "results": results, "summary": summary, "campaign": campaign}
 
 
 def main():
