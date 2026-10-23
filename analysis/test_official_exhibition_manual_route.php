@@ -11,6 +11,8 @@ $cases = [
     ['20261023TMG01', 'official_tamagawa'],
     ['20261022TMG01', 'legacy'],
     ['20261023AMG01', 'official_amagasaki'],
+    ['20261023SME01', 'official_suminoe'],
+    ['20261022SME01', 'legacy'],
     ['invalid', 'legacy'],
 ];
 
@@ -22,4 +24,4 @@ foreach ($cases as [$raceCode, $expected]) {
     }
 }
 
-echo "PASS 7 manual exhibition route cases\n";
+echo "PASS 9 manual exhibition route cases\n";
