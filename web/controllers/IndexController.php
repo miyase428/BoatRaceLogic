@@ -103,7 +103,7 @@ class IndexController
         if (isset($_POST["update_exhibition"])) {
             $target_race_code = $_POST["race_code"] ?? $race_code;
             $route = OfficialExhibitionManualRoute::decide((string)$target_race_code);
-            if (!in_array($route['source'], ['official_amagasaki', 'official_tamagawa', 'official_suminoe'], true)) {
+            if (!in_array($route['source'], ['official_amagasaki', 'official_tamagawa', 'official_suminoe', 'official_omura'], true)) {
                 // Official adapters do not yet exist for the other venues.
                 // Keep their established manual Kyotei Biyori route unchanged.
                 [$update_message, $debug_msg] = $apiClient->updateExhibition($target_race_code);

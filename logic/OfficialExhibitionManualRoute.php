@@ -14,6 +14,7 @@ final class OfficialExhibitionManualRoute
     public const AMAGASAKI_OFFICIAL_START_DATE = '20261021';
     public const TAMAGAWA_OFFICIAL_START_DATE = '20261023';
     public const SUMINOE_OFFICIAL_START_DATE = '20261023';
+    public const OMURA_OFFICIAL_START_DATE = '20261023';
 
     /** @return array{source:string,reason:string} */
     public static function decide(string $raceCode): array
@@ -29,6 +30,9 @@ final class OfficialExhibitionManualRoute
         }
         if ($matches[2] === 'SME' && $matches[1] >= self::SUMINOE_OFFICIAL_START_DATE) {
             return ['source' => 'official_suminoe', 'reason' => 'OFFICIAL_SUMINOE_MANUAL_ROUTE'];
+        }
+        if ($matches[2] === 'OMR' && $matches[1] >= self::OMURA_OFFICIAL_START_DATE) {
+            return ['source' => 'official_omura', 'reason' => 'OFFICIAL_OMURA_MANUAL_ROUTE'];
         }
         return ['source' => 'legacy', 'reason' => 'LEGACY_MANUAL_ROUTE'];
     }

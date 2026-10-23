@@ -16,7 +16,9 @@ require_once __DIR__ . '/../logic/OfficialAmagasakiManualExhibitionUpdate.php';
 require_once __DIR__ . '/../logic/NodeOfficialTamagawaPayloadFetcher.php';
 require_once __DIR__ . '/../logic/OfficialTamagawaManualExhibitionUpdate.php';
 require_once __DIR__ . '/../logic/NodeOfficialSuminoePayloadFetcher.php';
+require_once __DIR__ . '/../logic/NodeOfficialOmuraPayloadFetcher.php';
 require_once __DIR__ . '/../logic/OfficialSuminoeManualExhibitionUpdate.php';
+require_once __DIR__ . '/../logic/OfficialOmuraManualExhibitionUpdate.php';
 require_once __DIR__ . '/../logic/OfficialExhibitionManualRoute.php';
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -55,6 +57,12 @@ try {
         $service = new OfficialSuminoeManualExhibitionUpdate(
             $pdo,
             new NodeOfficialSuminoePayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_suminoe.js', false),
+            rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines',
+        );
+    } elseif ($route['source'] === 'official_omura') {
+        $service = new OfficialOmuraManualExhibitionUpdate(
+            $pdo,
+            new NodeOfficialOmuraPayloadFetcher('/usr/bin/node', __DIR__ . '/../playwright/official_exhibition_omura.js', false),
             rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . '/boatrace_official_deadlines',
         );
     } else {

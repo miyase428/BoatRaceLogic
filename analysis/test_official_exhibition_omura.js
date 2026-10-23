@@ -1,0 +1,25 @@
+'use strict';
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const p = require('../playwright/official_exhibition_omura.js');
+const root = path.join(__dirname, 'fixtures', 'official_omura_20261023_02');
+const start = fs.readFileSync(path.join(root, 'start.html'), 'utf8');
+const direct = fs.readFileSync(path.join(root, 'chokuzen.html'), 'utf8');
+const detail = fs.readFileSync(path.join(root, 'detail.html'), 'utf8');
+let cases = 0;
+const parsedStart = p.parseStartDisplay(start, '20261023', 2);
+assert.equal(parsedStart.status, 'published'); assert.equal(parsedStart.boats.length, 6); assert.deepEqual(parsedStart.boats.map((x) => x.player_id), ['4110','5022','4553','4051','4346','4552']); assert.equal(parsedStart.boats[0].start_timing, '.01'); cases++;
+const parsedDirect = p.parseDirectInfo(direct, '20261023', 2);
+assert.equal(parsedDirect.boats[0].lane, '1'); assert.equal(parsedDirect.boats[5].exhibition_time, '6.76'); cases++;
+const parsedDetail = p.parseDetail(detail, '20261023', 2);
+assert.deepEqual(parsedDetail[3], { lane: '4', start_timing: '.05', exhibition_time: '6.93', lap_time: '37.32', around_time: '6.37', straight_time: '7.27' }); cases++;
+assert.throws(() => p.parseStartDisplay(start.replace('day=20261023', 'day=20261022'), '20261023', 2), /identity/); cases++;
+assert.throws(() => p.mergePublished(parsedStart.boats, p.parseDirectInfo(direct.replace('toban=4553', 'toban=9999'), '20261023', 2).boats, parsedDetail, {}), /disagree/); cases++;
+(async () => {
+  const calls = [];
+  const result = await p.capture('20261023', 2, { fetchPage: async (url) => { calls.push(url); return { body: url.includes('start.php') ? start : url.includes('chokuzen.php') ? direct : detail, completedAt: `2026-10-23T06:4${calls.length}:00.000Z` }; }, now: () => '2026-10-23T06:50:00.000Z' });
+  assert.equal(calls.length, 3); assert.equal(result.race_code, '20261023OMR02'); assert.equal(result.source, 'official_omura'); assert.equal(result.boats.length, 6); assert.deepEqual(result.boats.map((b) => [b.lane,b.player_id,b.entry_course,b.exhibition_time,b.start_timing,b.lap_time,b.around_time,b.straight_time]), [[1,'4110',1,'6.94','.01','37.70','6.28','7.33'],[2,'5022',2,'6.80','.15','37.41','6.32','7.35'],[3,'4553',3,'6.85','.15','37.93','6.36','7.27'],[4,'4051',4,'6.93','.05','37.32','6.37','7.27'],[5,'4346',5,'6.93','.20','37.69','6.57','7.33'],[6,'4552',6,'6.76','.35','39.14','6.69','7.60']]); cases++;
+  await assert.rejects(() => p.capture('20261023', 2, { fetchPage: async (url) => ({ body: url.includes('start.php') ? start : url.includes('chokuzen.php') ? direct.replace('6.80', '6.81') : detail, completedAt: '2026-10-23T06:47:00.000Z' }), now: () => '2026-10-23T06:48:00.000Z' }), /disagree/); cases++;
+  console.log(`PASS ${cases} Omura parser cases`);
+})().catch((error) => { console.error(error.stack || String(error)); process.exitCode = 1; });
