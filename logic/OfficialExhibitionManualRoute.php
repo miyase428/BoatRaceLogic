@@ -12,6 +12,7 @@ declare(strict_types=1);
 final class OfficialExhibitionManualRoute
 {
     public const AMAGASAKI_OFFICIAL_START_DATE = '20261021';
+    public const TAMAGAWA_OFFICIAL_START_DATE = '20261023';
 
     /** @return array{source:string,reason:string} */
     public static function decide(string $raceCode): array
@@ -19,9 +20,12 @@ final class OfficialExhibitionManualRoute
         if (!preg_match('/^(\d{8})([A-Z]{3})(0[1-9]|1[0-2])$/', $raceCode, $matches)) {
             return ['source' => 'legacy', 'reason' => 'RACE_CODE_INVALID'];
         }
-        if ($matches[2] !== 'AMG' || $matches[1] < self::AMAGASAKI_OFFICIAL_START_DATE) {
-            return ['source' => 'legacy', 'reason' => 'LEGACY_MANUAL_ROUTE'];
+        if ($matches[2] === 'AMG' && $matches[1] >= self::AMAGASAKI_OFFICIAL_START_DATE) {
+            return ['source' => 'official_amagasaki', 'reason' => 'OFFICIAL_AMAGASAKI_MANUAL_ROUTE'];
         }
-        return ['source' => 'official_amagasaki', 'reason' => 'OFFICIAL_AMAGASAKI_MANUAL_ROUTE'];
+        if ($matches[2] === 'TMG' && $matches[1] >= self::TAMAGAWA_OFFICIAL_START_DATE) {
+            return ['source' => 'official_tamagawa', 'reason' => 'OFFICIAL_TAMAGAWA_MANUAL_ROUTE'];
+        }
+        return ['source' => 'legacy', 'reason' => 'LEGACY_MANUAL_ROUTE'];
     }
 }
