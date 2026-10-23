@@ -22,7 +22,8 @@ final class OfficialOmuraManualExhibitionUpdate
     {
         $route = OfficialExhibitionManualRoute::decide($raceCode);
         if ($route['source'] !== 'official_omura') return ['status' => 'blocked', 'reason' => 'OFFICIAL_EXHIBITION_UNSUPPORTED_VENUE'];
-        if (substr($raceCode, 0, 8) !== $this->now()->format('Ymd')) return ['status' => 'blocked', 'reason' => 'OFFICIAL_MANUAL_NONCURRENT_DATE'];
+        $preflight = self::manualFetchTimingDecision($raceCode, $this->now(), null, null);
+        if (!$preflight['allowed']) return ['status' => 'blocked', 'reason' => $preflight['reason']];
         $entries = $this->pdo->prepare('SELECT lane_number::int AS lane_number, player_id::text AS player_id FROM boat_race.race_entry WHERE race_code = :race ORDER BY lane_number');
         $entries->execute([':race' => $raceCode]);
         $raceEntries = $entries->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -31,18 +32,14 @@ final class OfficialOmuraManualExhibitionUpdate
         if ($existing['status'] !== 'absent') return $existing;
         $deadline = $this->deadline($raceCode);
         if ($deadline === null) return ['status' => 'blocked', 'reason' => 'OFFICIAL_DEADLINE_CACHE_UNAVAILABLE'];
-        if ($this->now() >= $deadline) return ['status' => 'no_save', 'reason' => 'OFFICIAL_MANUAL_DEADLINE_PASSED'];
         $fetched = $this->fetcher->fetch($raceCode);
         if (($fetched['outcome'] ?? null) !== 'published' || !is_array($fetched['payload'] ?? null)) {
             return ['status' => 'no_save', 'reason' => strtoupper((string)($fetched['outcome'] ?? 'parse_error'))];
         }
         $payload = $fetched['payload'];
         try { $completed = new DateTimeImmutable((string)$payload['fetched_at']); } catch (Throwable) { return ['status' => 'no_save', 'reason' => 'FETCH_TIMESTAMP_INVALID']; }
-        // This branch intentionally leaves Strict Forward unchanged.  Without
-        // changing its existing readers, the only safe way to prevent a late
-        // browser fetch from becoming apparent as pre-cutoff data is to reject
-        // it before it reaches exhibition_live.
-        if ($completed > $deadline) return ['status' => 'no_save', 'reason' => 'POST_DEADLINE_MANUAL_FETCH'];
+        $timing = self::manualFetchTimingDecision($raceCode, $this->now(), $deadline, $completed);
+        if (!$timing['allowed']) return ['status' => 'blocked', 'reason' => $timing['reason']];
         $begun = false;
         try {
             $this->pdo->beginTransaction(); $begun = true;
@@ -51,14 +48,35 @@ final class OfficialOmuraManualExhibitionUpdate
             $again = $this->existingState($raceCode, $raceEntries, true);
             if ($again['status'] !== 'absent') { $this->pdo->rollBack(); return $again; }
             $store = new OfficialOmuraExhibitionTransactionStore(new PdoOfficialOmuraExhibitionRepository($this->pdo), new OfficialOmuraExhibitionValidator());
-            $result = $store->persistManualWithinOpenTransaction($payload, $raceCode, $raceEntries, false);
+            $result = $store->persistManualWithinOpenTransaction($payload, $raceCode, $raceEntries, $timing['after_deadline']);
             if ($result['status'] !== 'saved') { $this->pdo->rollBack(); return ['status' => 'no_save', 'reason' => $result['status'], 'comparison' => $result['comparison']]; }
             $this->pdo->commit();
-            return ['status' => 'saved', 'reason' => 'MANUAL_OFFICIAL_SAVED', 'comparison' => 'none'];
+            return ['status' => 'saved', 'reason' => $timing['after_deadline'] ? 'MANUAL_OFFICIAL_POSTDEADLINE_SAVED' : 'MANUAL_OFFICIAL_SAVED', 'comparison' => 'none'];
         } catch (Throwable) {
             if ($begun && $this->pdo->inTransaction()) $this->pdo->rollBack();
             return ['status' => 'no_save', 'reason' => 'MANUAL_OFFICIAL_TRANSACTION_FAILED'];
         }
+    }
+
+    /**
+     * Keeps the manual route limited to the calendar day of the click in JST.
+     * A deadline is evidence for audit classification, not a closing time for
+     * Omura's same-day historical display.  Strict Forward independently
+     * accepts rows only when exhibition_live.created_date is before its cutoff.
+     *
+     * @return array{allowed:bool,reason:string,after_deadline:bool}
+     */
+    public static function manualFetchTimingDecision(string $raceCode, DateTimeImmutable $now, ?DateTimeImmutable $deadline, ?DateTimeImmutable $completed): array
+    {
+        $jstNow = $now->setTimezone(new DateTimeZone('Asia/Tokyo'));
+        if (!preg_match('/^\d{8}OMR(?:0[1-9]|1[0-2])$/', $raceCode) || substr($raceCode, 0, 8) !== $jstNow->format('Ymd')) {
+            return ['allowed' => false, 'reason' => 'OFFICIAL_MANUAL_NONCURRENT_DATE', 'after_deadline' => false];
+        }
+        return [
+            'allowed' => true,
+            'reason' => '',
+            'after_deadline' => $deadline !== null && $completed !== null && $completed > $deadline,
+        ];
     }
 
     /** @param list<array<string,mixed>> $raceEntries @return array{status:string,reason:string,comparison?:string} */
