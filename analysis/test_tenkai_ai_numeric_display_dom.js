@@ -212,6 +212,9 @@ async function boot(panels, fetchImpl, postPayload) {
     const css = fs.readFileSync('web/assets/css/tenkai_ai_status.css', 'utf8');
     const wallApi = fs.readFileSync('web/course34_wall_api.php', 'utf8');
     check(pcView.includes("tenkai_ai_status_panel.php") && appView.includes("tenkai_ai_status_panel.php"), 'pc_app_share_single_markup');
+    check(pcView.includes('tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1') && appView.includes('tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1')
+        && !pcView.includes('tenkai_ai_status.css?v=20261021-tenkai-numeric-v4') && !appView.includes('tenkai_ai_status.css?v=20261021-tenkai-numeric-v4'), 'pc_app_use_new_css_cache_key');
+    check(pcView.includes('tenkai_ai_status.js?v=20261023-postdeadline-v1') && appView.includes('tenkai_ai_status.js?v=20261023-postdeadline-v1'), 'javascript_cache_key_unchanged');
     check(partial.includes('data-tenkai-ai-value="wall"') && partial.includes('data-tenkai-ai-value="makuri"') && partial.includes('data-tenkai-ai-value="makurizashi"') && partial.includes('data-tenkai-ai-value="no-attack"'), 'only_four_allowed_metrics');
     check(css.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'), 'two_by_two_grid');
     check(!wallApi.includes("'wall_score'") && !wallApi.includes('wall_score'), 'wall_score_never_public');

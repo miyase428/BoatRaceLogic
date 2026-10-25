@@ -107,7 +107,7 @@ if (!is_string($appTrifectaJson)) {
     <link rel="stylesheet" href="/web/assets/css/app_recent_prediction_history.css?v=20261011-app-details-v6">
     <link rel="stylesheet" href="/web/assets/css/app_course_signals.css?v=20260917-0915">
     <link rel="stylesheet" href="/web/assets/css/course4_attack_type_race_detail.css?v=20261008-1">
-    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261021-tenkai-numeric-v4">
+    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1">
 </head>
 <body>
 <div class="app-shell">

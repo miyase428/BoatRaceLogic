@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="/web/assets/css/style.css?v=20260921-8point-ref">
     <link rel="stylesheet" href="/web/assets/css/pc_prediction_panels.css?v=20261016-ai-prediction-revert-v1">
     <link rel="stylesheet" href="/web/assets/css/course4_attack_type_race_detail.css?v=20261008-1">
-    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261021-tenkai-numeric-v4">
+    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1">
 </head>
 
 <body class="pc-web-page">
