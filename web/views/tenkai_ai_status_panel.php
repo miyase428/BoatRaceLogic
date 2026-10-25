@@ -12,6 +12,10 @@
     <h2 class="tenkai-ai-status-title">展開AI</h2>
     <div class="tenkai-ai-status-body" data-tenkai-ai-status>展開AIを確認中…</div>
     <div class="tenkai-ai-status-meta" data-tenkai-ai-meta></div>
+    <details class="tenkai-ai-model-detail" data-tenkai-ai-reference-model-detail hidden>
+        <summary>参考モデルの詳細</summary>
+        <code class="tenkai-ai-model-identifier" data-tenkai-ai-reference-model-identifier></code>
+    </details>
     <div class="tenkai-ai-status-notice" data-tenkai-ai-numeric-notice hidden></div>
     <div class="tenkai-ai-metric-grid" data-tenkai-ai-grid hidden aria-label="4コース展開予測">
         <div class="tenkai-ai-metric tenkai-ai-metric--positive">

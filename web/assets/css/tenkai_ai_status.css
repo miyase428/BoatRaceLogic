@@ -10,7 +10,10 @@
 
 .tenkai-ai-status-title { margin: 0 0 3px; font-size: 14px; font-weight: 800; color: #315c73; }
 .tenkai-ai-status-body { font-size: 13px; font-weight: 700; }
-.tenkai-ai-status-meta { min-height: 15px; margin-top: 2px; color: #697a85; font-size: 11px; white-space: pre-line; }
+.tenkai-ai-status-meta { min-height: 15px; margin-top: 2px; color: #697a85; font-size: 11px; white-space: pre-line; overflow-wrap: anywhere; word-break: break-word; }
+.tenkai-ai-model-detail { margin-top: 4px; color: #697a85; font-size: 11px; min-width: 0; }
+.tenkai-ai-model-detail summary { cursor: pointer; width: fit-content; max-width: 100%; }
+.tenkai-ai-model-identifier { display: block; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
 .tenkai-ai-status-card[data-tenkai-ai-state="captured"] { border-left-color: #4f8a65; background: #f4faf5; }
 .tenkai-ai-status-card[data-tenkai-ai-state="waiting_exhibition"],
 .tenkai-ai-status-card[data-tenkai-ai-state="waiting_eligibility"],
@@ -34,7 +37,8 @@
 }
 /* The author-level grid rule otherwise overrides the browser's [hidden] rule. */
 .tenkai-ai-metric-grid[hidden],
-.tenkai-ai-status-note[hidden] { display: none; }
+.tenkai-ai-status-note[hidden],
+.tenkai-ai-model-detail[hidden] { display: none; }
 .tenkai-ai-metric { min-width: 0; padding: 10px 9px; border-right: 1px solid #dbe5ea; border-bottom: 1px solid #dbe5ea; }
 .tenkai-ai-metric:nth-child(2n) { border-right: 0; }
 .tenkai-ai-metric:nth-last-child(-n + 2) { border-bottom: 0; }

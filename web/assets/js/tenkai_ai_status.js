@@ -22,6 +22,7 @@
     function timeText(value) { const date = new Date(String(value || '')); return Number.isNaN(date.getTime()) ? '' : String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0') + '取得'; }
     function percent(value) { return (value * 100).toFixed(1) + '%'; }
     function displayVersion(value) { const text = String(value || '').trim(); return /^[A-Za-z0-9._:+\/-]{1,80}$/.test(text) ? text : ''; }
+    function abbreviatedVersion(value) { const text = displayVersion(value); return text.length > 12 ? text.slice(0, 12) + '…' : text; }
     function officialSourceText(value) {
         return {official_amagasaki: '尼崎公式取得データ', official_tamagawa: '多摩川公式取得データ', official_suminoe: '住之江公式取得データ', official_omura: '大村公式取得データ'}[String(value || '')] || '';
     }
@@ -41,8 +42,10 @@
         return {kind: 'unknown', message: '展開AIを取得できませんでした'};
     }
     function active(panel, token, raceCode) { return panel.dataset.tenkaiAiRequest === token && String(panel.dataset.raceCode || '').trim().toUpperCase() === raceCode; }
-    function ui(panel) { return {body: panel.querySelector('[data-tenkai-ai-status]'), meta: panel.querySelector('[data-tenkai-ai-meta]'), notice: panel.querySelector('[data-tenkai-ai-numeric-notice]'), grid: panel.querySelector('[data-tenkai-ai-grid]'), footer: panel.querySelector('[data-tenkai-ai-footer]')}; }
-    function hideNumeric(panel) { const view = ui(panel); if (view.grid) { view.grid.hidden = true; view.grid.querySelectorAll('[data-tenkai-ai-value]').forEach(node => { node.textContent = '—'; }); } if (view.footer) view.footer.hidden = true; }
+    function ui(panel) { return {body: panel.querySelector('[data-tenkai-ai-status]'), meta: panel.querySelector('[data-tenkai-ai-meta]'), notice: panel.querySelector('[data-tenkai-ai-numeric-notice]'), grid: panel.querySelector('[data-tenkai-ai-grid]'), footer: panel.querySelector('[data-tenkai-ai-footer]'), modelDetail: panel.querySelector('[data-tenkai-ai-reference-model-detail]'), modelIdentifier: panel.querySelector('[data-tenkai-ai-reference-model-identifier]')}; }
+    function clearReferenceModelDetail(panel) { const view = ui(panel); if (view.modelDetail) { view.modelDetail.hidden = true; view.modelDetail.open = false; } if (view.modelIdentifier) view.modelIdentifier.textContent = ''; }
+    function setReferenceModelDetail(panel, value) { const view = ui(panel); const identifier = displayVersion(value); if (!identifier || !view.modelDetail || !view.modelIdentifier) return; view.modelIdentifier.textContent = identifier; view.modelDetail.hidden = false; }
+    function hideNumeric(panel) { const view = ui(panel); clearReferenceModelDetail(panel); if (view.grid) { view.grid.hidden = true; view.grid.querySelectorAll('[data-tenkai-ai-value]').forEach(node => { node.textContent = '—'; }); } if (view.footer) view.footer.hidden = true; }
     function setNotice(panel, text) { const notice = ui(panel).notice; if (!notice) return; notice.textContent = text || ''; notice.hidden = !text; }
     function renderStatus(panel, data) {
         const view = ui(panel); if (!view.body || !view.meta) return false;
@@ -103,7 +106,10 @@
             const sourceText = officialSourceText(referenceData.exhibition_source); if (sourceText) lines.push('展示情報：' + sourceText);
             const fetched = jstDateTime(referenceData.exhibition_fetched_at); if (fetched) lines.push('展示取得：' + fetched);
             const referenceComponent = attack.kind === 'POST_RACE_REFERENCE' ? attack : wall;
-            if (displayVersion(referenceComponent.logic_version)) lines.push('参考モデル：' + displayVersion(referenceComponent.logic_version) + '（現在モデル）');
+            if (displayVersion(referenceComponent.logic_version)) {
+                lines.push('参考モデル：' + abbreviatedVersion(referenceComponent.logic_version) + '（現在モデル）');
+                setReferenceModelDetail(panel, referenceComponent.logic_version);
+            }
         }
         if (view.meta) view.meta.textContent = lines.join('\n');
         if (reference) {

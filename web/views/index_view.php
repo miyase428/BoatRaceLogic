@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="/web/assets/css/style.css?v=20260921-8point-ref">
     <link rel="stylesheet" href="/web/assets/css/pc_prediction_panels.css?v=20261016-ai-prediction-revert-v1">
     <link rel="stylesheet" href="/web/assets/css/course4_attack_type_race_detail.css?v=20261008-1">
-    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1">
+    <link rel="stylesheet" href="/web/assets/css/tenkai_ai_status.css?v=20261025-tenkai-model-id-v1">
 </head>
 
 <body class="pc-web-page">
@@ -808,7 +808,7 @@
 </div> <!-- container -->
 
 <script src="/web/assets/js/race_deadline_display.js?v=20260922a"></script>
-<script src="/web/assets/js/tenkai_ai_status.js?v=20261023-postdeadline-v1"></script>
+<script src="/web/assets/js/tenkai_ai_status.js?v=20261025-tenkai-model-id-v1"></script>
     <script src="/web/assets/js/course4_attack_type_race_detail.js?v=20261016-display-off-v2"></script>
 <script>
 if ('serviceWorker' in navigator) {

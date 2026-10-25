@@ -16,20 +16,22 @@ function node() {
 }
 function makePanel(raceCode) {
     const values = {wall: node(), makuri: node(), makurizashi: node(), 'no-attack': node()};
-    const body = node(); const meta = node(); const notice = node(); const footer = node();
+    const body = node(); const meta = node(); const notice = node(); const footer = node(); const modelDetail = node(); const modelIdentifier = node();
     const grid = Object.assign(node(), {querySelector(selector) {
         const match = selector.match(/^\[data-tenkai-ai-value="(.+)"\]$/);
         return match ? values[match[1]] || null : null;
     }, querySelectorAll(selector) { return selector === '[data-tenkai-ai-value]' ? Object.values(values) : []; }});
     return {
-        dataset: {raceCode}, attributes: {'aria-busy': 'true'}, body, meta, notice, grid, footer, values,
+        dataset: {raceCode}, attributes: {'aria-busy': 'true'}, body, meta, notice, grid, footer, modelDetail, modelIdentifier, values,
         querySelector(selector) {
             return {
                 '[data-tenkai-ai-status]': body,
                 '[data-tenkai-ai-meta]': meta,
                 '[data-tenkai-ai-numeric-notice]': notice,
                 '[data-tenkai-ai-grid]': grid,
-                '[data-tenkai-ai-footer]': footer
+                '[data-tenkai-ai-footer]': footer,
+                '[data-tenkai-ai-reference-model-detail]': modelDetail,
+                '[data-tenkai-ai-reference-model-identifier]': modelIdentifier
             }[selector] || null;
         },
         setAttribute(key, value) { this.attributes[key] = String(value); }
@@ -82,12 +84,13 @@ async function boot(panels, fetchImpl, postPayload) {
     const reference = makePanel(race);
     await boot([reference], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
         success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'POST_RACE_REFERENCE',
-        components: {wall: {prediction_available: false, reason_code: 'PROSPECTIVE_SNAPSHOT_NOT_FOUND'}, attack: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: 'reference-model-v1', probabilities: {no_attack_success: .7, makuri_success: .2, makurizashi_success: .1}}},
+        components: {wall: {prediction_available: false, reason_code: 'PROSPECTIVE_SNAPSHOT_NOT_FOUND'}, attack: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: '0544b9c3bf41' + 'abcdef1234567890abcdef1234567890abcdef1234567890abcd', probabilities: {no_attack_success: .7, makuri_success: .2, makurizashi_success: .1}}},
         reference: {calculated_at: '2026-10-23T11:15:00Z', exhibition_fetched_at: '2026-10-23T11:04:00Z', exhibition_source: 'official_tamagawa', model_context: 'CURRENT_MODEL_AT_CALCULATION', notice: '締切後に取得した展示情報などを現在のモデルで計算した参考値です。当時の正式予測や前方検証の実績には含まれません。'}
     });
     check(reference.body.textContent === '展開AI｜事後参考分析', 'post_reference_label');
     check(reference.values.wall.textContent === '—' && reference.values.makuri.textContent === '20.0%', 'post_reference_partial_components');
-    check(reference.meta.textContent.includes('計算日時：2026/10/23 20:15 JST') && reference.meta.textContent.includes('展示取得：2026/10/23 20:04 JST') && reference.meta.textContent.includes('展示情報：多摩川公式取得データ') && reference.meta.textContent.includes('参考モデル：reference-model-v1（現在モデル）'), 'post_reference_provenance_display', reference.meta.textContent);
+    check(reference.meta.textContent.includes('計算日時：2026/10/23 20:15 JST') && reference.meta.textContent.includes('展示取得：2026/10/23 20:04 JST') && reference.meta.textContent.includes('展示情報：多摩川公式取得データ') && reference.meta.textContent.includes('参考モデル：0544b9c3bf41…（現在モデル）'), 'post_reference_provenance_display', reference.meta.textContent);
+    check(reference.modelDetail.hidden === false && reference.modelIdentifier.textContent === '0544b9c3bf41abcdef1234567890abcdef1234567890abcdef1234567890abcd', 'post_reference_model_identifier_is_available_in_details', reference.modelIdentifier.textContent);
     check(reference.notice.textContent.includes('3C壁：予測に必要な事前データがありません'), 'post_reference_component_specific_reason');
     check(reference.notice.textContent.includes('正式予測や前方検証の実績には含まれません'), 'post_reference_warning');
 
@@ -112,6 +115,7 @@ async function boot(panels, fetchImpl, postPayload) {
     });
     check(redisplay.body.textContent === '締切前の予測を再表示', 'formal_redisplay_label');
     check(redisplay.values.makuri.textContent === '15.0%' && redisplay.meta.textContent.includes('予測生成：2026/10/20 16:48 JST') && redisplay.meta.textContent.includes('正式モデル：formal-model'), 'formal_redisplay_values_unchanged');
+    check(redisplay.modelDetail.hidden === true && redisplay.modelIdentifier.textContent === '', 'formal_redisplay_does_not_use_reference_model_detail');
 
     const reasonCases = [
         ['VENUE_NOT_SUPPORTED', 'この場は展開AIの対象外です'],
@@ -212,11 +216,12 @@ async function boot(panels, fetchImpl, postPayload) {
     const css = fs.readFileSync('web/assets/css/tenkai_ai_status.css', 'utf8');
     const wallApi = fs.readFileSync('web/course34_wall_api.php', 'utf8');
     check(pcView.includes("tenkai_ai_status_panel.php") && appView.includes("tenkai_ai_status_panel.php"), 'pc_app_share_single_markup');
-    check(pcView.includes('tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1') && appView.includes('tenkai_ai_status.css?v=20261025-tenkai-postdeadline-v1')
+    check(pcView.includes('tenkai_ai_status.css?v=20261025-tenkai-model-id-v1') && appView.includes('tenkai_ai_status.css?v=20261025-tenkai-model-id-v1')
         && !pcView.includes('tenkai_ai_status.css?v=20261021-tenkai-numeric-v4') && !appView.includes('tenkai_ai_status.css?v=20261021-tenkai-numeric-v4'), 'pc_app_use_new_css_cache_key');
-    check(pcView.includes('tenkai_ai_status.js?v=20261023-postdeadline-v1') && appView.includes('tenkai_ai_status.js?v=20261023-postdeadline-v1'), 'javascript_cache_key_unchanged');
+    check(pcView.includes('tenkai_ai_status.js?v=20261025-tenkai-model-id-v1') && appView.includes('tenkai_ai_status.js?v=20261025-tenkai-model-id-v1'), 'pc_app_use_new_javascript_cache_key');
     check(partial.includes('data-tenkai-ai-value="wall"') && partial.includes('data-tenkai-ai-value="makuri"') && partial.includes('data-tenkai-ai-value="makurizashi"') && partial.includes('data-tenkai-ai-value="no-attack"'), 'only_four_allowed_metrics');
     check(css.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'), 'two_by_two_grid');
+    check(css.includes('overflow-wrap: anywhere') && partial.includes('data-tenkai-ai-reference-model-identifier'), 'long_model_identifier_cannot_force_horizontal_overflow');
     check(!wallApi.includes("'wall_score'") && !wallApi.includes('wall_score'), 'wall_score_never_public');
     console.log(JSON.stringify({kind: 'DOM_CONTRACT_HARNESS_NOT_BROWSER', tests}, null, 2));
 })().catch(error => { console.error(error.stack || String(error)); process.exit(1); });
