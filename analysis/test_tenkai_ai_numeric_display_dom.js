@@ -35,7 +35,7 @@ function makePanel(raceCode) {
         setAttribute(key, value) { this.attributes[key] = String(value); }
     };
 }
-function response(data, ok = true) { return {ok, json: async () => data}; }
+function response(data, ok = true, statusCode = ok ? 200 : 500) { return {ok, status: statusCode, json: async () => data}; }
 function status(raceCode, statusName, extra) {
     return Object.assign({
         success: true, api_version: 'tenkai-ai-status/v1', race_code: raceCode,
@@ -83,11 +83,27 @@ async function boot(panels, fetchImpl, postPayload) {
     await boot([reference], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
         success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'POST_RACE_REFERENCE',
         components: {wall: {prediction_available: false, reason_code: 'PROSPECTIVE_SNAPSHOT_NOT_FOUND'}, attack: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: 'reference-model-v1', probabilities: {no_attack_success: .7, makuri_success: .2, makurizashi_success: .1}}},
-        reference: {notice: '締切後に取得した展示情報などを現在のモデルで計算した参考値です。当時の正式予測や前方検証の実績には含まれません。'}
+        reference: {calculated_at: '2026-10-23T11:15:00Z', exhibition_fetched_at: '2026-10-23T11:04:00Z', exhibition_source: 'official_tamagawa', model_context: 'CURRENT_MODEL_AT_CALCULATION', notice: '締切後に取得した展示情報などを現在のモデルで計算した参考値です。当時の正式予測や前方検証の実績には含まれません。'}
     });
     check(reference.body.textContent === '展開AI｜事後参考分析', 'post_reference_label');
     check(reference.values.wall.textContent === '—' && reference.values.makuri.textContent === '20.0%', 'post_reference_partial_components');
+    check(reference.meta.textContent.includes('計算日時：2026/10/23 20:15 JST') && reference.meta.textContent.includes('展示取得：2026/10/23 20:04 JST') && reference.meta.textContent.includes('展示情報：多摩川公式取得データ') && reference.meta.textContent.includes('参考モデル：reference-model-v1（現在モデル）'), 'post_reference_provenance_display', reference.meta.textContent);
+    check(reference.notice.textContent.includes('3C壁：予測に必要な事前データがありません'), 'post_reference_component_specific_reason');
     check(reference.notice.textContent.includes('正式予測や前方検証の実績には含まれません'), 'post_reference_warning');
+
+    const wallOnly = makePanel(race);
+    await boot([wallOnly], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
+        success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'POST_RACE_REFERENCE',
+        components: {wall: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: 'wall-reference-v1', wall_probability: .42}, attack: {prediction_available: false, reason_code: 'EXHIBITION_NOT_COMPLETE'}}, reference: {notice: '現在のモデルによる参考分析です。当時の正式予測・前方検証の実績には含まれません。'}
+    });
+    check(wallOnly.values.wall.textContent === '42.0%' && wallOnly.values.makuri.textContent === '—' && wallOnly.notice.textContent.includes('4C攻撃：展示データが不足しています'), 'wall_only_remains_visible');
+
+    const bothAvailable = makePanel(race);
+    await boot([bothAvailable], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
+        success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'POST_RACE_REFERENCE',
+        components: {wall: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: 'wall-v1', wall_probability: .42}, attack: {prediction_available: true, kind: 'POST_RACE_REFERENCE', logic_version: 'attack-v1', probabilities: {no_attack_success: .7, makuri_success: .2, makurizashi_success: .1}}}, reference: {notice: '現在のモデルによる参考分析です。当時の正式予測・前方検証の実績には含まれません。'}
+    });
+    check(bothAvailable.values.wall.textContent === '42.0%' && bothAvailable.values.makuri.textContent === '20.0%', 'both_components_visible');
 
     const redisplay = makePanel(race);
     await boot([redisplay], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
@@ -95,7 +111,30 @@ async function boot(panels, fetchImpl, postPayload) {
         components: {wall: {prediction_available: false, reason_code: 'FORMAL_WALL_NOT_STORED'}, attack: {prediction_available: true, kind: 'FORMAL_PREDICTION', prediction_generated_at: '2026-10-20T16:48:00+09:00', logic_version: 'formal-model-v1', probabilities: {no_attack_success: .8, makuri_success: .15, makurizashi_success: .05}}}, reference: {}
     });
     check(redisplay.body.textContent === '締切前の予測を再表示', 'formal_redisplay_label');
-    check(redisplay.values.makuri.textContent === '15.0%' && redisplay.meta.textContent.includes('16:48取得'), 'formal_redisplay_values_unchanged');
+    check(redisplay.values.makuri.textContent === '15.0%' && redisplay.meta.textContent.includes('予測生成：2026/10/20 16:48 JST') && redisplay.meta.textContent.includes('正式モデル：formal-model'), 'formal_redisplay_values_unchanged');
+
+    const reasonCases = [
+        ['VENUE_NOT_SUPPORTED', 'この場は展開AIの対象外です'],
+        ['NON_WAKUNARI', '進入変更のため対象外です'],
+        ['PROSPECTIVE_SNAPSHOT_NOT_FOUND', '予測に必要な事前データがありません'],
+        ['EXHIBITION_NOT_COMPLETE', '展示データが不足しています'],
+        ['OFFICIAL_EXHIBITION_AUDIT_DATA_MISMATCH', 'データの整合性を確認できません'],
+        ['FUTURE_UNKNOWN_REASON', '展開AIを取得できませんでした']
+    ];
+    for (const [reason, expected] of reasonCases) {
+        const panel = makePanel(race);
+        await boot([panel], async () => { throw new Error('pre-deadline endpoints must not run'); }, {
+            success: true, api_version: 'tenkai-ai-postdeadline-display/v1', race_code: race, phase: 'POST_DEADLINE', display_mode: 'DATA_INSUFFICIENT',
+            components: {wall: {prediction_available: false, reason_code: reason}, attack: {prediction_available: false, reason_code: reason}}, reference: {}
+        });
+        check(panel.body.textContent === expected, 'reason_mapping_' + reason, panel.body.textContent);
+    }
+
+    const busy = makePanel(race);
+    const busyDocument = {readyState: 'complete', querySelectorAll: selector => selector === '[data-tenkai-ai-panel]' ? [busy] : [], addEventListener() {}};
+    const busyContext = vm.createContext({document: busyDocument, fetch: async () => response({success: false, error_code: 'REFERENCE_RACE_RATE_LIMITED'}, false, 429), console, Promise, Date, setTimeout});
+    vm.runInContext(source, busyContext, {filename: 'tenkai_ai_status.js'}); await flush();
+    check(busy.body.textContent === '現在、参考分析の処理が混み合っています' && busy.dataset.tenkaiAiState === 'reference_busy', 'rate_limit_display');
 
     const waiting = makePanel('20261020KRY08'); let waitingNumericCalls = 0;
     await boot([waiting], async url => {

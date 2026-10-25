@@ -21,7 +21,25 @@
     }
     function timeText(value) { const date = new Date(String(value || '')); return Number.isNaN(date.getTime()) ? '' : String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0') + '取得'; }
     function percent(value) { return (value * 100).toFixed(1) + '%'; }
-    function shortVersion(value) { const text = String(value || ''); return text ? text.slice(0, 12) : ''; }
+    function displayVersion(value) { const text = String(value || '').trim(); return /^[A-Za-z0-9._:+\/-]{1,80}$/.test(text) ? text : ''; }
+    function officialSourceText(value) {
+        return {official_amagasaki: '尼崎公式取得データ', official_tamagawa: '多摩川公式取得データ', official_suminoe: '住之江公式取得データ', official_omura: '大村公式取得データ'}[String(value || '')] || '';
+    }
+    function jstDateTime(value) {
+        const date = new Date(String(value || '')); if (Number.isNaN(date.getTime())) return '';
+        const parts = new Intl.DateTimeFormat('ja-JP', {timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).formatToParts(date);
+        const item = name => (parts.find(part => part.type === name) || {}).value || '';
+        return item('year') + '/' + item('month') + '/' + item('day') + ' ' + item('hour') + ':' + item('minute') + ' JST';
+    }
+    function reasonPresentation(reason) {
+        const code = String(reason || '');
+        if (code === 'VENUE_NOT_SUPPORTED') return {kind: 'unsupported', message: 'この場は展開AIの対象外です'};
+        if (code === 'NON_WAKUNARI') return {kind: 'entry_change', message: '進入変更のため対象外です'};
+        if (code === 'PROSPECTIVE_SNAPSHOT_NOT_FOUND') return {kind: 'static_missing', message: '予測に必要な事前データがありません'};
+        if (['EXHIBITION_NOT_COMPLETE', 'ENTRY_MAPPING_INCOMPLETE', 'OFFICIAL_EXHIBITION_AUDIT_NOT_FOUND'].includes(code)) return {kind: 'exhibition_missing', message: '展示データが不足しています'};
+        if (['PROSPECTIVE_SNAPSHOT_INVALID', 'PROSPECTIVE_SNAPSHOT_NOT_PREDEADLINE', 'PROSPECTIVE_SNAPSHOT_INCOMPLETE', 'SNAPSHOT_ENTRY_MAPPING_MISMATCH', 'OFFICIAL_EXHIBITION_AUDIT_SOURCE_MISMATCH', 'OFFICIAL_EXHIBITION_AUDIT_DATA_MISMATCH', 'OFFICIAL_DEADLINE_UNAVAILABLE'].includes(code)) return {kind: 'integrity', message: 'データの整合性を確認できません'};
+        return {kind: 'unknown', message: '展開AIを取得できませんでした'};
+    }
     function active(panel, token, raceCode) { return panel.dataset.tenkaiAiRequest === token && String(panel.dataset.raceCode || '').trim().toUpperCase() === raceCode; }
     function ui(panel) { return {body: panel.querySelector('[data-tenkai-ai-status]'), meta: panel.querySelector('[data-tenkai-ai-meta]'), notice: panel.querySelector('[data-tenkai-ai-numeric-notice]'), grid: panel.querySelector('[data-tenkai-ai-grid]'), footer: panel.querySelector('[data-tenkai-ai-footer]')}; }
     function hideNumeric(panel) { const view = ui(panel); if (view.grid) { view.grid.hidden = true; view.grid.querySelectorAll('[data-tenkai-ai-value]').forEach(node => { node.textContent = '—'; }); } if (view.footer) view.footer.hidden = true; }
@@ -66,25 +84,39 @@
         };
         const available = Object.values(values).some(finiteProbability);
         if (!available || !view.grid || !view.footer) {
-            renderNumericWaiting(panel, '予測データ不足', 'waiting_prediction');
-            const reasons = [wall.reason_code, attack.reason_code].filter(Boolean).join(' / ');
-            if (reasons) setNotice(panel, reasons);
+            const states = [reasonPresentation(wall.reason_code), reasonPresentation(attack.reason_code)];
+            const priority = ['unsupported', 'entry_change', 'integrity', 'static_missing', 'exhibition_missing', 'unknown'];
+            const selected = priority.map(kind => states.find(state => state.kind === kind)).find(Boolean) || reasonPresentation('');
+            renderNumericWaiting(panel, selected.message, selected.kind);
             return;
         }
         Object.keys(values).forEach(key => { const node = view.grid.querySelector('[data-tenkai-ai-value="' + key + '"]'); if (node) node.textContent = finiteProbability(values[key]) ? percent(values[key]) : '—'; });
         view.grid.hidden = false; view.footer.hidden = false;
         const formal = attack.kind === 'FORMAL_PREDICTION'; const reference = wall.kind === 'POST_RACE_REFERENCE' || attack.kind === 'POST_RACE_REFERENCE';
         if (view.body) view.body.textContent = formal && reference ? '締切前予測＋事後参考分析' : (formal ? '締切前の予測を再表示' : '展開AI｜事後参考分析');
-        const times = [];
-        if (formal && attack.prediction_generated_at) times.push(timeText(attack.prediction_generated_at));
-        const version = shortVersion((formal ? attack : (attack.prediction_available ? attack : wall)).logic_version);
-        if (version) times.push('モデル ' + version);
-        if (view.meta) view.meta.textContent = times.join('・');
-        if (reference) setNotice(panel, data.reference && data.reference.notice ? data.reference.notice : '締切後の参考値です。正式予測には含まれません。');
+        const lines = [];
+        if (formal && attack.prediction_generated_at) lines.push('予測生成：' + jstDateTime(attack.prediction_generated_at));
+        if (formal && displayVersion(attack.logic_version)) lines.push('正式モデル：' + displayVersion(attack.logic_version));
+        if (reference) {
+            const referenceData = data.reference || {};
+            const calculated = jstDateTime(referenceData.calculated_at); if (calculated) lines.push('計算日時：' + calculated);
+            const sourceText = officialSourceText(referenceData.exhibition_source); if (sourceText) lines.push('展示情報：' + sourceText);
+            const fetched = jstDateTime(referenceData.exhibition_fetched_at); if (fetched) lines.push('展示取得：' + fetched);
+            const referenceComponent = attack.kind === 'POST_RACE_REFERENCE' ? attack : wall;
+            if (displayVersion(referenceComponent.logic_version)) lines.push('参考モデル：' + displayVersion(referenceComponent.logic_version) + '（現在モデル）');
+        }
+        if (view.meta) view.meta.textContent = lines.join('\n');
+        if (reference) {
+            const missing = [];
+            if (!wall.prediction_available) missing.push('3C壁：' + reasonPresentation(wall.reason_code).message);
+            if (!attack.prediction_available) missing.push('4C攻撃：' + reasonPresentation(attack.reason_code).message);
+            const notice = data.reference && data.reference.notice ? data.reference.notice : '現在のモデルによる参考分析です。当時の正式予測・前方検証の実績には含まれません。';
+            setNotice(panel, missing.concat([notice]).join('\n'));
+        }
         else setNotice(panel, '締切前に保存された確率を再計算せず表示しています。');
         panel.dataset.tenkaiAiState = reference ? 'post_reference' : 'formal_redisplay'; panel.setAttribute('aria-busy', 'false');
     }
-    async function fetchJson(url) { const response = await fetch(url, {cache: 'no-store', credentials: 'same-origin'}); let data; try { data = await response.json(); } catch (_) { throw new Error('MALFORMED_JSON'); } if (!response.ok) throw new Error('HTTP_ERROR'); return data; }
+    async function fetchJson(url) { const response = await fetch(url, {cache: 'no-store', credentials: 'same-origin'}); let data; try { data = await response.json(); } catch (_) { throw new Error('MALFORMED_JSON'); } if (!response.ok) { const error = new Error(String((data && data.error_code) || 'HTTP_ERROR')); error.status = response.status; throw error; } return data; }
     function unavailableReason(data) { return String((data && (data.reason_code || data.reason_message)) || ''); }
     async function load(panel) {
         const raceCode = String(panel.dataset.raceCode || '').trim().toUpperCase(); const token = String(Number(panel.dataset.tenkaiAiRequest || '0') + 1); panel.dataset.tenkaiAiRequest = token; hideNumeric(panel); setNotice(panel, '');
@@ -110,7 +142,12 @@
                 return;
             }
             renderNumeric(panel, wall, attack, formalCaptured);
-        } catch (_) { if (active(panel, token, raceCode)) renderUnavailable(panel); }
+        } catch (error) {
+            if (!active(panel, token, raceCode)) return;
+            if (error && ['REFERENCE_GLOBAL_BUSY', 'REFERENCE_RACE_BUSY', 'REFERENCE_RACE_RATE_LIMITED', 'REFERENCE_CLIENT_RATE_LIMITED'].includes(error.message)) {
+                renderNumericWaiting(panel, '現在、参考分析の処理が混み合っています', 'reference_busy');
+            } else renderUnavailable(panel);
+        }
     }
     function mountAll() { document.querySelectorAll('[data-tenkai-ai-panel]').forEach(panel => { if (panel.dataset.tenkaiAiMounted === '1') return; panel.dataset.tenkaiAiMounted = '1'; load(panel); }); }
     root.Cc30cTenkaiAiStatus = Object.freeze({mountAll, load, validStatusPayload, validWallPayload, validAttackPayload, validPostDeadlinePayload, statusText: STATUS_TEXT});

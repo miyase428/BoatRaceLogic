@@ -10,7 +10,7 @@
 
 .tenkai-ai-status-title { margin: 0 0 3px; font-size: 14px; font-weight: 800; color: #315c73; }
 .tenkai-ai-status-body { font-size: 13px; font-weight: 700; }
-.tenkai-ai-status-meta { min-height: 15px; margin-top: 2px; color: #697a85; font-size: 11px; }
+.tenkai-ai-status-meta { min-height: 15px; margin-top: 2px; color: #697a85; font-size: 11px; white-space: pre-line; }
 .tenkai-ai-status-card[data-tenkai-ai-state="captured"] { border-left-color: #4f8a65; background: #f4faf5; }
 .tenkai-ai-status-card[data-tenkai-ai-state="waiting_exhibition"],
 .tenkai-ai-status-card[data-tenkai-ai-state="waiting_eligibility"],
@@ -19,9 +19,10 @@
 .tenkai-ai-status-card[data-tenkai-ai-state="not_target"] { border-left-color: #87949c; background: #f8fafb; }
 .tenkai-ai-status-card[data-tenkai-ai-state="post_reference"] { border-left-color: #9a6ca8; background: #fbf7fc; }
 .tenkai-ai-status-card[data-tenkai-ai-state="formal_redisplay"] { border-left-color: #4f8a65; background: #f4faf5; }
+.tenkai-ai-status-card[data-tenkai-ai-state="reference_busy"] { border-left-color: #b78c3b; background: #fffaf1; }
 .tenkai-ai-status-card[data-tenkai-ai-state="post_reference"] .tenkai-ai-status-title { color: #72507c; }
 
-.tenkai-ai-status-notice { margin-top: 7px; color: #697a85; font-size: 12px; font-weight: 700; }
+.tenkai-ai-status-notice { margin-top: 7px; color: #697a85; font-size: 12px; font-weight: 700; white-space: pre-line; }
 .tenkai-ai-metric-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

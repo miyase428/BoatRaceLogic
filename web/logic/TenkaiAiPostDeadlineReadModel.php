@@ -13,6 +13,8 @@ final class TenkaiAiPostDeadlineReadModel
         private readonly ?Closure $referenceRunner = null,
         private readonly ?string $deadlineRoot = null,
         private readonly ?string $formalRoot = null,
+        private readonly ?string $referenceScript = null,
+        private readonly float $referenceTimeoutSeconds = 15.0,
     ) {
     }
 
@@ -50,12 +52,23 @@ final class TenkaiAiPostDeadlineReadModel
             'strict_forward_eligible' => false, 'persisted' => false,
             'components' => ['wall' => $wall, 'attack' => $attack],
             'reference' => [
-                'calculated_at' => $reference['calculated_at'] ?? null,
-                'input_provenance' => $reference['input_provenance'] ?? null,
+                'calculated_at' => $this->publicTimestamp($reference['calculated_at'] ?? null),
+                'exhibition_fetched_at' => $this->publicTimestamp($reference['input_provenance']['exhibition_observed_at'] ?? null),
+                'exhibition_source' => $this->publicSource($reference['input_provenance']['exhibition_source'] ?? null),
                 'model_context' => $reference['model_context'] ?? null,
                 'notice' => '締切後に取得した展示情報などを現在のモデルで計算した参考値です。当時の正式予測や前方検証の実績には含まれません。',
             ],
         ];
+    }
+
+    /** The API uses this before taking an inference lease; it never runs Python. */
+    public function phase(string $raceCode): string
+    {
+        $raceCode = strtoupper(trim($raceCode));
+        if (preg_match('/^\d{8}[A-Z0-9]{3}(0[1-9]|1[0-2])$/', $raceCode) !== 1) throw new InvalidArgumentException('INVALID_RACE_CODE');
+        $deadline = $this->deadline($raceCode);
+        if ($deadline === null) return 'UNKNOWN';
+        return $this->now() <= $deadline ? 'PRE_DEADLINE' : 'POST_DEADLINE';
     }
 
     private function now(): DateTimeImmutable
@@ -117,7 +130,8 @@ final class TenkaiAiPostDeadlineReadModel
             $valid[] = [
                 'prediction_available' => true,
                 'probabilities' => ['no_attack_success' => $probabilities[0], 'makuri_success' => $probabilities[1], 'makurizashi_success' => $probabilities[2]],
-                'prediction_generated_at' => $generated->format(DATE_ATOM), 'prediction_cutoff' => $cutoff->format(DATE_ATOM),
+                'prediction_generated_at' => $generated->setTimezone(new DateTimeZone('Asia/Tokyo'))->format(DATE_ATOM),
+                'prediction_cutoff' => $cutoff->setTimezone(new DateTimeZone('Asia/Tokyo'))->format(DATE_ATOM),
                 'logic_version' => (string)($row['logic_version'] ?? ''), 'artifact_sha256' => (string)($row['artifact_sha256'] ?? ''),
                 'snapshot_hash' => (string)($row['snapshot_hash'] ?? ''),
             ];
@@ -133,7 +147,7 @@ final class TenkaiAiPostDeadlineReadModel
         $variant = $this->modelVariant(substr($raceCode, 8, 3));
         if ($variant === null) return ['components' => ['wall' => ['prediction_available' => false, 'reason_code' => 'VENUE_NOT_SUPPORTED'], 'attack' => ['prediction_available' => false, 'reason_code' => 'VENUE_NOT_SUPPORTED']]];
         if ($this->referenceRunner !== null) return (array)($this->referenceRunner)($raceCode, $deadline->format(DATE_ATOM), $variant);
-        $cmd = ['/usr/bin/python3', $this->repoRoot . '/forecast/tenkai_ai_postrace_reference.py', '--race-code', $raceCode,
+        $cmd = ['/usr/bin/python3', $this->referenceScript ?? ($this->repoRoot . '/forecast/tenkai_ai_postrace_reference.py'), '--race-code', $raceCode,
             '--official-deadline', $deadline->format(DATE_ATOM), '--model-variant', $variant];
         $pipes = []; $process = proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->repoRoot);
         if (!is_resource($process)) return [];
@@ -141,7 +155,7 @@ final class TenkaiAiPostDeadlineReadModel
         $out = ''; $started = microtime(true); $timedOut = false;
         while (($state = proc_get_status($process))['running']) {
             $out .= stream_get_contents($pipes[1]); stream_get_contents($pipes[2]);
-            if (microtime(true) - $started > 15.0) { proc_terminate($process); $timedOut = true; break; }
+            if (microtime(true) - $started > $this->referenceTimeoutSeconds) { proc_terminate($process); $timedOut = true; break; }
             usleep(10000);
         }
         $out .= stream_get_contents($pipes[1]); stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]); $exit = proc_close($process);
@@ -181,6 +195,18 @@ final class TenkaiAiPostDeadlineReadModel
         unset($hashBody['prediction_generated_at'], $hashBody['capture_generated_at'], $hashBody['snapshot_hash']);
         return is_string($row['snapshot_hash'] ?? null)
             && hash_equals((string)$row['snapshot_hash'], hash('sha256', $this->canonicalJson($hashBody)));
+    }
+
+    private function publicTimestamp(mixed $value): ?string
+    {
+        if (!is_string($value) || $value === '') return null;
+        try { return (new DateTimeImmutable($value))->setTimezone(new DateTimeZone('Asia/Tokyo'))->format(DATE_ATOM); }
+        catch (Throwable) { return null; }
+    }
+
+    private function publicSource(mixed $value): ?string
+    {
+        return in_array($value, ['official_amagasaki', 'official_tamagawa', 'official_suminoe', 'official_omura'], true) ? (string)$value : null;
     }
 
     /** @return array<string,mixed> */
