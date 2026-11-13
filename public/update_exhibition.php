@@ -14,11 +14,13 @@ $race_code = $_POST["race_code"]
         ?? $_GET["race_code"]
         ?? "";
 $pdo = null;
+$officialLegacyWriteTransaction = false;
 
 require_once __DIR__ . '/../logic/race_url.php';
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/../logic/exhibition_source_guard.php';
 require_once __DIR__ . '/../logic/exhibition_data_quality.php';
+require_once __DIR__ . '/../logic/OfficialAmagasakiWriteBarrier.php';
 
 // ------------------------------------------------------------
 // ログ出力関数
@@ -109,6 +111,20 @@ try {
         throw new Exception("race_codeがありません");
     }
 
+    $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, 'web');
+    if (!$officialGuard['allow_legacy']) {
+        ob_end_clean();
+        header("Content-Type: application/json; charset=UTF-8");
+        echo json_encode([
+            "success" => false,
+            "race_code" => $race_code,
+            "blocked" => true,
+            "reason" => $officialGuard['reason'],
+            "message" => "尼崎公式展示の管理対象のため、既存取得では更新しません"
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    }
+
     // 正しい展示を持つレースでは再スクレイピングしない。
     // 表示のためのボタン操作が取得元への追加アクセスにならないようにする。
     if (hasSavedExhibition($pdo, $race_code)) {
@@ -174,6 +190,10 @@ try {
     if (!hasCompleteExhibitionData($data, $place_code)) {
         throw new Exception("展示情報が全項目そろっていないため、保存せず次回更新対象にします");
     }
+
+    // The first check was before fetching. Repeat it under the same per-race
+    // lock used by the official writer before any legacy upsert can occur.
+    $officialLegacyWriteTransaction = officialAmagasakiBeginLegacyWrite($pdo, $race_code, 'web');
 
     // ------------------------------------------------------------
     // 過去の場平均
@@ -284,6 +304,9 @@ try {
         ]);
     }
 
+    officialAmagasakiFinishLegacyWrite($pdo, $officialLegacyWriteTransaction, true);
+    $officialLegacyWriteTransaction = false;
+
     log_message("{$race_code} 更新完了");
 
     ob_end_clean();
@@ -296,6 +319,11 @@ try {
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 } catch (Throwable $e) {
+
+    if ($pdo instanceof PDO && $officialLegacyWriteTransaction) {
+        officialAmagasakiFinishLegacyWrite($pdo, true, false);
+        $officialLegacyWriteTransaction = false;
+    }
 
     $errorMessage = $e->getMessage();
     log_message("エラー発生: " . $errorMessage);

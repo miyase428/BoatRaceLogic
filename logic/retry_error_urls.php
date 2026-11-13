@@ -20,6 +20,9 @@ require_once __DIR__ . '/../common/safeGoto.php';
 require_once __DIR__ . '/../common/exhibition_calc.php';
 require_once __DIR__ . '/../common/save_exhibition.php';
 require_once __DIR__ . '/../common/db_connect.php';
+require_once __DIR__ . '/OfficialAmagasakiWriteBarrier.php';
+
+$placeMap = require __DIR__ . '/../config/place_map.php';
 
 // ------------------------------------------------------------
 // error_urls.txt の読み込み
@@ -72,6 +75,13 @@ foreach ($urls as $url) {
     }
 
     $race_code = $race_date . $place_no . str_pad($race_no, 2, '0', STR_PAD_LEFT);
+    $place_code = $placeMap[(int)$place_no] ?? null;
+    $canonicalRaceCode = is_string($place_code) ? $race_date . $place_code . str_pad($race_no, 2, '0', STR_PAD_LEFT) : $race_code;
+    $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $canonicalRaceCode, 'retry');
+    if (!$officialGuard['allow_legacy']) {
+        log_message("尼崎公式管理対象のため既存リトライを保留: {$canonicalRaceCode} {$officialGuard['reason']}");
+        continue;
+    }
 
     // ------------------------------------------------------------
     // ページ取得
@@ -121,7 +131,15 @@ foreach ($urls as $url) {
         $results[] = $calc;
     }
 
-    save_exhibition($pdo, $race_code, $results);
+    try {
+        $writeTransaction = officialAmagasakiBeginLegacyWrite($pdo, $canonicalRaceCode, 'retry');
+        save_exhibition($pdo, $race_code, $results);
+        officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, true);
+    } catch (Throwable $error) {
+        if (isset($writeTransaction)) officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, false);
+        log_message("尼崎公式管理対象または保存競合のため既存リトライを保留: {$canonicalRaceCode} " . $error->getMessage());
+        continue;
+    }
 
     log_message("保存完了: {$race_code}");
 

@@ -4,6 +4,8 @@ date_default_timezone_set('Asia/Tokyo');
 require_once __DIR__ . '/../common/db_connect.php';
 require_once __DIR__ . '/exhibition_source_guard.php';
 require_once __DIR__ . '/exhibition_data_quality.php';
+require_once __DIR__ . '/OfficialAmagasakiWriteBarrier.php';
+require_once __DIR__ . '/OfficialAmagasakiNightlyBackfill.php';
 
 // ------------------------------------------------------------
 // ログ出力関数（画面にも出しつつ log/YYYYMMDD.log に保存）
@@ -240,8 +242,53 @@ function fetchExhibitionData(string $url, string $placeCode): array
     ];
 }
 
-function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array $data): void
+/** @return list<array<string,mixed>> */
+function officialAmagasakiNightlyCalculatedResults(PDO $pdo, string $placeCode, array $data): array
 {
+    $average = $pdo->prepare('SELECT AVG(exhibition_time) AS avg_exh, AVG(lap_time) AS avg_lap, AVG(around_time) AS avg_around, AVG(straight_time) AS avg_straight FROM boat_race.exhibition_live WHERE race_code LIKE :place_prefix');
+    $average->execute([':place_prefix' => "%{$placeCode}%"]);
+    $avg = $average->fetch(PDO::FETCH_ASSOC) ?: [];
+    $results = [];
+    foreach ($data as $row) {
+        $exhibition = toFloatOrZero($row['exhibition_time']);
+        $lap = toFloatOrZero($row['lap_time']);
+        $around = toFloatOrZero($row['around_time']);
+        $straight = toFloatOrZero($row['straight_time']);
+        $diffStraight = (float)($avg['avg_straight'] ?? 0) - $straight;
+        $diffAround = (float)($avg['avg_around'] ?? 0) - $around;
+        $diffLap = (float)($avg['avg_lap'] ?? 0) - $lap;
+        $diffExhibition = (float)($avg['avg_exh'] ?? 0) - $exhibition;
+        $results[] = [
+            'entry_course' => (int)$row['entry_course'], 'player_id' => (string)$row['player_id'],
+            'exhibition_time' => $exhibition, 'start_timing' => convertStartTiming($row['start_timing']),
+            'lap_time' => $lap, 'around_time' => $around, 'straight_time' => toNullOrFloat($row['straight_time']),
+            'exhibition_score' => $diffStraight * 0.4 + $diffAround * 0.3 + $diffLap * 0.2 + $diffExhibition * 0.1,
+            'exhibition_type' => $diffStraight > 0.10 ? '伸び型' : ($diffAround > 0.10 ? '差し型' : 'バランス'),
+        ];
+    }
+    return $results;
+}
+
+function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array $data, ?OfficialAmagasakiNightlyBackfillContext $nightlyBackfill = null, string $sourceUrl = '', string $entry = 'nightly'): void
+{
+    if ($nightlyBackfill?->permits($raceCode)) {
+        $nightlyDecision = OfficialAmagasakiOperationalPolicy::fromPdo($pdo)->decide($raceCode, 'nightly_backfill');
+        if ($nightlyDecision['mode'] === 'nightly_backfill') {
+            $result = (new PdoOfficialAmagasakiNightlyBackfillPersistence($pdo))->persist(
+                $raceCode,
+                officialAmagasakiNightlyCalculatedResults($pdo, $placeCode, $data),
+                $sourceUrl,
+                new DateTimeImmutable('now', new DateTimeZone('UTC')),
+                $nightlyBackfill,
+            );
+            if ($result['status'] !== 'saved') throw new RuntimeException('OFFICIAL_AMAGASAKI_NIGHTLY_BACKFILL_NOT_SAVED:' . $result['reason']);
+            return;
+        }
+        if ($nightlyDecision['mode'] === 'blocked') throw new RuntimeException('OFFICIAL_AMAGASAKI_NIGHTLY_BACKFILL_NOT_SAVED:' . $nightlyDecision['reason']);
+        // Before the cut-over, retain the original nightly saver and source.
+    }
+    $writeTransaction = officialAmagasakiBeginLegacyWrite($pdo, $raceCode, $entry);
+    try {
     $avgSql = "
         SELECT
             AVG(exhibition_time) AS avg_exh,
@@ -340,6 +387,11 @@ function saveExhibitionData(PDO $pdo, string $raceCode, string $placeCode, array
             ':exhibition_type'  => $type,
         ]);
     }
+    officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, true);
+    } catch (Throwable $error) {
+        officialAmagasakiFinishLegacyWrite($pdo, $writeTransaction, false);
+        throw $error;
+    }
 }
 
 function parseExhibitionUrl(string $url, array $placeMap): ?array
@@ -413,6 +465,15 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
         $placeCode = $info['place_code'];
         $raceNo = $info['race_no'];
 
+        $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $raceCode, 'retry');
+        if (!$officialGuard['allow_legacy']) {
+            // Keep the legacy URL queued.  It must never be reinterpreted as
+            // an official request or silently removed on a cut-over block.
+            $remaining[] = $url;
+            log_message("エラー再試行スキップ: {$raceCode} {$officialGuard['reason']}");
+            continue;
+        }
+
         if (getRegisteredExhibitionCount($pdo, $raceCode) >= 6) {
             log_message("エラー再試行スキップ: {$raceCode} は6艇分登録済み");
             continue;
@@ -478,10 +539,73 @@ function retryErrorUrls(PDO $pdo, array $placeMap, string $errorFile, int $limit
 // ------------------------------------------------------------
 // 日付ループ設定（last_date → 今日まで）
 // ------------------------------------------------------------
+// A normal invocation remains the generic nightly route. Only the dedicated
+// wrapper adds the explicit context that can request same-day AMG backfill.
+$cliArgs = $argv ?? [];
+$nightlyBackfillContext = OfficialAmagasakiNightlyBackfillContext::fromCommandLine($cliArgs);
+$collectionOnly = PHP_SAPI === 'cli' && in_array('--collection-only', $cliArgs, true);
+$maxCollectionRaces = null;
+
+/** @return ?string */
+function cliOptionValue(array $args, string $option): ?string
+{
+    $prefix = $option . '=';
+    foreach ($args as $arg) {
+        if (str_starts_with((string)$arg, $prefix)) {
+            return substr((string)$arg, strlen($prefix));
+        }
+    }
+    return null;
+}
+
+function cliYmdOption(array $args, string $option): ?string
+{
+    $value = cliOptionValue($args, $option);
+    if ($value === null) {
+        return null;
+    }
+    $date = DateTimeImmutable::createFromFormat('!Ymd', $value, new DateTimeZone('Asia/Tokyo'));
+    if ($date === false || $date->format('Ymd') !== $value) {
+        throw new InvalidArgumentException("{$option} must be YYYYMMDD");
+    }
+    return $value;
+}
+
+function cliPositiveIntOption(array $args, string $option): ?int
+{
+    $value = cliOptionValue($args, $option);
+    if ($value === null) {
+        return null;
+    }
+    if (!ctype_digit($value) || (int)$value < 1) {
+        throw new InvalidArgumentException("{$option} must be a positive integer");
+    }
+    return (int)$value;
+}
+
 $config = require __DIR__ . '/../config/last_date.php';
 
 $start_date = $config['last_date'];
 $today      = date('Ymd');
+$end_date = $today;
+
+if ($collectionOnly) {
+    if ($nightlyBackfillContext->requested()) {
+        throw new InvalidArgumentException('--collection-only cannot be combined with --amagasaki-nightly-backfill');
+    }
+    $start_date = cliYmdOption($cliArgs, '--start-date');
+    $end_date = cliYmdOption($cliArgs, '--end-date');
+    if ($start_date === null || $end_date === null) {
+        throw new InvalidArgumentException('--collection-only requires --start-date=YYYYMMDD and --end-date=YYYYMMDD');
+    }
+    if ($start_date > $end_date || $end_date >= $today) {
+        throw new InvalidArgumentException('--collection-only is limited to completed historical dates before today');
+    }
+    $maxCollectionRaces = cliPositiveIntOption($cliArgs, '--max-races');
+    $limitText = $maxCollectionRaces === null ? '' : "; max-races={$maxCollectionRaces}";
+    log_message("=== collection-only catch-up: {$start_date} ～ {$end_date}{$limitText}; replay/state advance/retry disabled ===");
+}
+
 $nightly_replay_date = date('Y-m-d');
 $nightly_replay_ran = false;
 $run_nightly_replay = static function () use ($nightly_replay_date, &$nightly_replay_ran): void {
@@ -515,13 +639,27 @@ $run_nightly_replay = static function () use ($nightly_replay_date, &$nightly_re
 };
 
 // アクセス保護による途中終了時も、取得済みレースだけは夜間再現へ回す。
-register_shutdown_function($run_nightly_replay);
+// Historical collection-only mode must never create retrospective predictions.
+if (!$collectionOnly) {
+    register_shutdown_function($run_nightly_replay);
+}
 
 $period = new DatePeriod(
     new DateTime($start_date),
     new DateInterval('P1D'),
-    (new DateTime($today))->modify('+1 day')
+    (new DateTime($end_date))->modify('+1 day')
 );
+$periodDates = iterator_to_array($period, false);
+// The dedicated 23:00 wrapper must not wait for a historical last_date
+// catch-up.  It handles today's AMG races first, then leaves the existing
+// chronological catch-up and all non-AMG behaviour intact.
+$todayAmagasakiPriority = $nightlyBackfillContext->permits($today . 'AMG01');
+if ($todayAmagasakiPriority) {
+    $byDate = [];
+    foreach ($periodDates as $periodDate) $byDate[$periodDate->format('Ymd')] = $periodDate;
+    $periodDates = array_values(array_map(static fn(string $date): DateTimeInterface => $byDate[$date], OfficialAmagasakiNightlyBackfillPriority::dates(array_keys($byDate), $today, true)));
+    log_message("=== 23時AMG補完優先: {$today} を過去日処理より先行 ===");
+}
 
 // ------------------------------------------------------------
 // 6時を過ぎたら次の日付には進まない
@@ -538,23 +676,28 @@ $pdo = getPDO();
 
 $consecutive_access_errors = 0;
 $max_consecutive_access_errors = 3;
+$collectionRaceAttempts = 0;
+$collectionLimitReached = false;
 
 // ------------------------------------------------------------
 // 通常取得: 日付ごとの処理
 // ------------------------------------------------------------
-foreach ($period as $dateObj) {
+foreach ($periodDates as $dateObj) {
     $race_date = $dateObj->format('Ymd');
     $race_date_db = $dateObj->format('Y-m-d');
 
     if (time() >= $limit_time) {
-        $last_done = $dateObj->format('Ymd');
-        file_put_contents(
-            __DIR__ . '/../config/last_date.php',
-            "<?php\nreturn ['last_date' => '{$last_done}'];"
-        );
+        if (!$collectionOnly) {
+            $last_done = $dateObj->format('Ymd');
+            file_put_contents(
+                __DIR__ . '/../config/last_date.php',
+                "<?php\nreturn ['last_date' => '{$last_done}'];"
+            );
+        }
 
         $yesterday = (clone $dateObj)->modify('-1 day')->format('Ymd');
-        log_message("時間切れのため {$yesterday} までで終了");
+        $suffix = $collectionOnly ? '（collection-onlyのためstateは更新しません）' : '';
+        log_message("時間切れのため {$yesterday} までで終了{$suffix}");
         exit;
     }
 
@@ -569,6 +712,10 @@ foreach ($period as $dateObj) {
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':race_date' => $race_date_db]);
     $stadiums = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    if ($todayAmagasakiPriority && $race_date === $today && is_array($stadiums)) {
+        $stadiums = OfficialAmagasakiNightlyBackfillPriority::stadiums($stadiums, true);
+    }
 
     if (empty($stadiums)) {
         log_message("開催場なし（{$race_date}）");
@@ -588,9 +735,25 @@ foreach ($period as $dateObj) {
                 $race_no2  = str_pad((string)$race_no, 2, '0', STR_PAD_LEFT);
                 $race_code = $race_date . $place_code . $race_no2;
 
+                $nightlyEntry = $nightlyBackfillContext->permits($race_code) ? 'nightly_backfill' : 'nightly';
+                $officialGuard = officialAmagasakiLegacyWriteDecision($pdo, $race_code, $nightlyEntry);
+                if (!$officialGuard['allow_legacy']) {
+                    log_message("{$race_code} 既存取得を停止: {$officialGuard['reason']}");
+                    continue;
+                }
+
                 if (getRegisteredExhibitionCount($pdo, $race_code) >= 6) {
                     log_message("{$race_code} は6艇分登録済みのためスキップ");
                     continue;
+                }
+
+                if ($collectionOnly && $maxCollectionRaces !== null && $collectionRaceAttempts >= $maxCollectionRaces) {
+                    $collectionLimitReached = true;
+                    log_message("collection-only max-races={$maxCollectionRaces} に到達したため終了します");
+                    break 2;
+                }
+                if ($collectionOnly) {
+                    $collectionRaceAttempts++;
                 }
 
                 log_message("=== {$place_code} {$race_no}R 開始 ===");
@@ -658,7 +821,7 @@ foreach ($period as $dateObj) {
                 $consecutive_access_errors = 0;
 
                 try {
-                    saveExhibitionData($pdo, $race_code, $place_code, $result['data']);
+                    saveExhibitionData($pdo, $race_code, $place_code, $result['data'], $nightlyBackfillContext, $url, $nightlyEntry);
                     log_message("{$race_code} 登録完了");
                 } catch (Throwable $e) {
                     log_message("DB登録エラー（{$race_code}）: " . $e->getMessage());
@@ -675,22 +838,32 @@ foreach ($period as $dateObj) {
         }
     }
 
+    if ($collectionLimitReached) {
+        break;
+    }
+
     if ($date_error_count > 0) {
         log_message("=== 日付 {$race_date} の通常取得完了（失敗 {$date_error_count}件は error_urls.txt に保留） ===");
     } else {
         log_message("=== 日付 {$race_date} の通常取得完了 ===");
     }
 
-    $next_date = (new DateTime($race_date))->modify('+1 day')->format('Ymd');
-    file_put_contents(
-        __DIR__ . '/../config/last_date.php',
-        "<?php\nreturn ['last_date' => '{$next_date}'];"
-    );
+    if (!$collectionOnly) {
+        $next_date = (new DateTime($race_date))->modify('+1 day')->format('Ymd');
+        file_put_contents(
+            __DIR__ . '/../config/last_date.php',
+            "<?php\nreturn ['last_date' => '{$next_date}'];"
+        );
+    }
 }
 
 log_message("=== 通常取得の全日付処理完了 ===");
 
-retryErrorUrls($pdo, $placeMap, $error_file, $limit_time);
+if (!$collectionOnly) {
+    retryErrorUrls($pdo, $placeMap, $error_file, $limit_time);
+}
 
 log_message("=== 全処理完了 ===");
-$run_nightly_replay();
+if (!$collectionOnly) {
+    $run_nightly_replay();
+}
