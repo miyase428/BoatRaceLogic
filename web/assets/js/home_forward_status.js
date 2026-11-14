@@ -13,20 +13,30 @@
         const eligible = numberOrZero(payload.eligible_distinct_races);
         const required = Math.max(1, numberOrZero(payload.gate_c_required_races) || 2);
         const accepted = numberOrZero(payload.accepted_samples);
+        const epochState = String(payload.official_epoch_state || (payload.official_epoch === true ? 'ACTIVE' : 'NOT_STARTED'));
         const official = payload.official_epoch === true;
-        const blocked = payload.blocked === true || status === 'FAIL' || status.indexOf('BLOCKED_') === 0;
+        const runtimeAuthorized = payload.runtime_authorized === true && payload.official_epoch_runtime_authorized === true;
+        const officialActive = official && epochState === 'ACTIVE' && runtimeAuthorized;
+        const processing = payload.gate_c_processing === true
+            && String(payload.gate_c_materialization_state || '') === 'IN_PROGRESS'
+            && payload.runtime_authorized === true;
+        const epochBlocked = (official && (!runtimeAuthorized || epochState !== 'ACTIVE')) || epochState === 'UNRESOLVED';
+        const rawBlocked = payload.blocked === true || status === 'FAIL' || status.indexOf('BLOCKED_') === 0 || epochBlocked;
+        const blocked = rawBlocked && !processing;
         let tone = 'neutral';
         let icon = '⚪';
         let label = '状態を確認中';
 
-        if (official) {
-            tone = 'official'; icon = '🔵'; label = 'Official Forward：検証中';
-        } else if (blocked) {
+        if (blocked) {
             tone = 'blocked'; icon = '🔴'; label = 'Gate C：要確認';
+        } else if (processing) {
+            tone = 'pending'; icon = '🟡'; label = officialActive ? 'Official Forward：記録反映中' : 'Gate C：記録反映中';
         } else if (status === 'PASS') {
-            tone = 'pass'; icon = '🟢'; label = 'Gate C PASS：CG確認待ち';
+            tone = 'pass'; icon = '🟢'; label = officialActive ? 'Official Forward：稼働中' : 'Gate C PASS：CG確認待ち';
         } else if (status === 'PENDING_LIVE') {
             tone = 'pending'; icon = '🟡'; label = 'Gate C LIVE：データ収集中';
+        } else if (officialActive) {
+            tone = 'official'; icon = '🔵'; label = 'Official Forward：稼働中';
         }
 
         const updated = payload.last_updated_at ? new Date(payload.last_updated_at) : null;
@@ -37,16 +47,18 @@
             tone: tone,
             icon: icon,
             label: label,
-            gateStatus: status,
+            gateStatus: processing ? status + '（記録反映中）' : status,
             eligibleText: eligible >= required ? eligible + '件（条件達成）' : eligible + ' / ' + required + ' レース',
             acceptedText: accepted + ' 件',
-            alertText: blocked ? '要確認' : '異常なし',
-            epochText: official ? '開始済み' : '未開始',
+            alertText: blocked ? '要確認' : processing ? '異常なし（記録反映中）' : '異常なし',
+            epochText: epochState === 'NOT_STARTED' ? '未開始' : epochState,
             updatedText: updatedText,
-            helpText: official
-                ? '現在はOfficial Forwardとして前方検証を実施中です。'
-                : blocked
+            helpText: blocked
                     ? '現在は異常または記録の不一致があり、内容の確認が必要です。待つだけの状態ではありません。'
+                    : processing
+                        ? '正式なGate C値はFAILですが、新しい証拠レコードを正常に反映している途中です。'
+                    : officialActive
+                        ? '現在はOfficial Forwardとして前方検証を実施中です。'
                     : status === 'PASS'
                         ? 'Gate Cの条件は揃っています。証拠確認と明示的な承認を待っています。'
                         : status === 'PENDING_LIVE'

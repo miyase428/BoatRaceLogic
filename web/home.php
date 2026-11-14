@@ -511,7 +511,7 @@ $weekday = $weekdays[(int)$selectedDate->format('w')];
 </div>
 <script src="/web/assets/js/home.js?v=20260907a" defer></script>
 <script src="/web/assets/js/home_deadline_emphasis.js?v=20260927-venue-ml-v2" defer></script>
-<script src="/web/assets/js/home_forward_status.js?v=20261006c" defer></script>
+<script src="/web/assets/js/home_forward_status.js?v=20261114a" defer></script>
 <script src="/web/assets/js/home_navigation_loading.js?v=20260909a" defer></script>
 </body>
 </html>

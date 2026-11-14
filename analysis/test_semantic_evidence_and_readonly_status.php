@@ -108,6 +108,8 @@ try {
     semanticAssert($treeBefore === semanticTree($fixture['window']), 'inspector creates or changes no window file');
     semanticAssert(($statusOne['declared_current_match'] ?? true) === false && ($statusTwo['declared_current_match'] ?? true) === false, 'identity mismatch remains readable');
     semanticAssert(($statusOne['declared_activation_match'] ?? false) === true, 'legacy evidence remains valid despite current mismatch');
+    semanticAssert(($statusOne['official_epoch'] ?? true) === false && ($statusOne['official_epoch_state'] ?? '') === 'NOT_STARTED', 'pre-Epoch fixture remains not started');
+    semanticAssert(array_key_exists('runtime_authorized', $statusOne) && array_key_exists('gate_c_status', $statusOne), 'status fields are additive and legacy Gate field remains');
     semanticAssert((new ForwardStatusReadModel($fixture['repo']))->current()['window_id'] === 'fixture-window', 'TOP read model uses pure inspector');
     semanticAssert($treeBefore === semanticTree($fixture['window']), 'TOP-equivalent status creates no provenance');
     $results[] = 'pure_inspector_single_read_no_side_effects';
@@ -116,6 +118,7 @@ try {
     $results[] = 'top_status_read_no_side_effects';
     $results[] = 'identity_mismatch_status_available';
     $results[] = 'identity_mismatch_legacy_evidence_separated';
+    $results[] = 'pre_epoch_status_and_additive_api_fields';
 
     semanticAssert(!$fixture['context']->authorizeFormalWrite()['accepted'], 'ordinary formal write remains rejected after identity mismatch');
     $results[] = 'formal_write_remains_fail_closed';

@@ -6,7 +6,10 @@ require_once __DIR__ . '/FormalMeasurementWindowContext.php';
 require_once __DIR__ . '/GateA1ProspectiveInventory.php';
 require_once __DIR__ . '/StrictForwardOpportunityLedger.php';
 require_once __DIR__ . '/StrictForwardAcceptedRace.php';
+require_once __DIR__ . '/StrictForwardMaterializationDiagnostic.php';
 require_once __DIR__ . '/OfficialEpochLifecycleV1.php';
+require_once __DIR__ . '/OfficialEpochWindowBindingResolver.php';
+require_once __DIR__ . '/OfficialEpochWindowBindingRuntimeAuthorization.php';
 
 /**
  * Side-effect-free projection of a Formal Measurement Window.
@@ -18,6 +21,11 @@ require_once __DIR__ . '/OfficialEpochLifecycleV1.php';
 final class FormalMeasurementWindowStatusInspector
 {
     private const REQUIRED_ELIGIBLE_RACES = 2;
+    // The production scheduler runs every two minutes. Two full cycles allow
+    // the Expected and Canonical first-write sequence to finish while still
+    // making a silently stalled partial matrix visible as a real failure.
+    private const SCHEDULER_CADENCE_SECONDS = 120;
+    private const MATERIALIZATION_MAX_CYCLES = 2;
 
     public function __construct(private readonly string $repoRoot)
     {
@@ -48,30 +56,27 @@ final class FormalMeasurementWindowStatusInspector
 
         $windowState = trim((string)($manifest['status'] ?? ''));
         $armedAt = trim((string)($manifest['armed_at'] ?? ''));
-        // Epoch promotion is an external immutable lifecycle record.  A
-        // CLOSED source Window must never be mutated merely to change a UI
-        // projection, so the legacy manifest flag is only a compatibility
-        // fallback and never the authoritative source for v1 Epoch state.
-        $epochRecord = (new OfficialEpochLifecycleV1($this->repoRoot))->epochForSourceWindow($context->windowId());
-        $officialEpoch = $epochRecord !== [] || strtoupper(trim((string)($manifest['official_epoch_started'] ?? 'NO'))) === 'YES';
+        $epochStatus = $this->officialEpochStatus($context, $manifest);
+        $officialEpoch = !empty($epochStatus['official_epoch'])
+            && ($epochStatus['official_epoch_state'] ?? '') === 'ACTIVE';
         $lifecycle = $context->lifecycle()->effectiveState($context->windowId(), $manifest);
         if (($lifecycle['effective_state'] ?? '') === 'ABORTED') {
             $abort = is_array($lifecycle['abort'] ?? null) ? $lifecycle['abort'] : [];
-            return [
+            return array_merge([
                 'ok' => true, 'phase' => 'window_aborted', 'window_id' => $context->windowId(),
                 'window_state' => $windowState !== '' ? $windowState : 'UNKNOWN', 'effective_state' => 'ABORTED',
                 'window_completion_status' => 'ABORTED', 'gate_c_status' => 'ABORTED',
                 'gate_c_required_races' => self::REQUIRED_ELIGIBLE_RACES, 'eligible_distinct_races' => 0, 'accepted_samples' => 0,
                 'blocked' => true, 'blocked_reason' => 'WINDOW_ABORTED', 'abort_reason' => (string)($abort['abort_reason'] ?? ''),
-                'official_epoch' => false, 'declared_implementation_identity' => $declaredIdentity,
+                'declared_implementation_identity' => $declaredIdentity,
                 'activation_implementation_identity' => $activationIdentity, 'current_implementation_identity' => $currentIdentity,
                 'declared_activation_match' => $declaredActivationMatch, 'declared_current_match' => $declaredCurrentMatch,
                 'closure_present' => false, 'abort_present' => true, 'abort_record_hash' => (string)($abort['abort_record_hash'] ?? ''),
                 'last_updated_at' => $this->lastUpdatedAt(dirname($context->windowManifestPath())),
-            ];
+            ], $epochStatus);
         }
         if ($windowState !== 'ACTIVE' || !$this->isTimestamp($armedAt)) {
-            return [
+            return array_merge([
                 'ok' => true,
                 'phase' => $officialEpoch ? 'official_forward' : 'window_prepared',
                 'window_id' => $context->windowId(),
@@ -83,7 +88,6 @@ final class FormalMeasurementWindowStatusInspector
                 'accepted_samples' => 0,
                 'blocked' => false,
                 'blocked_reason' => null,
-                'official_epoch' => $officialEpoch,
                 'declared_implementation_identity' => $declaredIdentity,
                 'activation_implementation_identity' => $activationIdentity,
                 'current_implementation_identity' => $currentIdentity,
@@ -91,7 +95,7 @@ final class FormalMeasurementWindowStatusInspector
                 'declared_current_match' => $declaredCurrentMatch,
                 'closure_present' => !empty($lifecycle['closure']),
                 'last_updated_at' => $this->lastUpdatedAt(dirname($context->windowManifestPath())),
-            ];
+            ], $epochStatus);
         }
 
         $gateA1 = (new GateA1ProspectiveInventory($context->opportunityRoot()))->compare($context->windowId(), $armedAt);
@@ -112,6 +116,9 @@ final class FormalMeasurementWindowStatusInspector
         $canonical = array_values(array_filter($this->jsonFiles($ledgerRoot . '/records/*/*.json'), fn(array $row): bool => $this->after((string)($row['captured_at'] ?? ''), $armedAt) && (string)($row['capture_mode'] ?? '') === 'LIVE_STRICT'));
         $revisionEvents = $this->jsonLines($opportunityRoot . '/schedule_revisions/*/*.jsonl');
         $operational = $this->jsonLines($opportunityRoot . '/operational/*.jsonl');
+        $ledgerFailures = $this->jsonLines($ledgerRoot . '/failures/*.jsonl');
+        $ledgerOperational = $this->jsonLines($ledgerRoot . '/operational/*.jsonl');
+        $comparativeFailures = $this->jsonLines(dirname($ledgerRoot) . '/comparative/failures/*.jsonl');
 
         $resolutionByRace = [];
         foreach ($resolutions as $row) $resolutionByRace[(string)($row['race_code'] ?? '')] = $row;
@@ -140,6 +147,7 @@ final class FormalMeasurementWindowStatusInspector
         $eligibleRaces = [];
         $acceptedSamples = 0;
         $provenanceGap = 0;
+        $unacceptedDiagnostics = [];
         foreach ($candidates as $candidate) {
             if (!is_array($candidate)) continue;
             $raceCode = (string)($candidate['race_code'] ?? '');
@@ -169,6 +177,30 @@ final class FormalMeasurementWindowStatusInspector
             ]);
             if ((isset($expectedByRace[$raceCode]) || isset($canonicalByRace[$raceCode])) && empty($acceptance['provenance_valid'])) $provenanceGap++;
             if (!empty($acceptance['accepted'])) $acceptedSamples++;
+            elseif ($isEligible) {
+                $progress = StrictForwardMaterializationDiagnostic::diagnose($expectedByRace[$raceCode] ?? [], $canonicalByRace[$raceCode] ?? [], [
+                    'formal_schedule_accepted' => !empty($formalSchedule['accepted']),
+                    'window_id' => $context->windowId(),
+                    'implementation' => $implementation,
+                    'scheduler_candidate_key' => 'scheduler-opportunity|' . $raceCode,
+                ]);
+                $eligibilityAt = trim((string)($resolutionByRace[$raceCode]['first_eligible_observed_at']
+                    ?? $resolutionByRace[$raceCode]['resolved_at'] ?? ''));
+                $latestAt = $this->latestTimestamp([$eligibilityAt, (string)($progress['latest_artifact_at'] ?? '')]);
+                $explicitFailure = $this->hasRaceFailure($raceCode, $eligibilityAt, [
+                    ...$sourceFailures, ...$ledgerFailures, ...$comparativeFailures,
+                ], $ledgerOperational);
+                $stale = $latestAt === null || $this->olderThan(
+                    $latestAt,
+                    self::SCHEDULER_CADENCE_SECONDS * self::MATERIALIZATION_MAX_CYCLES,
+                );
+                $unacceptedDiagnostics[$raceCode] = $progress + [
+                    'eligibility_at' => $eligibilityAt !== '' ? $eligibilityAt : null,
+                    'latest_progress_at' => $latestAt,
+                    'explicit_failure' => $explicitFailure,
+                    'stale' => $stale,
+                ];
+            }
         }
 
         $gateA = (string)($gateA1['status'] ?? 'BLOCKED_EXPECTED_INVENTORY_INVALID');
@@ -185,7 +217,27 @@ final class FormalMeasurementWindowStatusInspector
         else $gateC = 'FAIL';
 
         $blocked = str_starts_with($gateC, 'BLOCKED_') || $gateC === 'FAIL';
-        return [
+        $processingRaces = [];
+        if ($gateC === 'FAIL' && $eligibleCount > $acceptedSamples && !empty($epochStatus['runtime_authorized'])) {
+            foreach ($unacceptedDiagnostics as $raceCode => $diagnostic) {
+                if (!StrictForwardMaterializationDiagnostic::displayAsInProgress(
+                    $diagnostic,
+                    !empty($diagnostic['explicit_failure']),
+                    !empty($diagnostic['stale']),
+                    !empty($epochStatus['runtime_authorized']),
+                )) {
+                    $processingRaces = [];
+                    break;
+                }
+                $processingRaces[] = $raceCode;
+            }
+        }
+        $processing = $processingRaces !== []
+            && count($processingRaces) === ($eligibleCount - $acceptedSamples);
+        $materializationState = $processing ? 'IN_PROGRESS'
+            : ($eligibleCount > $acceptedSamples ? 'FAILED' : 'IDLE');
+
+        return array_merge([
             'ok' => true,
             'phase' => $officialEpoch ? 'official_forward' : 'gate_c_live',
             'window_id' => $context->windowId(),
@@ -203,7 +255,10 @@ final class FormalMeasurementWindowStatusInspector
             'canonical_count' => count($canonical),
             'blocked' => $blocked,
             'blocked_reason' => $blocked ? $gateC : null,
-            'official_epoch' => $officialEpoch,
+            'gate_c_materialization_state' => $materializationState,
+            'gate_c_processing' => $processing,
+            'gate_c_processing_races' => $processingRaces,
+            'gate_c_unaccepted_races' => max(0, $eligibleCount - $acceptedSamples),
             'gate_a1_status' => $gateA,
             'gate_a2_status' => $gateA2,
             'gate_b_status' => $gateBNow,
@@ -214,7 +269,139 @@ final class FormalMeasurementWindowStatusInspector
             'declared_activation_match' => $declaredActivationMatch,
             'declared_current_match' => $declaredCurrentMatch,
             'last_updated_at' => $this->lastUpdatedAt(dirname($context->windowManifestPath())),
+        ], $epochStatus);
+    }
+
+    /** @param array<string,mixed> $manifest @return array<string,mixed> */
+    private function officialEpochStatus(FormalMeasurementWindowContext $context, array $manifest): array
+    {
+        $resolver = new OfficialEpochWindowBindingResolver($this->repoRoot);
+        $relation = ['accepted' => false, 'reason' => 'OFFICIAL_EPOCH_NOT_STARTED'];
+        try { $relation = $resolver->epochForBoundWindow($context->windowId()); }
+        catch (Throwable $error) { $relation = ['accepted' => false, 'reason' => get_class($error)]; }
+
+        $epochId = '';
+        $epochState = 'NOT_STARTED';
+        $windowKind = 'NONE';
+        $resolutionValid = false;
+        $bindingPresent = $resolver->bindingForWindow($context->windowId()) !== [];
+        $startPaths = glob($resolver->store()->lifecycleRoot() . '/official_epochs/*/start.json') ?: [];
+
+        if (!empty($relation['accepted'])) {
+            $epoch = is_array($relation['epoch'] ?? null) ? $relation['epoch'] : [];
+            $epochId = trim((string)($epoch['epoch_id'] ?? ''));
+            $windowKind = (string)($relation['kind'] ?? 'UNKNOWN');
+            $projection = $epochId !== ''
+                ? (new OfficialEpochIncidentLifecycleStore($resolver->store()->lifecycleRoot()))->project($epochId)
+                : [];
+            $epochState = !empty($projection['valid']) ? (string)($projection['state'] ?? 'UNRESOLVED') : 'UNRESOLVED';
+            $resolutionValid = !empty($projection['valid']);
+            if ($windowKind === 'BOUND_SUCCESSOR_WINDOW') {
+                $validated = $resolver->validateBinding($context->windowId(), ['require_pointer' => true]);
+                $resolutionValid = $resolutionValid && !empty($validated['accepted']);
+            }
+        } elseif ($startPaths === [] && !$bindingPresent
+            && strtoupper(trim((string)($manifest['official_epoch_started'] ?? 'NO'))) === 'YES') {
+            // Compatibility is intentionally limited to repositories that do
+            // not yet contain the v1 Epoch lifecycle. An invalid v1 binding
+            // must never be hidden by this manifest flag.
+            $epochState = 'ACTIVE';
+            $windowKind = 'LEGACY_MANIFEST';
+            $resolutionValid = true;
+        } elseif ($startPaths !== [] || $bindingPresent) {
+            $epochState = 'UNRESOLVED';
+            $windowKind = $bindingPresent ? 'INVALID_BOUND_WINDOW' : 'UNBOUND_WINDOW';
+        }
+
+        try {
+            $runtime = (new OfficialEpochWindowBindingRuntimeAuthorization($this->repoRoot))
+                ->authorizeOperationalPointerWindow();
+        } catch (Throwable $error) {
+            $runtime = ['accepted' => false, 'status' => 'OFFICIAL_EPOCH_RUNTIME_BLOCKED', 'reason' => get_class($error)];
+        }
+        $runtimeAuthorized = !empty($runtime['accepted']) && ($runtime['kind'] ?? '') === 'ACTIVE'
+            && hash_equals($context->windowId(), (string)($runtime['window_id'] ?? ''));
+        $officialEpoch = $resolutionValid && $epochState !== 'NOT_STARTED';
+        $officialRuntimeAuthorized = $officialEpoch && $epochState === 'ACTIVE' && $runtimeAuthorized
+            && ($runtime['status'] ?? '') === 'OFFICIAL_EPOCH_RUNTIME_AUTHORIZED';
+
+        return [
+            'official_epoch' => $officialEpoch,
+            'official_epoch_id' => $epochId !== '' ? $epochId : null,
+            'official_epoch_state' => $epochState,
+            'official_epoch_window_kind' => $windowKind,
+            'official_epoch_runtime_authorized' => $officialRuntimeAuthorized,
+            'runtime_authorized' => $runtimeAuthorized,
+            'runtime_status' => (string)($runtime['status'] ?? 'UNKNOWN'),
+            'runtime_reason' => (string)($runtime['reason'] ?? ''),
         ];
+    }
+
+    /** @param list<array<string,mixed>> $failureRows @param list<array<string,mixed>> $operationalRows */
+    private function hasRaceFailure(string $raceCode, string $since, array $failureRows, array $operationalRows): bool
+    {
+        foreach ($failureRows as $row) {
+            if (!$this->rowReferencesRace($row, $raceCode)) continue;
+            $at = $this->rowTimestamp($row);
+            if ($since === '' || $at === null || $this->atOrAfter($at, $since)) return true;
+        }
+        foreach ($operationalRows as $row) {
+            if (($row['event'] ?? '') !== 'conflict' || !$this->rowReferencesRace($row, $raceCode)) continue;
+            $at = $this->rowTimestamp($row);
+            if ($since === '' || $at === null || $this->atOrAfter($at, $since)) return true;
+        }
+        return false;
+    }
+
+    /** @param array<string,mixed> $row */
+    private function rowReferencesRace(array $row, string $raceCode): bool
+    {
+        if (($row['race_code'] ?? '') === $raceCode) return true;
+        if (in_array($raceCode, array_map('strval', (array)($row['race_codes'] ?? [])), true)) return true;
+        foreach (['intended_key', 'stable_unique_key', 'opportunity_identity'] as $field) {
+            if (str_contains((string)($row[$field] ?? ''), '|' . $raceCode . '|')) return true;
+        }
+        foreach ((array)($row['intended_keys'] ?? []) as $key) {
+            if (str_contains((string)$key, '|' . $raceCode . '|')) return true;
+        }
+        return false;
+    }
+
+    /** @param array<string,mixed> $row */
+    private function rowTimestamp(array $row): ?string
+    {
+        foreach (['attempted_at', 'recorded_at', 'observed_at', 'timestamp'] as $field) {
+            $value = trim((string)($row[$field] ?? ''));
+            if ($value !== '' && $this->isTimestamp($value)) return $value;
+        }
+        return null;
+    }
+
+    /** @param list<string> $values */
+    private function latestTimestamp(array $values): ?string
+    {
+        $latest = null;
+        foreach ($values as $value) {
+            if (!$this->isTimestamp($value)) continue;
+            $time = new DateTimeImmutable($value);
+            if ($latest === null || $time > $latest) $latest = $time;
+        }
+        return $latest?->format(DATE_ATOM);
+    }
+
+    private function olderThan(string $timestamp, int $seconds): bool
+    {
+        try {
+            $then = new DateTimeImmutable($timestamp);
+            $now = new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo'));
+            return $then->modify('+' . $seconds . ' seconds') < $now;
+        } catch (Throwable) { return true; }
+    }
+
+    private function atOrAfter(string $left, string $right): bool
+    {
+        try { return new DateTimeImmutable($left) >= new DateTimeImmutable($right); }
+        catch (Throwable) { return false; }
     }
 
     /** @return list<array<string,mixed>> */

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../web/logic/OfficialEpochWindowBindingStore.php';
 require_once __DIR__ . '/../web/logic/OfficialEpochWindowBindingRuntimeAuthorization.php';
 require_once __DIR__ . '/../web/logic/OfficialEpochIncidentLifecycleStore.php';
 require_once __DIR__ . '/../web/logic/FormalMeasurementWindowLifecycle.php';
+require_once __DIR__ . '/../web/logic/FormalMeasurementWindowStatusInspector.php';
 require_once __DIR__ . '/collect_strict_forward_exhibition.php';
 
 final class OfficialEpochBindingRuntimeFixture
@@ -33,6 +34,22 @@ final class OfficialEpochBindingRuntimeFixture
             $this->check('activation v2 valid binding allowed', !empty($activation['accepted']));
             $this->check('common formal writer allowed', !empty(FormalMeasurementWindowContext::production($this->repo)->authorizeMeasurementWrite()['accepted']));
             $this->check('operational pointer runtime allowed', !empty($runtime->authorizeOperationalPointerWindow()['accepted']));
+            $activeStatus = (new FormalMeasurementWindowStatusInspector($this->repo))->inspect();
+            $this->check('bound successor projects ACTIVE Epoch', ($activeStatus['official_epoch_state'] ?? '') === 'ACTIVE'
+                && ($activeStatus['official_epoch_window_kind'] ?? '') === 'BOUND_SUCCESSOR_WINDOW'
+                && !empty($activeStatus['official_epoch_runtime_authorized']));
+            $pointerPath = $this->repo . '/' . FormalMeasurementWindowContext::POINTER_RELATIVE_PATH;
+            $successorPointer = (string)file_get_contents($pointerPath);
+            file_put_contents($pointerPath, OfficialEpochPolicyV1::canonicalJson([
+                'schema_version' => FormalMeasurementWindowContext::POINTER_SCHEMA_VERSION,
+                'window_id' => 'source-closed-fixture',
+                'window_root' => 'var/strict_forward_live_readiness/windows/source-closed-fixture',
+            ]) . "\n");
+            $sourceStatus = (new FormalMeasurementWindowStatusInspector($this->repo))->inspect();
+            $this->check('historical source Window projects ACTIVE Epoch', ($sourceStatus['official_epoch_state'] ?? '') === 'ACTIVE'
+                && ($sourceStatus['official_epoch_window_kind'] ?? '') === 'SOURCE_CLOSED_WINDOW'
+                && empty($sourceStatus['official_epoch_runtime_authorized']));
+            file_put_contents($pointerPath, $successorPointer);
 
             $bindingPath = $store->bindingPath($window); $originalBinding = (string)file_get_contents($bindingPath);
             unlink($bindingPath);
@@ -59,11 +76,17 @@ final class OfficialEpochBindingRuntimeFixture
             $incident->commitTransition('SUSPEND', $suspend);
             $this->check('Epoch SUSPENDED blocks collector/runtime', ($runtime->authorizeOperationalPointerWindow()['kind'] ?? '') === 'GLOBAL_FATAL');
             $this->check('Epoch SUSPENDED blocks common formal writer', empty(FormalMeasurementWindowContext::production($this->repo)->authorizeMeasurementWrite()['accepted']));
+            $suspendedStatus = (new FormalMeasurementWindowStatusInspector($this->repo))->inspect();
+            $this->check('bound successor projects SUSPENDED Epoch', ($suspendedStatus['official_epoch_state'] ?? '') === 'SUSPENDED'
+                && empty($suspendedStatus['official_epoch_runtime_authorized']));
             $state = $incident->project($this->epoch);
             $end = $incident->transitionRecord('END', ['epoch_id' => $this->epoch, 'from_state' => 'SUSPENDED', 'predecessor_state_hash' => $state['state_hash'], 'incident_hash' => 'sha256:' . str_repeat('7', 64), 'transition_at' => '2026-10-14T00:01:00+09:00']);
             $incident->commitTransition('END', $end);
             $this->check('Epoch ENDED blocks collector/runtime', ($runtime->authorizeOperationalPointerWindow()['kind'] ?? '') === 'GLOBAL_FATAL');
             $this->check('Epoch ENDED blocks common formal writer', empty(FormalMeasurementWindowContext::production($this->repo)->authorizeMeasurementWrite()['accepted']));
+            $closedStatus = (new FormalMeasurementWindowStatusInspector($this->repo))->inspect();
+            $this->check('bound successor projects CLOSED Epoch', in_array(($closedStatus['official_epoch_state'] ?? ''), ['CLOSED', 'ENDED'], true)
+                && empty($closedStatus['official_epoch_runtime_authorized']));
 
             $this->check('historical source remains binding-free readable', !empty((new OfficialEpochWindowBindingResolver($this->repo))->epochForBoundWindow('source-closed-fixture')['accepted']));
             $this->check('runtime class performs no formal evidence write', $this->formalJsonCount($this->root($window)) === 0);
