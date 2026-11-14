@@ -36,9 +36,9 @@ final class MeasurementImplementationProvenance
         // when the collector source itself is unchanged.
         'analysis/finalize_strict_forward_late_eligibility.php',
         'analysis/install_cc30c_late_eligibility_cron.sh',
-        // v1 is retained as the historical Window's immutable contract; v2
-        // binds the current runner and installer for all successor Windows.
-        'analysis/output/cc30c_late_eligibility_schedule_contract_v1.json',
+        // v1 remains an immutable runtime artifact of the historical Window,
+        // not a dependency of a successor's clean source freeze.  v2 binds
+        // the current runner and installer for all successor Windows.
         'analysis/output/cc30c_late_eligibility_schedule_contract_v2.json',
         'analysis/run_strict_forward_late_eligibility_cron.sh',
         // Direct collector dependencies that can change whether a candidate
