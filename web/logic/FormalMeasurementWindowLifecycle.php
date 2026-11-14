@@ -24,6 +24,11 @@ final class FormalMeasurementWindowLifecycle
     public const ABORT_REASON_A1_DEADLINE_SNAPSHOT_SEMANTIC_CONFLICT = 'A1_DEADLINE_SNAPSHOT_SEMANTIC_CONFLICT';
     public const ABORT_REASON_COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG = 'COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG';
     public const ABORT_REASON_FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT = 'FORMAL_EVIDENCE_INCOMPLETE_PRODUCER_DEFECT';
+    // Defined by the Official Epoch incident policy.  This is deliberately a
+    // distinct immutable terminal reason: a Window whose declared production
+    // implementation has drifted must never be relabelled as an A1 defect or
+    // a producer failure.
+    public const ABORT_REASON_MEASUREMENT_IMPLEMENTATION_IDENTITY_DRIFT = 'MEASUREMENT_IMPLEMENTATION_IDENTITY_DRIFT';
     public const TECHNICAL_INCOMPLETE_RECOVERY_STRATEGY = 'FREEZE_CURRENT_AND_START_CLEAN_WINDOW';
     public const TECHNICAL_INCOMPLETE_EVIDENCE_RETENTION_POLICY = 'RETAIN_DIAGNOSTIC_NATURAL_EVIDENCE_NO_SUCCESSOR_COPY';
     public const POINTER_TRANSITION_SCHEMA_VERSION = 'formal-measurement-pointer-transition/v2';
@@ -718,6 +723,7 @@ final class FormalMeasurementWindowLifecycle
             self::ABORT_REASON_A1_EXPECTED_INVENTORY_BOOTSTRAP_INVALID,
             self::ABORT_REASON_A1_DEADLINE_SNAPSHOT_SEMANTIC_CONFLICT,
             self::ABORT_REASON_COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG,
+            self::ABORT_REASON_MEASUREMENT_IMPLEMENTATION_IDENTITY_DRIFT,
         ], true);
     }
     private static function validHash(string $value): bool { return preg_match('/^sha256:[a-f0-9]{64}$/', $value) === 1; }

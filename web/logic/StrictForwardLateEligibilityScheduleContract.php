@@ -11,8 +11,8 @@ declare(strict_types=1);
  */
 final class StrictForwardLateEligibilityScheduleContract
 {
-    public const CONTRACT_VERSION = 'cc30c-late-eligibility-schedule-contract/v1';
-    public const CONTRACT_RELATIVE_PATH = 'analysis/output/cc30c_late_eligibility_schedule_contract_v1.json';
+    public const CONTRACT_VERSION = 'cc30c-late-eligibility-schedule-contract/v2';
+    public const CONTRACT_RELATIVE_PATH = 'analysis/output/cc30c_late_eligibility_schedule_contract_v2.json';
     public const MARKER = 'BOATRACE_STRICT_FORWARD_LATE_ELIGIBILITY';
 
     /** @return array{accepted:bool,status:string,reason:string,contract:array<string,mixed>,contract_sha256:string} */
@@ -62,7 +62,8 @@ final class StrictForwardLateEligibilityScheduleContract
             || ($contract['mode'] ?? '') !== 'DB_ONLY'
             || !empty($contract['external_fetch']) || !empty($contract['candidate_discovery'])
             || !empty($contract['collector_trigger']) || !empty($contract['historical_repair'])
-            || !is_array($contract['runner'] ?? null)) return false;
+            || !is_array($contract['runner'] ?? null)
+            || !is_array($contract['installer'] ?? null)) return false;
         $runner = $contract['runner'];
         if (($runner['repo_relative_path'] ?? '') !== 'analysis/run_strict_forward_late_eligibility_cron.sh'
             || ($runner['command_prefix'] ?? '') !== 'TZ=Asia/Tokyo /usr/bin/bash'
@@ -70,6 +71,12 @@ final class StrictForwardLateEligibilityScheduleContract
             || preg_match('/^[a-f0-9]{64}$/', (string)($runner['sha256'] ?? '')) !== 1) return false;
         $path = rtrim($repoRoot, DIRECTORY_SEPARATOR) . '/' . (string)$runner['repo_relative_path'];
         $actual = @hash_file('sha256', $path);
-        return is_string($actual) && hash_equals((string)$runner['sha256'], $actual);
+        if (!is_string($actual) || !hash_equals((string)$runner['sha256'], $actual)) return false;
+        $installer = $contract['installer'];
+        if (($installer['repo_relative_path'] ?? '') !== 'analysis/install_cc30c_late_eligibility_cron.sh'
+            || preg_match('/^[a-f0-9]{64}$/', (string)($installer['sha256'] ?? '')) !== 1) return false;
+        $installerPath = rtrim($repoRoot, DIRECTORY_SEPARATOR) . '/' . (string)$installer['repo_relative_path'];
+        $installerActual = @hash_file('sha256', $installerPath);
+        return is_string($installerActual) && hash_equals((string)$installer['sha256'], $installerActual);
     }
 }

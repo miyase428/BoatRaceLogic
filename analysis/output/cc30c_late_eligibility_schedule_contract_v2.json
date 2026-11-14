@@ -1,0 +1,29 @@
+{
+  "active_time_end": "23:59",
+  "active_time_start": "22:00",
+  "cadence_minutes": 2,
+  "candidate_discovery": false,
+  "collector_trigger": false,
+  "contract_version": "cc30c-late-eligibility-schedule-contract/v2",
+  "cron_expression": "*/2 22-23 * * *",
+  "deadline_source": "frozen Candidate cutoff_timestamp",
+  "external_fetch": false,
+  "historical_repair": false,
+  "installer": {
+    "repo_relative_path": "analysis/install_cc30c_late_eligibility_cron.sh",
+    "sha256": "86c20b683ed58af9367fcb38fccdffe8fca22b0a5e2f8965b62bf97366429a14"
+  },
+  "locking_contract": {
+    "lock_path": "/tmp/boatrace_strict_forward_late_eligibility.lock",
+    "mode": "nonblocking single-process"
+  },
+  "mode": "DB_ONLY",
+  "runner": {
+    "command_prefix": "TZ=Asia/Tokyo /usr/bin/bash",
+    "marker": "BOATRACE_STRICT_FORWARD_LATE_ELIGIBILITY",
+    "repo_relative_path": "analysis/run_strict_forward_late_eligibility_cron.sh",
+    "sha256": "44a8fa7dcb2b778f1967962357db7adcddf443948be35f3afa96f547db176f6e"
+  },
+  "scope": "Previously late-observed unresolved frozen Candidates only",
+  "timezone": "Asia/Tokyo"
+}

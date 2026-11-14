@@ -14,7 +14,7 @@ require_once __DIR__ . '/../web/logic/FormalEvidenceAggregate.php';
  */
 function cc12AbortUsage(): never
 {
-    fwrite(STDERR, "usage: php analysis/abort_formal_measurement_window.php --window-id=<id> --capture-through=YYYY-MM-DD --scheduler-held-confirmed [--abort-reason=a1-bootstrap-invalid|a1-deadline-semantic-conflict|comparative-race-local-reject-batch-abort-bug]\n");
+    fwrite(STDERR, "usage: php analysis/abort_formal_measurement_window.php --window-id=<id> --capture-through=YYYY-MM-DD --scheduler-held-confirmed [--abort-reason=a1-bootstrap-invalid|a1-deadline-semantic-conflict|comparative-race-local-reject-batch-abort-bug|measurement-implementation-identity-drift]\n");
     exit(64);
 }
 
@@ -29,6 +29,7 @@ foreach ($argv as $argument) {
     if ($argument === '--abort-reason=a1-deadline-semantic-conflict') $abortReason = FormalMeasurementWindowLifecycle::ABORT_REASON_A1_DEADLINE_SNAPSHOT_SEMANTIC_CONFLICT;
     if ($argument === '--abort-reason=a1-bootstrap-invalid') $abortReason = FormalMeasurementWindowLifecycle::ABORT_REASON_A1_EXPECTED_INVENTORY_BOOTSTRAP_INVALID;
     if ($argument === '--abort-reason=comparative-race-local-reject-batch-abort-bug') $abortReason = FormalMeasurementWindowLifecycle::ABORT_REASON_COMPARATIVE_RACE_LOCAL_REJECT_BATCH_ABORT_BUG;
+    if ($argument === '--abort-reason=measurement-implementation-identity-drift') $abortReason = FormalMeasurementWindowLifecycle::ABORT_REASON_MEASUREMENT_IMPLEMENTATION_IDENTITY_DRIFT;
 }
 if ($windowId === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $through) || !$held) cc12AbortUsage();
 
@@ -94,6 +95,12 @@ if ($abortReason === FormalMeasurementWindowLifecycle::ABORT_REASON_A1_DEADLINE_
     $gateA1 = 'PASS';
     $gateA2 = 'PASS';
     $gateC = 'BLOCKED_COMPARATIVE_RUNTIME';
+} elseif ($abortReason === FormalMeasurementWindowLifecycle::ABORT_REASON_MEASUREMENT_IMPLEMENTATION_IDENTITY_DRIFT) {
+    $failureCode = 'DECLARED_IMPLEMENTATION_IDENTITY_MISMATCH';
+    $failureDetails = 'The production measurement implementation changed after Window activation. The declared and activation identities remain immutable; no historical repair or backfill is permitted.';
+    $gateA1 = 'PASS';
+    $gateA2 = 'PASS';
+    $gateC = 'BLOCKED_MEASUREMENT_IMPLEMENTATION_IDENTITY_DRIFT';
 }
 $result = $context->lifecycle()->createAbort([
     'window_id' => $windowId, 'armed_at' => $armedAt,
