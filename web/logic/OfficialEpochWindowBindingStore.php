@@ -8,6 +8,7 @@ require_once __DIR__ . '/OfficialEpochIncidentLifecycleStore.php';
 require_once __DIR__ . '/OfficialEpochIncidentPolicyV1.php';
 require_once __DIR__ . '/FormalMeasurementWindowContext.php';
 require_once __DIR__ . '/OfficialEpochSameEpochSuccessorValidator.php';
+require_once __DIR__ . '/IdentityDriftRecoveryEvidenceV1.php';
 
 /**
  * External append-only store.  A binding never changes Window evidence and is
@@ -90,6 +91,24 @@ final class OfficialEpochWindowBindingStore
         if ($epoch === []) return $this->blocked('OFFICIAL_EPOCH_WINDOW_BINDING_EPOCH_NOT_FOUND');
         $projection = $this->incidentStore()->project((string)$epoch['epoch_id']);
         if (empty($projection['valid']) || ($projection['state'] ?? '') !== 'ACTIVE') return $this->blocked('OFFICIAL_EPOCH_WINDOW_BINDING_EPOCH_NOT_ACTIVE');
+        if (is_string($validation['identity_drift_recovery_package_ref'] ?? null)) {
+            $drift = (new IdentityDriftRecoveryEvidenceV1($this->repoRoot))->validateForBinding(
+                (string)$validation['identity_drift_recovery_package_ref'],
+                [
+                    'predecessor_window_id'=>(string)($validation['predecessor_window_id']??''),
+                    'successor_window_id'=>$windowId,
+                    'predecessor_epoch_id'=>(string)$epoch['epoch_id'],
+                    'epoch_state'=>(string)$projection['state'],
+                    'pointer_owner'=>(string)($validation['pointer_owner']??''),
+                    'predecessor_state'=>(string)($validation['predecessor_state']??''),
+                    'abort_reason'=>(string)($validation['abort_reason']??''),
+                    'successor_prepared'=>true,
+                    'historical_mutation_detected'=>!empty($validation['historical_mutation_detected']),
+                ]
+            );
+            if (empty($drift['accepted'])) return $this->blocked('OFFICIAL_EPOCH_IDENTITY_DRIFT_PACKAGE_INVALID:'.(string)$drift['reason']);
+            $validation=array_replace($validation,$drift['binding_validation']);
+        }
         if (!OfficialEpochWindowBindingV1::validHash((string)($epoch['record_hash'] ?? ''))
             || !OfficialEpochWindowBindingV1::validHash((string)($projection['state_hash'] ?? ''))
             || !hash_equals(OfficialEpochIncidentPolicyV1::identity(), (string)($epoch['incident_policy_identity'] ?? ''))) {

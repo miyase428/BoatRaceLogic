@@ -64,6 +64,7 @@ final class MeasurementImplementationProvenance
         'web/logic/FormalEvidenceAggregate.php',
         'web/logic/FormalWindowProvenanceResolver.php',
         'web/logic/IdentitySeparatedFormalCloseV3.php',
+        'web/logic/IdentityDriftRecoveryEvidenceV1.php',
         'web/logic/FormalMeasurementWindowLifecycle.php',
         'web/logic/TechnicalIncompleteEvidenceAttestation.php',
         'web/logic/FormalMeasurementWindowContext.php',
