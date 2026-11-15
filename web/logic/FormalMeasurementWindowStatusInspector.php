@@ -111,14 +111,16 @@ final class FormalMeasurementWindowStatusInspector
         $ledgerRoot = $context->ledgerRoot();
         $ledger = new StrictForwardOpportunityLedger($opportunityRoot);
         $resolutions = array_values(array_filter($this->jsonFiles($opportunityRoot . '/eligibility/*/*.json'), fn(array $row): bool => $this->after((string)($row['first_eligible_observed_at'] ?? $row['resolved_at'] ?? ''), $armedAt)));
-        $sourceFailures = array_values(array_filter($this->jsonLines($opportunityRoot . '/source_failures/*.jsonl'), fn(array $row): bool => $this->after((string)($row['observed_at'] ?? ''), $armedAt)));
+        // JSONL ledgers grow continuously in production.  The status card
+        // needs only a few aggregates from them, never their complete
+        // decoded history.  Keep the read path streaming so Apache's memory
+        // ceiling cannot turn a healthy Formal Forward runtime into a UI 500.
+        $sourceFailureCount = $this->countJsonLines(
+            $opportunityRoot . '/source_failures/*.jsonl',
+            fn(array $row): bool => $this->after((string)($row['observed_at'] ?? ''), $armedAt),
+        );
         $expected = array_values(array_filter($this->jsonFiles($ledgerRoot . '/expected/*/*.json'), fn(array $row): bool => $this->after((string)($row['expected_at'] ?? ''), $armedAt)));
         $canonical = array_values(array_filter($this->jsonFiles($ledgerRoot . '/records/*/*.json'), fn(array $row): bool => $this->after((string)($row['captured_at'] ?? ''), $armedAt) && (string)($row['capture_mode'] ?? '') === 'LIVE_STRICT'));
-        $revisionEvents = $this->jsonLines($opportunityRoot . '/schedule_revisions/*/*.jsonl');
-        $operational = $this->jsonLines($opportunityRoot . '/operational/*.jsonl');
-        $ledgerFailures = $this->jsonLines($ledgerRoot . '/failures/*.jsonl');
-        $ledgerOperational = $this->jsonLines($ledgerRoot . '/operational/*.jsonl');
-        $comparativeFailures = $this->jsonLines(dirname($ledgerRoot) . '/comparative/failures/*.jsonl');
 
         $resolutionByRace = [];
         foreach ($resolutions as $row) $resolutionByRace[(string)($row['race_code'] ?? '')] = $row;
@@ -126,18 +128,18 @@ final class FormalMeasurementWindowStatusInspector
         $canonicalByRace = $this->groupByRace($canonical);
 
         $oldUnaccounted = 0;
-        foreach ($operational as $row) {
-            if (($row['event'] ?? '') !== 'CANDIDATE_SOURCE_CONFLICT') continue;
+        $this->forEachJsonLine($opportunityRoot . '/operational/*.jsonl', function (array $row) use (&$oldUnaccounted, $candidateByRace): void {
+            if (($row['event'] ?? '') !== 'CANDIDATE_SOURCE_CONFLICT') return;
             $raceCode = (string)($row['race_code'] ?? '');
-            if (!isset($candidateByRace[$raceCode])) continue;
+            if (!isset($candidateByRace[$raceCode])) return;
             if (trim((string)($row['original_cutoff_timestamp'] ?? '')) === '' || trim((string)($row['new_cutoff_timestamp'] ?? '')) === '') $oldUnaccounted++;
-        }
+        });
         $unsafeRollback = 0;
         $unverifiedSemanticRevision = 0;
-        foreach ($revisionEvents as $row) {
+        $this->forEachJsonLine($opportunityRoot . '/schedule_revisions/*/*.jsonl', function (array $row) use (&$unsafeRollback, &$unverifiedSemanticRevision): void {
             if (($row['revision_type'] ?? '') === 'STALE_OR_OUT_OF_ORDER_SOURCE') $unsafeRollback++;
             if (($row['revision_type'] ?? '') === 'SEMANTIC_REVISION_UNVERIFIED') $unverifiedSemanticRevision++;
-        }
+        });
 
         $now = (new DateTimeImmutable('now', new DateTimeZone('Asia/Tokyo')))->format(DATE_ATOM);
         $effectiveComplete = 0;
@@ -187,9 +189,6 @@ final class FormalMeasurementWindowStatusInspector
                 $eligibilityAt = trim((string)($resolutionByRace[$raceCode]['first_eligible_observed_at']
                     ?? $resolutionByRace[$raceCode]['resolved_at'] ?? ''));
                 $latestAt = $this->latestTimestamp([$eligibilityAt, (string)($progress['latest_artifact_at'] ?? '')]);
-                $explicitFailure = $this->hasRaceFailure($raceCode, $eligibilityAt, [
-                    ...$sourceFailures, ...$ledgerFailures, ...$comparativeFailures,
-                ], $ledgerOperational);
                 $stale = $latestAt === null || $this->olderThan(
                     $latestAt,
                     self::SCHEDULER_CADENCE_SECONDS * self::MATERIALIZATION_MAX_CYCLES,
@@ -197,14 +196,22 @@ final class FormalMeasurementWindowStatusInspector
                 $unacceptedDiagnostics[$raceCode] = $progress + [
                     'eligibility_at' => $eligibilityAt !== '' ? $eligibilityAt : null,
                     'latest_progress_at' => $latestAt,
-                    'explicit_failure' => $explicitFailure,
                     'stale' => $stale,
                 ];
             }
         }
 
+        // Preserve the former fail-closed contract for every JSONL ledger:
+        // even when no materialization diagnostic is currently needed, an
+        // invalid failure record must still make the status projection
+        // unavailable rather than being silently skipped.
+        $this->validateJsonLines(
+            $ledgerRoot . '/failures/*.jsonl',
+            dirname($ledgerRoot) . '/comparative/failures/*.jsonl',
+        );
+
         $gateA = (string)($gateA1['status'] ?? 'BLOCKED_EXPECTED_INVENTORY_INVALID');
-        $gateA2 = $oldUnaccounted === 0 && $effectiveComplete === count($candidates) && $unsafeRollback === 0 && $unverifiedSemanticRevision === 0 && $sourceFailures === [] ? 'PASS' : 'FAIL';
+        $gateA2 = $oldUnaccounted === 0 && $effectiveComplete === count($candidates) && $unsafeRollback === 0 && $unverifiedSemanticRevision === 0 && $sourceFailureCount === 0 ? 'PASS' : 'FAIL';
         $gateBNow = $unresolved === 0 && $instrumentationGap === 0 ? 'PASS' : 'FAIL';
         $gateBFinal = count($candidates) === $terminal && $unresolved === 0 && $instrumentationGap === 0 ? 'PASS' : 'PENDING_LIVE';
         $eligibleCount = count($eligibleRaces);
@@ -219,10 +226,23 @@ final class FormalMeasurementWindowStatusInspector
         $blocked = str_starts_with($gateC, 'BLOCKED_') || $gateC === 'FAIL';
         $processingRaces = [];
         if ($gateC === 'FAIL' && $eligibleCount > $acceptedSamples && !empty($epochStatus['runtime_authorized'])) {
+            $failureByRace = $this->raceFailures(
+                array_keys($unacceptedDiagnostics),
+                $opportunityRoot . '/source_failures/*.jsonl',
+                $ledgerRoot . '/failures/*.jsonl',
+                dirname($ledgerRoot) . '/comparative/failures/*.jsonl',
+                $ledgerRoot . '/operational/*.jsonl',
+            );
             foreach ($unacceptedDiagnostics as $raceCode => $diagnostic) {
+                $explicitFailure = $this->hasRaceFailure(
+                    $raceCode,
+                    (string)($diagnostic['eligibility_at'] ?? ''),
+                    $failureByRace[$raceCode]['failures'] ?? [],
+                    $failureByRace[$raceCode]['operational'] ?? [],
+                );
                 if (!StrictForwardMaterializationDiagnostic::displayAsInProgress(
                     $diagnostic,
-                    !empty($diagnostic['explicit_failure']),
+                    $explicitFailure,
                     !empty($diagnostic['stale']),
                     !empty($epochStatus['runtime_authorized']),
                 )) {
@@ -416,16 +436,82 @@ final class FormalMeasurementWindowStatusInspector
         return $rows;
     }
 
-    /** @return list<array<string,mixed>> */
-    private function jsonLines(string $pattern): array
+    /**
+     * Iterates a JSONL stream without retaining its decoded rows.  This is
+     * deliberately the only JSONL reader in the status projection: these
+     * audit logs are append-only and can be much larger than the current
+     * display's race-level aggregates.
+     *
+     * @param callable(array<string,mixed>):void $consume
+     */
+    private function forEachJsonLine(string $pattern, callable $consume): void
     {
-        $rows = [];
-        foreach (glob($pattern) ?: [] as $path) foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            try { $row = json_decode($line, true, 512, JSON_THROW_ON_ERROR); }
-            catch (Throwable) { throw new RuntimeException('forward_status_invalid_jsonl:' . basename($path)); }
-            if (is_array($row)) $rows[] = $row;
+        foreach (glob($pattern) ?: [] as $path) {
+            $handle = @fopen($path, 'rb');
+            if ($handle === false) throw new RuntimeException('forward_status_jsonl_unreadable:' . basename($path));
+            try {
+                while (($line = fgets($handle)) !== false) {
+                    if (trim($line) === '') continue;
+                    try { $row = json_decode($line, true, 512, JSON_THROW_ON_ERROR); }
+                    catch (Throwable) { throw new RuntimeException('forward_status_invalid_jsonl:' . basename($path)); }
+                    if (is_array($row)) $consume($row);
+                }
+                if (!feof($handle)) throw new RuntimeException('forward_status_jsonl_unreadable:' . basename($path));
+            } finally {
+                fclose($handle);
+            }
         }
-        return $rows;
+    }
+
+    /** @param callable(array<string,mixed>):bool $matches */
+    private function countJsonLines(string $pattern, callable $matches): int
+    {
+        $count = 0;
+        $this->forEachJsonLine($pattern, function (array $row) use (&$count, $matches): void {
+            if ($matches($row)) $count++;
+        });
+        return $count;
+    }
+
+    private function validateJsonLines(string ...$patterns): void
+    {
+        foreach ($patterns as $pattern) {
+            $this->forEachJsonLine($pattern, static function (array $_row): void {});
+        }
+    }
+
+    /**
+     * Extracts only rows relevant to the currently unaccepted races.  The
+     * materialization diagnostic is invoked only for those races, so keeping
+     * a complete failure ledger in memory would be both unnecessary and
+     * increasingly expensive as natural collection accumulates.
+     *
+     * @return array<string,array{failures:list<array<string,mixed>>,operational:list<array<string,mixed>>}>
+     */
+    private function raceFailures(array $raceCodes, string ...$patterns): array
+    {
+        $selected = [];
+        foreach ($raceCodes as $raceCode) {
+            if ($raceCode !== '') $selected[(string)$raceCode] = ['failures' => [], 'operational' => []];
+        }
+        if ($selected === []) return $selected;
+
+        foreach (array_slice($patterns, 0, 3) as $pattern) {
+            $this->forEachJsonLine($pattern, function (array $row) use (&$selected): void {
+                foreach (array_keys($selected) as $raceCode) {
+                    if ($this->rowReferencesRace($row, $raceCode)) $selected[$raceCode]['failures'][] = $row;
+                }
+            });
+        }
+        foreach (array_slice($patterns, 3, 1) as $pattern) {
+            $this->forEachJsonLine($pattern, function (array $row) use (&$selected): void {
+                if (($row['event'] ?? '') !== 'conflict') return;
+                foreach (array_keys($selected) as $raceCode) {
+                    if ($this->rowReferencesRace($row, $raceCode)) $selected[$raceCode]['operational'][] = $row;
+                }
+            });
+        }
+        return $selected;
     }
 
     /** @param list<array<string,mixed>> $rows @return array<string,list<array<string,mixed>>> */
